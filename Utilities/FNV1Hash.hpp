@@ -18,21 +18,21 @@ namespace Hash
         constexpr uint64_t FNV1_Offset_64 = 14695981039346656037u;
 
         // Compile-time hashing for null-terminated strings.
-        constexpr uint32_t FNV1_32(const char *String, const uint32_t Lastvalue = Internal::FNV1_Offset_32)
+        constexpr uint32_t FNV1_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
         {
-            return *String ? FNV1_32(String + 1, (Lastvalue * Internal::FNV1_Prime_32) ^ *String) : Lastvalue;
+            return *String ? FNV1_32(String + 1, (Lastvalue * FNV1_Prime_32) ^ *String) : Lastvalue;
         }
-        constexpr uint64_t FNV1_64(const char *String, const uint64_t Lastvalue = Internal::FNV1_Offset_64)
+        constexpr uint64_t FNV1_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
         {
-            return *String ? FNV1_64(String + 1, (Lastvalue * Internal::FNV1_Prime_64) ^ *String) : Lastvalue;
+            return *String ? FNV1_64(String + 1, (Lastvalue * FNV1_Prime_64) ^ *String) : Lastvalue;
         }
-        constexpr uint32_t FNV1a_32(const char *String, const uint32_t Lastvalue = Internal::FNV1_Offset_32)
+        constexpr uint32_t FNV1a_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
         {
-            return *String ? FNV1a_32(String + 1, (*String ^ Lastvalue) * Internal::FNV1_Prime_32) : Lastvalue;
+            return *String ? FNV1a_32(String + 1, (*String ^ Lastvalue) * FNV1_Prime_32) : Lastvalue;
         }
-        constexpr uint64_t FNV1a_64(const char *String, const uint64_t Lastvalue = Internal::FNV1_Offset_64)
+        constexpr uint64_t FNV1a_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
         {
-            return *String ? FNV1a_64(String + 1, (*String ^ Lastvalue) * Internal::FNV1_Prime_64) : Lastvalue;
+            return *String ? FNV1a_64(String + 1, (*String ^ Lastvalue) * FNV1_Prime_64) : Lastvalue;
         }
     }
 
