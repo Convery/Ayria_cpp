@@ -105,19 +105,19 @@ namespace Hash
     }
 
     // Wrappers for runtime hashing of strings.
-    inline uint32_t FNV1_32(std::string_view String)
+    inline uint32_t FNV1_32(const std::basic_string_view<char> String)
     {
         return FNV1_32(String.data(), String.size());
     }
-    inline uint64_t FNV1_64(std::string_view String)
+    inline uint64_t FNV1_64(const std::basic_string_view<char> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    inline uint32_t FNV1a_32(std::string_view String)
+    inline uint32_t FNV1a_32(const std::basic_string_view<char> String)
     {
         return FNV1a_32(String.data(), String.size());
     }
-    inline uint64_t FNV1a_64(std::string_view String)
+    inline uint64_t FNV1a_64(const std::basic_string_view<char> String)
     {
         return FNV1a_64(String.data(), String.size());
     }

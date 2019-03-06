@@ -34,7 +34,7 @@ namespace Base64
         };
     }
 
-    inline std::string Encode(std::string_view Input)
+    inline std::string Encode(const std::basic_string_view<char> Input)
     {
         std::string Result((((Input.size() + 2) / 3) * 4), '=');
         size_t Outputposition = 0;
@@ -60,7 +60,7 @@ namespace Base64
 
         return Result;
     }
-    inline std::string Decode(std::string_view Input)
+    inline std::string Decode(const std::basic_string_view<char> Input)
     {
         std::string Result;
         uint32_t Accumulator = 0;
@@ -82,7 +82,7 @@ namespace Base64
 
         return Result;
     }
-    inline bool Validate(std::string_view Input)
+    inline bool Validate(const std::basic_string_view<char> Input)
     {
         for (const auto &Item : Input)
         {
