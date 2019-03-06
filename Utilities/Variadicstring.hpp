@@ -14,18 +14,18 @@ namespace
 {
     // Truncate the string if needed.
     #if defined(VA_SIZE)
-    constexpr ssize_t Defaultsize = VA_SIZE;
+        constexpr ssize_t Defaultsize = VA_SIZE;
     #else
-    constexpr ssize_t Defaultsize = 512;
+        constexpr ssize_t Defaultsize = 512;
     #endif
 
-    inline ssize_t va(char *Buffer, ssize_t Size, std::string_view &Format, std::va_list Varlist)
+    inline ssize_t va(char *Buffer, ssize_t Size, const std::basic_string_view<char> &Format, std::va_list Varlist)
     {
         return std::vsnprintf(Buffer, Size, Format.data(), Varlist);
     }
 }
 
-inline std::basic_string<char> va(std::string_view Format, ...)
+inline std::basic_string<char> va(const std::basic_string_view<char> Format, ...)
 {
     auto Buffer{ std::make_unique<char []>(Defaultsize) };
     std::va_list Varlist;
