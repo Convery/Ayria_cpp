@@ -48,7 +48,7 @@ namespace Steam
         bool BIsSubscribedApp(uint32_t nAppID)
         {
             Traceprint();
-            return true;
+            return nAppID == Global.ApplicationID;
         }
         bool BIsDlcInstalled(uint32_t nAppID)
         {
