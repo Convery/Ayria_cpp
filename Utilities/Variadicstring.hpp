@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 06-03-2018
+    Started: 14-03-2019
     License: MIT
 */
 
@@ -14,12 +14,12 @@ namespace
 {
     // Truncate the string if needed.
     #if defined(VA_SIZE)
-        constexpr ssize_t Defaultsize = VA_SIZE;
+    constexpr int32_t Defaultsize = VA_SIZE;
     #else
-        constexpr ssize_t Defaultsize = 512;
+    constexpr int32_t Defaultsize = 512;
     #endif
 
-    inline ssize_t va(char *Buffer, ssize_t Size, const std::basic_string_view<char> &Format, std::va_list Varlist)
+    inline int32_t va(char *Buffer, int32_t Size, const std::basic_string_view<char> &Format, std::va_list Varlist)
     {
         return std::vsnprintf(Buffer, Size, Format.data(), Varlist);
     }
@@ -27,9 +27,9 @@ namespace
 
 inline std::basic_string<char> va(const std::basic_string_view<char> Format, ...)
 {
-    auto Buffer{ std::make_unique<char []>(Defaultsize) };
+    auto Buffer{ std::make_unique<char[]>(Defaultsize) };
     std::va_list Varlist;
-    ssize_t Size{};
+    int32_t Size{};
 
     // Parse the argument-list.
     va_start(Varlist, Format);

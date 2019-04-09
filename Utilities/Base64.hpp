@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 06-03-2018
+    Started: 14-03-2019
     License: MIT
 */
 
@@ -122,8 +122,8 @@ namespace Base64
 
         switch (Input.size() % 4)
         {
-        case 2: Input += "=="; break;
-        case 1: Input += "="; break;
+            case 2: Input += "=="; break;
+            case 1: Input += "="; break;
         }
 
         return Input;
