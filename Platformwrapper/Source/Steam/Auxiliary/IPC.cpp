@@ -43,16 +43,16 @@ namespace Steam
         // Parse the startup module.
         if (auto Filehandle = std::fopen(Startupmodule, "rb"))
         {
-            std::fseek(Filehandle, SEEK_END, SEEK_SET);
-            const auto Filesize = std::ftell(Filehandle);
+            std::fseek(Filehandle, SEEK_SET, SEEK_END);
+            const auto Size = std::ftell(Filehandle);
             std::rewind(Filehandle);
 
-            auto Buffer = std::make_unique<char[]>(Filesize);
-            std::fread(Buffer.get(), Filesize, 1, Filehandle);
+            auto Filebuffer = std::make_unique<char[]>(Size);
+            std::fread(Filebuffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
             uint32_t Entrysize{};
-            auto Pointer = Buffer.get();
+            auto Pointer = Filebuffer.get();
             Infoprint("Steam startup module with:");                Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
             Infoprint(va("GUID1: %*s", Entrysize, Pointer));        Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
             Infoprint(va("GUID2: %*s", Entrysize, Pointer));        Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
