@@ -11,11 +11,15 @@
 
 namespace Logging
 {
+    #if !defined(LOGPATH)
+    #define LOGPATH "."
+    #endif
+
     #if !defined(MODULENAME)
     #warning No module name specified for the logging.
         constexpr char Logfile[] = "./NoModuleName.log";
     #else
-    constexpr char Logfile[] = "./" MODULENAME ".log";
+    constexpr char Logfile[] = LOGPATH "/" MODULENAME ".log";
     #endif
 
     // NOTE(tcn): Not threadsafe but good enough.
