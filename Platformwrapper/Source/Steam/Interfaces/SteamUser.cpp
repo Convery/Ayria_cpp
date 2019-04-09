@@ -13,7 +13,6 @@ namespace Steam
 
     struct SteamUser
     {
-        public:
         uint32_t GetHSteamUser()
         {
             Traceprint();
