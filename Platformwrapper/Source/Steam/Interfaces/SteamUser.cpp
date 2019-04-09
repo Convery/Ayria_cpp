@@ -30,7 +30,6 @@ namespace Steam
         }
         bool BLoggedOn()
         {
-            Traceprint();
             return true;
         }
         uint32_t GetLogonState()
@@ -40,17 +39,14 @@ namespace Steam
         }
         bool BConnected()
         {
-            Traceprint();
             return true;
         }
         CSteamID GetSteamID()
         {
-            Traceprint();
             return CSteamID(Global.UserID);
         }
         bool IsVACBanned(uint32_t eVACBan)
         {
-            Traceprint();
             return false;
         }
         bool RequireShowVACBannedMessage(uint32_t eVACBan)

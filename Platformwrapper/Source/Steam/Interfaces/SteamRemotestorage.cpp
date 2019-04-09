@@ -20,8 +20,7 @@ namespace Steam
         }
         bool FileExists(const char *filename)
         {
-            Traceprint();
-
+            Infoprint(va("Requesting file \"%s\" from cloud.", filename));
             return false;
         }
         bool FileDelete(const char *filename)
