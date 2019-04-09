@@ -145,7 +145,10 @@ extern "C"
 
     // Callback management.
     EXPORT_ATTR void SteamAPI_RunCallbacks() { Traceprint(); }
-    EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback) { Traceprint(); }
+    EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
+    {
+        Debugprint(va("Register callback %i", iCallback));
+    }
     EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback) { Traceprint(); }
     EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall) { Traceprint(); }
     EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall) { Traceprint(); }
