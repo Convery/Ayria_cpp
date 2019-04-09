@@ -48,6 +48,7 @@ namespace Build
 // Information logging.
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
+#define Infoprint(string) Logging::Print('I', string)
 #if !defined(NDEBUG)
 #define Debugprint(string) Logging::Print('D', string)
 #define Traceprint() Logging::Print('>', __FUNCTION__)

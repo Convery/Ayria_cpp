@@ -11,8 +11,21 @@
 extern "C"
 {
     // Initialization and shutdown.
-    EXPORT_ATTR bool SteamAPI_Init() { Traceprint(); return true; }
-    EXPORT_ATTR bool SteamAPI_InitSafe() { Traceprint(); return true; }
+    EXPORT_ATTR bool SteamAPI_Init()
+    {
+        Traceprint();
+
+        // Start processing the IPC separately.
+        std::thread(Steam::InitializeIPC).detach();
+
+
+
+
+
+
+        return true;
+    }
+    EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
     EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
     EXPORT_ATTR bool SteamAPI_IsSteamRunning() { Traceprint(); return true; }
     EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { Traceprint(); return nullptr; }
