@@ -96,7 +96,6 @@ namespace Steam
         }
         void RunFrame()
         {
-            Steamcallback::Runcallbacks();
         }
         uint32_t GetIPCCallCount()
         {
@@ -143,7 +142,7 @@ namespace Steam
         const char *GetSteamUILanguage()
         {
             Traceprint();
-            return Global.Language;
+            return Global.Language.c_str();
         }
         bool IsSteamRunningInVR()
         {
@@ -156,154 +155,168 @@ namespace Steam
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
     struct SteamUtilities001 : Interface_t
-{ SteamUtilities001()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-    }};
+        SteamUtilities001()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+        }
+    };
     struct SteamUtilities002 : Interface_t
-{ SteamUtilities002()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-    }};
+        SteamUtilities002()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+        }
+    };
     struct SteamUtilities003 : Interface_t
-{ SteamUtilities003()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-        Createmethod(9, SteamUtils, GetAppID);
-        Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
-        Createmethod(11, SteamUtils, IsAPICallCompleted);
-        Createmethod(12, SteamUtils, GetAPICallFailureReason);
-        Createmethod(13, SteamUtils, GetAPICallResult);
-        Createmethod(14, SteamUtils, RunFrame);
-        Createmethod(15, SteamUtils, GetIPCCallCount);
-        Createmethod(16, SteamUtils, SetWarningMessageHook);
-    }};
+        SteamUtilities003()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+            Createmethod(9, SteamUtils, GetAppID);
+            Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
+            Createmethod(11, SteamUtils, IsAPICallCompleted);
+            Createmethod(12, SteamUtils, GetAPICallFailureReason);
+            Createmethod(13, SteamUtils, GetAPICallResult);
+            Createmethod(14, SteamUtils, RunFrame);
+            Createmethod(15, SteamUtils, GetIPCCallCount);
+            Createmethod(16, SteamUtils, SetWarningMessageHook);
+        }
+    };
     struct SteamUtilities004 : Interface_t
-{ SteamUtilities004()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-        Createmethod(9, SteamUtils, GetAppID);
-        Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
-        Createmethod(11, SteamUtils, IsAPICallCompleted);
-        Createmethod(12, SteamUtils, GetAPICallFailureReason);
-        Createmethod(13, SteamUtils, GetAPICallResult);
-        Createmethod(14, SteamUtils, RunFrame);
-        Createmethod(15, SteamUtils, GetIPCCallCount);
-        Createmethod(16, SteamUtils, SetWarningMessageHook);
-        Createmethod(17, SteamUtils, IsOverlayEnabled);
-    }};
+        SteamUtilities004()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+            Createmethod(9, SteamUtils, GetAppID);
+            Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
+            Createmethod(11, SteamUtils, IsAPICallCompleted);
+            Createmethod(12, SteamUtils, GetAPICallFailureReason);
+            Createmethod(13, SteamUtils, GetAPICallResult);
+            Createmethod(14, SteamUtils, RunFrame);
+            Createmethod(15, SteamUtils, GetIPCCallCount);
+            Createmethod(16, SteamUtils, SetWarningMessageHook);
+            Createmethod(17, SteamUtils, IsOverlayEnabled);
+        }
+    };
     struct SteamUtilities005 : Interface_t
-{ SteamUtilities005()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-        Createmethod(9, SteamUtils, GetAppID);
-        Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
-        Createmethod(11, SteamUtils, IsAPICallCompleted);
-        Createmethod(12, SteamUtils, GetAPICallFailureReason);
-        Createmethod(13, SteamUtils, GetAPICallResult);
-        Createmethod(14, SteamUtils, RunFrame);
-        Createmethod(15, SteamUtils, GetIPCCallCount);
-        Createmethod(16, SteamUtils, SetWarningMessageHook);
-        Createmethod(17, SteamUtils, IsOverlayEnabled);
-        Createmethod(18, SteamUtils, BOverlayNeedsPresent);
-        Createmethod(19, SteamUtils, CheckFileSignature);
-        Createmethod(20, SteamUtils, ShowGamepadTextInput);
-        Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
-        Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
-    };};
+        SteamUtilities005()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+            Createmethod(9, SteamUtils, GetAppID);
+            Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
+            Createmethod(11, SteamUtils, IsAPICallCompleted);
+            Createmethod(12, SteamUtils, GetAPICallFailureReason);
+            Createmethod(13, SteamUtils, GetAPICallResult);
+            Createmethod(14, SteamUtils, RunFrame);
+            Createmethod(15, SteamUtils, GetIPCCallCount);
+            Createmethod(16, SteamUtils, SetWarningMessageHook);
+            Createmethod(17, SteamUtils, IsOverlayEnabled);
+            Createmethod(18, SteamUtils, BOverlayNeedsPresent);
+            Createmethod(19, SteamUtils, CheckFileSignature);
+            Createmethod(20, SteamUtils, ShowGamepadTextInput);
+            Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
+            Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
+        };
+    };
     struct SteamUtilities006 : Interface_t
-{ SteamUtilities006()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-        Createmethod(9, SteamUtils, GetAppID);
-        Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
-        Createmethod(11, SteamUtils, IsAPICallCompleted);
-        Createmethod(12, SteamUtils, GetAPICallFailureReason);
-        Createmethod(13, SteamUtils, GetAPICallResult);
-        Createmethod(14, SteamUtils, RunFrame);
-        Createmethod(15, SteamUtils, GetIPCCallCount);
-        Createmethod(16, SteamUtils, SetWarningMessageHook);
-        Createmethod(17, SteamUtils, IsOverlayEnabled);
-        Createmethod(18, SteamUtils, BOverlayNeedsPresent);
-        Createmethod(19, SteamUtils, CheckFileSignature);
-        Createmethod(20, SteamUtils, ShowGamepadTextInput);
-        Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
-        Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
-        Createmethod(23, SteamUtils, GetSteamUILanguage);
-        Createmethod(24, SteamUtils, IsSteamRunningInVR);
-    };};
+        SteamUtilities006()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+            Createmethod(9, SteamUtils, GetAppID);
+            Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
+            Createmethod(11, SteamUtils, IsAPICallCompleted);
+            Createmethod(12, SteamUtils, GetAPICallFailureReason);
+            Createmethod(13, SteamUtils, GetAPICallResult);
+            Createmethod(14, SteamUtils, RunFrame);
+            Createmethod(15, SteamUtils, GetIPCCallCount);
+            Createmethod(16, SteamUtils, SetWarningMessageHook);
+            Createmethod(17, SteamUtils, IsOverlayEnabled);
+            Createmethod(18, SteamUtils, BOverlayNeedsPresent);
+            Createmethod(19, SteamUtils, CheckFileSignature);
+            Createmethod(20, SteamUtils, ShowGamepadTextInput);
+            Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
+            Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
+            Createmethod(23, SteamUtils, GetSteamUILanguage);
+            Createmethod(24, SteamUtils, IsSteamRunningInVR);
+        };
+    };
     struct SteamUtilities007 : Interface_t
-    { SteamUtilities007()
     {
-        Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
-        Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
-        Createmethod(2, SteamUtils, GetConnectedUniverse);
-        Createmethod(3, SteamUtils, GetServerRealTime);
-        Createmethod(4, SteamUtils, GetIPCountry);
-        Createmethod(5, SteamUtils, GetImageSize);
-        Createmethod(6, SteamUtils, GetImageRGBA);
-        Createmethod(7, SteamUtils, GetCSERIPPort);
-        Createmethod(8, SteamUtils, GetCurrentBatteryPower);
-        Createmethod(9, SteamUtils, GetAppID);
-        Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
-        Createmethod(11, SteamUtils, IsAPICallCompleted);
-        Createmethod(12, SteamUtils, GetAPICallFailureReason);
-        Createmethod(13, SteamUtils, GetAPICallResult);
-        Createmethod(14, SteamUtils, RunFrame);
-        Createmethod(15, SteamUtils, GetIPCCallCount);
-        Createmethod(16, SteamUtils, SetWarningMessageHook);
-        Createmethod(17, SteamUtils, IsOverlayEnabled);
-        Createmethod(18, SteamUtils, BOverlayNeedsPresent);
-        Createmethod(19, SteamUtils, CheckFileSignature);
-        Createmethod(20, SteamUtils, ShowGamepadTextInput);
-        Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
-        Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
-        Createmethod(23, SteamUtils, GetSteamUILanguage);
-        Createmethod(24, SteamUtils, IsSteamRunningInVR);
-    };};
+        SteamUtilities007()
+        {
+            Createmethod(0, SteamUtils, GetSecondsSinceAppActive);
+            Createmethod(1, SteamUtils, GetSecondsSinceComputerActive);
+            Createmethod(2, SteamUtils, GetConnectedUniverse);
+            Createmethod(3, SteamUtils, GetServerRealTime);
+            Createmethod(4, SteamUtils, GetIPCountry);
+            Createmethod(5, SteamUtils, GetImageSize);
+            Createmethod(6, SteamUtils, GetImageRGBA);
+            Createmethod(7, SteamUtils, GetCSERIPPort);
+            Createmethod(8, SteamUtils, GetCurrentBatteryPower);
+            Createmethod(9, SteamUtils, GetAppID);
+            Createmethod(10, SteamUtils, SetOverlayNotificationPosition);
+            Createmethod(11, SteamUtils, IsAPICallCompleted);
+            Createmethod(12, SteamUtils, GetAPICallFailureReason);
+            Createmethod(13, SteamUtils, GetAPICallResult);
+            Createmethod(14, SteamUtils, RunFrame);
+            Createmethod(15, SteamUtils, GetIPCCallCount);
+            Createmethod(16, SteamUtils, SetWarningMessageHook);
+            Createmethod(17, SteamUtils, IsOverlayEnabled);
+            Createmethod(18, SteamUtils, BOverlayNeedsPresent);
+            Createmethod(19, SteamUtils, CheckFileSignature);
+            Createmethod(20, SteamUtils, ShowGamepadTextInput);
+            Createmethod(21, SteamUtils, GetEnteredGamepadTextLength);
+            Createmethod(22, SteamUtils, GetEnteredGamepadTextInput);
+            Createmethod(23, SteamUtils, GetSteamUILanguage);
+            Createmethod(24, SteamUtils, IsSteamRunningInVR);
+        };
+    };
 
     struct Steamutilitiesloader
     {
