@@ -17,6 +17,7 @@ namespace Steam
         }
         bool BIsSubscribed()
         {
+            Traceprint();
             return true;
         }
         bool BIsLowViolence()
@@ -31,6 +32,7 @@ namespace Steam
         }
         bool BIsVACBanned()
         {
+            Traceprint();
             return false;
         }
         const char *GetCurrentGameLanguage()
@@ -45,11 +47,13 @@ namespace Steam
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {
+            Traceprint();
             return true;
         }
         bool BIsDlcInstalled(uint32_t nAppID)
         {
-            return true;
+            Traceprint();
+            return false;
         }
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)
         {
