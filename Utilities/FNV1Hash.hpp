@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 06-03-2018
+    Started: 14-03-2019
     License: MIT
 */
 
@@ -12,9 +12,9 @@ namespace Hash
 {
     namespace Internal
     {
-        constexpr uint32_t FNV1_Prime_32 = 16777619u;
-        constexpr uint64_t FNV1_Prime_64 = 1099511628211u;
+        constexpr uint32_t FNV1_Prime_32  = 16777619u;
         constexpr uint32_t FNV1_Offset_32 = 2166136261u;
+        constexpr uint64_t FNV1_Prime_64  = 1099511628211u;
         constexpr uint64_t FNV1_Offset_64 = 14695981039346656037u;
 
         // Compile-time hashing for null-terminated strings.

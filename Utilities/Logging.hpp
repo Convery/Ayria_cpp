@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 06-03-2018
+    Started: 14-03-2019
     License: MIT
 */
 
@@ -12,10 +12,10 @@
 namespace Logging
 {
     #if !defined(MODULENAME)
-        #warning No module name specified for the logging.
+    #warning No module name specified for the logging.
         constexpr char Logfile[] = "./NoModuleName.log";
     #else
-        constexpr char Logfile[] = "./" MODULENAME ".log";
+    constexpr char Logfile[] = "./" MODULENAME ".log";
     #endif
 
     // NOTE(tcn): Not threadsafe but good enough.
@@ -42,6 +42,10 @@ namespace Logging
 
         std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));
         toFile(va("[%c][%-8s] %*s", Prefix, Buffer, Message.size(), Message.data()));
+
+        #if !defined(NDEBUG)
+        toStream(va("[%c][%-8s] %*s", Prefix, Buffer, Message.size(), Message.data()));
+        #endif
     }
 
     // Remove the old logfile.
