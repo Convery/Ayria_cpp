@@ -17,7 +17,6 @@ namespace Steam
         }
         bool BIsSubscribed()
         {
-            Traceprint();
             return true;
         }
         bool BIsLowViolence()
@@ -47,12 +46,10 @@ namespace Steam
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {
-            Traceprint();
             return nAppID == Global.ApplicationID;
         }
         bool BIsDlcInstalled(uint32_t nAppID)
         {
-            Traceprint();
             return false;
         }
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)

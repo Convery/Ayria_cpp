@@ -144,7 +144,7 @@ extern "C"
     EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam::Global.ApplicationID = unOwnAppID; return false; }
 
     // Callback management.
-    EXPORT_ATTR void SteamAPI_RunCallbacks() { Traceprint(); }
+    EXPORT_ATTR void SteamAPI_RunCallbacks() { }
     EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
     {
         Debugprint(va("Register callback %i", iCallback));
