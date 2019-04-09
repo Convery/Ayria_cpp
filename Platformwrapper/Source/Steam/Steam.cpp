@@ -51,11 +51,12 @@ extern "C"
             }
         }
 
-        // Query the Ayria platform for the username and localization.
+        // Query the Ayria platform for the account information.
         if (true /* TODO(tcn): Update when Ayria is done. */)
         {
             Steam::Global.Username = "Ayria";
             Steam::Global.Language = "english";
+            Steam::Global.UserID = 0x1100001DEADC0DE;
         }
 
         // Query the Steam platform for installation-location.
