@@ -141,7 +141,7 @@ namespace Steam
         }
     };
 
-    std::any Hackery;
+    static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
     struct SteamApps001 : Interface_t
