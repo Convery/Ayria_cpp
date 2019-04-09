@@ -10,7 +10,6 @@ namespace Steam
 {
     struct SteamUtils
     {
-        public:
         uint32_t GetSecondsSinceAppActive()
         {
             Traceprint();

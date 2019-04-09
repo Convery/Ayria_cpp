@@ -79,7 +79,10 @@ namespace Steam
     {
         // See if we have any interface selected for this type.
         if (const auto Result = Currentinterfaces.find(Type); Result != Currentinterfaces.end())
+        {
+            Debugprint(va("Fetching interface %i", Type));
             return &Result->second;
+        }
 
         // Return the dummy interface for debugging.
         Errorprint(va("Interface missing for interface-type %i", Type));
@@ -117,6 +120,7 @@ namespace Steam
                     if (std::strstr(&Filebuffer[i], Scanstring.c_str()))
                     {
                         // Load the interface to mark it as active.
+                        Debugprint(va("Loading interface %s", Name.c_str()));
                         Foundnames.push_back(Scanstring);
                         Fetchinterface(Name);
                         break;
