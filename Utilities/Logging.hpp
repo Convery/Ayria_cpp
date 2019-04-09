@@ -45,10 +45,10 @@ namespace Logging
         char Buffer[80]{};
 
         std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));
-        toFile(va("[%c][%-8s] %*s", Prefix, Buffer, Message.size(), Message.data()));
+        toFile(va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data()));
 
         #if !defined(NDEBUG)
-        toStream(va("[%c][%-8s] %*s", Prefix, Buffer, Message.size(), Message.data()));
+        toStream(va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data()));
         #endif
     }
 
