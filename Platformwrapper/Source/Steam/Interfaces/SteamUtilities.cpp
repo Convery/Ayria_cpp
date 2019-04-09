@@ -79,6 +79,7 @@ namespace Steam
         }
         void SetOverlayNotificationPosition(uint32_t eNotificationPosition)
         {
+            Traceprint();
         }
         bool IsAPICallCompleted(uint64_t hSteamAPICall, bool *pbFailed)
         {
