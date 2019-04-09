@@ -18,9 +18,10 @@ else()
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().
+find_path(HASHMAP_INC parallel_hashmap)
+find_path(JSON_INC nlohmann)
+include_directories(${HASHMAP_INC} ${JSON_INC})
 set(MODULE_LIBS ${MODULE_LIBS})
-set(MODULE_INCS ${MODULE_INCS})
-include_directories(${MODULE_INCS})
 
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")

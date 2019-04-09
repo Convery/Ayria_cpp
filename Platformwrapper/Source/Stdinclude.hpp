@@ -48,6 +48,8 @@
 #endif
 
 // Third-party includes.
+#include <parallel_hashmap/phmap.h>
+#include <nlohmann/json.hpp>
 
 // Restore warnings.
 #pragma warning(pop)
