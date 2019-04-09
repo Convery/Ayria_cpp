@@ -6,6 +6,7 @@
 
 #pragma once
 #include "../Stdinclude.hpp"
+#include "Auxiliary/CSteamID.hpp"
 
 namespace Steam
 {
