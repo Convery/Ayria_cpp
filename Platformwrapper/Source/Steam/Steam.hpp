@@ -69,3 +69,38 @@ namespace Steam
     void Redirectmodulehandle();
     void InitializeIPC();
 }
+
+// Interface exports.
+extern "C"
+{
+    EXPORT_ATTR void *SteamInternal_CreateInterface(const char *Interfacename);
+    EXPORT_ATTR void *SteamAppList();
+    EXPORT_ATTR void *SteamApps();
+    EXPORT_ATTR void *SteamClient();
+    EXPORT_ATTR void *SteamController();
+    EXPORT_ATTR void *SteamFriends();
+    EXPORT_ATTR void *SteamGameServer();
+    EXPORT_ATTR void *SteamGameServerHTTP();
+    EXPORT_ATTR void *SteamGameServerInventory();
+    EXPORT_ATTR void *SteamGameServerNetworking();
+    EXPORT_ATTR void *SteamGameServerStats();
+    EXPORT_ATTR void *SteamGameServerUGC();
+    EXPORT_ATTR void *SteamGameServerUtils();
+    EXPORT_ATTR void *SteamHTMLSurface();
+    EXPORT_ATTR void *SteamHTTP();
+    EXPORT_ATTR void *SteamInventory();
+    EXPORT_ATTR void *SteamMatchmaking();
+    EXPORT_ATTR void *SteamMatchmakingServers();
+    EXPORT_ATTR void *SteamMusic();
+    EXPORT_ATTR void *SteamMusicRemote();
+    EXPORT_ATTR void *SteamNetworking();
+    EXPORT_ATTR void *SteamRemoteStorage();
+    EXPORT_ATTR void *SteamScreenshots();
+    EXPORT_ATTR void *SteamUnifiedMessages();
+    EXPORT_ATTR void *SteamUGC();
+    EXPORT_ATTR void *SteamUser();
+    EXPORT_ATTR void *SteamUserStats();
+    EXPORT_ATTR void *SteamUtils();
+    EXPORT_ATTR void *SteamVideo();
+    EXPORT_ATTR void *SteamMasterServerUpdater();
+}
