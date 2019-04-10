@@ -80,7 +80,7 @@ namespace Steam
         // See if we have any interface selected for this type.
         if (const auto Result = Currentinterfaces.find(Type); Result != Currentinterfaces.end())
         {
-            Debugprint(va("Fetching interface %i", Type));
+            //Debugprint(va("Fetching interface %i", Type));
             return &Result->second;
         }
 

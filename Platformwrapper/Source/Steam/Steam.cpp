@@ -160,7 +160,7 @@ extern "C"
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
     EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint();}
-    EXPORT_ATTR void SteamGameServer_RunCallbacks() { Traceprint();}
+    EXPORT_ATTR void SteamGameServer_RunCallbacks() { }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
     EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
