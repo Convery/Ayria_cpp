@@ -56,6 +56,8 @@
 
 // Global utilities.
 #include <Utilities/Variadicstring.hpp>
+#include <Utilities/Memprotect.hpp>
+#include <Utilities/Filesystem.hpp>
 #include <Utilities/FNV1Hash.hpp>
 #include <Utilities/Logging.hpp>
 #include <Utilities/Base64.hpp>

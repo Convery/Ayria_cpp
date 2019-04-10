@@ -60,5 +60,6 @@ endif()
 include_directories("${PROJECT_SOURCE_DIR}")
 
 # Add the sub-projects.
-add_subdirectory(Platformwrapper)
 add_subdirectory(Bootstrapper)
+add_subdirectory(Localnetworking)
+add_subdirectory(Platformwrapper)
