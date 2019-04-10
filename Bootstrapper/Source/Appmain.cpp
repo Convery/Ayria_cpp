@@ -9,12 +9,14 @@
 // Let's just keep everything in a single module.
 extern size_t TLSCallbackaddress();
 extern size_t PEEntrypoint();
+extern void Loadallplugins();
 uint8_t Originalstub[14]{};
 size_t TLSAddress{};
 size_t EPAddress{};
 void PECallback()
 {
-    // Load all plugins.
+    // Check all the places plugins may reside.
+    Loadallplugins();
 
     // Restore the entrypoint.
     if (const size_t Address = PEEntrypoint())
@@ -107,24 +109,39 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
             }
             Memprotect::Protectrange(Address, 14, Protection);
         }
-
-        // Done.
-
-        //
-
-
     }
 
     return TRUE;
 }
 
-// Utility functionality.
+// Poke at the plugins from other modules.
+std::vector<void *> Loadedplugins;
 extern "C"
 {
-    EXPORT_ATTR bool Broadcastmessage(const void *Buffer, uint32_t Size);
+    EXPORT_ATTR bool Broadcastmessage(const void *Buffer, uint32_t Size)
+    {
+        // Forward to all plugins until one handles it.
+        for (const auto &Item : Loadedplugins)
+        {
+            auto Callback = GetProcAddress(HMODULE(Item), "onMessage");
+            auto Result = (reinterpret_cast<bool (*)(const void *, uint32_t)>(Callback))(Buffer, Size);
+            if (Result) return true;
+        }
+
+        return false;
+    }
+    EXPORT_ATTR void onInitializationdone()
+    {
+        // Notify all plugins about being initialized.
+        for (const auto &Item : Loadedplugins)
+        {
+            auto Callback = GetProcAddress(HMODULE(Item), "onInitialized");
+            (reinterpret_cast<void (*)(bool)>(Callback))(false);
+        }
+    }
 }
 
-// Utility.
+// Utility functionality.
 std::string Temporarydir() { char Buffer[260]{}; GetTempPathA(260, Buffer); return std::move(Buffer); }
 size_t TLSCallbackaddress()
 {
@@ -152,4 +169,35 @@ size_t PEEntrypoint()
     PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
 
     return (size_t)((DWORD_PTR)Modulehandle + NTHeader->OptionalHeader.AddressOfEntryPoint);
+}
+void Loadallplugins()
+{
+    constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Ayria32" : ".Ayria64";
+    std::vector<void *> Freshplugins;
+
+    // Really just load all files from the directory.
+    auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
+    for (const auto &Item : Results)
+    {
+        /*
+            TODO(tcn):
+            We should really check that the plugins are signed by us.
+            Then prompt the user for whitelisting.
+        */
+
+        auto Module = LoadLibraryA(Item.c_str());
+        if (Module)
+        {
+            Infoprint(va("Loaded plugin \"%s\"", Item.c_str()));
+            Loadedplugins.push_back(Module);
+            Freshplugins.push_back(Module);
+        }
+    }
+
+    // Notify all plugins about starting up.
+    for (const auto &Item : Freshplugins)
+    {
+        auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
+        (reinterpret_cast<void (*)(bool)>(Callback))(false);
+    }
 }
