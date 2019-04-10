@@ -37,7 +37,8 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
             SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
         }
 
-        /* TODO(tcn): Load plugins if available. */
+        // If there's a local bootstrap module, we'll load it.
+        LoadLibraryA("Developerbootstrap.dll");
     }
 
     return TRUE;
