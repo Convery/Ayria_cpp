@@ -59,6 +59,9 @@ __attribute__((constructor)) void DllMain()
 #endif
 
 // Entrypoint when loaded as a plugin.
-void onStartup(bool) { /* Do .text edits */ }
-void onInitialized(bool) { /* Do .data edits */ }
-bool onMessage(const void *, uint32_t) { return false; }
+extern "C"
+{
+    EXPORT_ATTR void onStartup(bool) { /* Do .text edits */ }
+    EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
+    EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
+}
