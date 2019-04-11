@@ -53,3 +53,59 @@ inline std::basic_string<char> va(const std::basic_string_view<char> Format, ...
     // Take the memory with us.
     return { std::move(Buffer.get()), static_cast<size_t>(Size) };
 }
+inline std::string va(const char *Format, ...)
+{
+    auto Buffer{ std::make_unique<char[]>(Defaultsize) };
+    std::va_list Varlist;
+    int32_t Size{};
+
+    // Parse the argument-list.
+    va_start(Varlist, Format);
+    {
+        // Try using the default size as it should work 99% of the time.
+        Size = va(Buffer.get(), Defaultsize, Format, Varlist);
+
+        // If the size is larger, we need to allocate again =(
+        if (Size > Defaultsize)
+        {
+            Buffer = std::make_unique<char[]>(Size);
+            Size = va(Buffer.get(), Size, Format, Varlist);
+        }
+    }
+    va_end(Varlist);
+
+    // Negative result on error.
+    if (Size < 0) { assert(false); return {}; }
+    assert(Size);
+
+    // Take the memory with us.
+    return { std::move(Buffer.get()), static_cast<size_t>(Size) };
+}
+inline std::string va(std::string Format, ...)
+{
+    auto Buffer{ std::make_unique<char[]>(Defaultsize) };
+    std::va_list Varlist;
+    int32_t Size{};
+
+    // Parse the argument-list.
+    va_start(Varlist, Format);
+    {
+        // Try using the default size as it should work 99% of the time.
+        Size = va(Buffer.get(), Defaultsize, Format, Varlist);
+
+        // If the size is larger, we need to allocate again =(
+        if (Size > Defaultsize)
+        {
+            Buffer = std::make_unique<char[]>(Size);
+            Size = va(Buffer.get(), Size, Format, Varlist);
+        }
+    }
+    va_end(Varlist);
+
+    // Negative result on error.
+    if (Size < 0) { assert(false); return {}; }
+    assert(Size);
+
+    // Take the memory with us.
+    return { std::move(Buffer.get()), static_cast<size_t>(Size) };
+}

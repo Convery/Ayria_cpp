@@ -14,12 +14,15 @@ namespace Simplehook
     struct Stomphook
     {
         uint8_t Originalstub[14]{};
-        void *Oldlocation;
+        void *Savedlocation;
+        void *Savedtarget;
 
-        void Installhook(void *Target, void *Location = nullptr)
+        void Installhook(void *Location = nullptr, void *Target = nullptr)
         {
-            if (!Location) Location = Oldlocation;
-            Oldlocation = Location;
+            if (!Location) Location = Savedlocation;
+            if (!Target) Target = Savedtarget;
+            Savedlocation = Location;
+            Savedtarget = Target;
 
             auto Protection = Memprotect::Unprotectrange(Location, 14);
             {
@@ -49,13 +52,13 @@ namespace Simplehook
         }
         void Removehook()
         {
-            if (Oldlocation)
+            if (Savedlocation)
             {
-                auto Protection = Memprotect::Unprotectrange(Oldlocation, 14);
+                auto Protection = Memprotect::Unprotectrange(Savedlocation, 14);
                 {
-                    std::memcpy((void *)Oldlocation, Originalstub, 14);
+                    std::memcpy((void *)Savedlocation, Originalstub, 14);
                 }
-                Memprotect::Protectrange(Oldlocation, 14, Protection);
+                Memprotect::Protectrange(Savedlocation, 14, Protection);
             }
         }
     };
