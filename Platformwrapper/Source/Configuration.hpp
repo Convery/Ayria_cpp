@@ -60,5 +60,5 @@ namespace Build
 // Helper to support designated initializers until we get C++20
 #define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
 
-// Ignore ANSI compatibility for stucts.
+// Ignore ANSI compatibility for structs.
 #pragma warning(disable: 4201)
