@@ -185,7 +185,7 @@ void Loadallplugins()
             Then prompt the user for whitelisting.
         */
 
-        auto Module = LoadLibraryA(Item.c_str());
+        auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str());
         if (Module)
         {
             Infoprint(va("Loaded plugin \"%s\"", Item.c_str()));
