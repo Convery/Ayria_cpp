@@ -19,13 +19,13 @@ namespace
     constexpr int32_t Defaultsize = 512;
     #endif
 
-    inline int32_t va(char *Buffer, int32_t Size, const std::basic_string_view<char> &Format, std::va_list Varlist)
+    inline int32_t va(char *Buffer, int32_t Size, const std::string_view Format, std::va_list Varlist)
     {
         return std::vsnprintf(Buffer, Size, Format.data(), Varlist);
     }
 }
 
-inline std::basic_string<char> va(const std::basic_string_view<char> Format, ...)
+inline std::string va(std::string_view Format, ...)
 {
     auto Buffer{ std::make_unique<char[]>(Defaultsize) };
     std::va_list Varlist;
@@ -81,7 +81,7 @@ inline std::string va(const char *Format, ...)
     // Take the memory with us.
     return { std::move(Buffer.get()), static_cast<size_t>(Size) };
 }
-inline std::string va(std::string Format, ...)
+inline std::string va(const std::string Format, ...)
 {
     auto Buffer{ std::make_unique<char[]>(Defaultsize) };
     std::va_list Varlist;
