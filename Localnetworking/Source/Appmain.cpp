@@ -6,11 +6,17 @@
 
 #include "Stdinclude.hpp"
 
+// Install the frontend hooks.
+extern void InstallWinsock();
+
 // Entrypoint when loaded as a plugin.
 extern "C"
 {
     EXPORT_ATTR void onStartup(bool)
     {
+        // Hook the front-facing APIs.
+        InstallWinsock();
+
         /*
             TODO(tcn):
             1. Insert hooks.
