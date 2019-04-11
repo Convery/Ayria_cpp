@@ -7,19 +7,22 @@
 #include "Stdinclude.hpp"
 
 // Entrypoint when loaded as a plugin.
-void onStartup(bool)
+extern "C"
 {
-    /*
-        TODO(tcn):
-        1. Insert hooks.
-            1a. Winsock.
-            1b. WinHTTP
-        2. Initialize the backend.
-            2a. Start the background thread.
-    */
+    EXPORT_ATTR void onStartup(bool)
+    {
+        /*
+            TODO(tcn):
+            1. Insert hooks.
+                1a. Winsock.
+                1b. WinHTTP
+            2. Initialize the backend.
+                2a. Start the background thread.
+        */
+    }
+    EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
+    EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
 }
-void onInitialized(bool) { /* Do .data edits */ }
-bool onMessage(const void *, uint32_t) { return false; }
 
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
