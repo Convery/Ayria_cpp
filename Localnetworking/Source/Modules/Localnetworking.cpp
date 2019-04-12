@@ -5,15 +5,15 @@
 */
 
 #include "../Stdinclude.hpp"
-#include "../IServer.h"
+#include "../IServer.hpp"
 #include <WinSock2.h>
 
 namespace Localnetworking
 {
-    std::unordered_map<std::string_view, std::string> Proxyaddresses;
-    std::unordered_map<std::string_view, uint16_t> Proxyports;
-    std::unordered_map<std::string_view, size_t> Proxysockets;
-    std::unordered_map<std::string_view, void *> Servers;
+    std::unordered_map<std::string, std::string> Proxyaddresses;
+    std::unordered_map<std::string, uint16_t> Proxyports;
+    std::unordered_map<std::string, size_t> Proxysockets;
+    std::unordered_map<std::string, void *> Servers;
     std::vector<void *> Pluginslist;
 
     // Internal polling.
@@ -92,15 +92,27 @@ namespace Localnetworking
                             {
                                 if (Port == ntohs(Client.sin_port))
                                 {
+                                    for (const auto &[Real, Proxy] : Proxyaddresses)
+                                    {
+                                        if (Host == Proxy)
+                                        {
+                                            if (auto Server = (IServer *)Servers[Real])
+                                            {
+                                                Server->onDatagram(Port, Buffer, Size);
+                                                goto LABEL_PROCESSED;
+                                            }
+                                        }
+                                    }
+
                                     if (auto Server = (IServer *)Servers[Host])
                                     {
-                                        Debugprint(va("Got a packet from proxyport %u", ntohs(Client.sin_port)));
                                         Server->onDatagram(Port, Buffer, Size);
-                                        break;
+                                        goto LABEL_PROCESSED;
                                     }
                                 }
                             }
                         }
+                        LABEL_PROCESSED:;
                     }
                 }
             }
@@ -167,7 +179,7 @@ namespace Localnetworking
             {
                 if (auto Server = (reinterpret_cast<IServer *(*)(const char *)>(Callback))(Hostname.data()))
                 {
-                    Servers[Hostname] = Server;
+                    Servers[Hostname.data()] = Server;
                     return true;
                 }
             }
@@ -181,30 +193,30 @@ namespace Localnetworking
     {
         static uint16_t Counter = 0;
 
-        if (Proxyaddresses[Hostname] == std::string())
+        if (Proxyaddresses[Hostname.data()] == std::string())
         {
             Counter++;  // If we ever create 64K connections, overflowing is the least of our problems.
-            Proxyaddresses[Hostname] = va("240.0.%u.%u", HIBYTE(Counter), LOBYTE(Counter));
+            Proxyaddresses[Hostname.data()] = va("240.0.%u.%u", HIBYTE(Counter), LOBYTE(Counter));
         }
 
-        return Proxyaddresses[Hostname];
+        return Proxyaddresses[Hostname.data()];
     }
     uint16_t getProxyport(std::string_view Address)
     {
         static size_t Counter = 0;
 
-        if (Proxyports[Address] == 0)
+        if (Proxyports[Address.data()] == 0)
         {
-            Proxyports[Address] = 4202 + Counter++;
+            Proxyports[Address.data()] = 4202 + Counter++;
         }
 
-        return Proxyports[Address];
+        return Proxyports[Address.data()];
     }
 
     // Associate a port with an address.
     void Associateport(std::string_view Address, uint16_t Port)
     {
-        Proxyports[Address] = Port;
+        Proxyports[Address.data()] = Port;
     }
 
     /*
