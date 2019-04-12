@@ -1,0 +1,23 @@
+/*
+    Initial author: Convery (tcn@ayria.se)
+    Started: 11-04-2019
+    License: MIT
+*/
+
+#pragma once
+#include <cstdint>
+#include <string_view>
+
+namespace Localnetworking
+{
+    // Initialize the server backends on port 50000 and 50001 respectively.
+    void Createbackend(uint16_t TCPPort = 50000, uint16_t UDPPort = 50001);
+
+    // Check if we are going to proxy any connection-property.
+    bool isAddressproxied(std::string_view Address);
+    bool isHostproxied(std::string_view Hostname);
+
+    // Create or fetch a unique property for the connection.
+    std::string getProxyaddress(std::string_view Hostname);
+    uint16_t getProxyport(std::string_view Address);
+}
