@@ -69,7 +69,7 @@ namespace Localnetworking
                     {
                         Count--;
                         auto Size = recv(Socket, Buffer, 8192, 0);
-                        // TODO(tcn): Forward to a server.
+                        // TODO(tcn): Forward to a server based on socket..
                     }
                 }
 
@@ -81,7 +81,7 @@ namespace Localnetworking
                         Clientsize = sizeof(SOCKADDR_IN);
                         auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize);
                         Debugprint(va("Got a packet from proxyport %u", ntohs(Client.sin_port)));
-                        // TODO(tcn): Forward to a server.
+                        // TODO(tcn): Forward to a server based on port.
                     }
                 }
             }
@@ -156,6 +156,12 @@ namespace Localnetworking
         }
 
         return Proxyports[Address];
+    }
+
+    // Associate a port with an address.
+    void Associateport(std::string_view Address, uint16_t Port)
+    {
+        Proxyports[Address] = Port;
     }
 
     /*
