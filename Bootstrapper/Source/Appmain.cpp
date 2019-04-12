@@ -124,6 +124,7 @@ extern "C"
         for (const auto &Item : Loadedplugins)
         {
             auto Callback = GetProcAddress(HMODULE(Item), "onMessage");
+            if (!Callback) continue;
             auto Result = (reinterpret_cast<bool (*)(const void *, uint32_t)>(Callback))(Buffer, Size);
             if (Result) return true;
         }
@@ -136,7 +137,7 @@ extern "C"
         for (const auto &Item : Loadedplugins)
         {
             auto Callback = GetProcAddress(HMODULE(Item), "onInitialized");
-            (reinterpret_cast<void (*)(bool)>(Callback))(false);
+            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
         }
     }
 }
@@ -198,6 +199,6 @@ void Loadallplugins()
     for (const auto &Item : Freshplugins)
     {
         auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
-        (reinterpret_cast<void (*)(bool)>(Callback))(false);
+        if(Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
     }
 }
