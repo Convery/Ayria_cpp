@@ -5,8 +5,6 @@
 */
 
 #include "../Stdinclude.hpp"
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-using namespace std::string_literals;
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 
@@ -14,7 +12,7 @@ namespace Winsock
 {
     #define Callhook(Name, ...) WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook();
     phmap::flat_hash_map<std::string_view, Simplehook::Stomphook> WSHooks;
-    std::unordered_map<uint16_t, uint16_t> Proxyports;
+    phmap::flat_hash_map<uint16_t, uint16_t> Proxyports;
 
     // Utility.
     std::string Plainaddress(const struct sockaddr *Sockaddr)
