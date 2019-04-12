@@ -23,4 +23,5 @@ namespace Localnetworking
 
     // Associate a port with an address.
     void Associateport(std::string_view Address, uint16_t Port);
+    std::string Addressfromport(uint16_t Port);
 }
