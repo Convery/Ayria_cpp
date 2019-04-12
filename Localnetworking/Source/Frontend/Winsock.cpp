@@ -117,6 +117,14 @@ namespace Winsock
         return 0;
     }
 
+    int __stdcall Bind(SOCKET s, const struct sockaddr *name, int namelen)
+    {
+        // Let's not trust other IPs.
+        if (Plainaddress(name) != "127.0.0.1"s) return 0;
+        int Result{}; Callhook(bind, Result = bind(s, name, namelen));
+        return Result;
+    }
+
     struct hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         Debugprint(va("Performing lookup for \"%s\"", Hostname));
@@ -165,4 +173,5 @@ void InstallWinsock()
     Hook("connect", Winsock::Connectsocket);
     Hook("socket", Winsock::Createsocket);
     Hook("sendto", Winsock::Sendto);
+    Hook("bind", Winsock::Bind);
 }
