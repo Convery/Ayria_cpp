@@ -93,14 +93,13 @@ namespace Winsock
             SOCKADDR_IN Client{};
             int Clientsize{ sizeof(SOCKADDR_IN) };
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
-            Localnetworking::Associateport(Readable, Client.sin_port);
+            Localnetworking::Associateport(Readable, ntohs(Client.sin_port));
 
             SOCKADDR_IN Server{};
             Server.sin_family = AF_INET;
             Server.sin_port = htons(4201);
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 
-            Debugprint(va("(0x%X)Sending a packet from proxyport %u", Socket, ntohs(Client.sin_port)));
             Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
