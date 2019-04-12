@@ -5,6 +5,7 @@
 */
 
 #include "../Stdinclude.hpp"
+#include "../IServer.h"
 #include <WinSock2.h>
 
 namespace Localnetworking
@@ -13,6 +14,7 @@ namespace Localnetworking
     std::unordered_map<std::string_view, uint16_t> Proxyports;
     std::unordered_map<std::string_view, size_t> Proxysockets;
     std::unordered_map<std::string_view, void *> Servers;
+    std::vector<void *> Pluginslist;
 
     // Internal polling.
     size_t Listensocket, UDPSocket;
@@ -68,8 +70,13 @@ namespace Localnetworking
                     if (FD_ISSET(Socket, &ReadFD))
                     {
                         Count--;
-                        auto Size = recv(Socket, Buffer, 8192, 0);
-                        // TODO(tcn): Forward to a server based on socket..
+                        if (auto Size = recv(Socket, Buffer, 8192, 0) > 0)
+                        {
+                            if (auto Server = (IServer *)Servers[Host])
+                            {
+                                Server->onStream(Socket, Buffer, Size);
+                            }
+                        }
                     }
                 }
 
@@ -79,15 +86,27 @@ namespace Localnetworking
                     if (FD_ISSET(UDPSocket, &ReadFD))
                     {
                         Clientsize = sizeof(SOCKADDR_IN);
-                        auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize);
-                        Debugprint(va("Got a packet from proxyport %u", ntohs(Client.sin_port)));
-                        // TODO(tcn): Forward to a server based on port.
+                        if (auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize))
+                        {
+                            for (const auto &[Host, Port] : Proxyports)
+                            {
+                                if (Port == ntohs(Client.sin_port))
+                                {
+                                    if (auto Server = (IServer *)Servers[Host])
+                                    {
+                                        Debugprint(va("Got a packet from proxyport %u", ntohs(Client.sin_port)));
+                                        Server->onDatagram(Port, Buffer, Size);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             // NOTE(tcn): We might want to tweak this delay later.
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 
@@ -110,6 +129,18 @@ namespace Localnetworking
         UDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
 
+        constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Localnet32" : ".Localnet64";
+        auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
+        for (const auto &Item : Results)
+        {
+            auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str());
+            if (Module)
+            {
+                Infoprint(va("Loaded localnet plugin \"%s\"", Item.c_str()));
+                Pluginslist.push_back(Module);
+            }
+        }
+
         std::thread(Serverthread).detach();
     }
 
@@ -129,7 +160,19 @@ namespace Localnetworking
             if (Host == Hostname)
                 return true;
 
-        // TODO(tcn): Try to create a server from hostname.
+        // Ask the plugins nicely if they have a server for us.
+        for (const auto &Item : Pluginslist)
+        {
+            if (auto Callback = GetProcAddress((HMODULE)Item, "Createserver"))
+            {
+                if (auto Server = (reinterpret_cast<IServer *(*)(const char *)>(Callback))(Hostname.data()))
+                {
+                    Servers[Hostname] = Server;
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
