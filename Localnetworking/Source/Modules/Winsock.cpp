@@ -90,19 +90,17 @@ namespace Winsock
         }
         else
         {
-            const auto Proxyport = Localnetworking::getProxyport(Readable);
-
             SOCKADDR_IN Client{};
-            Client.sin_family = AF_INET;
-            Client.sin_port = htons(Proxyport);
-            Client.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-            bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+            int Clientsize{ sizeof(SOCKADDR_IN) };
+            getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+            Localnetworking::Associateport(Readable, Client.sin_port);
 
             SOCKADDR_IN Server{};
             Server.sin_family = AF_INET;
             Server.sin_port = htons(4201);
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 
+            Debugprint(va("(0x%X)Sending a packet from proxyport %u", Socket, ntohs(Client.sin_port)));
             Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
@@ -115,14 +113,6 @@ namespace Winsock
     int __stdcall Closesocket(size_t Socket)
     {
         return 0;
-    }
-
-    int __stdcall Bind(SOCKET s, const struct sockaddr *name, int namelen)
-    {
-        // Let's not trust other IPs.
-        if (Plainaddress(name) != "127.0.0.1"s) return 0;
-        int Result{}; Callhook(bind, Result = bind(s, name, namelen));
-        return Result;
     }
 
     struct hostent *__stdcall Gethostbyname(const char *Hostname)
@@ -173,5 +163,4 @@ void InstallWinsock()
     Hook("connect", Winsock::Connectsocket);
     Hook("socket", Winsock::Createsocket);
     Hook("sendto", Winsock::Sendto);
-    Hook("bind", Winsock::Bind);
 }
