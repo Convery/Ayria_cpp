@@ -10,10 +10,10 @@
 
 namespace Localnetworking
 {
-    std::unordered_map<std::string, std::string> Proxyaddresses;
-    std::unordered_map<std::string, uint16_t> Proxyports;
-    std::unordered_map<std::string, size_t> Proxysockets;
-    std::unordered_map<std::string, void *> Servers;
+    phmap::flat_hash_map<std::string, std::string> Proxyaddresses;
+    phmap::flat_hash_map<std::string, uint16_t> Proxyports;
+    phmap::flat_hash_map<std::string, size_t> Proxysockets;
+    phmap::flat_hash_map<std::string, void *> Servers;
     std::vector<void *> Pluginslist;
 
     // Internal polling.
@@ -232,7 +232,7 @@ namespace Localnetworking
     }
     uint16_t getProxyport(std::string_view Address)
     {
-        static size_t Counter = 0;
+        static uint16_t Counter = 0;
 
         if (Proxyports[Address.data()] == 0)
         {

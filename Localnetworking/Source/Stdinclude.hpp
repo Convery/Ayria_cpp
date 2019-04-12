@@ -64,3 +64,6 @@
 
 // Our components.
 #include "Localnetworking.hpp"
+
+// Extensions to the language.
+using namespace std::string_literals;
