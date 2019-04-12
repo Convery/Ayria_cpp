@@ -17,14 +17,8 @@ extern "C"
         // Hook the front-facing APIs.
         InstallWinsock();
 
-        /*
-            TODO(tcn):
-            1. Insert hooks.
-                1a. Winsock.
-                1b. WinHTTP
-            2. Initialize the backend.
-                2a. Start the background thread.
-        */
+        // Initialize the background thread.
+        Localnetworking::Createbackend();
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
