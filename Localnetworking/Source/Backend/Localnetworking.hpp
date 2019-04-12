@@ -10,8 +10,8 @@
 
 namespace Localnetworking
 {
-    // Initialize the server backends on port 50000 and 50001 respectively.
-    void Createbackend(uint16_t TCPPort = 50000, uint16_t UDPPort = 50001);
+    // Initialize the server backends on port 4200 and 4201 respectively.
+    void Createbackend(uint16_t TCPPort = 4200, uint16_t UDPPort = 4201);
 
     // Check if we are going to proxy any connection-property.
     bool isAddressproxied(std::string_view Address);

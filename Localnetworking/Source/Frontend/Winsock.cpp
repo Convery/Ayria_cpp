@@ -57,7 +57,7 @@ namespace Winsock
         if (!Localnetworking::isAddressproxied(Readable))
         {
             Callhook(connect, Result = connect(Socket, Name, Namelength));
-            Debugprint(va("Connecting (0x%X) to %s: %s", Socket, Readable.c_str(), Result ? "FAILED" : "SUCCESS"));
+            Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), WSPort(Name), Result ? "FAILED" : "SUCCESS"));
         }
         else
         {
@@ -71,10 +71,10 @@ namespace Winsock
 
             SOCKADDR_IN Server{};
             Server.sin_family = AF_INET;
-            Server.sin_port = htons(50000);
+            Server.sin_port = htons(4200);
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 
-            Debugprint(va("Proxying connect to %s:%u", "TODO", WSPort(Name)));
+            Debugprint(va("Proxying connect (0x%X) to %s:%u", Socket, "TODO", WSPort(Name)));
             Callhook(connect, Result = connect(Socket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
@@ -100,7 +100,7 @@ namespace Winsock
 
             SOCKADDR_IN Server{};
             Server.sin_family = AF_INET;
-            Server.sin_port = htons(50001);
+            Server.sin_port = htons(4201);
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 
             Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
@@ -132,9 +132,11 @@ namespace Winsock
             Callhook(gethostbyname, Result = gethostbyname("localhost"));
             Result->h_name = const_cast<char *>(Hostname);
             Result->h_addrtype = AF_INET;
-            Result->h_aliases = NULL;
+            *Result->h_aliases = NULL;
+            Result->h_length = 4;
 
             ((in_addr *)Result->h_addr_list[0])->S_un.S_addr = inet_addr(Proxy.c_str());
+            Result->h_addr_list[1] = NULL;
         }
 
         return Result;
