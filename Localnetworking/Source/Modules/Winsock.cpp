@@ -14,6 +14,7 @@ namespace Winsock
 {
     #define Callhook(Name, ...) WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook();
     phmap::flat_hash_map<std::string_view, Simplehook::Stomphook> WSHooks;
+    std::unordered_map<uint16_t, uint16_t> Proxyports;
 
     // Utility.
     std::string Plainaddress(const struct sockaddr *Sockaddr)
@@ -100,11 +101,34 @@ namespace Winsock
             Server.sin_port = htons(4201);
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 
+            Proxyports[ntohs(Client.sin_port)] = WSPort(To);
+
             Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
         return Result;
     }
+    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
+    {
+        int Result{}; Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
+        if (Result < 0) return Result;
+
+        // Update the address if it's from localhost.
+        const auto Readable = Plainaddress(From);
+        if (Readable == "127.0.0.1"s)
+        {
+            SOCKADDR_IN Client{};
+            int Clientsize{ sizeof(SOCKADDR_IN) };
+            getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+
+            ((SOCKADDR_IN *)From)->sin_family = AF_INET;
+            ((SOCKADDR_IN *)From)->sin_port = htons(Proxyports[ntohs(Client.sin_port)]);
+            ((SOCKADDR_IN *)From)->sin_addr.S_un.S_addr = inet_addr(Localnetworking::Addressfromport(ntohs(Client.sin_port)).c_str());
+        }
+
+        return Result;
+    }
+
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
         return 0;
@@ -150,16 +174,18 @@ void InstallWinsock()
     auto Getexport = [](std::string_view Name) -> void *
     {
         auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data());
-        if (!Address) GetProcAddress(GetModuleHandleA("WS2_32.dll"), Name.data());
+        if (!Address) Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data());
         return Address;
     };
     auto Hook = [&](std::string_view Name, void *Target)
     {
-        Winsock::WSHooks[Name].Installhook(Getexport(Name), Target);
+        auto Address = Getexport(Name);
+        if(Address) Winsock::WSHooks[Name].Installhook(Address, Target);
     };
 
     Hook("gethostbyname", Winsock::Gethostbyname);
     Hook("connect", Winsock::Connectsocket);
+    Hook("recvfrom", Winsock::Receivefrom);
     Hook("socket", Winsock::Createsocket);
     Hook("sendto", Winsock::Sendto);
 }
