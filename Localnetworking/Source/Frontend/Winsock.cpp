@@ -5,21 +5,39 @@
 */
 
 #include "../Stdinclude.hpp"
-#include <WinSock2.h>
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 using namespace std::string_literals;
+#include <WinSock2.h>
+#include <Ws2tcpip.h>
 
 namespace Winsock
 {
     #define Callhook(Name, ...) WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook();
-    struct Socketinfo_t { size_t Nativesocket; int Family, Type, Protocol; };
     phmap::flat_hash_map<std::string_view, Simplehook::Stomphook> WSHooks;
-    std::vector<Socketinfo_t> Sockets;
 
+    // Utility.
+    std::string Plainaddress(const struct sockaddr *Sockaddr)
+    {
+        auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
+        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)Sockaddr)->sin6_addr), Address.get(), INET6_ADDRSTRLEN);
+        else inet_ntop(AF_INET, &(((struct sockaddr_in *)Sockaddr)->sin_addr), Address.get(), INET6_ADDRSTRLEN);
+        return std::string(Address.get());
+    }
+    uint16_t WSPort(const struct sockaddr *Sockaddr)
+    {
+        if (Sockaddr->sa_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port);
+        else return ntohs(((struct sockaddr_in *)Sockaddr)->sin_port);
+    }
+
+    // Shims
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
-        auto Familystring = [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }();
-        auto Typestring = [&]() { if (Type == SOCK_STREAM) return "Stream"s; if (Type == SOCK_DGRAM) return "Datagram"s; return va("%u", Type); }();
-        auto Protocolstring = [&]()
+        size_t Result{}; Callhook(socket, Result = socket(Family, Type, Protocol));
+
+        Debugprint(va("Creating a %s socket for %s over %s protocol (0x%X)",
+        [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }().c_str(),
+        [&]() { if (Type == SOCK_STREAM) return "streaming"s; if (Type == SOCK_DGRAM) return "datagrams"s; return va("%u", Type); }().c_str(),
+        [&]()
         {
             switch (Protocol)
             {
@@ -27,26 +45,68 @@ namespace Winsock
                 case /*NSPROTO_IPX*/ 1000: return "IPX"s; case /*NSPROTO_SPX*/ 1256: return "SPX"s; case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
                 default: return va("%u", Protocol);
             }
-        }();
+        }().c_str(),
+        Result));
 
-        Debugprint(va("Creating %s-socket over %s for protocol %s", Typestring.c_str(), Familystring.c_str(), Protocolstring.c_str()));
-        size_t Result{}; Callhook(socket, Result = socket(Family, Type, Protocol));
-        if (Result) Sockets.push_back({ Result, Family, Type, Protocol });
         return Result;
     }
-    int __stdcall Connectsocket(size_t Socket, const struct sockaddr *Name, int Namelength)
+    int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
     {
-        // Check with the backend if this socket or name is claimed.
-        Traceprint();
-        return 0;
+        int Result{};
+        const auto Readable = Plainaddress(Name);
+        if (!Localnetworking::isAddressproxied(Readable))
+        {
+            Callhook(connect, Result = connect(Socket, Name, Namelength));
+            Debugprint(va("Connecting (0x%X) to %s: %s", Socket, Readable.c_str(), Result ? "FAILED" : "SUCCESS"));
+        }
+        else
+        {
+            const auto Proxyport = Localnetworking::getProxyport(Readable);
+
+            SOCKADDR_IN Client{};
+            Client.sin_family = AF_INET;
+            Client.sin_port = htons(Proxyport);
+            Client.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+            bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+
+            SOCKADDR_IN Server{};
+            Server.sin_family = AF_INET;
+            Server.sin_port = htons(50000);
+            Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+
+            Debugprint(va("Proxying connect to %s:%u", "TODO", WSPort(Name)));
+            Callhook(connect, Result = connect(Socket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
+        }
+
+        return Result;
     }
-    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
+    int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, struct sockaddr *To, int Tolength)
     {
-        return 0;
-    }
-    int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, const struct sockaddr *To, int Tolength)
-    {
-        return 0;
+        int Result{};
+        const auto Readable = Plainaddress(To);
+        if (!Localnetworking::isAddressproxied(Readable))
+        {
+            Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, To, Tolength));
+        }
+        else
+        {
+            const auto Proxyport = Localnetworking::getProxyport(Readable);
+
+            SOCKADDR_IN Client{};
+            Client.sin_family = AF_INET;
+            Client.sin_port = htons(Proxyport);
+            Client.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+            bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+
+            SOCKADDR_IN Server{};
+            Server.sin_family = AF_INET;
+            Server.sin_port = htons(50001);
+            Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+
+            Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
+        }
+
+        return Result;
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
@@ -59,7 +119,25 @@ namespace Winsock
 
     struct hostent *__stdcall Gethostbyname(const char *Hostname)
     {
-        return nullptr;
+        Debugprint(va("Performing lookup for \"%s\"", Hostname));
+        hostent *Result{};
+
+        if (!Localnetworking::isHostproxied(Hostname))
+        {
+            Callhook(gethostbyname, Result = gethostbyname(Hostname));
+        }
+        else
+        {
+            const auto Proxy = Localnetworking::getProxyaddress(Hostname);
+            Callhook(gethostbyname, Result = gethostbyname("localhost"));
+            Result->h_name = const_cast<char *>(Hostname);
+            Result->h_addrtype = AF_INET;
+            Result->h_aliases = NULL;
+
+            ((in_addr *)Result->h_addr_list[0])->S_un.S_addr = inet_addr(Proxy.c_str());
+        }
+
+        return Result;
     }
     struct hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
     {
@@ -81,8 +159,8 @@ void InstallWinsock()
         Winsock::WSHooks[Name].Installhook(Getexport(Name), Target);
     };
 
+    Hook("gethostbyname", Winsock::Gethostbyname);
     Hook("connect", Winsock::Connectsocket);
     Hook("socket", Winsock::Createsocket);
+    Hook("sendto", Winsock::Sendto);
 }
-
-
