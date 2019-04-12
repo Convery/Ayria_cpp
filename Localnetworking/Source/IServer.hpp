@@ -17,6 +17,6 @@
 struct IServer
 {
     // Called whenever the client sends data to the associated hostname. We don't send statuses.
-    void onDatagram(uint16_t Clientport, const void *Databuffer, const uint32_t Datasize) { };
-    void onStream(const size_t Socket, const void *Databuffer, const uint32_t Datasize) { };
+    virtual void onDatagram(uint16_t Clientport, const void *Databuffer, const uint32_t Datasize) = 0;
+    virtual void onStream(const size_t Socket, const void *Databuffer, const uint32_t Datasize) = 0;
 };
