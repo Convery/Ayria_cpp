@@ -5,8 +5,7 @@
 */
 
 #pragma once
-#include <cstdint>
-#include <string_view>
+#include "Stdinclude.hpp"
 
 namespace Localnetworking
 {

@@ -74,7 +74,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Disable TLS callbacks as they run before main.
         if (const size_t Address = TLSCallbackaddress())
         {
-            if (TLSAddress = *(size_t *)Address)
+            if (TLSAddress = *(size_t *)Address; TLSAddress)
             {
                 auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
                 {
@@ -103,8 +103,8 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
                 else
                 {
                     // JMP short
-                    *(uint8_t  *)((uint8_t *)Address + 0) = 0xE9;
-                    *(uint32_t *)((uint8_t *)Address + 1) = ((uint32_t)PECallback - (Address + 5));
+                    *(uint8_t *)((uint8_t *)Address + 0) = 0xE9;
+                    *(size_t  *)((uint8_t *)Address + 1) = ((size_t)PECallback - (Address + 5));
                 }
             }
             Memprotect::Protectrange(Address, 14, Protection);

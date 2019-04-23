@@ -5,6 +5,7 @@
 */
 
 #include "Stdinclude.hpp"
+#include "Localnetworking.hpp"
 
 // Install the frontend hooks.
 extern void InstallWinsock();
