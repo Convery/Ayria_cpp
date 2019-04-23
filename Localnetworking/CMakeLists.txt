@@ -20,8 +20,6 @@ else()
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().
-find_path(HASHMAP_INC parallel_hashmap)
-include_directories(${HASHMAP_INC})
 set(MODULE_LIBS ${MODULE_LIBS})
 
 # Just pull all the files from /Source

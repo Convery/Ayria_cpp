@@ -10,10 +10,10 @@
 
 namespace Localnetworking
 {
-    phmap::flat_hash_map<std::string, std::string> Proxyaddresses;
-    phmap::flat_hash_map<std::string, uint16_t> Proxyports;
-    phmap::flat_hash_map<std::string, size_t> Proxysockets;
-    phmap::flat_hash_map<std::string, void *> Servers;
+    robin_hood::unordered_flat_map<std::string, std::string> Proxyaddresses;
+    robin_hood::unordered_flat_map<std::string, uint16_t> Proxyports;
+    robin_hood::unordered_flat_map<std::string, size_t> Proxysockets;
+    robin_hood::unordered_flat_map<std::string, void *> Servers;
     std::vector<void *> Pluginslist;
 
     // Internal polling.
@@ -70,13 +70,9 @@ namespace Localnetworking
                         {
                             if (Port == ntohs(Client.sin_port))
                             {
-                                if (auto Server = Findserver(Host))
-                                {
-                                    // Remove the proxy port as it's now irrelevant.
-                                    Proxysockets[Host] = Socket;
-                                    Proxyports.erase(Host);
-                                    Server->onConnect();
-                                }
+                                // Remove the proxy port as it's now irrelevant.
+                                Proxysockets[Host] = Socket;
+                                Proxyports.erase(Host);
                                 break;
                             }
                         }
@@ -91,7 +87,7 @@ namespace Localnetworking
                     {
                         if (auto Server = Findserver(Host))
                         {
-                            Server->onWrite(Buffer, Size);
+                            Server->onStreamwrite(Buffer, Size);
                         }
                     }
                 }
@@ -108,7 +104,7 @@ namespace Localnetworking
                             {
                                 if (auto Server = Findserver(Host))
                                 {
-                                    Server->onWrite(Buffer, Size);
+                                    Server->onPacketwrite(Buffer, Size);
                                 }
                             }
                         }
@@ -125,7 +121,7 @@ namespace Localnetworking
                 if (auto Server = Findserver(Host))
                 {
                     uint32_t Datasize{ 8192 };
-                    while (Server->onRead(Buffer, &Datasize))
+                    while (Server->onStreamread(Buffer, &Datasize))
                     {
                         send(FD, Buffer, Datasize, 0);
                         Datasize = 8192;
@@ -137,7 +133,7 @@ namespace Localnetworking
                 if (auto Server = Findserver(Host))
                 {
                     uint32_t Datasize{ 8192 };
-                    while (Server->onRead(Buffer, &Datasize))
+                    while (Server->onPacketread(Buffer, &Datasize))
                     {
                         Client.sin_family = AF_INET;
                         Client.sin_port = htons(Port);

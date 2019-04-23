@@ -48,7 +48,7 @@
 #endif
 
 // Third-party includes.
-#include <parallel_hashmap/phmap.h>
+#include <Utilities/Robin_hood.hpp>
 
 // Restore warnings.
 #pragma warning(pop)
