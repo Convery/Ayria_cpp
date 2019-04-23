@@ -9,8 +9,8 @@
 namespace Steam
 {
     std::vector<std::pair<Interfacetype_t, Interface_t *>> *Interfacestore;
-    phmap::flat_hash_map<Interfacetype_t, Interface_t *> Currentinterfaces;
-    phmap::flat_hash_map<std::string_view, Interface_t *> *Interfacenames;
+    robin_hood::unordered_flat_map<Interfacetype_t, Interface_t *> Currentinterfaces;
+    robin_hood::unordered_flat_map<std::string_view, Interface_t *> *Interfacenames;
 
     // A nice little dummy interface for debugging.
     struct Dummyinterface : Interface_t

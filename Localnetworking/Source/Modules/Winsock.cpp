@@ -11,8 +11,8 @@
 namespace Winsock
 {
     #define Callhook(Name, ...) WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook();
-    phmap::flat_hash_map<std::string_view, Simplehook::Stomphook> WSHooks;
-    phmap::flat_hash_map<uint16_t, uint16_t> Proxyports;
+    robin_hood::unordered_flat_map<std::string_view, Simplehook::Stomphook> WSHooks;
+    robin_hood::unordered_flat_map<uint16_t, uint16_t> Proxyports;
 
     // Utility.
     std::string Plainaddress(const struct sockaddr *Sockaddr)
