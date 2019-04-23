@@ -4,7 +4,7 @@
     License: MIT
 */
 
-#include "../Localnetworking.hpp"
+#include "Localnetworking.hpp"
 #include "Stdinclude.hpp"
 #include "../IServer.hpp"
 #include <WinSock2.h>
@@ -15,6 +15,7 @@ namespace Localnetworking
     robin_hood::unordered_flat_map<std::string, uint16_t> Proxyports;
     robin_hood::unordered_flat_map<std::string, size_t> Proxysockets;
     robin_hood::unordered_flat_map<std::string, void *> Servers;
+    uint16_t BackendTCPport, BackendUDPport;
     std::vector<void *> Pluginslist;
 
     // Internal polling.
@@ -151,6 +152,9 @@ namespace Localnetworking
     // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t TCPPort, uint16_t UDPPort)
     {
+        BackendTCPport = TCPPort;
+        BackendUDPport = UDPPort;
+
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
