@@ -4,7 +4,7 @@
     License: MIT
 */
 
-#include "../Stdinclude.hpp"
+#include "Stdinclude.hpp"
 #include "Steam.hpp"
 
 // Keep the global state together.
