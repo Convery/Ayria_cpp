@@ -147,7 +147,7 @@ namespace Localnetworking
         }
     }
 
-    // Initialize the server backends on port 4200 and 4201 respectively.
+    // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t TCPPort, uint16_t UDPPort)
     {
         WSADATA wsaData;
