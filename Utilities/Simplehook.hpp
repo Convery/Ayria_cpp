@@ -40,8 +40,8 @@ namespace Simplehook
                 else
                 {
                     // JMP short
-                    *(uint8_t  *)((uint8_t *)Location + 0) = 0xE9;
-                    *(uint32_t *)((uint8_t *)Location + 1) = ((uint32_t)Target - ((uint32_t)Location + 5));
+                    *(uint8_t *)((uint8_t *)Location + 0) = 0xE9;
+                    *(size_t  *)((uint8_t *)Location + 1) = ((size_t)Target - ((size_t)Location + 5));
                 }
             }
             Memprotect::Protectrange(Location, 14, Protection);
