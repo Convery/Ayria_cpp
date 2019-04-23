@@ -28,7 +28,8 @@ namespace Winsock
         else return ntohs(((struct sockaddr_in *)Sockaddr)->sin_port);
     }
 
-    // Shims
+    // Only relevant while debugging.
+    #if !defined (NDEBUG)
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
         size_t Result{}; Callhook(socket, Result = socket(Family, Type, Protocol));
@@ -49,6 +50,9 @@ namespace Winsock
 
         return Result;
     }
+    #endif
+
+    // Streamed connections just proxies the port.
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
     {
         int Result{};
@@ -60,25 +64,30 @@ namespace Winsock
         }
         else
         {
-            const auto Proxyport = Localnetworking::getProxyport(Readable);
+            SOCKADDR_IN Client{ AF_INET }, Server{ AF_INET };
+            int Clientsize{ sizeof(SOCKADDR_IN) };
 
-            SOCKADDR_IN Client{};
-            Client.sin_family = AF_INET;
-            Client.sin_port = htons(Proxyport);
+            // Bind this socket to a port before the call to WS.
             Client.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
             bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
 
-            SOCKADDR_IN Server{};
-            Server.sin_family = AF_INET;
-            Server.sin_port = htons(4200);
-            Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+            // Query which port we got and associate it.
+            getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+            Localnetworking::Associateport(Readable, ntohs(Client.sin_port));
 
+            // Redirect the connection to our backend. TODO(tcn): Don't hardcode the port.
+            Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+            Server.sin_port = htons(4200);
+
+            // Pass to Winsock.
             Debugprint(va("Proxying connect (0x%X) to %s:%u", Socket, "TODO", WSPort(Name)));
             Callhook(connect, Result = connect(Socket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
         return Result;
     }
+
+    // Datagram sockets need to remember the hostinfo.
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, struct sockaddr *To, int Tolength)
     {
         int Result{};
@@ -89,18 +98,21 @@ namespace Winsock
         }
         else
         {
-            SOCKADDR_IN Client{};
+            SOCKADDR_IN Client{ AF_INET }, Server{ AF_INET };
             int Clientsize{ sizeof(SOCKADDR_IN) };
+
+            // Query which port the socket is bound to.
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
             Localnetworking::Associateport(Readable, ntohs(Client.sin_port));
 
-            SOCKADDR_IN Server{};
-            Server.sin_family = AF_INET;
-            Server.sin_port = htons(4201);
+            // Redirect the target to our backend. TODO(tcn): Don't hardcode the port.
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+            Server.sin_port = htons(4201);
 
+            // Remember where the client wanted to send it.
             Proxyports[ntohs(Client.sin_port)] = WSPort(To);
 
+            // And forward to Winsock.
             Callhook(sendto, Result = sendto(Socket, Buffer, Length, Flags, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)));
         }
 
@@ -119,6 +131,7 @@ namespace Winsock
             int Clientsize{ sizeof(SOCKADDR_IN) };
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
 
+            // Replace with the saved hostinfo.
             ((SOCKADDR_IN *)From)->sin_family = AF_INET;
             ((SOCKADDR_IN *)From)->sin_port = htons(Proxyports[ntohs(Client.sin_port)]);
             ((SOCKADDR_IN *)From)->sin_addr.S_un.S_addr = inet_addr(Localnetworking::Addressfromport(ntohs(Client.sin_port)).c_str());
@@ -127,15 +140,7 @@ namespace Winsock
         return Result;
     }
 
-    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
-    {
-        return 0;
-    }
-    int __stdcall Closesocket(size_t Socket)
-    {
-        return 0;
-    }
-
+    // Create a proxy address if needed.
     struct hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         Debugprint(va("Performing lookup for \"%s\"", Hostname));
@@ -164,6 +169,10 @@ namespace Winsock
     {
         return nullptr;
     }
+    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
+    {
+        return 0;
+    }
 }
 
 // Hook the front-facing APIs.
@@ -181,9 +190,14 @@ void InstallWinsock()
         if(Address) Winsock::WSHooks[Name].Installhook(Address, Target);
     };
 
+    // Proxy Winsocks exports with our own information.
     Hook("gethostbyname", Winsock::Gethostbyname);
     Hook("connect", Winsock::Connectsocket);
     Hook("recvfrom", Winsock::Receivefrom);
-    Hook("socket", Winsock::Createsocket);
     Hook("sendto", Winsock::Sendto);
+
+    // For debugging only.
+    #if !defined(NDEBUG)
+    Hook("socket", Winsock::Createsocket);
+    #endif
 }

@@ -19,7 +19,6 @@ namespace Localnetworking
 
     // Create or fetch a unique property for the connection.
     std::string getProxyaddress(std::string_view Hostname);
-    uint16_t getProxyport(std::string_view Address);
 
     // Associate a port with an address.
     void Associateport(std::string_view Address, uint16_t Port);
