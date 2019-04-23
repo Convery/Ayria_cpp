@@ -226,17 +226,6 @@ namespace Localnetworking
 
         return Proxyaddresses[Hostname.data()];
     }
-    uint16_t getProxyport(std::string_view Address)
-    {
-        static uint16_t Counter = 0;
-
-        if (Proxyports[Address.data()] == 0)
-        {
-            Proxyports[Address.data()] = 4202 + Counter++;
-        }
-
-        return Proxyports[Address.data()];
-    }
 
     // Associate a port with an address.
     void Associateport(std::string_view Address, uint16_t Port)
