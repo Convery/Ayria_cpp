@@ -5,10 +5,10 @@
 */
 
 #include "Stdinclude.hpp"
-#include "Localnetworking.hpp"
 
 // Install the frontend hooks.
 extern void InstallWinsock();
+namespace Localnetworking { extern void Createbackend(uint16_t TCPPort = 4200, uint16_t UDPPort = 4201); };
 
 // Entrypoint when loaded as a plugin.
 extern "C"

@@ -9,6 +9,8 @@
 
 namespace Localnetworking
 {
+    extern uint16_t BackendTCPport, BackendUDPport;
+
     // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t TCPPort = 4200, uint16_t UDPPort = 4201);
 

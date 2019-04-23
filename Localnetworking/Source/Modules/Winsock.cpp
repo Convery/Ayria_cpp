@@ -4,7 +4,7 @@
     License: MIT
 */
 
-#include "../Localnetworking.hpp"
+#include "Localnetworking.hpp"
 #include "Stdinclude.hpp"
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
@@ -76,9 +76,9 @@ namespace Winsock
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
             Localnetworking::Associateport(Readable, ntohs(Client.sin_port));
 
-            // Redirect the connection to our backend. TODO(tcn): Don't hardcode the port.
+            // Redirect the connection to our backend.
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-            Server.sin_port = htons(4200);
+            Server.sin_port = htons(Localnetworking::BackendTCPport);
 
             // Pass to Winsock.
             Debugprint(va("Proxying connect (0x%X) to %s:%u", Socket, "TODO", WSPort(Name)));
@@ -106,9 +106,9 @@ namespace Winsock
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
             Localnetworking::Associateport(Readable, ntohs(Client.sin_port));
 
-            // Redirect the target to our backend. TODO(tcn): Don't hardcode the port.
+            // Redirect the target to our backend..
             Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-            Server.sin_port = htons(4201);
+            Server.sin_port = htons(Localnetworking::BackendUDPport);
 
             // Remember where the client wanted to send it.
             Proxyports[ntohs(Client.sin_port)] = WSPort(To);
