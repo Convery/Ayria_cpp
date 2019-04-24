@@ -5,6 +5,7 @@
 */
 
 #include "Stdinclude.hpp"
+#include "Steam/Steam.hpp"
 
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
@@ -36,6 +37,15 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
             SetConsoleTitleA("Platformwrapper Console");
             SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
         }
+
+        // Start tracking availability.
+        Steam::Global.Startuptimestamp = time(NULL);
+
+        // Legacy compatibility.
+        Steam::Redirectmodulehandle();
+
+        // Start processing the IPC separately.
+        std::thread(Steam::InitializeIPC).detach();
 
         // If there's a local bootstrap module, we'll load it.
         LoadLibraryA("Developerbootstrap.dll");

@@ -8,8 +8,30 @@
 
 namespace Steam
 {
+    Simplehook::Stomphook Modulehook;
     // Also redirect module lookups for legacy compatibility.
-    void Redirectmodulehandle() {}
+    int Callback(DWORD Flags, LPCSTR Modulename, HMODULE *Handle)
+    {
+        char Filename[260]{};
+
+        Modulehook.Removehook();
+        auto Result = GetModuleHandleExA(Flags, Modulename, Handle);
+        Modulehook.Installhook();
+
+        if (Result)
+        {
+            GetModuleFileNameA(*Handle, Filename, 260);
+
+            if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
+            {
+                constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
+                *Handle = LoadLibraryA(Clientlibrary);
+            }
+        }
+
+        return Result;
+    }
+    void Redirectmodulehandle() { Modulehook.Installhook(Callback, GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA")); }
 
     // Block and wait for Steams IPC initialization event as some games need it.
     void InitializeIPC()
@@ -65,8 +87,7 @@ namespace Steam
 
         // Acknowledge that the game has started.
         auto Event = OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, Startevent);
-        SetEvent(Event);
-        CloseHandle(Event);
+        SetEvent(Event); CloseHandle(Event);
 
         // Notify the game that we are done.
         ReleaseSemaphore(Producesemaphore, 1, NULL);
