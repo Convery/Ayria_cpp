@@ -18,12 +18,6 @@ extern "C"
     {
         Traceprint();
 
-        // Start tracking availability.
-        Steam::Global.Startuptimestamp = time(NULL);
-
-        // Start processing the IPC separately.
-        std::thread(Steam::InitializeIPC).detach();
-
         // Modern games provide the ApplicationID via SteamAPI_RestartAppIfNecessary.
         // While legacy/dedis have hardcoded steam_apis. Thus we need a configuration file.
         if (Steam::Global.ApplicationID == 0)
