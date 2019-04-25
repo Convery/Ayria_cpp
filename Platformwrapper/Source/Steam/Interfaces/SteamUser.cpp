@@ -11,6 +11,9 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
+    // Authentication data.
+    uint8_t Ticketdata[128]{};
+
     struct SteamUser
     {
         uint32_t GetHSteamUser()
@@ -320,12 +323,30 @@ namespace Steam
         }
         uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude)
         {
-            return 0;
+            // Fill the buffer with useful information.
+            std::memcpy(&Ticketdata[0], &Steam::Global.UserID, 8);
+            std::memcpy(&Ticketdata[8], Steam::Global.Username.c_str(), Steam::Global.Username.size());
+            std::memcpy(&Ticketdata[24], "\x00", 1);    // Ensure that any string is null-terminated.
+            /* NOTE(tcn): 7 bytes unused here */
+
+            // Append game data.
+            Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));
+            std::memcpy(&Ticketdata[32], pDataToInclude, std::min(cbDataToInclude, (unsigned int)sizeof(Ticketdata) - 32));
+
+            // Notify the game that we are ready.
+            const auto Request = new Callbacks::EncryptedAppTicketResponse_t();
+            const auto RequestID = Callbacks::Createrequest();
+            Request->m_eResult = Callbacks::k_EResultOK;
+
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
+            return RequestID;
         }
         bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t * pcbTicket)
         {
+            memcpy(pTicket, Ticketdata, std::min(cbMaxTicket, (unsigned int)sizeof(Ticketdata)));
+            *pcbTicket = sizeof(Ticketdata);
             Traceprint();
-            return false;
+            return true;
         }
         uint32_t DecompressVoice1(void *pCompressed, uint32_t cbCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t * nBytesWritten, uint32_t nSamplesPerSec)
         {
