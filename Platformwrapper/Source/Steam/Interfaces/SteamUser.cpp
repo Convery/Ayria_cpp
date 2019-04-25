@@ -271,10 +271,14 @@ namespace Steam
         }
         uint32_t GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
         {
-            Traceprint();
+            const auto Request = new Callbacks::GetAuthSessionTicketResponse_t();
+            Request->m_eResult = Callbacks::EResult::k_EResultOK;
+            Request->m_hAuthTicket = Callbacks::Createrequest();
+            Callbacks::Completerequest(Request->m_hAuthTicket, Callbacks::k_iSteamUserCallbacks + 63, Request);
+            *pcbTicket = cbMaxTicket;
 
-            // k_HAuthTicketInvalid
-            return 0;
+            Traceprint();
+            return Request->m_hAuthTicket;
         }
         uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
         {

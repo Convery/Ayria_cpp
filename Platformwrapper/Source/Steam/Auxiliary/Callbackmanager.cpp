@@ -25,7 +25,7 @@ namespace Steam
 
         robin_hood::unordered_flat_map<int32_t, Callback_t *> Callbacks;
         std::queue<std::pair<int32_t, Result_t>> Results;
-        std::atomic<CallID_t> Callbackcount;
+        std::atomic<CallID_t> Callbackcount{ 42 };
 
         // Forward declaration, will be optimized out in release.
         std::string Callbackname(int32_t Callbacktype);
@@ -51,14 +51,18 @@ namespace Steam
         {
             while (!Results.empty())
             {
-                const auto Entry = Results.front();
-                Results.pop();
+                const auto Entry = Results.front(); Results.pop();
+                auto Callback = Callbacks.find(Entry.first);
 
                 // Prefer the longer method as most implementations just discard the extra data.
-                Callbacks[Entry.first]->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
+                if(Callback != Callbacks.end()) Callbacks[Entry.first]->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
+
+                // Let's not leak.
+                delete Entry.second.Databuffer;
             }
         }
 
+        // Will be removed by the linker in release mode.
         std::string Callbackname(int32_t Callbacktype)
         {
             // Named lookup, added as we go.
