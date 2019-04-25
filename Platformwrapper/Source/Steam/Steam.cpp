@@ -133,19 +133,19 @@ extern "C"
     }
     EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
     EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
-    EXPORT_ATTR bool SteamAPI_IsSteamRunning() { Traceprint(); return true; }
-    EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { Traceprint(); return nullptr; }
+    EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
+    EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { return Steam::Global.Path.c_str(); }
     EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam::Global.ApplicationID = unOwnAppID; return false; }
 
     // Callback management.
-    EXPORT_ATTR void SteamAPI_RunCallbacks() { }
+    EXPORT_ATTR void SteamAPI_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
     {
-        Debugprint(va("Register callback %i", iCallback));
+        Steam::Callbacks::Registercallback(pCallback, iCallback);
     }
-    EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback) { Traceprint(); }
+    EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback) { }
     EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall) { Traceprint(); }
-    EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall) { Traceprint(); }
+    EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall) { }
 
     // Steam proxy.
     EXPORT_ATTR int32_t SteamAPI_GetHSteamUser() { Traceprint(); return { }; }
@@ -154,7 +154,7 @@ extern "C"
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
     EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint();}
-    EXPORT_ATTR void SteamGameServer_RunCallbacks() { }
+    EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
     EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
