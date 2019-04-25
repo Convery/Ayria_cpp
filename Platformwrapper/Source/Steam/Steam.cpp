@@ -160,6 +160,9 @@ extern "C"
     EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
     EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString) { Traceprint(); return true; }
 
+    // For debugging interface access.
+    #define Printcaller() { Debugprint(va("%s from 0x%X", __func__, (size_t)_ReturnAddress())); }
+
     // Interface access.
     EXPORT_ATTR void *SteamAppList() { return Steam::Fetchinterface(Steam::Interfacetype_t::APPLIST);  }
     EXPORT_ATTR void *SteamApps() { return Steam::Fetchinterface(Steam::Interfacetype_t::APPS);  }
