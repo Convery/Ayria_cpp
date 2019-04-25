@@ -14,8 +14,8 @@ namespace Steam
         using Result_t = struct { CallID_t RequestID; void *Databuffer; };
         struct Callback_t
         {
-            virtual void Execute(void *Databuffer, bool Error, CallID_t CallID) = 0;
             virtual void Execute(void *Databuffer) = 0;
+            virtual void Execute(void *Databuffer, bool Error, CallID_t CallID) = 0;
             virtual int32_t Callbacksize() = 0;
 
             // Padding intended.
@@ -37,6 +37,10 @@ namespace Steam
         }
         void Registercallback(void *Callback, int32_t Callbacktype)
         {
+            // Special case, callback provides the type.
+            if (Callbacktype == -1) Callbacktype = ((Callback_t *)Callback)->Type;
+
+            // Register the callback handler for later use.
             auto &Entry = Callbacks[Callbacktype];
             Entry = (Callback_t *)Callback;
             Entry->Type = Callbacktype;
@@ -55,7 +59,7 @@ namespace Steam
                 auto Callback = Callbacks.find(Entry.first);
 
                 // Prefer the longer method as most implementations just discard the extra data.
-                if(Callback != Callbacks.end()) Callbacks[Entry.first]->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
+                if(Callback != Callbacks.end()) Callback->second->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
 
                 // Let's not leak.
                 delete Entry.second.Databuffer;

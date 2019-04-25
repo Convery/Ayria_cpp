@@ -141,10 +141,15 @@ extern "C"
     EXPORT_ATTR void SteamAPI_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
     {
+        // Broadcasting callback.
         Steam::Callbacks::Registercallback(pCallback, iCallback);
     }
     EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback) { }
-    EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall) { Traceprint(); }
+    EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall)
+    {
+        // One-off callback (though we cheat and implement it as a normal one).
+        Steam::Callbacks::Registercallback(pCallback, -1);
+    }
     EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall) { }
 
     // Steam proxy.
