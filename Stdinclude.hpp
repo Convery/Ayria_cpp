@@ -28,6 +28,7 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+#include <atomic>
 #include <queue>
 #include <any>
 
