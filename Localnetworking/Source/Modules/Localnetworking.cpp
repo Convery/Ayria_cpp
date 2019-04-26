@@ -85,7 +85,7 @@ namespace Localnetworking
                 for (const auto &[Host, Socket] : Proxysockets)
                 {
                     if (!FD_ISSET(Socket, &ReadFD)) continue; Count--;
-                    if (auto Size = recv(Socket, Buffer, 8192, 0))
+                    if (auto Size = recv(Socket, Buffer, 8192, 0); Size != -1)
                     {
                         if (auto Server = Findserver(Host))
                         {
@@ -98,7 +98,7 @@ namespace Localnetworking
                 while (Count-- && FD_ISSET(UDPSocket, &ReadFD))
                 {
                     Clientsize = sizeof(SOCKADDR_IN);
-                    if (auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize))
+                    if (auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize); Size != -1)
                     {
                         for (const auto &[Host, Port] : Proxyports)
                         {
