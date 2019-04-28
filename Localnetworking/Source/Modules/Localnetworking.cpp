@@ -11,38 +11,28 @@
 
 namespace Localnetworking
 {
-    robin_hood::unordered_flat_map<std::string, std::string> Proxyaddresses;
-    robin_hood::unordered_flat_map<std::string, uint16_t> Proxyports;
-    robin_hood::unordered_flat_map<std::string, size_t> Proxysockets;
-    robin_hood::unordered_flat_map<std::string, void *> Servers;
+    std::unordered_map<IServer *, std::vector<uint16_t>> Proxyports;
+    std::unordered_map<std::string, IServer *> Serverinstances;
+
+    std::unordered_map<IServer *, size_t> Datagramsockets;
+    std::unordered_map<size_t, IServer *> Streamsockets;
     uint16_t BackendTCPport, BackendUDPport;
     std::vector<void *> Pluginslist;
-
-    // Internal polling.
     size_t Listensocket, UDPSocket;
-    IServer *Findserver(std::string_view Address)
-    {
-        for (const auto &[Real, Proxy] : Proxyaddresses)
-        {
-            if (Proxy == Address)
-            {
-                if (auto Server = (IServer *)Servers[Real])
-                {
-                    return Server;
-                }
-            }
-        }
 
-        return (IServer *)Servers[Address.data()];
-    }
+    std::unordered_map<std::string, std::string> Resolvercache;
+
+    // Poll on the local sockets.
     void Serverthread()
     {
-        SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
+        // ~100 FPS incase someone proxies game-data.
+        timeval Timeout{ NULL, 10000 };
         char Buffer[8192];
         FD_SET ReadFD;
 
         while (true)
         {
+        // Resent the descriptors.
             FD_ZERO(&ReadFD);
 
             // Only listen for new connections on this socket.
@@ -52,61 +42,91 @@ namespace Localnetworking
             FD_SET(UDPSocket, &ReadFD);
 
             // While the TCP ones need their own socket, because reasons.
-            for (const auto &[_, FD] : Proxysockets) FD_SET(FD, &ReadFD);
+            for (const auto &[Socket, Server] : Streamsockets) FD_SET(Socket, &ReadFD);
 
-            // Ask Windows nicely for the status.
-            if (auto Count = select(NULL, &ReadFD, NULL, NULL, NULL))
+            // NOTE(tcn): Not portable! POSIX select timeout is not const *.
+            if (select(NULL, &ReadFD, NULL, NULL, &Timeout))
             {
                 // If there's data on the listen-socket, it's a new connection.
                 if (FD_ISSET(Listensocket, &ReadFD))
                 {
-                    Count--; Clientsize = sizeof(SOCKADDR_IN);
+                    SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
                     if (auto Socket = accept(Listensocket, (SOCKADDR *)&Client, &Clientsize))
                     {
-                        // Blocking is bad.
-                        unsigned long Noblocky = 1;
-                        ioctlsocket(Socket, FIONBIO, &Noblocky);
-
-                        // Find the hostname from the port.
-                        for (const auto &[Host, Port] : Proxyports)
+                        // Associate the new socket with a server-instance.
+                        for (const auto &[Server, Portlist] : Proxyports)
                         {
-                            if (Port == ntohs(Client.sin_port))
+                            for (const auto &Port : Portlist)
                             {
-                                // Remove the proxy port as it's now irrelevant.
-                                Proxysockets[Host] = Socket;
-                                Proxyports.erase(Host);
-                                break;
+                                if (Port == ntohs(Client.sin_port))
+                                {
+                                    Streamsockets[Socket] = Server;
+                                    Server->onConnect();
+                                    break;
+                                }
                             }
                         }
                     }
                 }
 
                 // If there's data on the stream-sockets then we need to forward it.
-                for (const auto &[Host, Socket] : Proxysockets)
+                for (const auto &[Socket, Server] : Streamsockets)
                 {
-                    if (!FD_ISSET(Socket, &ReadFD)) continue; Count--;
-                    if (auto Size = recv(Socket, Buffer, 8192, 0); Size != -1)
+                    if (!FD_ISSET(Socket, &ReadFD)) continue;
+                    auto Size = recv(Socket, Buffer, 8192, 0);
+
+                    // Connection closed gracefully.
+                    if (Size == 0) Server->onDisconnect();
+
+                    // Winsock had some internal issue.
+                    else if (Size == -1)
                     {
-                        if (auto Server = Findserver(Host))
-                        {
-                            Server->onStreamwrite(Buffer, Size);
-                        }
+                        Infoprint(va("Error on socket 0x%X - %u", WSAGetLastError()));
+                        Streamsockets.erase(Socket);
+                        closesocket(Socket);
                     }
+
+                    // Normal data.
+                    else Server->onStreamwrite(Buffer, Size);
                 }
 
-                // If we still have unhandled FDs, it's for datagram.
-                while (Count-- && FD_ISSET(UDPSocket, &ReadFD))
+                // All datagram packets come through a single socket.
+                if (FD_ISSET(UDPSocket, &ReadFD))
                 {
-                    Clientsize = sizeof(SOCKADDR_IN);
-                    if (auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize); Size != -1)
+                    SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
+                    while (recvfrom(UDPSocket, Buffer, 8196, MSG_PEEK, (SOCKADDR *)&Client, &Clientsize) > 0)
                     {
-                        for (const auto &[Host, Port] : Proxyports)
+                        auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize);
+
+                        // Find the server from the sending-port.
+                        for (const auto &[Server, Portlist] : Proxyports)
                         {
-                            if (Port == ntohs(Client.sin_port))
+                            for (const auto &Port : Portlist)
                             {
-                                if (auto Server = Findserver(Host))
+                                if (Port == ntohs(Client.sin_port))
                                 {
+                                    // Forward to the server.
+                                    Server->onContextswitch(&Client);
                                     Server->onPacketwrite(Buffer, Size);
+
+                                    // Ensure that there's a socket associated with the server.
+                                    auto &Entry = Datagramsockets[Server];
+                                    if (Entry == 0)
+                                    {
+                                        auto Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+                                        // Ensure that the socket is bound somewhere.
+                                        Client = { AF_INET, 0 };
+                                        Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                                        bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+
+                                        // Query the port assigned to the socket.
+                                        getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+                                        Proxyports[Server].push_back(ntohs(Client.sin_port));
+
+                                        // Associate the server with the socket.
+                                        Entry = Socket;
+                                    }
                                 }
                             }
                         }
@@ -114,36 +134,27 @@ namespace Localnetworking
                 }
             }
 
-            // NOTE(tcn): We might want to tweak this delay later.
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-            // Poll the servers for data.
-            for (const auto &[Host, FD] : Proxysockets)
+            // Poll the servers for a single packet and forward it.
+            for (const auto &[Server, Socket] : Datagramsockets)
             {
-                if (auto Server = Findserver(Host))
+                uint32_t Datasize{ 8192 };
+                if (Server->onPacketread(Buffer, &Datasize))
                 {
-                    uint32_t Datasize{ 8192 };
-                    while (Server->onStreamread(Buffer, &Datasize))
+                    // Notify all ports associated with the server.
+                    for (const auto &Port : Proxyports[Server])
                     {
-                        send(FD, Buffer, Datasize, 0);
-                        Datasize = 8192;
+                        SOCKADDR_IN Client{ AF_INET, htons(Port) };
+                        Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                        sendto(Socket, Buffer, Datasize, 0, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
                     }
                 }
             }
-            for (const auto &[Host, Port] : Proxyports)
+            for (const auto &[Socket, Server] : Streamsockets)
             {
-                if (auto Server = Findserver(Host))
+                uint32_t Datasize{ 8192 };
+                if (Server->onStreamread(Buffer, &Datasize))
                 {
-                    uint32_t Datasize{ 8192 };
-                    while (Server->onPacketread(Buffer, &Datasize))
-                    {
-                        Client.sin_family = AF_INET;
-                        Client.sin_port = htons(Port);
-                        Client.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-                        sendto(UDPSocket, Buffer, Datasize, 0, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
-
-                        Datasize = 8192;
-                    }
+                    send(Socket, Buffer, Datasize, 0);
                 }
             }
         }
@@ -152,6 +163,7 @@ namespace Localnetworking
     // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t TCPPort, uint16_t UDPPort)
     {
+        // Save the config.
         BackendTCPport = TCPPort;
         BackendUDPport = UDPPort;
 
@@ -161,16 +173,26 @@ namespace Localnetworking
         SOCKADDR_IN Server{};
         Server.sin_family = AF_INET;
         Server.sin_port = htons(TCPPort);
-        Server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+        Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
+        // TCP connection proxy.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
-        listen(Listensocket, 5);
+        listen(Listensocket, 15);
 
+        // UDP packet proxy.
         Server.sin_port = htons(UDPPort);
         UDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
 
+        // Should not block.
+        unsigned long Noblocky = 1;
+        ioctlsocket(UDPSocket, FIONBIO, &Noblocky);
+
+        // Add a default entry for localhost proxying.
+        Resolvercache["240.0.0.1"] = "127.0.0.1";
+
+        // Load all plugins from disk.
         constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Localnet32" : ".Localnet64";
         auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
         for (const auto &Item : Results)
@@ -183,24 +205,80 @@ namespace Localnetworking
             }
         }
 
+        // Keep the polling away from the main thread.
         std::thread(Serverthread).detach();
     }
 
-    // Check if we are going to proxy any connection-property.
-    bool isAddressproxied(std::string_view Address)
+    // Resolve the address and associated ports, creates a new address if needed.
+    void Associateport(std::string_view Address, uint16_t Port)
     {
-        for (const auto &[Host, Proxy] : Proxyaddresses)
-            if (Proxy == Address)
-                return true;
+        // Try to resolve directly.
+        auto Hostname = Serverinstances.find(Address.data());
+        if (Hostname != Serverinstances.end())
+        {
+            Proxyports[Hostname->second].push_back(Port);
+            return;
+        }
 
-        // Allow hosts to be an IP.
-        return isHostproxied(Address);
+        // Else we check the cache.
+        auto Resolved = Resolvercache.find(Address.data());
+        if (Resolved != Resolvercache.end())
+        {
+            return Associateport(Resolved->second, Port);
+        }
+
+        // We need to debug this.
+        assert(false);
     }
-    bool isHostproxied(std::string_view Hostname)
+    std::string getAddress(std::string_view Hostname)
     {
-        for (const auto &[Host, _] : Servers)
-            if (Host == Hostname)
-                return true;
+        // Check if we've resolved the hostname.
+        auto Resolved = Resolvercache.find(Hostname.data());
+        if (Resolved != Resolvercache.end())
+            return getAddress(Resolved->second);
+
+        // Resolve IPs same as hostnames.
+        auto Address = Serverinstances.find(Hostname.data());
+        if (Address != Serverinstances.end())
+            return Address->first;
+
+        // Create a new address for this host in the internal IPaddress range.
+        static uint16_t Counter = 2; // 240.0.0.1 is reserved for localhost.
+        return va("240.0.%u.%u", HIBYTE(Counter), LOBYTE(Counter++));
+    }
+    std::string_view getAddress(uint16_t Senderport)
+    {
+        for (const auto &[Server, Portlist] : Proxyports)
+        {
+            for (const auto &Port : Portlist)
+            {
+                if (Senderport == Port)
+                {
+                    for (const auto &[Hostname, Instance] : Serverinstances)
+                    {
+                        if (Instance == Server)
+                        {
+                            return Hostname;
+                        }
+                    }
+                }
+            }
+        }
+
+        assert(false);
+        return "";
+    }
+    bool isProxiedhost(std::string_view Hostname)
+    {
+        // Is the hostname in the list?
+        if (Resolvercache.end() != Resolvercache.find(Hostname.data())) return true;
+        if (Serverinstances.end() != Serverinstances.find(Hostname.data())) return true;
+
+        // Keep a blacklist so we don't spam lookups.
+        static std::vector<std::string> Blacklist;
+        for (const auto &Item : Blacklist)
+            if (Item == Hostname)
+                return false;
 
         // Ask the plugins nicely if they have a server for us.
         for (const auto &Item : Pluginslist)
@@ -209,41 +287,17 @@ namespace Localnetworking
             {
                 if (auto Server = (reinterpret_cast<IServer *(*)(const char *)>(Callback))(Hostname.data()))
                 {
-                    Servers[Hostname.data()] = Server;
+                    const auto Proxyaddress = getAddress(Hostname);
+                    Resolvercache[Hostname.data()] = Proxyaddress;
+                    Serverinstances[Proxyaddress.data()] = Server;
+
                     return true;
                 }
             }
         }
 
+        // Blacklist the host so we don't have to ask the plugins again.
+        Blacklist.push_back(Hostname.data());
         return false;
-    }
-
-    // Create or fetch a unique property for the connection.
-    std::string getProxyaddress(std::string_view Hostname)
-    {
-        static uint16_t Counter = 0;
-
-        if (Proxyaddresses[Hostname.data()] == std::string())
-        {
-            Counter++;  // If we ever create 64K connections, overflowing is the least of our problems.
-            Proxyaddresses[Hostname.data()] = va("240.0.%u.%u", HIBYTE(Counter), LOBYTE(Counter));
-        }
-
-        return Proxyaddresses[Hostname.data()];
-    }
-
-    // Associate a port with an address.
-    void Associateport(std::string_view Address, uint16_t Port)
-    {
-        Proxyports[Address.data()] = Port;
-    }
-    std::string Addressfromport(uint16_t Port)
-    {
-        for (const auto &[Address, P] : Proxyports)
-        {
-            if (Port == P) return Address;
-        }
-
-        return {};
     }
 }
