@@ -13,6 +13,11 @@
 // Callbacks return false on error or if there's no data.
 struct IServer
 {
+    // Utility functionality.
+    virtual void onConnect() {};
+    virtual void onDisconnect() {};
+    virtual void onContextswitch(void *Context) { (void)Context; };
+
     // Packet-based IO for protocols such as UDP and ICMP.
     virtual bool onPacketread(void *Databuffer, uint32_t *Datasize) = 0;
     virtual bool onPacketwrite(const void *Databuffer, const uint32_t Datasize) = 0;
