@@ -235,7 +235,16 @@ namespace Steam
         }
         uint64_t CreateLobby3(uint32_t eLobbyType, int cMaxMembers)
         {
-            return 0;
+            auto LobbyID = CSteamID(1337, 0x40000, 1, k_EAccountTypeChat);
+            auto Response = new Callbacks::LobbyCreated_t();
+            auto RequestID = Callbacks::Createrequest();
+
+            Response->m_eResult = Callbacks::k_EResultOK;
+            Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();
+            Infoprint(va("Creating a lobby of type %d for %d players.", eLobbyType, cMaxMembers));
+            Callbacks::Completerequest(RequestID, 513, Response);
+
+            return RequestID;
         }
         int GetLobbyDataCount(CSteamID steamIDLobby)
         {
