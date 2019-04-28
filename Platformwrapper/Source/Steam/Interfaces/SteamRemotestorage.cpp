@@ -99,7 +99,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetUGCDetails(uint32_t hContent, uint32_t * pnAppID, char **ppchName, int32_t * pnFileSizeInBytes, CSteamID * pSteamIDOwner)
+        bool GetUGCDetails(uint32_t hContent, uint32_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, CSteamID *pSteamIDOwner)
         {
             Traceprint();
             return 0;
@@ -199,7 +199,7 @@ namespace Steam
 
             return 0;
         }
-        bool GetUGCDownloadProgress(uint32_t hContent, uint32_t * puDownloadedBytes, uint32_t * puTotalBytes)
+        bool GetUGCDownloadProgress(uint32_t hContent, uint32_t *puDownloadedBytes, uint32_t *puTotalBytes)
         {
             Traceprint();
 
@@ -285,7 +285,7 @@ namespace Steam
 
             return 0;
         }
-        uint64_t EnumerateUserSharedWorkshopFiles(uint32_t nAppId, CSteamID creatorSteamID, uint32_t uStartIndex, struct SteamParamStringArray_t * pRequiredTags, struct SteamParamStringArray_t * pExcludedTags)
+        uint64_t EnumerateUserSharedWorkshopFiles(uint32_t nAppId, CSteamID creatorSteamID, uint32_t uStartIndex, struct SteamParamStringArray_t *pRequiredTags, struct SteamParamStringArray_t *pExcludedTags)
         {
             Traceprint();
 

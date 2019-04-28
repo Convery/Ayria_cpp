@@ -174,7 +174,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetGuestPassToGiveInfo(uint32_t nPassIndex, uint64_t *pgidGuestPassID, int* pnPackageID, uint32_t* pRTime32Created, uint32_t* pRTime32Expiration, uint32_t* pRTime32Sent, uint32_t* pRTime32Redeemed, char * pchRecipientAddress, int cRecipientAddressSize)
+        bool GetGuestPassToGiveInfo(uint32_t nPassIndex, uint64_t *pgidGuestPassID, int* pnPackageID, uint32_t* pRTime32Created, uint32_t* pRTime32Expiration, uint32_t* pRTime32Sent, uint32_t* pRTime32Redeemed, char *pchRecipientAddress, int cRecipientAddressSize)
         {
             Traceprint();
             return false;
@@ -341,14 +341,14 @@ namespace Steam
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
             return RequestID;
         }
-        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t * pcbTicket)
+        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t *pcbTicket)
         {
             memcpy(pTicket, Ticketdata, std::min(cbMaxTicket, (unsigned int)sizeof(Ticketdata)));
             *pcbTicket = sizeof(Ticketdata);
             Traceprint();
             return true;
         }
-        uint32_t DecompressVoice1(void *pCompressed, uint32_t cbCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t * nBytesWritten, uint32_t nSamplesPerSec)
+        uint32_t DecompressVoice1(void *pCompressed, uint32_t cbCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t *nBytesWritten, uint32_t nSamplesPerSec)
         {
             Traceprint();
             return 0;
@@ -358,17 +358,17 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        uint32_t GetAvailableVoice1(uint32_t * pcbCompressed, uint32_t * pcbUncompressed, uint32_t nUncompressedVoiceDesiredSampleRate)
+        uint32_t GetAvailableVoice1(uint32_t *pcbCompressed, uint32_t *pcbUncompressed, uint32_t nUncompressedVoiceDesiredSampleRate)
         {
             Traceprint();
             return 0;
         }
-        uint32_t GetVoice1(bool bWantCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t * nBytesWritten, bool bWantUncompressed, void *pUncompressedDestBuffer, uint32_t cbUncompressedDestBufferSize, uint32_t * nUncompressBytesWritten, uint32_t nUncompressedVoiceDesiredSampleRate)
+        uint32_t GetVoice1(bool bWantCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t *nBytesWritten, bool bWantUncompressed, void *pUncompressedDestBuffer, uint32_t cbUncompressedDestBufferSize, uint32_t *nUncompressBytesWritten, uint32_t nUncompressedVoiceDesiredSampleRate)
         {
             // k_EVoiceResultNoData
             return 3;
         }
-        uint32_t DecompressVoice2(const void *pCompressed, uint32_t cbCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t * nBytesWritten, uint32_t nDesiredSampleRate)
+        uint32_t DecompressVoice2(const void *pCompressed, uint32_t cbCompressed, void *pDestBuffer, uint32_t cbDestBufferSize, uint32_t *nBytesWritten, uint32_t nDesiredSampleRate)
         {
             Traceprint();
             return 0;

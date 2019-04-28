@@ -270,9 +270,9 @@ class CSteamID
         // Input:	pTSteamGlobalUserID -	Steam2 ID to convert
         //			eUniverse -				universe this ID belongs to
         //-----------------------------------------------------------------------------
-    void SetFromSteam2(TSteamGlobalUserID * pTSteamGlobalUserID, EUniverse eUniverse)
+    void SetFromSteam2(TSteamGlobalUserID *pTSteamGlobalUserID, EUniverse eUniverse)
     {
-        m_steamid.m_comp.m_unAccountID = pTSteamGlobalUserID->m_SteamLocalUserID.Split.Low32bits * 2 +
+        m_steamid.m_comp.m_unAccountID = pTSteamGlobalUserID->m_SteamLocalUserID.Split.Low32bits *2 +
             pTSteamGlobalUserID->m_SteamLocalUserID.Split.High32bits;
         m_steamid.m_comp.m_EUniverse = eUniverse;		// set the universe
         m_steamid.m_comp.m_EAccountType = k_EAccountTypeIndividual; // Steam 2 accounts always map to account type of individual
@@ -283,7 +283,7 @@ class CSteamID
     // Purpose: Fills out a Steam2 ID structure
     // Input:	pTSteamGlobalUserID -	Steam2 ID to write to
     //-----------------------------------------------------------------------------
-    void ConvertToSteam2(TSteamGlobalUserID * pTSteamGlobalUserID) const
+    void ConvertToSteam2(TSteamGlobalUserID *pTSteamGlobalUserID) const
     {
         // only individual accounts have any meaning in Steam 2, only they can be mapped
         // Assert( m_steamid.m_comp.m_EAccountType == k_EAccountTypeIndividual );
@@ -447,7 +447,7 @@ class CSteamID
     #pragma warning(disable: 4996)
     #endif
 
-    const char * Render() const				// renders this steam ID to string
+    const char *Render() const				// renders this steam ID to string
     {
         const int k_cBufLen = 30;
         const int k_cBufs = 4;
@@ -470,7 +470,7 @@ class CSteamID
         }
         return pchBuf;
     }
-    static const char * Render(uint64_t ulSteamID)	// static method to render a uint64 representation of a steam ID to a string
+    static const char *Render(uint64_t ulSteamID)	// static method to render a uint64 representation of a steam ID to a string
     {
         return CSteamID(ulSteamID).Render();
     }

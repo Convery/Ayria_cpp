@@ -43,21 +43,21 @@ namespace Steam
 
             return "SE";
         }
-        bool GetImageSize(int iImage, uint32_t * pnWidth, uint32_t * pnHeight)
+        bool GetImageSize(int iImage, uint32_t *pnWidth, uint32_t *pnHeight)
         {
             Traceprint();
 
             // We do not handle any image requests.
             return false;
         }
-        bool GetImageRGBA(int iImage, uint8_t * pubDest, int nDestBufferSize)
+        bool GetImageRGBA(int iImage, uint8_t *pubDest, int nDestBufferSize)
         {
             Traceprint();
 
             // We do not handle any image requests.
             return false;
         }
-        bool GetCSERIPPort(uint32_t * unIP, uint16_t * usPort)
+        bool GetCSERIPPort(uint32_t *unIP, uint16_t *usPort)
         {
             Traceprint();
 

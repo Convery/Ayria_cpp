@@ -144,7 +144,7 @@ namespace Steam
             Traceprint();
             return true;
         }
-        bool GetStat3(const char *pchName, int32_t * pData)
+        bool GetStat3(const char *pchName, int32_t *pData)
         {
             return GetStat1({}, pchName, pData);
         }
@@ -199,7 +199,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetUserStat1(CSteamID steamIDUser, const char *pchName, int32_t * pData)
+        bool GetUserStat1(CSteamID steamIDUser, const char *pchName, int32_t *pData)
         {
             if (steamIDUser.ConvertToUint64() == Global.UserID)
                 return false;
@@ -254,12 +254,12 @@ namespace Steam
         {
             return 0;
         }
-        uint64_t UploadLeaderboardScore0(uint64_t hSteamLeaderboard, int32_t nScore, int32_t * pScoreDetails, int cScoreDetailsCount)
+        uint64_t UploadLeaderboardScore0(uint64_t hSteamLeaderboard, int32_t nScore, int32_t *pScoreDetails, int cScoreDetailsCount)
         {
             Traceprint();
             return 0;
         }
-        uint64_t UploadLeaderboardScore1(uint64_t hSteamLeaderboard, uint32_t eLeaderboardUploadScoreMethod, int32_t nScore, int32_t * pScoreDetails, int cScoreDetailsCount)
+        uint64_t UploadLeaderboardScore1(uint64_t hSteamLeaderboard, uint32_t eLeaderboardUploadScoreMethod, int32_t nScore, int32_t *pScoreDetails, int cScoreDetailsCount)
         {
             Traceprint();
             return 0;
@@ -269,17 +269,17 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetAchievementAndUnlockTime(const char *pchName, bool *pbAchieved, uint32_t * prtTime)
+        bool GetAchievementAndUnlockTime(const char *pchName, bool *pbAchieved, uint32_t *prtTime)
         {
             Traceprint();
             return false;
         }
-        bool GetUserAchievementAndUnlockTime(CSteamID steamIDUser, const char *pchName, bool *pbAchieved, uint32_t * prtTime)
+        bool GetUserAchievementAndUnlockTime(CSteamID steamIDUser, const char *pchName, bool *pbAchieved, uint32_t *prtTime)
         {
             Traceprint();
             return false;
         }
-        bool GetDownloadedLeaderboardEntry(uint64_t hSteamLeaderboardEntries, int index, struct LeaderboardEntry_t *pLeaderboardEntry, int32_t * pDetails, int cDetailsMax)
+        bool GetDownloadedLeaderboardEntry(uint64_t hSteamLeaderboardEntries, int index, struct LeaderboardEntry_t *pLeaderboardEntry, int32_t *pDetails, int cDetailsMax)
         {
             Traceprint();
             return false;
@@ -289,7 +289,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        uint64_t DownloadLeaderboardEntriesForUsers(uint64_t hSteamLeaderboard, CSteamID * prgUsers, int cUsers)
+        uint64_t DownloadLeaderboardEntriesForUsers(uint64_t hSteamLeaderboard, CSteamID *prgUsers, int cUsers)
         {
             Traceprint();
             return 0;
@@ -319,7 +319,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetGlobalStat1(const char *pchStatName, int64_t * pData)
+        bool GetGlobalStat1(const char *pchStatName, int64_t *pData)
         {
             Traceprint();
             return false;
@@ -329,7 +329,7 @@ namespace Steam
             Traceprint();
             return false;
         }
-        int32_t GetGlobalStatHistory1(const char *pchStatName, int64_t * pData, uint32_t cubData)
+        int32_t GetGlobalStatHistory1(const char *pchStatName, int64_t *pData, uint32_t cubData)
         {
             Traceprint();
             return 0;
