@@ -41,7 +41,7 @@ namespace Memprotect
         unsigned long Oldprotection = (PROT_READ | PROT_WRITE | PROT_EXEC);
 
         // Get the old protection of the range, we assume it's continuous.
-        std::FILE * Filehandle = std::fopen("/proc/self/maps", "r");
+        std::FILE *Filehandle = std::fopen("/proc/self/maps", "r");
         if (Filehandle)
         {
             char Buffer[1024]{}, Permissions[5]{}, Device[6]{}, Mapname[256]{};

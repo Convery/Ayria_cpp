@@ -67,7 +67,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool BGetDLCDataByIndex(int iDLC, uint32_t * pAppID, bool *pbAvailable, char *pchName, int cchNameBufferSize)
+        bool BGetDLCDataByIndex(int iDLC, uint32_t *pAppID, bool *pbAvailable, char *pchName, int cchNameBufferSize)
         {
             Traceprint();
             return false;
@@ -95,7 +95,7 @@ namespace Steam
             Traceprint();
             return false;
         }
-        uint32_t GetInstalledDepots0(uint32_t * pvecDepots, uint32_t cMaxDepots)
+        uint32_t GetInstalledDepots0(uint32_t *pvecDepots, uint32_t cMaxDepots)
         {
             Traceprint();
             return 0;
@@ -110,7 +110,7 @@ namespace Steam
         {
             return true;
         }
-        uint32_t GetInstalledDepots1(uint32_t appID, uint32_t * pvecDepots, uint32_t cMaxDepots)
+        uint32_t GetInstalledDepots1(uint32_t appID, uint32_t *pvecDepots, uint32_t cMaxDepots)
         {
             Traceprint();
             return 0;
@@ -125,7 +125,7 @@ namespace Steam
             Traceprint();
             return "";
         }
-        bool GetDlcDownloadProgress(uint32_t nAppID, uint64_t * punBytesDownloaded, uint64_t * punBytesTotal)
+        bool GetDlcDownloadProgress(uint32_t nAppID, uint64_t *punBytesDownloaded, uint64_t *punBytesTotal)
         {
             Traceprint();
             return false;

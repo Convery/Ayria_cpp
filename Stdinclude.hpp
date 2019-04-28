@@ -30,6 +30,7 @@
 #include <thread>
 #include <atomic>
 #include <queue>
+#include <mutex>
 #include <any>
 
 // Platform-specific libraries.
