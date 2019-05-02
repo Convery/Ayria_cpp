@@ -325,6 +325,11 @@ namespace Steam
         }
         void LogOn2(const char *pszUnk)
         {
+            Traceprint();
+        }
+        virtual void LogOn3(const char *pszAccountName, const char *pszPassword)
+        {
+            Traceprint();
         }
     };
 
@@ -369,19 +374,20 @@ namespace Steam
             Createmethod(0, SteamGameserver, LogOn0);
             Createmethod(1, SteamGameserver, LogOff);
             Createmethod(2, SteamGameserver, BLoggedOn);
-            Createmethod(3, SteamGameserver, GetSteamID);
-            Createmethod(4, SteamGameserver, GetSteam2GetEncryptionKeyToSendToNewClient);
-            Createmethod(5, SteamGameserver, SendUserConnect);
-            Createmethod(6, SteamGameserver, RemoveUserConnect);
-            Createmethod(7, SteamGameserver, SendUserDisconnect0);
-            Createmethod(8, SteamGameserver, SetSpawnCount);
-            Createmethod(9, SteamGameserver, SetServerType1);
-            Createmethod(10, SteamGameserver, UpdateStatus1);
-            Createmethod(11, SteamGameserver, CreateUnauthenticatedUser);
-            Createmethod(12, SteamGameserver, SetUserData);
-            Createmethod(13, SteamGameserver, UpdateSpectatorPort);
-            Createmethod(14, SteamGameserver, SetGameType);
-            Createmethod(15, SteamGameserver, GetUserAchievementStatus);
+            Createmethod(3, SteamGameserver, BSecure);
+            Createmethod(4, SteamGameserver, GetSteamID);
+            Createmethod(5, SteamGameserver, GetSteam2GetEncryptionKeyToSendToNewClient);
+            Createmethod(6, SteamGameserver, SendUserConnect);
+            Createmethod(7, SteamGameserver, RemoveUserConnect);
+            Createmethod(8, SteamGameserver, SendUserDisconnect0);
+            Createmethod(9, SteamGameserver, SetSpawnCount);
+            Createmethod(10, SteamGameserver, SetServerType1);
+            Createmethod(11, SteamGameserver, UpdateStatus1);
+            Createmethod(12, SteamGameserver, CreateUnauthenticatedUser);
+            Createmethod(13, SteamGameserver, SetUserData);
+            Createmethod(14, SteamGameserver, UpdateSpectatorPort);
+            Createmethod(15, SteamGameserver, SetGameType);
+            Createmethod(16, SteamGameserver, GetUserAchievementStatus);
         };
     };
     struct SteamGameserver004 : Interface_t
@@ -393,16 +399,15 @@ namespace Steam
             Createmethod(2, SteamGameserver, BLoggedOn);
             Createmethod(3, SteamGameserver, BSecure);
             Createmethod(4, SteamGameserver, GetSteamID);
-            Createmethod(5, SteamGameserver, SendUserConnectAndAuthenticate1);
+            Createmethod(5, SteamGameserver, SendUserConnectAndAuthenticate0);
             Createmethod(6, SteamGameserver, CreateUnauthenticatedUserConnection);
             Createmethod(7, SteamGameserver, SendUserDisconnect1);
             Createmethod(8, SteamGameserver, BUpdateUserData);
-            Createmethod(9, SteamGameserver, BSetServerType1);
+            Createmethod(9, SteamGameserver, BSetServerType0);
             Createmethod(10, SteamGameserver, UpdateServerStatus);
             Createmethod(11, SteamGameserver, UpdateSpectatorPort);
             Createmethod(12, SteamGameserver, SetGameType);
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
-            Createmethod(14, SteamGameserver, GetGameplayStats);
         };
     };
     struct SteamGameserver005 : Interface_t
@@ -445,7 +450,6 @@ namespace Steam
             Createmethod(12, SteamGameserver, SetGameType);
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
             Createmethod(14, SteamGameserver, GetGameplayStats);
-            Createmethod(15, SteamGameserver, RequestUserGroupStatus);
         };
     };
     struct SteamGameserver007 : Interface_t
@@ -468,7 +472,6 @@ namespace Steam
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
             Createmethod(14, SteamGameserver, GetGameplayStats);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(16, SteamGameserver, GetPublicIP);
         };
     };
     struct SteamGameserver008 : Interface_t
@@ -492,8 +495,6 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
             Createmethod(16, SteamGameserver, GetPublicIP);
-            Createmethod(17, SteamGameserver, SetGameData);
-            Createmethod(18, SteamGameserver, UserHasLicenseForApp);
         };
     };
     struct SteamGameserver009 : Interface_t
@@ -509,68 +510,46 @@ namespace Steam
             Createmethod(6, SteamGameserver, CreateUnauthenticatedUserConnection);
             Createmethod(7, SteamGameserver, SendUserDisconnect1);
             Createmethod(8, SteamGameserver, BUpdateUserData);
-            Createmethod(9, SteamGameserver, UpdateSpectatorPort);
-            Createmethod(10, SteamGameserver, SetGameTags);
-            Createmethod(11, SteamGameserver, GetGameplayStats);
-            Createmethod(12, SteamGameserver, GetServerReputation);
-            Createmethod(13, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(14, SteamGameserver, GetPublicIP);
-            Createmethod(15, SteamGameserver, SetGameData);
-            Createmethod(16, SteamGameserver, UserHasLicenseForApp);
-            Createmethod(17, SteamGameserver, GetAuthSessionTicket);
-            Createmethod(18, SteamGameserver, BeginAuthSession);
-            Createmethod(19, SteamGameserver, EndAuthSession);
-            Createmethod(20, SteamGameserver, CancelAuthTicket);
+            Createmethod(9, SteamGameserver, BSetServerType1);
+            Createmethod(10, SteamGameserver, UpdateServerStatus);
+            Createmethod(11, SteamGameserver, UpdateSpectatorPort);
+            Createmethod(12, SteamGameserver, SetGameType);
+            Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
+            Createmethod(14, SteamGameserver, GetGameplayStats);
+            Createmethod(15, SteamGameserver, RequestUserGroupStatus);
+            Createmethod(16, SteamGameserver, GetPublicIP);
+            Createmethod(17, SteamGameserver, SetGameData);
+            Createmethod(18, SteamGameserver, UserHasLicenseForApp);
+
         };
     };
     struct SteamGameserver010 : Interface_t
     {
         SteamGameserver010()
         {
-            Createmethod(0, SteamGameserver, InitGameServer);
-            Createmethod(1, SteamGameserver, SetProduct);
-            Createmethod(2, SteamGameserver, SetGameDescription);
-            Createmethod(3, SteamGameserver, SetModDir);
-            Createmethod(4, SteamGameserver, SetDedicatedServer);
-            Createmethod(5, SteamGameserver, LogOn1);
-            Createmethod(6, SteamGameserver, LogOnAnonymous);
-            Createmethod(7, SteamGameserver, LogOff);
-            Createmethod(8, SteamGameserver, BLoggedOn);
-            Createmethod(9, SteamGameserver, BSecure);
-            Createmethod(10, SteamGameserver, GetSteamID);
-            Createmethod(11, SteamGameserver, WasRestartRequested);
-            Createmethod(12, SteamGameserver, SetMaxPlayerCount);
-            Createmethod(13, SteamGameserver, SetBotPlayerCount);
-            Createmethod(14, SteamGameserver, SetServerName);
-            Createmethod(15, SteamGameserver, SetMapName);
-            Createmethod(16, SteamGameserver, SetPasswordProtected);
-            Createmethod(17, SteamGameserver, SetSpectatorPort);
-            Createmethod(18, SteamGameserver, SetSpectatorServerName);
-            Createmethod(19, SteamGameserver, ClearAllKeyValues);
-            Createmethod(20, SteamGameserver, SetKeyValue);
-            Createmethod(21, SteamGameserver, SetGameTags);
-            Createmethod(22, SteamGameserver, SetGameData);
-            Createmethod(23, SteamGameserver, SetRegion);
-            Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate1);
-            Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);
-            Createmethod(26, SteamGameserver, SendUserDisconnect1);
-            Createmethod(27, SteamGameserver, BUpdateUserData);
-            Createmethod(28, SteamGameserver, GetAuthSessionTicket);
-            Createmethod(29, SteamGameserver, BeginAuthSession);
-            Createmethod(30, SteamGameserver, EndAuthSession);
-            Createmethod(31, SteamGameserver, CancelAuthTicket);
-            Createmethod(32, SteamGameserver, UserHasLicenseForApp);
-            Createmethod(33, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(34, SteamGameserver, GetGameplayStats);
-            Createmethod(35, SteamGameserver, GetServerReputation);
-            Createmethod(36, SteamGameserver, GetPublicIP);
-            Createmethod(37, SteamGameserver, HandleIncomingPacket);
-            Createmethod(38, SteamGameserver, GetNextOutgoingPacket);
-            Createmethod(39, SteamGameserver, EnableHeartbeats);
-            Createmethod(40, SteamGameserver, SetHeartbeatInterval);
-            Createmethod(41, SteamGameserver, ForceHeartbeat);
-            Createmethod(42, SteamGameserver, AssociateWithClan);
-            Createmethod(43, SteamGameserver, ComputeNewPlayerCompatibility);
+            Createmethod(0, SteamGameserver, LogOn0);
+            Createmethod(1, SteamGameserver, LogOff);
+            Createmethod(2, SteamGameserver, BLoggedOn);
+            Createmethod(3, SteamGameserver, BSecure);
+            Createmethod(4, SteamGameserver, GetSteamID);
+            Createmethod(5, SteamGameserver, SendUserConnectAndAuthenticate1);
+            Createmethod(6, SteamGameserver, CreateUnauthenticatedUserConnection);
+            Createmethod(7, SteamGameserver, SendUserDisconnect1);
+            Createmethod(8, SteamGameserver, BUpdateUserData);
+            Createmethod(9, SteamGameserver, BSetServerType1);
+            Createmethod(10, SteamGameserver, UpdateServerStatus);
+            Createmethod(11, SteamGameserver, UpdateSpectatorPort);
+            Createmethod(12, SteamGameserver, SetGameTags);
+            Createmethod(13, SteamGameserver, GetGameplayStats);
+            Createmethod(14, SteamGameserver, GetServerReputation);
+            Createmethod(15, SteamGameserver, RequestUserGroupStatus);
+            Createmethod(16, SteamGameserver, GetPublicIP);
+            Createmethod(17, SteamGameserver, SetGameData);
+            Createmethod(18, SteamGameserver, UserHasLicenseForApp);
+            Createmethod(19, SteamGameserver, GetAuthSessionTicket);
+            Createmethod(20, SteamGameserver, BeginAuthSession);
+            Createmethod(21, SteamGameserver, EndAuthSession);
+            Createmethod(22, SteamGameserver, CancelAuthTicket);
         };
     };
     struct SteamGameserver011 : Interface_t
@@ -632,7 +611,7 @@ namespace Steam
             Createmethod(2, SteamGameserver, SetGameDescription);
             Createmethod(3, SteamGameserver, SetModDir);
             Createmethod(4, SteamGameserver, SetDedicatedServer);
-            Createmethod(5, SteamGameserver, LogOn2);
+            Createmethod(5, SteamGameserver, LogOn3);
             Createmethod(6, SteamGameserver, LogOnAnonymous);
             Createmethod(7, SteamGameserver, LogOff);
             Createmethod(8, SteamGameserver, BLoggedOn);
