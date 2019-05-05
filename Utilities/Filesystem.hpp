@@ -28,7 +28,7 @@ namespace FS
 
         return std::basic_string<uint8_t>(std::move(Buffer.get()), Length);
     }
-    inline bool Writefile(std::string_view Path, std::basic_string<uint8_t> Buffer)
+    inline bool Writefile(std::string_view Path, const std::basic_string<uint8_t> &Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
@@ -72,6 +72,10 @@ namespace FS
         return true;
     }
 
+    // File stat.
+    using Stat_t = struct { uint64_t Created, Modified, Accessed; };
+
+
     // Windows.
     #if defined(_WIN32)
     #include <Windows.h>
@@ -88,9 +92,9 @@ namespace FS
 
         // Find the first plugin.
         Filehandle = FindFirstFileA(Searchpath.c_str(), &Filedata);
-        if (Filehandle == (void *)ERROR_INVALID_HANDLE || Filehandle == (void *)INVALID_HANDLE_VALUE)
+        if (Filehandle == (void *)INVALID_HANDLE_VALUE)
         {
-            if (Filehandle) FindClose(Filehandle);
+            FindClose(Filehandle);
             return std::move(Filenames);
         }
 
@@ -109,6 +113,18 @@ namespace FS
         FindClose(Filehandle);
         return std::move(Filenames);
     }
+    inline Stat_t Filestats(std::string_view Path)
+    {
+        Stat_t Result{};
+        if (auto Filehandle = CreateFileA(Path.data(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL))
+        {
+            GetFileTime(Filehandle, (FILETIME *)&Result.Created, (FILETIME *)&Result.Accessed, (FILETIME *)&Result.Modified);
+            CloseHandle(Filehandle);
+        }
+
+        return Result;
+    }
+
     #endif
 
     // *nix.
@@ -145,6 +161,11 @@ namespace FS
         closedir(Filehandle);
 
         return std::move(Filenames);
+    }
+    inline Stat_t Filestats(std::string_view Path)
+    {
+        assert(false);
+        return {};
     }
     #endif
 }

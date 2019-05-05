@@ -74,7 +74,6 @@ namespace Steam
 
         uint32_t GetAppID()
         {
-            Traceprint();
             return Global.ApplicationID;
         }
         void SetOverlayNotificationPosition(uint32_t eNotificationPosition)

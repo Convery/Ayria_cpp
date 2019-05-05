@@ -6,7 +6,6 @@
 
 #pragma once
 #include <cstdint>
-#include <cstdio>
 
 namespace Memprotect
 {

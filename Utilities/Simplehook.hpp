@@ -14,8 +14,8 @@ namespace Simplehook
     struct Stomphook
     {
         uint8_t Originalstub[14]{};
-        void *Savedlocation;
-        void *Savedtarget;
+        void *Savedlocation{};
+        void *Savedtarget{};
 
         void Installhook(void *Location = nullptr, void *Target = nullptr)
         {
