@@ -31,7 +31,6 @@ namespace Steam
         }
         bool BIsVACBanned()
         {
-            Traceprint();
             return false;
         }
         const char *GetCurrentGameLanguage()
@@ -289,13 +288,14 @@ namespace Steam
     {
         Steamappsloader()
         {
-            Registerinterface(Interfacetype_t::APPS, "SteamApps001", new SteamApps001());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps002", new SteamApps002());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps003", new SteamApps003());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps004", new SteamApps004());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps005", new SteamApps005());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps006", new SteamApps006());
-            Registerinterface(Interfacetype_t::APPS, "SteamApps007", new SteamApps007());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::APPS, "SteamApps001", SteamApps001);
+            Register(Interfacetype_t::APPS, "SteamApps002", SteamApps002);
+            Register(Interfacetype_t::APPS, "SteamApps003", SteamApps003);
+            Register(Interfacetype_t::APPS, "SteamApps004", SteamApps004);
+            Register(Interfacetype_t::APPS, "SteamApps005", SteamApps005);
+            Register(Interfacetype_t::APPS, "SteamApps006", SteamApps006);
+            Register(Interfacetype_t::APPS, "SteamApps007", SteamApps007);
         }
     };
     static Steamappsloader Interfaceloader{};

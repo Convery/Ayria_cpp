@@ -12,23 +12,27 @@ namespace Steam
     // Also redirect module lookups for legacy compatibility.
     BOOL __stdcall Callback(DWORD Flags, LPCSTR Modulename, HMODULE *Handle)
     {
+        static std::mutex Guard;
         char Filename[260]{};
+        BOOL Result;
 
-        Modulehook.Removehook();
-        auto Result = GetModuleHandleExA(Flags, Modulename, Handle);
-        Modulehook.Installhook();
-
-        if (Result)
+        Guard.lock();
         {
-            GetModuleFileNameA(*Handle, Filename, 260);
+            Modulehook.Removehook();
+            Result = GetModuleHandleExA(Flags, Modulename, Handle);
+            Modulehook.Installhook();
 
-            if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
+            if (Result)
             {
-                constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
-                *Handle = LoadLibraryA(va("%s/%s", Global.Path.c_str(), Clientlibrary).c_str());
+                GetModuleFileNameA(*Handle, Filename, 260);
+                if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
+                {
+                    constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
+                    *Handle = GetModuleHandleA(Clientlibrary);
+                }
             }
         }
-
+        Guard.unlock();
         return Result;
     }
     void Redirectmodulehandle() {

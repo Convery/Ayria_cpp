@@ -78,8 +78,9 @@ namespace Steam
     {
         Steamscreenshotsloader()
         {
-            Registerinterface(Interfacetype_t::SCREENSHOTS, "SteamScreenshots001", new SteamScreenshots001());
-            Registerinterface(Interfacetype_t::SCREENSHOTS, "SteamScreenshots002", new SteamScreenshots002());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots001", SteamScreenshots001);
+            Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots002", SteamScreenshots002);
         }
     };
     static Steamscreenshotsloader Interfaceloader{};

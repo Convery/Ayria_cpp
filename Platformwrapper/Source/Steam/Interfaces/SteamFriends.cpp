@@ -1241,21 +1241,22 @@ namespace Steam
     {
         Steamfriendsloader()
         {
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends001", new SteamFriends001());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends002", new SteamFriends002());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends003", new SteamFriends003());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends004", new SteamFriends004());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends005", new SteamFriends005());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends006", new SteamFriends006());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends007", new SteamFriends007());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends008", new SteamFriends008());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends009", new SteamFriends009());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends010", new SteamFriends010());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends011", new SteamFriends011());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends012", new SteamFriends012());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends013", new SteamFriends013());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends014", new SteamFriends014());
-            Registerinterface(Interfacetype_t::FRIENDS, "SteamFriends015", new SteamFriends015());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends001", SteamFriends001);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends002", SteamFriends002);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends003", SteamFriends003);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends004", SteamFriends004);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends005", SteamFriends005);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends006", SteamFriends006);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends007", SteamFriends007);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends008", SteamFriends008);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends009", SteamFriends009);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends010", SteamFriends010);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends011", SteamFriends011);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends012", SteamFriends012);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends013", SteamFriends013);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends014", SteamFriends014);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends015", SteamFriends015);
         }
     };
     static Steamfriendsloader Interfaceloader{};

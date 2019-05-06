@@ -613,15 +613,16 @@ namespace Steam
     {
         Steammatchmakingloader()
         {
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking001", new SteamMatchmaking001());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking002", new SteamMatchmaking002());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking003", new SteamMatchmaking003());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking004", new SteamMatchmaking004());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking005", new SteamMatchmaking005());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking006", new SteamMatchmaking006());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking007", new SteamMatchmaking007());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking008", new SteamMatchmaking008());
-            Registerinterface(Interfacetype_t::MATCHMAKING, "SteamMatchmaking009", new SteamMatchmaking009());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking001", SteamMatchmaking001);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking002", SteamMatchmaking002);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking003", SteamMatchmaking003);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking004", SteamMatchmaking004);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking005", SteamMatchmaking005);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking006", SteamMatchmaking006);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking007", SteamMatchmaking007);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking008", SteamMatchmaking008);
+            Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking009", SteamMatchmaking009);
         }
     };
     static Steammatchmakingloader Interfaceloader{};

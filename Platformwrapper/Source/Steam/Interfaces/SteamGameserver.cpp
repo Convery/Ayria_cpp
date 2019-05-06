@@ -657,18 +657,19 @@ namespace Steam
     {
         Steamgameserverloader()
         {
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver001", new SteamGameserver001());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver002", new SteamGameserver002());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver003", new SteamGameserver003());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver004", new SteamGameserver004());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver005", new SteamGameserver005());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver006", new SteamGameserver006());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver007", new SteamGameserver007());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver008", new SteamGameserver008());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver009", new SteamGameserver009());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver010", new SteamGameserver010());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver011", new SteamGameserver011());
-            Registerinterface(Interfacetype_t::GAMESERVER, "SteamGameserver012", new SteamGameserver012());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver001", SteamGameserver001);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver002", SteamGameserver002);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver003", SteamGameserver003);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver004", SteamGameserver004);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver005", SteamGameserver005);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver006", SteamGameserver006);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver007", SteamGameserver007);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver008", SteamGameserver008);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver009", SteamGameserver009);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver010", SteamGameserver010);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver011", SteamGameserver011);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver012", SteamGameserver012);
         }
     };
     static Steamgameserverloader Interfaceloader{};

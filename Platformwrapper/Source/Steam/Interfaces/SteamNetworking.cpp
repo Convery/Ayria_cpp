@@ -280,11 +280,12 @@ namespace Steam
     {
         Steamnetworkingloader()
         {
-            Registerinterface(Interfacetype_t::NETWORKING, "SteamNetworking001", new SteamNetworking001());
-            Registerinterface(Interfacetype_t::NETWORKING, "SteamNetworking002", new SteamNetworking002());
-            Registerinterface(Interfacetype_t::NETWORKING, "SteamNetworking003", new SteamNetworking003());
-            Registerinterface(Interfacetype_t::NETWORKING, "SteamNetworking004", new SteamNetworking004());
-            Registerinterface(Interfacetype_t::NETWORKING, "SteamNetworking005", new SteamNetworking005());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::NETWORKING, "SteamNetworking001", SteamNetworking001);
+            Register(Interfacetype_t::NETWORKING, "SteamNetworking002", SteamNetworking002);
+            Register(Interfacetype_t::NETWORKING, "SteamNetworking003", SteamNetworking003);
+            Register(Interfacetype_t::NETWORKING, "SteamNetworking004", SteamNetworking004);
+            Register(Interfacetype_t::NETWORKING, "SteamNetworking005", SteamNetworking005);
         }
     };
     static Steamnetworkingloader Interfaceloader{};
