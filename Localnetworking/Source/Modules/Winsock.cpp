@@ -98,15 +98,18 @@ namespace Winsock
         if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
         {
             const auto Proxiedhost = Localnetworking::getAddress(getPort(From));
-            const auto Proxiedinfo = Proxyhosts[Proxiedhost.data()];
-
-            // Replace with our saved information.
-            if (Proxiedinfo.sin6_family == AF_INET6)
+            if (Proxiedhost.size())
             {
-                assert(*Fromlength < sizeof(SOCKADDR_IN6));
-                std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN6));
+                const auto Proxiedinfo = Proxyhosts[Proxiedhost.data()];
+
+                // Replace with our saved information.
+                if (Proxiedinfo.sin6_family == AF_INET6)
+                {
+                    assert(*Fromlength < sizeof(SOCKADDR_IN6));
+                    std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN6));
+                }
+                else std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN));
             }
-            else std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN));
         }
 
         return Result;
