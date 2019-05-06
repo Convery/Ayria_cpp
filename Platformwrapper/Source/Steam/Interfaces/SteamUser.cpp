@@ -779,24 +779,25 @@ namespace Steam
     {
         Steamuserloader()
         {
-            Registerinterface(Interfacetype_t::USER, "SteamUser001", new SteamUser001());
-            Registerinterface(Interfacetype_t::USER, "SteamUser002", new SteamUser002());
-            Registerinterface(Interfacetype_t::USER, "SteamUser003", new SteamUser003());
-            Registerinterface(Interfacetype_t::USER, "SteamUser004", new SteamUser004());
-            Registerinterface(Interfacetype_t::USER, "SteamUser005", new SteamUser005());
-            Registerinterface(Interfacetype_t::USER, "SteamUser006", new SteamUser006());
-            Registerinterface(Interfacetype_t::USER, "SteamUser007", new SteamUser007());
-            Registerinterface(Interfacetype_t::USER, "SteamUser008", new SteamUser008());
-            Registerinterface(Interfacetype_t::USER, "SteamUser009", new SteamUser009());
-            Registerinterface(Interfacetype_t::USER, "SteamUser010", new SteamUser010());
-            Registerinterface(Interfacetype_t::USER, "SteamUser011", new SteamUser011());
-            Registerinterface(Interfacetype_t::USER, "SteamUser012", new SteamUser012());
-            Registerinterface(Interfacetype_t::USER, "SteamUser013", new SteamUser013());
-            Registerinterface(Interfacetype_t::USER, "SteamUser014", new SteamUser014());
-            Registerinterface(Interfacetype_t::USER, "SteamUser015", new SteamUser015());
-            Registerinterface(Interfacetype_t::USER, "SteamUser016", new SteamUser016());
-            Registerinterface(Interfacetype_t::USER, "SteamUser017", new SteamUser017());
-            Registerinterface(Interfacetype_t::USER, "SteamUser018", new SteamUser018());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::USER, "SteamUser001", SteamUser001);
+            Register(Interfacetype_t::USER, "SteamUser002", SteamUser002);
+            Register(Interfacetype_t::USER, "SteamUser003", SteamUser003);
+            Register(Interfacetype_t::USER, "SteamUser004", SteamUser004);
+            Register(Interfacetype_t::USER, "SteamUser005", SteamUser005);
+            Register(Interfacetype_t::USER, "SteamUser006", SteamUser006);
+            Register(Interfacetype_t::USER, "SteamUser007", SteamUser007);
+            Register(Interfacetype_t::USER, "SteamUser008", SteamUser008);
+            Register(Interfacetype_t::USER, "SteamUser009", SteamUser009);
+            Register(Interfacetype_t::USER, "SteamUser010", SteamUser010);
+            Register(Interfacetype_t::USER, "SteamUser011", SteamUser011);
+            Register(Interfacetype_t::USER, "SteamUser012", SteamUser012);
+            Register(Interfacetype_t::USER, "SteamUser013", SteamUser013);
+            Register(Interfacetype_t::USER, "SteamUser014", SteamUser014);
+            Register(Interfacetype_t::USER, "SteamUser015", SteamUser015);
+            Register(Interfacetype_t::USER, "SteamUser016", SteamUser016);
+            Register(Interfacetype_t::USER, "SteamUser017", SteamUser017);
+            Register(Interfacetype_t::USER, "SteamUser018", SteamUser018);
         }
     };
     static Steamuserloader Interfaceloader{};

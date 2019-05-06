@@ -80,8 +80,11 @@ extern "C"
                 DWORD ProcessID = GetCurrentProcessId();
                 DWORD UserID = Steam::Global.UserID & 0xFFFFFFFF;
 
+                // Legacy wants the dlls loaded.
                 std::string Clientpath32 = va("%s\\steamclient.dll", Steam::Global.Path.c_str());
                 std::string Clientpath64 = va("%s\\steamclient64.dll", Steam::Global.Path.c_str());
+                LoadLibraryExA(Clientpath32.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+                LoadLibraryExA(Clientpath64.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 
                 RegSetValueExA(Registrykey, "pid", NULL, REG_DWORD, (LPBYTE)&ProcessID, sizeof(DWORD));
                 RegSetValueExA(Registrykey, "ActiveUser", NULL, REG_DWORD, (LPBYTE)&UserID, sizeof(DWORD));

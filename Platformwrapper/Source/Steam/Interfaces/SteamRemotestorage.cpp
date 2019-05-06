@@ -899,18 +899,19 @@ namespace Steam
     {
         Steamremotestorageloader()
         {
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage001", new SteamRemotestorage001());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage002", new SteamRemotestorage002());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage003", new SteamRemotestorage003());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage004", new SteamRemotestorage004());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage005", new SteamRemotestorage005());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage006", new SteamRemotestorage006());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage007", new SteamRemotestorage007());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage008", new SteamRemotestorage008());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage009", new SteamRemotestorage009());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage010", new SteamRemotestorage010());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage011", new SteamRemotestorage011());
-            Registerinterface(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage012", new SteamRemotestorage012());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage001", SteamRemotestorage001);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage002", SteamRemotestorage002);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage003", SteamRemotestorage003);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage004", SteamRemotestorage004);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage005", SteamRemotestorage005);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage006", SteamRemotestorage006);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage007", SteamRemotestorage007);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage008", SteamRemotestorage008);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage009", SteamRemotestorage009);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage010", SteamRemotestorage010);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage011", SteamRemotestorage011);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage012", SteamRemotestorage012);
         }
     };
     static Steamremotestorageloader Interfaceloader{};

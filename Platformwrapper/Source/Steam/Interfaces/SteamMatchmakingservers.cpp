@@ -122,8 +122,9 @@ namespace Steam
     {
         Steammatchmakingserverloader()
         {
-            Registerinterface(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers001", new SteamMatchmakingservers001());
-            Registerinterface(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers002", new SteamMatchmakingservers002());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers001", SteamMatchmakingservers001);
+            Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers002", SteamMatchmakingservers002);
         }
     };
     static Steammatchmakingserverloader Interfaceloader{};

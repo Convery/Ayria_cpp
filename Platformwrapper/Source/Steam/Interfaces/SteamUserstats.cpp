@@ -721,17 +721,18 @@ namespace Steam
     {
         Steamuserstatsloader()
         {
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats001", new SteamUserstats001());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats002", new SteamUserstats002());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats003", new SteamUserstats003());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats004", new SteamUserstats004());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats005", new SteamUserstats005());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats006", new SteamUserstats006());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats007", new SteamUserstats007());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats008", new SteamUserstats008());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats009", new SteamUserstats009());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats010", new SteamUserstats010());
-            Registerinterface(Interfacetype_t::USERSTATS, "SteamUserstats011", new SteamUserstats011());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats001", SteamUserstats001);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats002", SteamUserstats002);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats003", SteamUserstats003);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats004", SteamUserstats004);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats005", SteamUserstats005);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats006", SteamUserstats006);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats007", SteamUserstats007);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats008", SteamUserstats008);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats009", SteamUserstats009);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats010", SteamUserstats010);
+            Register(Interfacetype_t::USERSTATS, "SteamUserstats011", SteamUserstats011);
         }
     };
     static Steamuserstatsloader Interfaceloader{};

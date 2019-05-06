@@ -103,7 +103,8 @@ namespace Steam
     {
         SteamMasterserverupdaterloader()
         {
-            Registerinterface(Interfacetype_t::MASTERSERVERUPDATER, "SteamMasterserverupdater001", new SteamMasterserverupdater001());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::MASTERSERVERUPDATER, "SteamMasterserverupdater001", SteamMasterserverupdater001);
         }
     };
     static SteamMasterserverupdaterloader Interfaceloader{};

@@ -321,13 +321,14 @@ namespace Steam
     {
         Steamutilitiesloader()
         {
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities001", new SteamUtilities001());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities002", new SteamUtilities002());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities003", new SteamUtilities003());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities004", new SteamUtilities004());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities005", new SteamUtilities005());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities006", new SteamUtilities006());
-            Registerinterface(Interfacetype_t::UTILS, "SteamUtilities007", new SteamUtilities007());
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            Register(Interfacetype_t::UTILS, "SteamUtilities001", SteamUtilities001);
+            Register(Interfacetype_t::UTILS, "SteamUtilities002", SteamUtilities002);
+            Register(Interfacetype_t::UTILS, "SteamUtilities003", SteamUtilities003);
+            Register(Interfacetype_t::UTILS, "SteamUtilities004", SteamUtilities004);
+            Register(Interfacetype_t::UTILS, "SteamUtilities005", SteamUtilities005);
+            Register(Interfacetype_t::UTILS, "SteamUtilities006", SteamUtilities006);
+            Register(Interfacetype_t::UTILS, "SteamUtilities007", SteamUtilities007);
         }
     };
     static Steamutilitiesloader Interfaceloader{};
