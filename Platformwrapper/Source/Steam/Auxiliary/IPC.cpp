@@ -35,8 +35,7 @@ namespace Steam
         Guard.unlock();
         return Result;
     }
-    void Redirectmodulehandle() {
-        Modulehook.Installhook(GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA"), Callback); }
+    void Redirectmodulehandle() { Modulehook.Installhook(GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA"), Callback); }
 
     // Block and wait for Steams IPC initialization event as some games need it.
     void InitializeIPC()

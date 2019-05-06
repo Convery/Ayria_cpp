@@ -265,7 +265,6 @@ namespace Localnetworking
             }
         }
 
-        assert(false);
         return "";
     }
     bool isProxiedhost(std::string_view Hostname)
