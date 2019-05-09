@@ -35,7 +35,7 @@ namespace Simplehook
                     // JMP [RIP + 0], Target
                     *(uint16_t *)((uint8_t *)Location + 0) = 0x25FF;
                     *(uint32_t *)((uint8_t *)Location + 2) = 0x000000000;
-                    *(uint64_t *)((uint8_t *)Location + 6) = (size_t)&Target;
+                    *(uint64_t *)((uint8_t *)Location + 6) = (size_t)Target;
                 }
                 else
                 {
@@ -46,17 +46,17 @@ namespace Simplehook
             }
             Memprotect::Protectrange(Location, 14, Protection);
         }
-        void Installhook(std::uintptr_t Target, std::uintptr_t Location)
+        void Installhook(std::uintptr_t Location, std::uintptr_t Target)
         {
-            return Installhook(reinterpret_cast<void *>(Target), reinterpret_cast<void *>(Location));
+            return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
-        void Installhook(void *Target, std::uintptr_t Location)
+        void Installhook(void *Location, std::uintptr_t Target)
         {
-            return Installhook(reinterpret_cast<void *>(Target), reinterpret_cast<void *>(Location));
+            return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
-        void Installhook(std::uintptr_t Target, void *Location = nullptr)
+        void Installhook(std::uintptr_t Location, void *Target = nullptr)
         {
-            return Installhook(reinterpret_cast<void *>(Target), reinterpret_cast<void *>(Location));
+            return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
 
         void Removehook()
