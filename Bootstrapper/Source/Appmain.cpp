@@ -8,11 +8,12 @@
 
 // Let's just keep everything in a single module.
 extern size_t TLSCallbackaddress();
+extern "C" size_t EPAddress{};
 extern size_t PEEntrypoint();
 extern void Loadallplugins();
-uint8_t Originalstub[14]{};
+Simplehook::Stomphook Hook;
+extern "C" void Return();
 size_t TLSAddress{};
-size_t EPAddress{};
 void PECallback()
 {
     // Check all the places plugins may reside.
@@ -21,11 +22,7 @@ void PECallback()
     // Restore the entrypoint.
     if (const size_t Address = PEEntrypoint())
     {
-        auto Protection = Memprotect::Unprotectrange(Address, 14);
-        {
-            std::memcpy((void *)Address, Originalstub, 14);
-        }
-        Memprotect::Protectrange(Address, 14, Protection);
+        Hook.Removehook();
     }
 
     // Restore TLS.
@@ -44,13 +41,7 @@ void PECallback()
         }
     }
 
-    // Return to the applications entrypoint.
-    // NOTE(tcn): Clang and CL implements AddressOfReturnAddress differently, bug?
-    #if defined (__clang__)
-        *((size_t*)__builtin_frame_address(0) + 1) = PEEntrypoint();
-    #else
-        *(size_t *)_AddressOfReturnAddress() = PEEntrypoint();
-    #endif
+    Return();
 }
 
 // Entrypoint when loaded as a shared library.
@@ -85,29 +76,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         }
 
         // Install our own entrypoint for the application.
-        if (const size_t Address = PEEntrypoint())
+        if (EPAddress = PEEntrypoint(); EPAddress)
         {
-            auto Protection = Memprotect::Unprotectrange(Address, 14);
-            {
-                // Copy the original stub.
-                std::memcpy(Originalstub, (void *)Address, 14);
-
-                // Simple stomp-hooking.
-                if (Build::is64bit)
-                {
-                    // JMP [RIP + 0]
-                    *(uint16_t *)((uint8_t *)Address + 0) = 0x25FF;
-                    *(uint32_t *)((uint8_t *)Address + 2) = 0x000000000;
-                    *(uint64_t *)((uint8_t *)Address + 6) = (size_t)&PECallback;
-                }
-                else
-                {
-                    // JMP short
-                    *(uint8_t *)((uint8_t *)Address + 0) = 0xE9;
-                    *(size_t  *)((uint8_t *)Address + 1) = ((size_t)PECallback - (Address + 5));
-                }
-            }
-            Memprotect::Protectrange(Address, 14, Protection);
+            Hook.Installhook(EPAddress, PECallback);
         }
     }
 
@@ -118,6 +89,19 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 std::vector<void *> Loadedplugins;
 extern "C"
 {
+    // MSVC does not support x64 assembly so we need the jump in a new func.
+    #if !defined(_WIN64)
+    void Return()
+    {
+        // NOTE(tcn): Clang and CL implements AddressOfReturnAddress differently, bug?
+        #if defined (__clang__)
+        *((size_t *)__builtin_frame_address(0) + 1) = PEEntrypoint();
+        #else
+        *(size_t *)_AddressOfReturnAddress() = PEEntrypoint();
+        #endif
+    }
+    #endif
+
     EXPORT_ATTR bool Broadcastmessage(const void *Buffer, uint32_t Size)
     {
         // Forward to all plugins until one handles it.
