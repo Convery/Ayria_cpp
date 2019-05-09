@@ -96,9 +96,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
                 if (Build::is64bit)
                 {
                     // JMP [RIP + 0]
-                    std::memcpy((uint8_t *)Address, "\xFF\x25", 2);
-                    std::memcpy((uint8_t *)Address + 2, "\x00\x00\x00\x00", 4);
-                    std::memcpy((uint8_t *)Address + 6, &PECallback, sizeof(size_t));
+                    *(uint16_t *)((uint8_t *)Address + 0) = 0x25FF;
+                    *(uint32_t *)((uint8_t *)Address + 2) = 0x000000000;
+                    *(uint64_t *)((uint8_t *)Address + 6) = (size_t)&PECallback;
                 }
                 else
                 {
