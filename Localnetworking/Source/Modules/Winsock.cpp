@@ -29,7 +29,7 @@ namespace Winsock
 
         // Ensure that the socket is bound somewhere.
         Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        bind(Socket, (SOCKADDR *)& Client, sizeof(SOCKADDR_IN));
+        bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
 
         // Query the port assigned to the socket.
         getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
