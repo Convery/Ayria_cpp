@@ -75,13 +75,11 @@ namespace Localnetworking
                     if (!FD_ISSET(Socket, &ReadFD)) continue;
                     auto Size = recv(Socket, Buffer, 8192, 0);
 
-                    // Connection closed gracefully.
-                    if (Size == 0) Server->onDisconnect();
-
-                    // Winsock had some internal issue.
-                    else if (Size == -1)
+                    // Connection closed.
+                    if (Size <= 0)
                     {
-                        Infoprint(va("Error on socket 0x%X - %u", WSAGetLastError()));
+                        // Winsock had some internal issue.
+                        if (Size == -1) Infoprint(va("Error on socket 0x%X - %u", WSAGetLastError()));
                         Streamsockets.erase(Socket);
                         closesocket(Socket);
                     }
