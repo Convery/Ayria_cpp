@@ -19,7 +19,7 @@ namespace Internal
     constexpr int32_t Defaultsize = 512;
     #endif
 
-    inline int32_t va(char *Buffer, int32_t Size, const std::string_view Format, std::va_list Varlist)
+    inline int32_t va(char *Buffer, const int32_t Size, const std::string_view Format, const std::va_list Varlist)
     {
         return std::vsnprintf(Buffer, Size, Format.data(), Varlist);
     }
@@ -29,7 +29,7 @@ inline std::string va(std::string_view Format, ...)
 {
     auto Buffer{ std::make_unique<char[]>(Internal::Defaultsize) };
     std::va_list Varlist;
-    int32_t Size{};
+    int32_t Size;
 
     // Parse the argument-list.
     va_start(Varlist, Format);
@@ -51,13 +51,13 @@ inline std::string va(std::string_view Format, ...)
     assert(Size);
 
     // Take the memory with us.
-    return { std::move(Buffer.get()), static_cast<size_t>(Size) };
+    return { Buffer.get(), static_cast<size_t>(Size) };
 }
 inline std::string va(const char *Format, ...)
 {
     auto Buffer{ std::make_unique<char[]>(Internal::Defaultsize) };
     std::va_list Varlist;
-    int32_t Size{};
+    int32_t Size;
 
     // Parse the argument-list.
     va_start(Varlist, Format);
@@ -79,5 +79,5 @@ inline std::string va(const char *Format, ...)
     assert(Size);
 
     // Take the memory with us.
-    return { std::move(Buffer.get()), static_cast<size_t>(Size) };
+    return { Buffer.get(), static_cast<size_t>(Size) };
 }

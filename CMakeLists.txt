@@ -1,9 +1,9 @@
 # Convery (tcn@ayria.se)
 cmake_minimum_required(VERSION 3.1)
-project(Ayria)
+project(Alwaysoffline)
 
 # Use the latest standard at this time.
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 enable_language(ASM_MASM)
 
 # Export to the a gitignored directory.

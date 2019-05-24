@@ -12,7 +12,7 @@ namespace Memprotect
     // Windows version.
     #if defined(_WIN32)
     #include <Windows.h>
-    inline void Protectrange(void *Address, const size_t Length, unsigned long Oldprotection)
+    inline void Protectrange(void *Address, const size_t Length, const unsigned long Oldprotection)
     {
         unsigned long Temp;
         VirtualProtect(Address, Length, Oldprotection, &Temp);
@@ -74,11 +74,11 @@ namespace Memprotect
     #endif
 
     // Helpers to provide more readable code.
-    inline void Protectrange(std::uintptr_t Address, const size_t Length, unsigned long Oldprotection)
+    inline void Protectrange(const std::uintptr_t Address, const size_t Length, const unsigned long Oldprotection)
     {
         return Protectrange(reinterpret_cast<void *>(Address), Length, Oldprotection);
     }
-    inline unsigned long Unprotectrange(std::uintptr_t Address, const size_t Length)
+    inline unsigned long Unprotectrange(const std::uintptr_t Address, const size_t Length)
     {
         return Unprotectrange(reinterpret_cast<void *>(Address), Length);
     }
