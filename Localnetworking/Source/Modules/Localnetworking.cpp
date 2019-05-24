@@ -162,27 +162,35 @@ namespace Localnetworking
     // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t TCPPort, uint16_t UDPPort)
     {
-        // Save the config.
-        BackendTCPport = TCPPort;
-        BackendUDPport = UDPPort;
-
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-        SOCKADDR_IN Server{};
-        Server.sin_family = AF_INET;
-        Server.sin_port = htons(TCPPort);
-        Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-        // TCP connection proxy.
+        // Find an available port for TCP.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
+        for (int i = 0; i < 10; ++i)
+        {
+            SOCKADDR_IN Server{};
+            Server.sin_family = AF_INET;
+            BackendTCPport = TCPPort + i;
+            Server.sin_port = htons(BackendTCPport);
+            Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+                break;
+        }
         listen(Listensocket, 15);
 
-        // UDP packet proxy.
-        Server.sin_port = htons(UDPPort);
+        // Find an available port for UDP.
         UDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
+        for (int i = 0; i < 10; ++i)
+        {
+            SOCKADDR_IN Server{};
+            Server.sin_family = AF_INET;
+            BackendUDPport = UDPPort + i;
+            Server.sin_port = htons(BackendUDPport);
+            Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            if (0 == bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+                break;
+        }
 
         // Should not block.
         unsigned long Noblocky = 1;
@@ -203,6 +211,9 @@ namespace Localnetworking
                 Pluginslist.push_back(Module);
             }
         }
+
+        // Notify the developer.
+        Debugprint(va("Spawning server on TCP %u and UDP %u", BackendTCPport, BackendUDPport));
 
         // Keep the polling away from the main thread.
         std::thread(Serverthread).detach();
