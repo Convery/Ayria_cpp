@@ -77,8 +77,8 @@ namespace Winsock
         {
             // Associate the host-info.
             const auto Port = getPort(Socket);
+            Localnetworking::Associateport(Readable, Port);
             std::memcpy(&Proxyhosts[Readable], To, Tolength);
-            Localnetworking::Associateport(Readable, getPort(Socket));
 
             // Replace the host with our IPv4 proxy.
             ((SOCKADDR_IN *)To)->sin_family = AF_INET;
@@ -95,7 +95,7 @@ namespace Winsock
         if (Result < 0) return Result;
 
         // If sent from our local proxy.
-        if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
+        if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) && getPort(From) == Localnetworking::BackendUDPport)
         {
             const auto Proxiedhost = Localnetworking::getAddress(getPort(From));
             if (Proxiedhost.size())
