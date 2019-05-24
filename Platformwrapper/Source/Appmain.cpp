@@ -49,6 +49,17 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // If there's a local bootstrap module, we'll load it.
         LoadLibraryA("Developerbootstrap.dll");
+
+        // Finally initialize the interfaces by module.
+        if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cahce. */
+            !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
+            !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
+            !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))
+        {
+            Errorprint("Platformwrapper could not find the games interface version.");
+            Errorprint("This can cause a lot of errors, contact the developer.");
+            Errorprint("Alternatively provide a \"interfaces.txt\"");
+        }
     }
 
     return TRUE;
