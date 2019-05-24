@@ -41,7 +41,7 @@ namespace Logging
     // Formatted standard printing.
     inline void Print(const char Prefix, const std::basic_string_view<char> Message)
     {
-        const auto Now{ std::time(NULL) };
+        const auto Now{ std::time(nullptr) };
         char Buffer[80]{};
 
         std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));

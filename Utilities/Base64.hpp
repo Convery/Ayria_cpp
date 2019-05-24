@@ -55,7 +55,7 @@ namespace Base64
         if (Bits)
         {
             Accumulator <<= 6 - Bits;
-            Result[Outputposition++] = Table[Accumulator & 0x3F];
+            Result[Outputposition] = Table[Accumulator & 0x3F];
         }
 
         return Result;
@@ -94,7 +94,7 @@ namespace Base64
             return false;
         }
 
-        return Input.size();
+        return !Input.empty();
     }
 
     // RFC7515 compatibility.
@@ -124,6 +124,7 @@ namespace Base64
         {
             case 2: Input += "=="; break;
             case 1: Input += "="; break;
+            default: ;
         }
 
         return Input;

@@ -19,14 +19,14 @@ namespace FS
         if (!Filehandle) return {};
 
         std::fseek(Filehandle, 0, SEEK_END);
-        auto Length = std::ftell(Filehandle);
+        const auto Length = std::ftell(Filehandle);
         std::fseek(Filehandle, 0, SEEK_SET);
 
-        auto Buffer = std::make_unique<uint8_t[]>(Length);
+        const auto Buffer = std::make_unique<uint8_t[]>(Length);
         std::fread(Buffer.get(), Length, 1, Filehandle);
         std::fclose(Filehandle);
 
-        return std::basic_string<uint8_t>(std::move(Buffer.get()), Length);
+        return std::basic_string<uint8_t>(Buffer.get(), Length);
     }
     inline bool Writefile(std::string_view Path, const std::basic_string<uint8_t> &Buffer)
     {
@@ -71,10 +71,22 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
+    inline size_t Filesize(std::string_view Path)
+    {
+        size_t Filesize{};
+
+        if (const auto Filehandle = std::fopen(Path.data(), "rb"))
+        {
+            std::fseek(Filehandle, 0, SEEK_END);
+            Filesize = std::ftell(Filehandle);
+            std::fclose(Filehandle);
+        }
+
+        return Filesize;
+    }
 
     // File stat.
-    using Stat_t = struct { uint64_t Created, Modified, Accessed; };
-
+    using Stat_t = struct { uint32_t Created, Modified, Accessed; };
 
     // Windows.
     #if defined(_WIN32)
@@ -83,19 +95,18 @@ namespace FS
     {
         std::vector<std::string> Filenames{};
         WIN32_FIND_DATAA Filedata;
-        HANDLE Filehandle;
 
         // Append trailing slash, asterisk and extension.
         if (Searchpath.back() != '/') Searchpath.append("/");
         Searchpath.append("*");
-        if (Extension.size()) Searchpath.append(Extension);
+        if (!Extension.empty()) Searchpath.append(Extension);
 
         // Find the first plugin.
-        Filehandle = FindFirstFileA(Searchpath.c_str(), &Filedata);
-        if (Filehandle == (void *)INVALID_HANDLE_VALUE)
+        HANDLE Filehandle = FindFirstFileA(Searchpath.c_str(), &Filedata);
+        if (Filehandle == static_cast<void *>(INVALID_HANDLE_VALUE))
         {
             FindClose(Filehandle);
-            return std::move(Filenames);
+            return Filenames;
         }
 
         do
@@ -111,14 +122,18 @@ namespace FS
         } while (FindNextFileA(Filehandle, &Filedata));
 
         FindClose(Filehandle);
-        return std::move(Filenames);
+        return Filenames;
     }
     inline Stat_t Filestats(std::string_view Path)
     {
         Stat_t Result{};
-        if (auto Filehandle = CreateFileA(Path.data(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL))
+        if (const auto Filehandle = CreateFileA(Path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr))
         {
-            GetFileTime(Filehandle, (FILETIME *)&Result.Created, (FILETIME *)&Result.Accessed, (FILETIME *)&Result.Modified);
+            uint64_t Created, Accessed, Modified;
+            GetFileTime(Filehandle, (FILETIME *)&Created, (FILETIME *)&Accessed, (FILETIME *)&Modified);
+            Result.Modified = uint32_t(Modified / 10000000 - 11644473600);
+            Result.Accessed = uint32_t(Accessed / 10000000 - 11644473600);
+            Result.Created = uint32_t(Created / 10000000 - 11644473600);
             CloseHandle(Filehandle);
         }
 

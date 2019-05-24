@@ -24,10 +24,10 @@ namespace Simplehook
             Savedlocation = Location;
             Savedtarget = Target;
 
-            auto Protection = Memprotect::Unprotectrange(Location, 14);
+            const auto Protection = Memprotect::Unprotectrange(Location, 14);
             {
                 // Copy the original stub.
-                std::memcpy(Originalstub, (void *)Location, 14);
+                std::memcpy(Originalstub, Location, 14);
 
                 // Simple stomp-hooking.
                 if constexpr (sizeof(void *) == sizeof(uint64_t))
@@ -41,31 +41,31 @@ namespace Simplehook
                 {
                     // JMP short Target
                     *(uint8_t *)((uint8_t *)Location + 0) = 0xE9;
-                    *(size_t  *)((uint8_t *)Location + 1) = ((size_t)Target - ((size_t)Location + 5));
+                    *(size_t *)((uint8_t *)Location + 1) = ((size_t)Target - ((size_t)Location + 5));
                 }
             }
             Memprotect::Protectrange(Location, 14, Protection);
         }
-        void Installhook(std::uintptr_t Location, std::uintptr_t Target)
+        void Installhook(const std::uintptr_t Location, const std::uintptr_t Target)
         {
             return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
-        void Installhook(void *Location, std::uintptr_t Target)
+        void Installhook(void *Location, const std::uintptr_t Target)
         {
             return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
-        void Installhook(std::uintptr_t Location, void *Target = nullptr)
+        void Installhook(const std::uintptr_t Location, void *Target = nullptr)
         {
             return Installhook(reinterpret_cast<void *>(Location), reinterpret_cast<void *>(Target));
         }
 
-        void Removehook()
+        void Removehook() const
         {
             if (Savedlocation)
             {
-                auto Protection = Memprotect::Unprotectrange(Savedlocation, 14);
+                const auto Protection = Memprotect::Unprotectrange(Savedlocation, 14);
                 {
-                    std::memcpy((void *)Savedlocation, Originalstub, 14);
+                    std::memcpy(Savedlocation, Originalstub, 14);
                 }
                 Memprotect::Protectrange(Savedlocation, 14, Protection);
             }
