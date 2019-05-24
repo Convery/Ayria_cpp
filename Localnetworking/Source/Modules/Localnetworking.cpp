@@ -225,9 +225,6 @@ namespace Localnetworking
         {
             return Associateport(Resolved->second, Port);
         }
-
-        // We need to debug this.
-        assert(false);
     }
     std::string getAddress(std::string_view Hostname)
     {

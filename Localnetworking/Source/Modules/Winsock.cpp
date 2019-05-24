@@ -95,7 +95,7 @@ namespace Winsock
         if (Result < 0) return Result;
 
         // If sent from our local proxy.
-        if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) && getPort(From) == Localnetworking::BackendUDPport)
+        if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) && getPort(Socket) != Localnetworking::BackendUDPport)
         {
             const auto Proxiedhost = Localnetworking::getAddress(getPort(From));
             if (Proxiedhost.size())
