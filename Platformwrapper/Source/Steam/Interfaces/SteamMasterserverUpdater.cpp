@@ -68,7 +68,6 @@ namespace Steam
         }
         int  GetNumMasterServers()
         {
-            Traceprint();
             return {};
         }
         int  GetMasterServerAddress(int iServer, char *pOut, int outBufferSize)

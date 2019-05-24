@@ -64,7 +64,7 @@ namespace Steam
         void CancelQuery(uint32_t eType) { Traceprint(); };
         void RefreshQuery(uint32_t eType) { Traceprint(); };
         bool IsRefreshing(uint32_t eType) { Traceprint(); return {}; };
-        int GetServerCount(uint32_t eType) { Traceprint(); return {}; };
+        int GetServerCount(uint32_t eType) {  return {}; };
         void RefreshServer(uint32_t eType, int iServer) { Traceprint(); };
         int PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse) { Traceprint(); return {}; };
         int PlayerDetails(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPlayersResponse *pRequestServersResponse) { Traceprint(); return {}; };
