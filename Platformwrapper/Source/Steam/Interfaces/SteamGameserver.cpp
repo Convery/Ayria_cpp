@@ -162,7 +162,6 @@ namespace Steam
         }
         void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            Traceprint();
         }
         void GetGameplayStats()
         {
