@@ -69,7 +69,7 @@ namespace Localnetworking
                     }
                 }
 
-                // If there's data on the stream-sockets then we need to forward it.
+                LABEL_LOOP: // If there's data on the stream-sockets then we need to forward it.
                 for (const auto &[Socket, Server] : Streamsockets)
                 {
                     if (!FD_ISSET(Socket, &ReadFD)) continue;
@@ -82,6 +82,7 @@ namespace Localnetworking
                         if (Size == -1) Infoprint(va("Error on socket 0x%X - %u", WSAGetLastError()));
                         Streamsockets.erase(Socket);
                         closesocket(Socket);
+                        goto LABEL_LOOP;
                     }
 
                     // Normal data.
