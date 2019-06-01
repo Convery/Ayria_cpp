@@ -86,16 +86,17 @@ namespace Localnetworking
                     }
 
                     // Normal data.
-                    else Server->onStreamwrite(Buffer, Size);
+                    Server->onStreamwrite(Buffer, Size);
                 }
 
                 // All datagram packets come through a single socket.
                 if (FD_ISSET(UDPSocket, &ReadFD))
                 {
-                    SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
-                    while (recvfrom(UDPSocket, Buffer, 8196, MSG_PEEK, (SOCKADDR *)&Client, &Clientsize) > 0)
+                    while(true)
                     {
-                        auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize);
+                        SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
+                        const auto Size = recvfrom(UDPSocket, Buffer, 8196, 0, (SOCKADDR *)&Client, &Clientsize);
+                        if(Size <= 0) break;
 
                         // Find the server from the sending-port.
                         for (const auto &[Server, Portlist] : Proxyports)
