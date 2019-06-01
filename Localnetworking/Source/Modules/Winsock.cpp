@@ -11,10 +11,12 @@
 
 namespace Winsock
 {
-    #define Callhook(Name, ...) static std::mutex Guard; Guard.lock(); WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook(); Guard.unlock();
+    #define Callhook(Name, ...) WSGuards[#Name].lock(); WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook(); WSGuards[#Name].unlock();
     robin_hood::unordered_flat_map<std::string_view, Simplehook::Stomphook> WSHooks;
     // Maximum length should be a IPv6; so let's pretend it's a union of v4 and v6.
     robin_hood::unordered_flat_map<std::string, sockaddr_in6> Proxyhosts;
+    std::unordered_map<std::string_view, std::mutex> WSGuards;
+    std::vector<size_t> Nonblockingsockets;
 
     // Utility functionality.
     inline uint16_t getPort(const sockaddr *Sockaddr)
@@ -49,7 +51,7 @@ namespace Winsock
     #if !defined (NDEBUG)
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
-        size_t Result{}; Callhook(socket, Result = socket(Family, Type, Protocol));
+        Callhook(socket, const auto Result = socket(Family, Type, Protocol));
 
         Debugprint(va("Creating a %s socket for %s over %s protocol (ID 0x%X)",
         [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }().c_str(),
@@ -65,11 +67,26 @@ namespace Winsock
             }
         }().c_str(), Result));
 
+        /*
+            TODO(tcn):
+            Given that Windows Vista+ doesn't support the IPX protocol anymore,
+            we should probably create a IPX<->UDP solution for such sockets.
+            It was a very popular protocol in older games.
+        */
+
         return Result;
     }
     #endif
 
     // Datagram sockets need to remember the host-information.
+    int __stdcall Controlsocket(size_t Socket, unsigned long Command, unsigned long *Argument)
+    {
+        if(Command == FIONBIO && *Argument == 1)
+            Nonblockingsockets.push_back(Socket);
+
+        Callhook(ioctlsocket, const auto Result = ioctlsocket(Socket, Command, Argument));
+        return Result;
+    }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
     {
         const auto Readable = getAddress(To);
@@ -86,13 +103,35 @@ namespace Winsock
             ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
         }
 
-        Callhook(sendto, auto Result = sendto(Socket, Buffer, Length, Flags, To, Tolength));
+        Callhook(sendto, const auto Result = sendto(Socket, Buffer, Length, Flags, To, Tolength));
         return Result;
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
-        Callhook(recvfrom, auto Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
-        if (Result < 0) return Result;
+        int Result{-1};
+
+        // HACK(tcn): Our implementation does not support blocking sockets.
+        if(Nonblockingsockets.end() != std::find(Nonblockingsockets.begin(), Nonblockingsockets.end(), Socket))
+        {
+            Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
+        }
+        else
+        {
+            // Non-blocking state.
+            unsigned long Flags = 1;
+            ioctlsocket(Socket, FIONBIO, &Flags);
+
+            do
+            {
+                std::this_thread::yield(); // This should not be called in realtime threads anyways.
+                Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
+            } while(Result == -1 && WSAGetLastError() == WSAEWOULDBLOCK);
+
+            Flags = 0;
+            // Restore the state.
+            ioctlsocket(Socket, FIONBIO, &Flags);
+        }
+        if (!From || !Fromlength || Result < 0) return Result;
 
         // If sent from our local proxy.
         if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) && getPort(Socket) != Localnetworking::BackendUDPport)
@@ -198,6 +237,7 @@ void InstallWinsock()
 
     // Proxy Winsocks exports with our own information.
     Hook("gethostbyname", Winsock::Gethostbyname);
+    Hook("ioctlsocket", Winsock::Controlsocket);
     Hook("connect", Winsock::Connectsocket);
     Hook("recvfrom", Winsock::Receivefrom);
     Hook("sendto", Winsock::Sendto);
