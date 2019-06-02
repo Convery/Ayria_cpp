@@ -11,23 +11,22 @@
 
 namespace Winsock
 {
-    #define Callhook(Name, ...) WSGuards[#Name].lock(); WSHooks[#Name].Removehook(); __VA_ARGS__; WSHooks[#Name].Installhook(); WSGuards[#Name].unlock();
-    robin_hood::unordered_flat_map<std::string_view, Simplehook::Stomphook> WSHooks;
-    // Maximum length should be a IPv6; so let's pretend it's a union of v4 and v6.
+    #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
+    robin_hood::unordered_flat_map<std::string_view, void *> Originalfunctions;
     robin_hood::unordered_flat_map<std::string, sockaddr_in6> Proxyhosts;
-    std::unordered_map<std::string_view, std::mutex> WSGuards;
-    std::vector<size_t> Nonblockingsockets;
+    bool notInitialized = true; // x86 reading is atomic.
+    #define Waitforinit() while(notInitialized) { }
 
     // Utility functionality.
     inline uint16_t getPort(const sockaddr *Sockaddr)
     {
         if (Sockaddr->sa_family == AF_INET6) return ntohs(((sockaddr_in6 *)Sockaddr)->sin6_port);
-        else return ntohs(((sockaddr_in *)Sockaddr)->sin_port);
+        return ntohs(((sockaddr_in *)Sockaddr)->sin_port);
     }
     inline uint16_t getPort(const size_t Socket)
     {
         int Clientsize{ sizeof(SOCKADDR_IN) };
-        SOCKADDR_IN Client{ AF_INET };
+        SOCKADDR_IN Client{ AF_INET, 0 };
 
         // Ensure that the socket is bound somewhere.
         Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -41,17 +40,17 @@ namespace Winsock
     }
     inline std::string getAddress(const sockaddr *Sockaddr)
     {
-        auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
-        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)Sockaddr)->sin6_addr), Address.get(), INET6_ADDRSTRLEN);
-        else inet_ntop(AF_INET, &(((struct sockaddr_in *)Sockaddr)->sin_addr), Address.get(), INET6_ADDRSTRLEN);
+        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
+        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
+        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
         return std::string(Address.get());
     }
 
     // Only relevant while debugging.
-    #if !defined (NDEBUG)
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
-        Callhook(socket, const auto Result = socket(Family, Type, Protocol));
+        Waitforinit();
+        const auto Result = Calloriginal(socket)(Family, Type, Protocol);
 
         Debugprint(va("Creating a %s socket for %s over %s protocol (ID 0x%X)",
         [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }().c_str(),
@@ -76,19 +75,11 @@ namespace Winsock
 
         return Result;
     }
-    #endif
 
     // Datagram sockets need to remember the host-information.
-    int __stdcall Controlsocket(size_t Socket, unsigned long Command, unsigned long *Argument)
-    {
-        if(Command == FIONBIO && *Argument == 1)
-            Nonblockingsockets.push_back(Socket);
-
-        Callhook(ioctlsocket, const auto Result = ioctlsocket(Socket, Command, Argument));
-        return Result;
-    }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
     {
+        Waitforinit();
         const auto Address = getAddress(To);
         if(Localnetworking::isProxiedhost(Address))
         {
@@ -98,7 +89,7 @@ namespace Winsock
 
             // Save the host-info for later.
             const auto Readable = va("%s:%u", Address.c_str(), getPort(To));
-            auto Entry = &Proxyhosts[Readable];
+            const auto Entry = &Proxyhosts[Readable];
             std::memcpy(Entry, To, Tolength);
 
             // Replace the target with our IPv4 proxy.
@@ -107,36 +98,12 @@ namespace Winsock
             ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
         }
 
-        Callhook(sendto, const auto Result = sendto(Socket, Buffer, Length, Flags, To, Tolength));
-        return Result;
+        return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
-        int Result{-1};
-        unsigned long CMDFlags{1};
-
-        // NOTE(tcn): Our implementation only supports non-blocking sockets, so hackery is needed.
-        if(Nonblockingsockets.end() == std::find(Nonblockingsockets.begin(), Nonblockingsockets.end(), Socket))
-        {
-            // Put the socket into a non-blocking state.
-            Callhook(ioctlsocket, ioctlsocket(Socket, FIONBIO, &CMDFlags));
-
-            // Poll until we get data.
-            while(true)
-            {
-                Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
-                if(Result == -1 && WSAGetLastError() != WSAEWOULDBLOCK) break;
-                std::this_thread::yield();
-            }
-
-            // Restore the state.
-            CMDFlags = uint32_t();
-            Callhook(ioctlsocket, ioctlsocket(Socket, FIONBIO, &CMDFlags));
-        }
-        else
-        {
-            Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
-        }
+        Waitforinit();
+        const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
 
         // Quit early on errors.
         if (!From || !Fromlength || Result < 0) return Result;
@@ -166,7 +133,6 @@ namespace Winsock
     // Streamed connections just proxies the port.
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
     {
-        const auto Port = getPort(Name);
         const auto Readable = getAddress(Name);
         if (Localnetworking::isProxiedhost(Readable))
         {
@@ -179,39 +145,31 @@ namespace Winsock
             ((SOCKADDR_IN *)Name)->sin_port = htons(Localnetworking::BackendTCPport);
         }
 
-        // NOTE(tcn): Our backend is non-blocking, as such we need to hack.
-        Callhook(connect, auto Result = connect(Socket, Name, Namelength));
-        if (Result == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
-        {
-            unsigned long Blocky = 0, Noblocky = 1;
-            ioctlsocket(Socket, FIONBIO, &Blocky);
-            Callhook(connect, Result = connect(Socket, Name, Namelength));
-            if (Result == SOCKET_ERROR && WSAGetLastError() == WSAEISCONN) Result = 0;
-            ioctlsocket(Socket, FIONBIO, &Noblocky);
-        }
-
-        Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
+        const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
+        Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), getPort(Name), Result ? "FAILED" : "SUCCESS"));
+        if(Result == -1) WSASetLastError(WSAEWOULDBLOCK);
         return Result;
     }
 
     // Create a proxy address if needed.
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
+        Waitforinit();
         Debugprint(va("Performing hostname lookup for \"%s\"", Hostname));
-        Callhook(gethostbyname, auto Result = gethostbyname(Hostname));
+        auto Result = Calloriginal(gethostbyname)(Hostname);
 
         // If the host is interesting, give it a fake IP to work offline.
         if (Localnetworking::isProxiedhost(Hostname))
         {
             // Resolve to a known host and replace the address.
-            Callhook(gethostbyname, Result = gethostbyname("localhost"));
+            Result = Calloriginal(gethostbyname)("localhost");
             Result->h_name = const_cast<char *>(Hostname);
             Result->h_addrtype = AF_INET;
-            *Result->h_aliases = NULL;
+            *Result->h_aliases = nullptr;
             Result->h_length = 4;
 
             ((in_addr *)Result->h_addr_list[0])->s_addr = inet_addr(Localnetworking::getAddress(Hostname).data());
-            Result->h_addr_list[1] = NULL;
+            Result->h_addr_list[1] = nullptr;
         }
 
         return Result;
@@ -232,26 +190,70 @@ namespace Winsock
 // Hook the front-facing APIs.
 void InstallWinsock()
 {
-    auto Getexport = [](std::string_view Name) -> void *
+    // See if we can load any alternative dll.
+    // Threading doesn't help much in debug.
+    std::thread([]()
     {
-        auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data());
-        if (!Address) Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data());
-        return Address;
-    };
-    auto Hook = [&](std::string_view Name, void *Target)
-    {
-        auto Address = Getexport(Name);
-        if(Address) Winsock::WSHooks[Name].Installhook(Address, Target);
-    };
+        std::vector<void *> Alternativemodules;
+        for(const auto &Item : FS::Findfilesrecursive("C:/Windows/winsxs", "wsock32.dll"))
+        {
+            const auto Handle = LoadLibraryA(Item.c_str());
+            if (Handle) Alternativemodules.push_back(Handle);
+            if (Handle) break;
+        }
+        for(const auto &Item : FS::Findfilesrecursive("C:/Windows/winsxs", "ws2_32.dll"))
+        {
+            const auto Handle = LoadLibraryA(Item.c_str());
+            if (Handle) Alternativemodules.push_back(Handle);
+            if (Handle) break;
+        }
+
+        // Get our alternative functions.
+        const auto Hook = [&](std::string_view Name)
+        {
+            // See if we have any alternative function to use.
+            for(const auto &Item : Alternativemodules)
+            {
+                const auto Address = GetProcAddress((HMODULE)Item, Name.data());
+                if (Address) Winsock::Originalfunctions[Name] = (void *)Address;
+            }
+        };
+        Hook("gethostbyname");
+        Hook("connect");
+        Hook("recvfrom");
+        Hook("socket");
+        Hook("sendto");
+
+        // Always remember to initialize winsock.
+        for(const auto &Item : Alternativemodules)
+        {
+            WSADATA wsaData;
+            const auto Address = GetProcAddress((HMODULE)Item, "WSAStartup");
+            if(Address) ((decltype(WSAStartup) *)Address)(MAKEWORD(2, 2), &wsaData);
+        }
+
+        // Testing against false is faster.
+        Winsock::notInitialized = false;
+    }).detach();
 
     // Proxy Winsocks exports with our own information.
-    Hook("gethostbyname", Winsock::Gethostbyname);
-    Hook("ioctlsocket", Winsock::Controlsocket);
-    Hook("connect", Winsock::Connectsocket);
-    Hook("recvfrom", Winsock::Receivefrom);
-    Hook("sendto", Winsock::Sendto);
+    const auto Hook = [&](std::string_view Name, void *Target)
+    {
+        {
+            const auto Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data());
+            if(Address) Simplehook::Stomphook().Installhook((void *)Address, Target);
+        }
+        {
+            const auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data());
+            if(Address) Simplehook::Stomphook().Installhook((void *)Address, Target);
+        }
+    };
+    Hook("gethostbyname", (void *)Winsock::Gethostbyname);
+    Hook("connect", (void *)Winsock::Connectsocket);
+    Hook("recvfrom", (void *)Winsock::Receivefrom);
+    Hook("sendto", (void *)Winsock::Sendto);
 
-    // For debugging only.
+    // For debugging.
     #if !defined(NDEBUG)
     Hook("socket", Winsock::Createsocket);
     #endif
