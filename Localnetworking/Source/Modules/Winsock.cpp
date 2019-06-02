@@ -125,7 +125,7 @@ namespace Winsock
             while(true)
             {
                 Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
-                if(Result == -1 && WSAGetLastError() == WSAEWOULDBLOCK) break;
+                if(Result == -1 && WSAGetLastError() != WSAEWOULDBLOCK) break;
                 std::this_thread::yield();
             }
 
