@@ -89,15 +89,19 @@ namespace Winsock
     }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
     {
-        const auto Readable = getAddress(To);
-        if (Localnetworking::isProxiedhost(Readable))
+        const auto Address = getAddress(To);
+        if(Localnetworking::isProxiedhost(Address))
         {
-            // Associate the host-info.
+            // Associate the client-port.
             const auto Port = getPort(Socket);
-            Localnetworking::Associateport(Readable, Port);
-            std::memcpy(&Proxyhosts[Readable], To, Tolength);
+            Localnetworking::Associateport(Address, Port);
 
-            // Replace the host with our IPv4 proxy.
+            // Save the host-info for later.
+            const auto Readable = va("%s:%u", Address.c_str(), getPort(To));
+            auto Entry = &Proxyhosts[Readable];
+            std::memcpy(Entry, To, Tolength);
+
+            // Replace the target with our IPv4 proxy.
             ((SOCKADDR_IN *)To)->sin_family = AF_INET;
             ((SOCKADDR_IN *)To)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
@@ -109,45 +113,50 @@ namespace Winsock
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
         int Result{-1};
+        unsigned long CMDFlags{1};
 
-        // HACK(tcn): Our implementation does not support blocking sockets.
-        if(Nonblockingsockets.end() != std::find(Nonblockingsockets.begin(), Nonblockingsockets.end(), Socket))
+        // NOTE(tcn): Our implementation only supports non-blocking sockets, so hackery is needed.
+        if(Nonblockingsockets.end() == std::find(Nonblockingsockets.begin(), Nonblockingsockets.end(), Socket))
         {
-            Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
+            // Put the socket into a non-blocking state.
+            Callhook(ioctlsocket, ioctlsocket(Socket, FIONBIO, &CMDFlags));
+
+            // Poll until we get data.
+            while(true)
+            {
+                Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
+                if(Result == -1 && WSAGetLastError() == WSAEWOULDBLOCK) break;
+                std::this_thread::yield();
+            }
+
+            // Restore the state.
+            CMDFlags = uint32_t();
+            Callhook(ioctlsocket, ioctlsocket(Socket, FIONBIO, &CMDFlags));
         }
         else
         {
-            // Non-blocking state.
-            unsigned long Flags = 1;
-            ioctlsocket(Socket, FIONBIO, &Flags);
-
-            do
-            {
-                std::this_thread::yield(); // This should not be called in realtime threads anyways.
-                Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
-            } while(Result == -1 && WSAGetLastError() == WSAEWOULDBLOCK);
-
-            Flags = 0;
-            // Restore the state.
-            ioctlsocket(Socket, FIONBIO, &Flags);
+            Callhook(recvfrom, Result = recvfrom(Socket, Buffer, Length, Flags, From, Fromlength));
         }
+
+        // Quit early on errors.
         if (!From || !Fromlength || Result < 0) return Result;
 
-        // If sent from our local proxy.
-        if (((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) && getPort(Socket) != Localnetworking::BackendUDPport)
+        // Check if the sender is our backend.
+        if(((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
         {
-            const auto Proxiedhost = Localnetworking::getAddress(getPort(From));
-            if (Proxiedhost.size())
+            const auto Senderport = getPort(Socket);
+            // But not via the main socket as proxied packets have their own.
+            if(Senderport != Localnetworking::BackendUDPport)
             {
-                const auto Proxiedinfo = Proxyhosts[Proxiedhost.data()];
+                const auto Address = Localnetworking::getAddress(getPort(From));
+                const auto Readable = va("%s:%u", Address.data(), Senderport);
 
-                // Replace with our saved information.
-                if (Proxiedinfo.sin6_family == AF_INET6)
+                // Replace with the real host-information.
+                const auto Hostinfo = Proxyhosts.find(Readable);
+                if(Hostinfo != Proxyhosts.end())
                 {
-                    assert(*Fromlength < sizeof(SOCKADDR_IN6));
-                    std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN6));
+                    std::memcpy(From, &Hostinfo->second, *Fromlength);
                 }
-                else std::memcpy(From, &Proxiedinfo, sizeof(SOCKADDR_IN));
             }
         }
 
