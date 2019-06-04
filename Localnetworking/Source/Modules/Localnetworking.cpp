@@ -11,16 +11,14 @@
 
 namespace Localnetworking
 {
-    std::unordered_map<IServer *, std::vector<uint16_t>> Proxyports;
-    std::unordered_map<std::string, IServer *> Serverinstances;
-
-    std::unordered_map<IServer *, size_t> Datagramsockets;
-    std::unordered_map<size_t, IServer *> Streamsockets;
+    robin_hood::unordered_flat_map<IServer *, std::vector<uint16_t>> Proxyports;
+    robin_hood::unordered_flat_map<std::string, std::string> Resolvercache;
+    robin_hood::unordered_flat_map<std::string, IServer *> Serverinstances;
+    robin_hood::unordered_flat_map<IServer *, size_t> Datagramsockets;
+    robin_hood::unordered_flat_map<size_t, IServer *> Streamsockets;
     uint16_t BackendTCPport, BackendUDPport;
     std::vector<void *> Pluginslist;
     size_t Listensocket, UDPSocket;
-
-    std::unordered_map<std::string, std::string> Resolvercache;
 
     // Poll on the local sockets.
     void Serverthread()
@@ -106,7 +104,6 @@ namespace Localnetworking
                                 if (Port == ntohs(Client.sin_port))
                                 {
                                     // Forward to the server.
-                                    Server->onContextswitch(&Client);
                                     Server->onPacketwrite(Buffer, Size);
 
                                     // Ensure that there's a socket associated with the server.
@@ -232,7 +229,7 @@ namespace Localnetworking
         }
 
         // Else we check the cache.
-        auto Resolved = Resolvercache.find(Address.data());
+        const auto Resolved = Resolvercache.find(Address.data());
         if (Resolved != Resolvercache.end())
         {
             return Associateport(Resolved->second, Port);
@@ -246,7 +243,7 @@ namespace Localnetworking
             return getAddress(Resolved->second);
 
         // Resolve IPs same as hostnames.
-        auto Address = Serverinstances.find(Hostname.data());
+        const auto Address = Serverinstances.find(Hostname.data());
         if (Address != Serverinstances.end())
             return Address->first;
 
