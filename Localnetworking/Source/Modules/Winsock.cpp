@@ -88,8 +88,7 @@ namespace Winsock
             Localnetworking::Associateport(Address, Port);
 
             // Save the host-info for later.
-            const auto Readable = va("%s:%u", Address.c_str(), getPort(To));
-            const auto Entry = &Proxyhosts[Readable];
+            const auto Entry = &Proxyhosts[Address.c_str()];
             std::memcpy(Entry, To, Tolength);
 
             // Replace the target with our IPv4 proxy.
@@ -104,22 +103,16 @@ namespace Winsock
     {
         Waitforinit();
         const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
-
-        // Quit early on errors.
         if (!From || !Fromlength || Result < 0) return Result;
 
         // Check if the sender is our backend.
         if(((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
         {
-            const auto Senderport = getPort(Socket);
-            // But not via the main socket as proxied packets have their own.
-            if(Senderport != Localnetworking::BackendUDPport)
+            // Check if we have an address associated with this port in the backend.
+            if(const auto Address = Localnetworking::getAddress(getPort(Socket)); !Address.empty())
             {
-                const auto Address = Localnetworking::getAddress(getPort(From));
-                const auto Readable = va("%s:%u", Address.data(), Senderport);
-
-                // Replace with the real host-information.
-                const auto Hostinfo = Proxyhosts.find(Readable);
+                // Replace with the real host-information if available.
+                const auto Hostinfo = Proxyhosts.find(Address.data());
                 if(Hostinfo != Proxyhosts.end())
                 {
                     std::memcpy(From, &Hostinfo->second, *Fromlength);
