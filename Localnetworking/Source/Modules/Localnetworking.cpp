@@ -32,7 +32,7 @@ namespace Localnetworking
 
         while (true)
         {
-        // Resent the descriptors.
+            // Reset the descriptors.
             FD_ZERO(&ReadFD);
 
             // Only listen for new connections on this socket.
