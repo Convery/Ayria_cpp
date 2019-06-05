@@ -38,7 +38,7 @@ extern "C"
             if (Steam::Global.ApplicationID == 0)
             {
                 Errorprint("Platformwrapper could not find the games Application ID.");
-                Errorprint("This can cause a lot of errors, contact the developer.");
+                Errorprint("This will cause a lot of errors, contact the developer.");
                 Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\"");
 
                 Steam::Global.ApplicationID = Hash::FNV1a_32("Ayria");
@@ -121,6 +121,9 @@ extern "C"
         }
         #endif
 
+        // Start listening for LAN data so that we can stay up to date.
+        if (!Steam::Global.Synchronisation) Steam::Global.Synchronisation = new LANSync::Server(Steam::Global.ApplicationID);
+
         return true;
     }
     EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
@@ -155,12 +158,12 @@ extern "C"
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
     {
+        // For AppID.
+        SteamAPI_Init();
+
         Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
                      ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
                      usPort, usGamePort, usSpectatorPort, usQueryPort, pchVersionString));
-
-        // TODO(tcn): Matchmaking here.
-        // if(!Steam::Global.Synchronisation) Steam::Global.Synchronisation = new LANSynchroniser(Steam::Global.ApplicationID);
 
         return true;
     }
