@@ -19,7 +19,7 @@ namespace Steam
         std::string Language;
         uint32_t ApplicationID;
         uint64_t Startuptimestamp;
-        LANSynchroniser *Synchronisation{};
+        LANSync::Server *Synchronisation;
     };
     extern Globalstate_t Global;
 
@@ -73,8 +73,19 @@ namespace Steam
     // Perform matchmaking over LAN for the games.
     namespace Matchmaking
     {
+        struct Server_t
+        {
+            uint64_t Lastpingtime;
+            std::string Hostaddress;
+            nlohmann::json Gamedata;
+        };
+        extern std::vector<Server_t> Knownservers;
+        extern Server_t Localserver;
+        extern GUID SessionID;
 
-
+        void Createsession();
+        void Updateserver();
+        void Processqueue();
     }
 
     // Async replies.
