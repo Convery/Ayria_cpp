@@ -33,7 +33,8 @@ namespace Steam
         }
         void SetBasicServerData(unsigned short nProtocolVersion, bool bDedicatedServer, const char *pRegionName, const char *pProductName, unsigned short nMaxReportedClients, bool bPasswordProtected, const char *pGameDescription)
         {
-            Traceprint();
+            Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n>Product: %s\n> Description: %s\n> Maxplayers: %u",
+                          bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
         }
         void ClearAllKeyValues()
         {
@@ -68,12 +69,14 @@ namespace Steam
         }
         int  GetNumMasterServers()
         {
-            return {};
+            // NOTE(tcn): Some games uses this for an 'is online' check.
+            return 1;
         }
         int  GetMasterServerAddress(int iServer, char *pOut, int outBufferSize)
         {
+            // TODO(tcn): Returns bytes written, investigate this when needed.
             Traceprint();
-            return {};
+            return 0;
         }
     };
 
