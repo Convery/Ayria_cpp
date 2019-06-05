@@ -35,6 +35,15 @@ namespace Steam
         {
             Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n>Product: %s\n> Description: %s\n> Maxplayers: %u",
                           bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
+
+            Matchmaking::Localserver.Gamedata["Protocolversion"] = nProtocolVersion;
+            Matchmaking::Localserver.Gamedata["needsPassword"] = bPasswordProtected;
+            Matchmaking::Localserver.Gamedata["Gamedescription"] = pGameDescription;
+            Matchmaking::Localserver.Gamedata["Playerlimit"] = nMaxReportedClients;
+            Matchmaking::Localserver.Gamedata["isDedicated"] = bDedicatedServer;
+            Matchmaking::Localserver.Gamedata["Productname"] = pProductName;
+            Matchmaking::Localserver.Gamedata["Serverregion"] = pRegionName;
+            Matchmaking::Updateserver();
         }
         void ClearAllKeyValues()
         {

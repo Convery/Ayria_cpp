@@ -85,7 +85,6 @@ namespace Steam
 
         void Createsession();
         void Updateserver();
-        void Processqueue();
     }
 
     // Async replies.
