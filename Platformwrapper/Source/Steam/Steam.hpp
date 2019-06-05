@@ -19,6 +19,7 @@ namespace Steam
         std::string Language;
         uint32_t ApplicationID;
         uint64_t Startuptimestamp;
+        LANSynchroniser *Synchronisation{};
     };
     extern Globalstate_t Global;
 
@@ -68,6 +69,13 @@ namespace Steam
     // Also redirect module lookups for legacy compatibility.
     void Redirectmodulehandle();
     void InitializeIPC();
+
+    // Perform matchmaking over LAN for the games.
+    namespace Matchmaking
+    {
+
+
+    }
 
     // Async replies.
     namespace Callbacks

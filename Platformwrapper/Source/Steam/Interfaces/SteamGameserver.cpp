@@ -184,7 +184,7 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-            Traceprint();
+            Debugprint(va("Gameserver tags: %s", pchGameTags));
         }
         uint64_t GetServerReputation()
         {
@@ -326,7 +326,7 @@ namespace Steam
         {
             Traceprint();
         }
-        virtual void LogOn3(const char *pszAccountName, const char *pszPassword)
+        void LogOn3(const char *pszAccountName, const char *pszPassword)
         {
             Traceprint();
         }

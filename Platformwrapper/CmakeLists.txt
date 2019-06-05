@@ -16,7 +16,7 @@ endif()
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
     set(PLATFORM_LIBS dl pthread)
 else()
-    set(PLATFORM_LIBS )
+    set(PLATFORM_LIBS ws2_32)
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().
