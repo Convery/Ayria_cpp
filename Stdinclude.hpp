@@ -63,6 +63,7 @@
 #include <Utilities/Filesystem.hpp>
 #include <Utilities/FNV1Hash.hpp>
 #include <Utilities/Logging.hpp>
+#include <Utilities/LANSync.hpp>
 #include <Utilities/Base64.hpp>
 
 // Extensions to the language.
