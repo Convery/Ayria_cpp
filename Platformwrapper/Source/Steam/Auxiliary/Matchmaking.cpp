@@ -30,8 +30,11 @@ namespace Steam
 
         void Createsession()
         {
+            // Redundant call.
+            if (SessionID.Data1) return;
+
             // If this fails, we have bigger issues than proper randomness.
-            if (!CoCreateGuid(&SessionID))
+            if (CoCreateGuid(&SessionID))
             {
                 srand(time(NULL) & 0xFFFFEFFF);
                 for (int i = 0; i < 4; ++i) ((uint32_t *)&SessionID)[i] = rand();
@@ -40,7 +43,8 @@ namespace Steam
 
             std::thread([]()
             {
-                while(true)
+                // Quit if it's invalidated.
+                while(SessionID.Data1)
                 {
                     const uint64_t Currenttime = time(NULL);
 
