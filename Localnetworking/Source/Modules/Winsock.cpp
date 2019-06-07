@@ -15,7 +15,7 @@ namespace Winsock
     robin_hood::unordered_flat_map<std::string_view, void *> Originalfunctions;
     robin_hood::unordered_flat_map<std::string, sockaddr_in6> Proxyhosts;
     bool notInitialized = true; // x86 reading is atomic.
-    #define Waitforinit() while(notInitialized) { }
+    #define Waitforinit() while(notInitialized) { std::this_thread::yield(); }
 
     // Utility functionality.
     inline uint16_t getPort(const sockaddr *Sockaddr)
