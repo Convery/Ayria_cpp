@@ -55,7 +55,7 @@ namespace Steam
         auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
 
         // Wait for the game to initialize or timeout if unused.
-        if (WaitForSingleObject(Consumesemaphore, 3000)) return;
+        if (WaitForSingleObject(Consumesemaphore, 20000)) return;
 
         // Parse the shared buffer to get the process information.
         const char *Buffer = (char *)Sharedfilemapping;
