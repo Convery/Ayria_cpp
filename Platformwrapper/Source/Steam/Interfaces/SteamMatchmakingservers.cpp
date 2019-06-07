@@ -103,7 +103,7 @@ namespace Steam
 
             // Address in host-order.
             Serialized->m_NetAdr.m_unIP = ntohl(inet_addr(Server->Hostaddress.c_str()));
-            Serialized->m_NetAdr.m_usQueryPort = htons(Server->Gamedata.value("Queryport", 0));
+            Serialized->m_NetAdr.m_usQueryPort = Server->Gamedata.value("Queryport", 0);
             Serialized->m_NetAdr.m_usConnectionPort = Server->Gamedata.value("Gameport", 0);
 
             // To make it a little more readable.
