@@ -76,7 +76,9 @@ namespace Steam
         }
         CSteamID GetSteamID()
         {
-            return CSteamID(Global.UserID);
+            auto ID = CSteamID(Global.UserID);
+            ID.Set(ID.GetAccountID(), ID.GetEUniverse(), k_EAccountTypeGameServer);
+            return ID;
         }
         bool SetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint32_t unGamePort, const char *pchGameDir, const char *pchVersion)
         {

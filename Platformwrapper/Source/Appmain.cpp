@@ -51,7 +51,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         LoadLibraryA("Developerbootstrap.dll");
 
         // Finally initialize the interfaces by module.
-        if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cahce. */
+        if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
             !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
             !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
             !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))

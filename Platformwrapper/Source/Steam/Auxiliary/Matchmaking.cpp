@@ -60,12 +60,15 @@ namespace Steam
                             // We receive our own sessions update as well, to help developers.
                             if (SessionID == Object["SessionID"].get<GUID>()) continue;
 
-                            // Find the server to update or create a new one.
-                            auto Server = std::find_if(Knownservers.begin(), Knownservers.end(), [&](const auto A) { return Object["SessionID"] == A.Gamedata["SessionID"]; });
+                            RETRY: // Find the server to update or create a new one.
+                            auto Server = std::find_if(Knownservers.begin(), Knownservers.end(), [&](auto &A) { return Object["SessionID"] == A.Gamedata["SessionID"]; });
                             if (Server == Knownservers.end())
                             {
-                                Knownservers.emplace_back().Hostaddress = Item.Sender;
-                                Server = Knownservers.end()--;
+                                Server_t New{};
+                                New.Gamedata["SessionID"] = Object["SessionID"];
+                                New.Hostaddress = Item.Sender;
+                                Knownservers.push_back(New);
+                                goto RETRY;
                             }
 
                             // Highly advanced protection against fuckery here..
