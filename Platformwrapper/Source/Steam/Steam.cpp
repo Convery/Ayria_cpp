@@ -168,9 +168,12 @@ extern "C"
         // New session for the server.
         Steam::Matchmaking::Createsession();
         Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
+        Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
         Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
+        Steam::Matchmaking::Localserver.Gamedata["Gamedirectory"] = pchGameDir;
         Steam::Matchmaking::Localserver.Gamedata["Spectatorport"] = usSpectatorPort;
-        Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u:%hu", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0], usGamePort);
+        Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
+        Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
 
         return true;
     }

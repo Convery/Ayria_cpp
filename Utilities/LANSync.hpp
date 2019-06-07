@@ -100,7 +100,7 @@ namespace LANSync
                     try
                     {
                         Message_t Message;
-                        Message.Sender = va("%s:%u", inet_ntoa(Client.sin_addr), ntohl(Client.sin_port));
+                        Message.Sender = inet_ntoa(Client.sin_addr);
 
                         auto Object = nlohmann::json::parse(Buffer.get() + 4);
                         Message.Category = Object.value("Category", "");
