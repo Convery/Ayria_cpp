@@ -89,6 +89,26 @@ namespace Steam
         static auto Debug = new Dummyinterface();
         return (Interface_t **)&Debug;
     }
+    size_t Getinterfaceversion(Interfacetype_t Type)
+    {
+        const auto Result = Currentinterfaces.find(Type);
+        if(Result == Currentinterfaces.end())
+        {
+            Errorprint(va("Could not find an interface for %u", Type));
+            return 0;
+        }
+
+        for(const auto &[Name, Ptr] : *Interfacenames)
+        {
+            if(Ptr == Result->second)
+            {
+                // Parse the last 3 bytes ("0XX")
+                return std::atoi(Name.data() + Name.size() - 3);
+            }
+        }
+
+        return 0;
+    }
 
     // Poke at a module until it gives up its secrets.
     extern const std::vector<std::pair<std::string, std::string>> Scanstrings;

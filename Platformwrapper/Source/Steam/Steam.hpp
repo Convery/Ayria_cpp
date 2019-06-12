@@ -64,6 +64,7 @@ namespace Steam
     Interface_t **Fetchinterface(std::string_view Name);
     Interface_t **Fetchinterface(Interfacetype_t Type);
     bool Scanforinterfaces(std::string_view Filename);
+    size_t Getinterfaceversion(Interfacetype_t Type);
 
     // Block and wait for Steams IPC initialization event as some games need it.
     // Also redirect module lookups for legacy compatibility.

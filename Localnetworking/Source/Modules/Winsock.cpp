@@ -97,6 +97,7 @@ namespace Winsock
             ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
         }
 
+        //Debugprint(va("Sending to %s:%u", Address.c_str(), getPort(To)));
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
@@ -104,6 +105,7 @@ namespace Winsock
         Waitforinit();
         const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
         if (!From || !Fromlength || Result < 0) return Result;
+        //Debugprint(va("Recv from %s:%u", getAddress(From).c_str(), getPort(From)));
 
         // Check if the sender is our backend.
         if(((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))

@@ -156,25 +156,61 @@ extern "C"
     EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Steam::Matchmaking::SessionID.Data1 = 0; }
     EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Steam::Global.UserID; }
-    EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
+    EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
     {
+        va_list Args;
+        va_start(Args, usGamePort);
+
         // For AppID.
         SteamAPI_Init();
 
-        Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
+        // Per-version initialization.
+        const auto Version = Steam::Getinterfaceversion(Steam::Interfacetype_t::GAMESERVER);
+        if (Version == 0) return false;
+
+        // Server-versioning.
+        if(Version == 10)
+        {
+            uint16_t usSpectatorPort = va_arg(Args, uint16_t);
+            uint16_t usQueryPort = va_arg(Args, uint16_t);
+            uint32_t eServerMode = va_arg(Args, uint32_t);
+            const char *pchGameDir = va_arg(Args, char *);
+            const char *pchVersionString = va_arg(Args, char *);
+
+            Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
                      ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
                      usPort, usGamePort, usSpectatorPort, usQueryPort, pchVersionString));
 
-        // New session for the server.
-        Steam::Matchmaking::Createsession();
-        Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
-        Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
-        Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
-        Steam::Matchmaking::Localserver.Gamedata["Gamedirectory"] = pchGameDir;
-        Steam::Matchmaking::Localserver.Gamedata["Spectatorport"] = usSpectatorPort;
-        Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
-        Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+            // New session for the server.
+            Steam::Matchmaking::Createsession();
+            Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
+            Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
+            Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
+            Steam::Matchmaking::Localserver.Gamedata["Gamedirectory"] = pchGameDir;
+            Steam::Matchmaking::Localserver.Gamedata["Spectatorport"] = usSpectatorPort;
+            Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
+            Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+        }
+        if(Version == 11)
+        {
+            uint16_t usQueryPort = va_arg(Args, uint16_t);
+            uint32_t eServerMode = va_arg(Args, uint32_t);
+            const char *pchVersionString = va_arg(Args, char *);
 
+            Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Query-port: %u\n> Version \"%s\"",
+                     ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
+                     usPort, usGamePort, usQueryPort, pchVersionString));
+
+            // New session for the server.
+            Steam::Matchmaking::Createsession();
+            Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
+            Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
+            Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
+            Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
+            Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+        }
+
+        va_end(Args);
         return true;
     }
     EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
