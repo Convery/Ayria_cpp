@@ -80,9 +80,9 @@ namespace Steam
             uint32_t Entrysize{};
             auto Pointer = Filebuffer.get();
             Infoprint("Steam startup module with:");                Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
-            Infoprint(va("GUID1: %*s", Entrysize, Pointer));        Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
-            Infoprint(va("GUID2: %*s", Entrysize, Pointer));        Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
-            Infoprint(va("Instance: %*s", Entrysize, Pointer));     Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
+            /*Infoprint(va("GUID1: %*s", Entrysize, Pointer));    */Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
+            /*Infoprint(va("GUID2: %*s", Entrysize, Pointer));    */Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
+            /*Infoprint(va("Instance: %*s", Entrysize, Pointer)); */Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
             Infoprint(va("Module: %*s", Entrysize, Pointer));       Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
             Infoprint(va("Path: %*s", Entrysize, Pointer));         Pointer += Entrysize; Entrysize = *(uint32_t *)Pointer; Pointer += sizeof(uint32_t);
 
