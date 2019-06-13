@@ -169,16 +169,39 @@ namespace Winsock
 
         return Result;
     }
+    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
+    {
+        int lResult{};
+        Waitforinit();
+        if (Hints) Hints->ai_family = PF_INET;
+        Debugprint(va("Performing hostname lookup for \"%s\"", Nodename));
+
+        // If the host is interesting, give it a fake IP to work offline.
+        if (Localnetworking::isProxiedhost(Nodename))
+        {
+            // Resolve to a known host and replace the address.
+            lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
+
+            // Set the IP for all records.
+            for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
+            {
+                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(Localnetworking::getAddress(Nodename).data());
+            }
+        }
+        else
+        {
+            lResult = Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
+        }
+
+        return lResult;
+    }
 
     #if 0
     struct hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
     {
         return nullptr;
     }
-    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
-    {
-        return 0;
-    }
+
     #endif
 }
 
@@ -214,6 +237,7 @@ void InstallWinsock()
             }
         };
         Hook("gethostbyname");
+        Hook("getaddrinfo");
         Hook("connect");
         Hook("recvfrom");
         Hook("socket");
@@ -244,6 +268,7 @@ void InstallWinsock()
         }
     };
     Hook("gethostbyname", (void *)Winsock::Gethostbyname);
+    Hook("getaddrinfo", (void *)Winsock::Getaddrinfo);
     Hook("connect", (void *)Winsock::Connectsocket);
     Hook("recvfrom", (void *)Winsock::Receivefrom);
     Hook("sendto", (void *)Winsock::Sendto);
