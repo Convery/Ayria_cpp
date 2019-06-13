@@ -189,7 +189,7 @@ extern "C"
                 Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
                 Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
             }
-            if(Version == 11)
+            if(Version == 11 || Version == 12)
             {
                 uint16_t usQueryPort = va_arg(Args, uint16_t);
                 uint32_t eServerMode = va_arg(Args, uint32_t);

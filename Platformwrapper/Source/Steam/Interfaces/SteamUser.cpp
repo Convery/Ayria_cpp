@@ -14,6 +14,17 @@ namespace Steam
     // Authentication data.
     uint8_t Ticketdata[128]{};
 
+    // Ayria-internal.
+    #pragma pack(push, 1)
+    struct Steamappticket
+    {
+        uint8_t Identifier[6];
+        uint8_t SteamaccountID[8];
+        uint8_t Steamusername[17];
+        uint8_t Reserved;
+    };
+    #pragma pack(pop)
+
     struct SteamUser
     {
         uint32_t GetHSteamUser()
@@ -324,10 +335,10 @@ namespace Steam
         uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude)
         {
             // Fill the buffer with useful information.
-            std::memcpy(&Ticketdata[0], &Steam::Global.UserID, 8);
-            std::memcpy(&Ticketdata[8], Steam::Global.Username.c_str(), Steam::Global.Username.size());
-            std::memcpy(&Ticketdata[24], "\x00", 1);    // Ensure that any string is null-terminated.
-            /* NOTE(tcn): 7 bytes unused here */
+            ((Steamappticket *)Ticketdata)->Reserved = 0;
+            std::memcpy(&((Steamappticket *)Ticketdata)->Identifier, "Ayria", 6);
+            std::memcpy(&((Steamappticket *)Ticketdata)->SteamaccountID, &Steam::Global.UserID, 8);
+            std::memcpy(&((Steamappticket *)Ticketdata)->Steamusername, Steam::Global.Username.c_str(), Steam::Global.Username.size());
 
             // Append game data.
             Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));
