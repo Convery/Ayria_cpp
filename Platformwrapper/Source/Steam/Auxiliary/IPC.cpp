@@ -8,34 +8,32 @@
 
 namespace Steam
 {
-    Simplehook::Stomphook Modulehook;
+    void *Originalfunction;
     // Also redirect module lookups for legacy compatibility.
     BOOL __stdcall Callback(DWORD Flags, LPCSTR Modulename, HMODULE *Handle)
     {
-        static std::mutex Guard;
         char Filename[260]{};
-        BOOL Result;
 
-        Guard.lock();
+        // Is this even a real module?
+        if (const auto Result = ((decltype(GetModuleHandleExA) *)Originalfunction)(Flags, Modulename, Handle))
         {
-            Modulehook.Removehook();
-            Result = GetModuleHandleExA(Flags, Modulename, Handle);
-            Modulehook.Installhook();
-
-            if (Result)
+            GetModuleFileNameA(*Handle, Filename, 260);
+            if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
             {
-                GetModuleFileNameA(*Handle, Filename, 260);
-                if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
-                {
-                    constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
-                    *Handle = GetModuleHandleA(Clientlibrary);
-                }
+                constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
+                *Handle = GetModuleHandleA(Clientlibrary);
             }
+
+            return Result;
         }
-        Guard.unlock();
-        return Result;
+
+        return 0;
     }
-    void Redirectmodulehandle() { Modulehook.Installhook(GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA"), Callback); }
+    void Redirectmodulehandle()
+    {
+        Originalfunction = GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA");
+        Mhook_SetHook(&Originalfunction, Callback);
+    }
 
     // Block and wait for Steams IPC initialization event as some games need it.
     void InitializeIPC()
