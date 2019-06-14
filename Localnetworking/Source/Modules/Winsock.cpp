@@ -5,7 +5,7 @@
 */
 
 #include "Localnetworking.hpp"
-#include "Stdinclude.hpp"
+#include <Stdinclude.hpp>
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 
@@ -14,8 +14,6 @@ namespace Winsock
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
     robin_hood::unordered_flat_map<std::string_view, void *> Originalfunctions;
     robin_hood::unordered_flat_map<std::string, sockaddr_in6> Proxyhosts;
-    bool notInitialized = true; // x86 reading is atomic.
-    #define Waitforinit() while(notInitialized) { std::this_thread::yield(); }
 
     // Utility functionality.
     inline uint16_t getPort(const sockaddr *Sockaddr)
@@ -49,7 +47,6 @@ namespace Winsock
     // Only relevant while debugging.
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
-        Waitforinit();
         const auto Result = Calloriginal(socket)(Family, Type, Protocol);
 
         Debugprint(va("Creating a %s socket for %s over %s protocol (ID 0x%X)",
@@ -79,7 +76,6 @@ namespace Winsock
     // Datagram sockets need to remember the host-information.
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
     {
-        Waitforinit();
         const auto Address = getAddress(To);
         if(Localnetworking::isProxiedhost(Address))
         {
@@ -102,7 +98,6 @@ namespace Winsock
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
-        Waitforinit();
         const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
         if (!From || !Fromlength || Result < 0) return Result;
         //Debugprint(va("Recv from %s:%u", getAddress(From).c_str(), getPort(From)));
@@ -149,7 +144,6 @@ namespace Winsock
     // Create a proxy address if needed.
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
-        Waitforinit();
         Debugprint(va("Performing hostname lookup for \"%s\"", Hostname));
         auto Result = Calloriginal(gethostbyname)(Hostname);
 
@@ -172,7 +166,6 @@ namespace Winsock
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
         int lResult{};
-        Waitforinit();
         if (Hints) Hints->ai_family = PF_INET;
         Debugprint(va("Performing hostname lookup for \"%s\"", Nodename));
 
@@ -208,65 +201,18 @@ namespace Winsock
 // Hook the front-facing APIs.
 void InstallWinsock()
 {
-    // See if we can load any alternative dll.
-    // Threading doesn't help much in debug.
-    std::thread([]()
-    {
-        std::vector<void *> Alternativemodules;
-        for(const auto &Item : FS::Findfilesrecursive("C:/Windows/winsxs", "wsock32.dll"))
-        {
-            const auto Handle = LoadLibraryA(Item.c_str());
-            if (Handle) Alternativemodules.push_back(Handle);
-            if (Handle) break;
-        }
-        for(const auto &Item : FS::Findfilesrecursive("C:/Windows/winsxs", "ws2_32.dll"))
-        {
-            const auto Handle = LoadLibraryA(Item.c_str());
-            if (Handle) Alternativemodules.push_back(Handle);
-            if (Handle) break;
-        }
-
-        // Get our alternative functions.
-        const auto Hook = [&](std::string_view Name)
-        {
-            // See if we have any alternative function to use.
-            for(const auto &Item : Alternativemodules)
-            {
-                const auto Address = GetProcAddress((HMODULE)Item, Name.data());
-                if (Address) Winsock::Originalfunctions[Name] = (void *)Address;
-            }
-        };
-        Hook("gethostbyname");
-        Hook("getaddrinfo");
-        Hook("connect");
-        Hook("recvfrom");
-        Hook("socket");
-        Hook("sendto");
-
-        // Always remember to initialize winsock.
-        for(const auto &Item : Alternativemodules)
-        {
-            WSADATA wsaData;
-            const auto Address = GetProcAddress((HMODULE)Item, "WSAStartup");
-            if(Address) ((decltype(WSAStartup) *)Address)(MAKEWORD(2, 2), &wsaData);
-        }
-
-        // Testing against false is faster.
-        Winsock::notInitialized = false;
-    }).detach();
-
     // Proxy Winsocks exports with our own information.
     const auto Hook = [&](std::string_view Name, void *Target)
     {
+        auto Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data());
+        if (!Address) Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data());
+        if (Address)
         {
-            const auto Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data());
-            if(Address) Simplehook::Stomphook().Installhook((void *)Address, Target);
-        }
-        {
-            const auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data());
-            if(Address) Simplehook::Stomphook().Installhook((void *)Address, Target);
+            Winsock::Originalfunctions[Name] = (void *)Address;
+            Mhook_SetHook(&Winsock::Originalfunctions[Name], Target);
         }
     };
+
     Hook("gethostbyname", (void *)Winsock::Gethostbyname);
     Hook("getaddrinfo", (void *)Winsock::Getaddrinfo);
     Hook("connect", (void *)Winsock::Connectsocket);
