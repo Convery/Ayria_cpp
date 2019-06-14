@@ -435,7 +435,36 @@ namespace Callbacks = Steam::Callbacks;
 // Interface exports.
 extern "C"
 {
-    EXPORT_ATTR void *SteamInternal_CreateInterface(const char *Interfacename);
+    // Initialization and shutdown.
+    EXPORT_ATTR bool SteamAPI_Init();
+    EXPORT_ATTR bool SteamAPI_InitSafe();
+    EXPORT_ATTR void SteamAPI_Shutdown();
+    EXPORT_ATTR bool SteamAPI_IsSteamRunning();
+    EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath();
+    EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID);
+
+    // Callback management.
+    EXPORT_ATTR void SteamAPI_RunCallbacks();
+    EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback);
+    EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback);
+    EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall);
+    EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall);
+
+    // Steam proxy.
+    EXPORT_ATTR int32_t SteamAPI_GetHSteamUser();
+    EXPORT_ATTR int32_t SteamAPI_GetHSteamPipe();
+    EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser();
+    EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe();
+    EXPORT_ATTR bool SteamGameServer_BSecure();
+    EXPORT_ATTR void SteamGameServer_Shutdown();
+    EXPORT_ATTR void SteamGameServer_RunCallbacks();
+    EXPORT_ATTR uint64_t SteamGameServer_GetSteamID();
+    EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...);
+    // TODO(tcn): Replace with vararg versions.
+    EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString);
+    EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString);
+
+    // Interface access.
     EXPORT_ATTR void *SteamAppList();
     EXPORT_ATTR void *SteamApps();
     EXPORT_ATTR void *SteamClient();
@@ -465,4 +494,5 @@ extern "C"
     EXPORT_ATTR void *SteamUtils();
     EXPORT_ATTR void *SteamVideo();
     EXPORT_ATTR void *SteamMasterServerUpdater();
+    EXPORT_ATTR void *SteamInternal_CreateInterface(const char *Interfacename);
 }
