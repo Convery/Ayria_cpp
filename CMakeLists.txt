@@ -56,8 +56,12 @@ else()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} -g")
 endif()
 
-# Always include the root.
+# Always include the root and VCPKG includes.
 include_directories("${PROJECT_SOURCE_DIR}")
+find_path(MHOOK_INC mhook-lib/mhook.h)
+if(NOT HOOK_INC-NOTFOUND)
+include_directories(${MHOOK_INC})
+endif()
 
 # Add the sub-projects.
 add_subdirectory(Bootstrapper)

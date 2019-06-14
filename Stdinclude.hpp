@@ -52,6 +52,7 @@
 // Third-party includes.
 #include <Utilities/Robin_hood.hpp>
 #include <Utilities/JSON.hpp>
+#include <mhook-lib/mhook.h>
 
 // Restore warnings.
 #pragma warning(pop)

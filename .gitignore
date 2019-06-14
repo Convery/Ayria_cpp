@@ -66,4 +66,4 @@ Bin
 *.licenseheader
 *.log
 *.db
-/out
+out
