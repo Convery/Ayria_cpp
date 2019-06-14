@@ -37,10 +37,12 @@ void PECallback()
             Memprotect::Protectrange(Address, sizeof(size_t), Protection);
 
             // Trigger the applications TLS callback.
-            std::thread([]() {}).detach();
+            Debugprint("Starting TLS CB");
+            std::thread([]() {}).join();
         }
     }
 
+    Debugprint("Returning");
     Return();
 }
 
@@ -78,6 +80,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Install our own entrypoint for the application.
         if (EPAddress = PEEntrypoint(); EPAddress)
         {
+            Debugprint(va("EP at %llx", EPAddress));
             Hook.Installhook(EPAddress, PECallback);
         }
     }
