@@ -208,11 +208,13 @@ void InstallWinsock()
         {
             Winsock::Originalfunctions[Name] = (void *)Address;
             Mhook_SetHook(&Winsock::Originalfunctions[Name], Target);
+            return;
         }
         if (auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data()))
         {
             Winsock::Originalfunctions[Name] = (void *)Address;
             Mhook_SetHook(&Winsock::Originalfunctions[Name], Target);
+            return;
         }
     };
 
