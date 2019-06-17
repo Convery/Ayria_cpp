@@ -18,7 +18,7 @@ namespace Steam
         if (const auto Result = ((decltype(GetModuleHandleExA) *)Originalfunction)(Flags, Modulename, Handle))
         {
             GetModuleFileNameA(*Handle, Filename, 260);
-            if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Ayria"))
+            if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Platformwrapper"))
             {
                 constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
                 *Handle = GetModuleHandleA(Clientlibrary);
