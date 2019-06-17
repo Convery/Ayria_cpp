@@ -87,13 +87,13 @@ extern "C"
         // Proxy Steams exports with our own information.
         const auto Lambda = [&](std::string_view Name, void *Target) -> void
         {
-            if (auto Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data()))
+            auto Address = GetProcAddress(GetModuleHandleA("steam_api64.dll"), Name.data());
+            if (!Address) Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data());
+            if (Address)
             {
-                Mhook_SetHook((void **)&Address, Target);
-            }
-            if (auto Address = GetProcAddress(GetModuleHandleA("steam_api64.dll"), Name.data()))
-            {
-                Mhook_SetHook((void **)&Address, Target);
+                // Simple hook as fall-back.
+                if (!Mhook_SetHook((void **)&Address, Target))
+                    Simplehook::Stomphook().Installhook(Address, Target);
             }
         };
         #define Hook(x) Lambda(#x, (void *)x)

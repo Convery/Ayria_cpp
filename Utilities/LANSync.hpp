@@ -128,7 +128,7 @@ namespace LANSync
             Message["Subtype"] = std::move(Subtype);
 
             // We only allow base64 data to be sent, obviously.
-            if(Base64::Validate(Data)) Message["Data"] = std::move(Data);
+            if (Base64::Validate(Data)) Message["Data"] = std::move(Data);
             else Message["Data"] = Base64::Encode(Data);
 
             // Windows does not like to send partial messages, so prefix the ID.
@@ -141,7 +141,7 @@ namespace LANSync
             Address.sin_port = htons(Internal::Syncport);
 
             // Broadcast the payload
-            return Payload.size() == size_t(sendto(Socket, Payload.data(), Payload.size(), NULL, (SOCKADDR *)&Address, sizeof(Address)));
+            return Payload.size() == size_t(sendto(Socket, Payload.data(), uint32_t(Payload.size()), NULL, (SOCKADDR *)&Address, sizeof(Address)));
         }
     };
 }
