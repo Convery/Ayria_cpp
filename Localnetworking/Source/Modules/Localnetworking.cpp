@@ -21,7 +21,7 @@ namespace Localnetworking
     size_t Listensocket, UDPSocket;
 
     // Poll on the local sockets.
-    void Serverthread()
+    void Pollthread()
     {
         // ~100 FPS incase someone proxies game-data.
         timeval Timeout{ NULL, 10000 };
@@ -58,6 +58,16 @@ namespace Localnetworking
                             {
                                 if (Port == ntohs(Client.sin_port))
                                 {
+                                    // Notify the server about its info.
+                                    for (const auto &[Hostname, Instance] : Serverinstances)
+                                    {
+                                        if (Instance == Server)
+                                        {
+                                            const auto Readable = va("%s:%u", Hostname.c_str(), Port);
+                                            Server->onServerinfo(Readable.c_str(), Readable.size());
+                                            break;
+                                        }
+                                    }
                                     Streamsockets[Socket] = Server;
                                     Server->onConnect();
                                     break;
@@ -103,14 +113,22 @@ namespace Localnetworking
                             {
                                 if (Port == ntohs(Client.sin_port))
                                 {
-                                    // Forward to the server.
-                                    Server->onPacketwrite(Buffer, Size);
-
                                     // Ensure that there's a socket associated with the server.
                                     auto &Entry = Datagramsockets[Server];
                                     if (Entry == 0)
                                     {
                                         auto Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+                                        // Notify the server about its info.
+                                        for(const auto &[Hostname, Instance] : Serverinstances)
+                                        {
+                                            if(Instance == Server)
+                                            {
+                                                const auto Readable = va("%s:%u", Hostname.c_str(), Port);
+                                                Server->onServerinfo(Readable.c_str(), Readable.size());
+                                                break;
+                                            }
+                                        }
 
                                         // Ensure that the socket is bound somewhere.
                                         Client = { AF_INET, 0 };
@@ -124,14 +142,43 @@ namespace Localnetworking
                                         // Associate the server with the socket.
                                         Entry = Socket;
                                     }
+
+                                    // Forward to the server.
+                                    Server->onPacketwrite(Buffer, Size);
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
 
-            // Poll the servers for a single packet and forward it.
+    // Poll the servers for a single packet and forward it.
+    void TCPPushthread()
+    {
+        char Buffer[8192];
+
+        while(true)
+        {
+            for (const auto &[Socket, Server] : Streamsockets)
+            {
+                uint32_t Datasize{ 8192 };
+                if (Server->onStreamread(Buffer, &Datasize))
+                {
+                    send(Socket, Buffer, Datasize, 0);
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
+    }
+    void UDPPushthread()
+    {
+        char Buffer[8192];
+
+        while (true)
+        {
             for (const auto &[Server, Socket] : Datagramsockets)
             {
                 uint32_t Datasize{ 8192 };
@@ -142,18 +189,12 @@ namespace Localnetworking
                     {
                         SOCKADDR_IN Client{ AF_INET, htons(Port) };
                         Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-                        sendto(Socket, Buffer, Datasize, 0, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+                        sendto(Socket, Buffer, Datasize, 0, (SOCKADDR *)& Client, sizeof(SOCKADDR_IN));
                     }
                 }
             }
-            for (const auto &[Socket, Server] : Streamsockets)
-            {
-                uint32_t Datasize{ 8192 };
-                if (Server->onStreamread(Buffer, &Datasize))
-                {
-                    send(Socket, Buffer, Datasize, 0);
-                }
-            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
         }
     }
 
@@ -213,8 +254,10 @@ namespace Localnetworking
         // Notify the developer.
         Debugprint(va("Spawning server on TCP %u and UDP %u", BackendTCPport, BackendUDPport));
 
-        // Keep the polling away from the main thread.
-        std::thread(Serverthread).detach();
+        // Keep the polling and pushing away from the main thread.
+        std::thread(TCPPushthread).detach();
+        std::thread(UDPPushthread).detach();
+        std::thread(Pollthread).detach();
     }
 
     // Resolve the address and associated ports, creates a new address if needed.
