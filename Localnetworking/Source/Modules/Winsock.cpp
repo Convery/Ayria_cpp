@@ -12,8 +12,8 @@
 namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
-    robin_hood::unordered_flat_map<std::string_view, void *> Originalfunctions;
-    robin_hood::unordered_flat_map<std::string, sockaddr_in6> Proxyhosts;
+    std::unordered_map<std::string_view, void *> Originalfunctions;
+    std::unordered_map<std::string, sockaddr_in6> Proxyhosts;
 
     // Utility functionality.
     inline uint16_t getPort(const sockaddr *Sockaddr)
