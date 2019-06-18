@@ -204,13 +204,13 @@ void InstallWinsock()
     // Proxy Winsocks exports with our own information.
     const auto Hook = [&](std::string_view Name, void *Target)
     {
-        if (auto Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data()))
+        if (auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data()))
         {
             Winsock::Originalfunctions[Name] = (void *)Address;
             Mhook_SetHook(&Winsock::Originalfunctions[Name], Target);
             return;
         }
-        if (auto Address = GetProcAddress(GetModuleHandleA("wsock32.dll"), Name.data()))
+        if (auto Address = GetProcAddress(GetModuleHandleA("ws2_32.dll"), Name.data()))
         {
             Winsock::Originalfunctions[Name] = (void *)Address;
             Mhook_SetHook(&Winsock::Originalfunctions[Name], Target);
