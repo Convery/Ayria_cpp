@@ -23,7 +23,7 @@ namespace Steam
             int32_t Type;
         };
 
-        robin_hood::unordered_flat_map<int32_t, Callback_t *> Callbacks;
+        std::unordered_map<int32_t, Callback_t *> Callbacks;
         std::queue<std::pair<int32_t, Result_t>> Results;
         std::atomic<CallID_t> Callbackcount{ 42 };
 

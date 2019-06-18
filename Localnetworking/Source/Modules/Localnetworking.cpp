@@ -11,11 +11,11 @@
 
 namespace Localnetworking
 {
-    robin_hood::unordered_flat_map<IServer *, std::vector<uint16_t>> Proxyports;
-    robin_hood::unordered_flat_map<std::string, std::string> Resolvercache;
-    robin_hood::unordered_flat_map<std::string, IServer *> Serverinstances;
-    robin_hood::unordered_flat_map<IServer *, size_t> Datagramsockets;
-    robin_hood::unordered_flat_map<size_t, IServer *> Streamsockets;
+    std::unordered_map<IServer *, std::vector<uint16_t>> Proxyports;
+    std::unordered_map<std::string, std::string> Resolvercache;
+    std::unordered_map<std::string, IServer *> Serverinstances;
+    std::unordered_map<IServer *, size_t> Datagramsockets;
+    std::unordered_map<size_t, IServer *> Streamsockets;
     uint16_t BackendTCPport, BackendUDPport;
     std::vector<void *> Pluginslist;
     size_t Listensocket, UDPSocket;
