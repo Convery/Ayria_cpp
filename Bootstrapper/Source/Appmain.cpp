@@ -80,7 +80,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Install our own entrypoint for the application.
         if (EPAddress = PEEntrypoint(); EPAddress)
         {
-            Debugprint(va("EP at %llx", EPAddress));
+            Debugprint(va("EP at %p", EPAddress));
             Hook.Installhook(EPAddress, PECallback);
         }
     }
