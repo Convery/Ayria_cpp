@@ -48,7 +48,8 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         std::thread(Steam::InitializeIPC).detach();
 
         // If there's a local bootstrap module, we'll load it.
-        LoadLibraryA("Developerbootstrap.dll");
+        LoadLibraryA("Bootstrapper64d.dll");
+        LoadLibraryA("Bootstrapper32d.dll");
 
         // Finally initialize the interfaces by module.
         if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
