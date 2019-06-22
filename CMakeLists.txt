@@ -61,6 +61,7 @@ include_directories("${PROJECT_SOURCE_DIR}")
 find_path(MHOOK_INC mhook-lib/mhook.h)
 if(NOT HOOK_INC-NOTFOUND)
 include_directories(${MHOOK_INC})
+find_library(MHOOK mhook.lib)
 endif()
 
 # Add the sub-projects.
