@@ -50,7 +50,7 @@ extern "C"
         {
             Steam::Global.Username = "Ayria";
             Steam::Global.Language = "english";
-            Steam::Global.UserID = 0x1100001DEADC0DE;
+            Steam::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
         }
 
         // Query the Steam platform for installation-location.
