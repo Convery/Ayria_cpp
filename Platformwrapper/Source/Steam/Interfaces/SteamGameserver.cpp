@@ -164,12 +164,14 @@ namespace Steam
         }
         void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            Matchmaking::Localserver.Gamedata["Spectatorservername"] = pSpectatorServerName ? pSpectatorServerName : "";
-            Matchmaking::Localserver.Gamedata["Servername"] = pchServerName ? pchServerName : "";
-            Matchmaking::Localserver.Gamedata["Mapname"] = pchMapName ? pchMapName : "";
-            Matchmaking::Localserver.Gamedata["Currentplayers"] = cPlayers;
-            Matchmaking::Localserver.Gamedata["CurrentBots"] = cBotPlayers;
-            Matchmaking::Localserver.Gamedata["Maxplayers"] = cPlayersMax;
+            auto Localserver = LANMatchmaking::Createserver();
+            Localserver->Gamedata["Spectatorservername"] = pSpectatorServerName ? pSpectatorServerName : "";
+            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
+            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
+            Localserver->Gamedata["Currentplayers"] = cPlayers;
+            Localserver->Gamedata["CurrentBots"] = cBotPlayers;
+            Localserver->Gamedata["Maxplayers"] = cPlayersMax;
+            // No update here.
         }
         void GetGameplayStats()
         {
@@ -192,9 +194,10 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-            Matchmaking::Localserver.Gamedata["Gametags"] = pchGameTags;
+
+            LANMatchmaking::Createserver()->Gamedata["Gametags"] = pchGameTags;
             Debugprint(va("Gameserver tags: %s", pchGameTags));
-            Matchmaking::Updateserver();
+            LANMatchmaking::Updateserver();
         }
         uint64_t GetServerReputation()
         {

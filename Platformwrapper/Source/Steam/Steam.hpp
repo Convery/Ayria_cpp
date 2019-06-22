@@ -17,9 +17,9 @@ namespace Steam
         std::string Path;
         std::string Username;
         std::string Language;
+        std::thread LANThread;
         uint32_t ApplicationID;
         uint64_t Startuptimestamp;
-        LANSync::Server *Synchronisation;
     };
     extern Globalstate_t Global;
 
@@ -70,23 +70,6 @@ namespace Steam
     // Also redirect module lookups for legacy compatibility.
     void Redirectmodulehandle();
     void InitializeIPC();
-
-    // Perform matchmaking over LAN for the games.
-    namespace Matchmaking
-    {
-        struct Server_t
-        {
-            uint64_t Lastpingtime;
-            std::string Hostaddress;
-            nlohmann::json Gamedata;
-        };
-        extern std::vector<Server_t> Knownservers;
-        extern Server_t Localserver;
-        extern GUID SessionID;
-
-        void Createsession();
-        void Updateserver();
-    }
 
     // Async replies.
     namespace Callbacks
@@ -431,6 +414,38 @@ namespace Steam
 }
 
 namespace Callbacks = Steam::Callbacks;
+
+// Matchmaking subsystem.
+namespace LANMatchmaking
+{
+    using SessionID_t = GUID;
+    struct Message_t
+    {
+        SessionID_t SessionID;
+        std::string Eventtype;
+        std::string Sender;
+        std::string Data;
+    };
+    struct Server_t
+    {
+        // Internal usage.
+        uint64_t Lastmessage{};
+        SessionID_t SessionID{};
+        std::string Hostaddress{};
+        nlohmann::json Gamedata{};
+
+        public:
+        template<typename T> void Set(std::string &&Property, T Value) { Gamedata[Property] = Value; }
+        template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Gamedata.value(Property, Defaultvalue); }
+    };
+
+    void Updateserver();
+    void Terminatesession();
+    SessionID_t Createsession();
+    std::shared_ptr<Server_t> Createserver();
+    std::thread Initialize(uint32_t Identifier);
+    std::vector<std::shared_ptr<Server_t>> Listservers();
+}
 
 // Interface exports.
 extern "C"
