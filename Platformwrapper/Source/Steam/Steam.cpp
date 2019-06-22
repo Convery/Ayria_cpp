@@ -121,8 +121,8 @@ extern "C"
         }
         #endif
 
-        // Start listening for LAN data so that we can stay up to date.
-        if (!Steam::Global.Synchronisation) Steam::Global.Synchronisation = new LANSync::Server(Steam::Global.ApplicationID);
+        // Enable LAN-matchmaking for this title.
+        if (!Steam::Global.LANThread.joinable()) Steam::Global.LANThread = LANMatchmaking::Initialize(Steam::Global.ApplicationID);
 
         return true;
     }
@@ -153,7 +153,7 @@ extern "C"
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser() { Traceprint(); return { }; }
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
-    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Steam::Matchmaking::SessionID.Data1 = 0; }
+    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); LANMatchmaking::Terminatesession(); }
     EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Steam::Global.UserID; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
@@ -180,14 +180,15 @@ extern "C"
                          usPort, usGamePort, usSpectatorPort, usQueryPort, pchVersionString));
 
                 // New session for the server.
-                Steam::Matchmaking::Createsession();
-                Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
-                Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
-                Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
-                Steam::Matchmaking::Localserver.Gamedata["Gamedirectory"] = pchGameDir;
-                Steam::Matchmaking::Localserver.Gamedata["Spectatorport"] = usSpectatorPort;
-                Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
-                Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+                auto Localserver = LANMatchmaking::Createserver();
+                Localserver->Gamedata["Authport"] = usPort;
+                Localserver->Gamedata["Gameport"] = usGamePort;
+                Localserver->Gamedata["Queryport"] = usQueryPort;
+                Localserver->Gamedata["Gamedirectory"] = pchGameDir;
+                Localserver->Gamedata["Spectatorport"] = usSpectatorPort;
+                Localserver->Gamedata["Serverversion"] = pchVersionString;
+                Localserver->Gamedata["Hostaddress"] = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+                LANMatchmaking::Updateserver();
             }
             if(Version == 11 || Version == 12)
             {
@@ -200,12 +201,13 @@ extern "C"
                          usPort, usGamePort, usQueryPort, pchVersionString));
 
                 // New session for the server.
-                Steam::Matchmaking::Createsession();
-                Steam::Matchmaking::Localserver.Gamedata["Authport"] = usPort;
-                Steam::Matchmaking::Localserver.Gamedata["Gameport"] = usGamePort;
-                Steam::Matchmaking::Localserver.Gamedata["Queryport"] = usQueryPort;
-                Steam::Matchmaking::Localserver.Gamedata["Serverversion"] = pchVersionString;
-                Steam::Matchmaking::Localserver.Hostaddress = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+                auto Localserver = LANMatchmaking::Createserver();
+                Localserver->Gamedata["Authport"] = usPort;
+                Localserver->Gamedata["Gameport"] = usGamePort;
+                Localserver->Gamedata["Queryport"] = usQueryPort;
+                Localserver->Gamedata["Serverversion"] = pchVersionString;
+                Localserver->Gamedata["Hostaddress"] = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+                LANMatchmaking::Updateserver();
             }
 
             va_end(Args);

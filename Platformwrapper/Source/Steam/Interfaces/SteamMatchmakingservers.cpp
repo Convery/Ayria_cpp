@@ -5,6 +5,7 @@
 */
 
 #include "../Steam.hpp"
+#include <WinSock2.h>
 
 namespace Steam
 {
@@ -53,65 +54,63 @@ namespace Steam
         void *RequestInternetServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void *RequestLANServerList1(uint32_t iApp, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void *RequestFriendsServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void *RequestFavoritesServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void *RequestHistoryServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void *RequestSpectatorServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             Responsecallback2 = pRequestServersResponse;
-            Matchmaking::Createsession();
             return this;
         }
         void ReleaseRequest(void *hServerListRequest) { Traceprint(); };
 
-        void RequestInternetServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
-        void RequestLANServerList0(uint32_t iApp, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
-        void RequestFriendsServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
-        void RequestFavoritesServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
-        void RequestHistoryServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
-        void RequestSpectatorServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; Matchmaking::Createsession(); }
+        void RequestInternetServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; }
+        void RequestLANServerList0(uint32_t iApp, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
+        void RequestFriendsServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
+        void RequestFavoritesServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
+        void RequestHistoryServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
+        void RequestSpectatorServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
 
         Callbacks::gameserveritem_t *GetServerDetails1(uint32_t eType, int iServer) { Traceprint(); return {}; };
         Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer)
         {
-            auto Server = &Matchmaking::Knownservers.at(iServer);
             auto Serialized = new Callbacks::gameserveritem_t();
+            const auto Servers = LANMatchmaking::Listservers();
+            if (Servers.size() <= iServer) return 0;
+            auto Server = Servers[iServer];
 
             // Address in host-order.
+            Serialized->m_NetAdr.m_usQueryPort = Server->Get("Queryport", uint16_t());
             Serialized->m_NetAdr.m_unIP = ntohl(inet_addr(Server->Hostaddress.c_str()));
-            Serialized->m_NetAdr.m_usQueryPort = Server->Gamedata.value("Queryport", 0);
-            Serialized->m_NetAdr.m_usConnectionPort = Server->Gamedata.value("Gameport", 0);
+            Serialized->m_NetAdr.m_usConnectionPort = Server->Get("Gameport", uint16_t());
 
             // To make it a little more readable.
+            #define Copy(x, y) lCopy(x, sizeof(x), Server->Get(y, std::string()));
             auto lCopy = [](char *Dst, size_t Max, std::string &&Src) -> void
             {
                 std::memcpy(Dst, Src.c_str(), std::min(Max, Src.size()));
             };
-            #define Copy(x, y) lCopy(x, sizeof(x), Server->Gamedata.value(y, std::string()));
+
+            // String-properties.
             Copy(Serialized->m_szGameDescription, "Gamedescription");
             //Copy(Serialized->m_szServerName, "Servername");
             Copy(Serialized->m_szGameDir, "Gamedirectory");
@@ -138,7 +137,8 @@ namespace Steam
         int GetServerCount(uint32_t eType)
         {
             // Complete the listing as we did it in the background.
-            for(size_t i = 0; i < Matchmaking::Knownservers.size(); ++i)
+            const auto Servers = LANMatchmaking::Listservers();
+            for(size_t i = 0; i < Servers.size(); ++i)
             {
                 if (Responsecallback1) Responsecallback1->ServerResponded(i);
                 if (Responsecallback2) Responsecallback2->ServerResponded(this, i);
@@ -147,7 +147,7 @@ namespace Steam
             if (Responsecallback2) Responsecallback2->RefreshComplete(this, 0);
             if (Responsecallback1) Responsecallback1->RefreshComplete(0);
 
-            return Matchmaking::Knownservers.size();
+            return Servers.size();
         }
         void RefreshServer(uint32_t eType, int iServer) { Traceprint(); };
         int PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse)
