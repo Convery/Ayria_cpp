@@ -79,8 +79,8 @@ namespace Steam
         }
         int  GetNumMasterServers()
         {
-            // NOTE(tcn): Some games uses this for an 'is online' check.
-            return 1;
+            // NOTE(tcn): Some servers use this for an 'is online' check.
+            return 0; // Set to 1 for Internet-mode.
         }
         int  GetMasterServerAddress(int iServer, char *pOut, int outBufferSize)
         {
