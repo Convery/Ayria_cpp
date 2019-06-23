@@ -124,11 +124,15 @@ extern "C"
         // Enable LAN-matchmaking for this title.
         if (!Steam::Global.LANThread.joinable()) Steam::Global.LANThread = LANMatchmaking::Initialize(Steam::Global.ApplicationID);
 
+        // Notify the game that it's properly connected.
+        const auto RequestID = Callbacks::Createrequest();
+        Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
+
         return true;
     }
-    EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
     EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
     EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
+    EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
     EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { return Steam::Global.Path.c_str(); }
     EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam::Global.ApplicationID = unOwnAppID; return false; }
 

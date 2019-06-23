@@ -184,6 +184,13 @@ namespace Steam
         }
         uint32_t GetPublicIP()
         {
+            // One would think that this would be the default state..
+            const auto Request = new Callbacks::GSPolicyResponse_t();
+            const auto RequestID = Callbacks::Createrequest();
+            Request->m_bSecure = false;
+
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 15, Request);
+
             Traceprint();
             return 0;
         }
@@ -194,7 +201,6 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-
             LANMatchmaking::Createserver()->Gamedata["Gametags"] = pchGameTags;
             Debugprint(va("Gameserver tags: %s", pchGameTags));
             LANMatchmaking::Updateserver();
