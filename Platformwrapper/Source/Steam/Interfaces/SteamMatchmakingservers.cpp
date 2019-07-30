@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 05-05-2019
+    Started: 2019-05-05
     License: MIT
 */
 
@@ -125,6 +125,7 @@ namespace Steam
             Serialized->m_nBotPlayers = 0;
             Serialized->m_nPlayers = 1;
             Serialized->m_nPing = 33;
+            Serialized->m_bSecure = true;
 
             // Silly, but it works =P
             Serialized->m_nServerVersion = 1001;

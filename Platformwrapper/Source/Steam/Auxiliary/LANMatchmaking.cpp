@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 20-06-2019
+    Started: 2019-06-20
     License: MIT
 */
 

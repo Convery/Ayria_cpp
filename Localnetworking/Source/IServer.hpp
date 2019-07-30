@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 12-04-2019
+    Started: 2019-04-12
     License: MIT
     Notes:
         Plugins need to provide an export:
