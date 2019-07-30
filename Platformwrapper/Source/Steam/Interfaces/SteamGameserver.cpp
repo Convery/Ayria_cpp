@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 10-04-2019
+    Started: 2019-04-10
     License: MIT
 */
 
@@ -72,7 +72,7 @@ namespace Steam
         bool BSecure()
         {
             Traceprint();
-            return false;
+            return true;
         }
         CSteamID GetSteamID()
         {
@@ -187,7 +187,7 @@ namespace Steam
             // One would think that this would be the default state..
             const auto Request = new Callbacks::GSPolicyResponse_t();
             const auto RequestID = Callbacks::Createrequest();
-            Request->m_bSecure = false;
+            Request->m_bSecure = true;
 
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 15, Request);
 
