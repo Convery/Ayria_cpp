@@ -286,7 +286,7 @@ namespace Steam
         uint32_t GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
         {
             const auto Request = new Callbacks::GetAuthSessionTicketResponse_t();
-            Request->m_eResult = Callbacks::EResult::k_EResultOK;
+            Request->m_eResult = EResult::k_EResultOK;
             Request->m_hAuthTicket = Callbacks::Createrequest();
             Callbacks::Completerequest(Request->m_hAuthTicket, Callbacks::k_iSteamUserCallbacks + 63, Request);
             *pcbTicket = cbMaxTicket;
@@ -347,7 +347,7 @@ namespace Steam
             // Notify the game that we are ready.
             const auto Request = new Callbacks::EncryptedAppTicketResponse_t();
             const auto RequestID = Callbacks::Createrequest();
-            Request->m_eResult = Callbacks::k_EResultOK;
+            Request->m_eResult = EResult::k_EResultOK;
 
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
             return RequestID;
