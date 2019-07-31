@@ -38,8 +38,9 @@ inline std::string va(std::string_view Format, ...)
         Size = Internal::va(Buffer.get(), Internal::Defaultsize, Format, Varlist);
 
         // If the size is larger, we need to allocate again =(
-        if (Size > Internal::Defaultsize)
+        if(Size > Internal::Defaultsize)
         {
+            Size += 1;  // Returned length + null.
             Buffer = std::make_unique<char[]>(Size);
             Size = Internal::va(Buffer.get(), Size, Format, Varlist);
         }
@@ -47,7 +48,7 @@ inline std::string va(std::string_view Format, ...)
     va_end(Varlist);
 
     // Negative result on error.
-    if (Size < 0) { assert(false); return {}; }
+    if(Size < 0) { assert(false); return {}; }
     assert(Size);
 
     // Take the memory with us.
@@ -66,8 +67,9 @@ inline std::string va(const char *Format, ...)
         Size = Internal::va(Buffer.get(), Internal::Defaultsize, Format, Varlist);
 
         // If the size is larger, we need to allocate again =(
-        if (Size > Internal::Defaultsize)
+        if(Size > Internal::Defaultsize)
         {
+            Size += 1;  // Returned length + null.
             Buffer = std::make_unique<char[]>(Size);
             Size = Internal::va(Buffer.get(), Size, Format, Varlist);
         }
@@ -75,7 +77,7 @@ inline std::string va(const char *Format, ...)
     va_end(Varlist);
 
     // Negative result on error.
-    if (Size < 0) { assert(false); return {}; }
+    if(Size < 0) { assert(false); return {}; }
     assert(Size);
 
     // Take the memory with us.
