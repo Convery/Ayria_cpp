@@ -287,18 +287,23 @@ namespace Steam
         {
             const auto Request = new Callbacks::GetAuthSessionTicketResponse_t();
             Request->m_eResult = EResult::k_EResultOK;
-            Request->m_hAuthTicket = Callbacks::Createrequest();
-            Callbacks::Completerequest(Request->m_hAuthTicket, Callbacks::k_iSteamUserCallbacks + 63, Request);
+            Request->m_hAuthTicket = 1337;
             *pcbTicket = cbMaxTicket;
-
             Traceprint();
+
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
             return Request->m_hAuthTicket;
         }
         uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
         {
             Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
+            const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
+            Request->m_eAuthSessionResponse = 0; // k_EBeginAuthSessionResultOK
+            Request->m_OwnerSteamID = steamID;
+            Request->m_SteamID = steamID;
 
-            return 0;
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 43, Request);
+            return 0; // k_EBeginAuthSessionResultOK
         }
         void EndAuthSession(CSteamID steamID)
         {
