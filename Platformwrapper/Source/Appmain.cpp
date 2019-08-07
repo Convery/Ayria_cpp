@@ -48,8 +48,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         std::thread(Steam::InitializeIPC).detach();
 
         // If there's a local bootstrap module, we'll load it.
-        LoadLibraryA("Bootstrapper64d.dll");
-        LoadLibraryA("Bootstrapper32d.dll");
+
+        if(LoadLibraryA("./Ayria/Bootstrapper64d.dll") || LoadLibraryA("./Ayria/Bootstrapper32d.dll"))
+            std::thread([]() {}).detach();
 
         // Finally initialize the interfaces by module.
         if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
@@ -92,6 +93,9 @@ extern "C"
             if (!Address) Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data());
             if (Address)
             {
+                // If a developer has loaded the plugin as a DLL, ignore it.
+                if(Address == Target) return;
+
                 // Simple hook as fall-back.
                 if (!Mhook_SetHook((void **)&Address, Target))
                     Simplehook::Stomphook().Installhook(Address, Target);
