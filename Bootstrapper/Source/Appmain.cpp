@@ -6,44 +6,47 @@
 
 #include "Stdinclude.hpp"
 
-// Let's just keep everything in a single module.
-extern size_t TLSCallbackaddress();
-extern "C" size_t EPAddress{};
-extern size_t PEEntrypoint();
-extern void Loadallplugins();
-Simplehook::Stomphook Hook;
-extern "C" void Return();
-size_t TLSAddress{};
-void PECallback()
+size_t OriginalTLS{};
+void Loadallplugins();
+
+// Utility functions.
+size_t AddressofTLS()
 {
-    // Check all the places plugins may reside.
-    Loadallplugins();
+    // Module(NULL) gets the host application.
+    HMODULE Modulehandle = GetModuleHandleA(NULL);
+    if(!Modulehandle) return 0;
 
-    // Restore the entrypoint.
-    if (const size_t Address = PEEntrypoint())
-    {
-        Hook.Removehook();
-    }
+    // Traverse the PE header.
+    PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
+    PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
+    IMAGE_DATA_DIRECTORY TLSDirectory = NTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
 
-    // Restore TLS.
-    if (const size_t Address = TLSCallbackaddress())
+    // Get the callback address.
+    if(!TLSDirectory.VirtualAddress) return 0;
+    return size_t(((size_t *)((DWORD_PTR)Modulehandle + TLSDirectory.VirtualAddress))[3]);
+}
+
+// Called after Ntdll.ldr's ctors but before main.
+void __stdcall TLSCallback(void *a, uint32_t b, void *c)
+{
+    if(const auto Address = AddressofTLS())
     {
-        if (TLSAddress)
+        auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
         {
-            auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
-            {
-                *(size_t *)Address = TLSAddress;
-            }
-            Memprotect::Protectrange(Address, sizeof(size_t), Protection);
+            // Remove the TLS callback in-case plugins spawn new threads.
+            *(size_t *)Address = 0;
 
-            // Trigger the applications TLS callback.
-            Debugprint("Starting TLS CB");
-            std::thread([]() {}).join();
+            // Check all the places plugins may reside.
+            Loadallplugins();
+
+            // Restore the original TLS callback.
+            *(size_t *)Address = OriginalTLS;
         }
+        Memprotect::Protectrange(Address, sizeof(size_t), Protection);
     }
 
-    Debugprint("Returning");
-    Return();
+    // If there was a TLS callback already, call it directly.
+    if(OriginalTLS) return ((decltype(TLSCallback) *)OriginalTLS)(a, b, c);
 }
 
 // Entrypoint when loaded as a shared library.
@@ -64,24 +67,19 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
 
-        // Disable TLS callbacks as they run before main.
-        if (const size_t Address = TLSCallbackaddress())
+        // Set TLS to run our callback when fully loaded.
+        if(const auto Address = AddressofTLS())
         {
-            if (TLSAddress = *(size_t *)Address; TLSAddress)
+            auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
             {
-                auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
-                {
-                    *(size_t *)Address = NULL;
-                }
-                Memprotect::Protectrange(Address, sizeof(size_t), Protection);
+                OriginalTLS = *(size_t *)Address;
+                *(size_t *)Address = (size_t)TLSCallback;
             }
+            Memprotect::Protectrange(Address, sizeof(size_t), Protection);
         }
-
-        // Install our own entrypoint for the application.
-        if (EPAddress = PEEntrypoint(); EPAddress)
+        else
         {
-            Debugprint(va("EP at %p", EPAddress));
-            Hook.Installhook(EPAddress, PECallback);
+            assert(false);
         }
     }
 
@@ -92,19 +90,6 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 std::vector<void *> Loadedplugins;
 extern "C"
 {
-    // MSVC does not support x64 assembly so we need the jump in a new func.
-    #if !defined(_WIN64)
-    void Return()
-    {
-        // NOTE(tcn): Clang and CL implements AddressOfReturnAddress differently, bug?
-        #if defined (__clang__)
-        *((size_t *)__builtin_frame_address(0) + 1) = PEEntrypoint();
-        #else
-        *(size_t *)_AddressOfReturnAddress() = PEEntrypoint();
-        #endif
-    }
-    #endif
-
     EXPORT_ATTR bool Broadcastmessage(const void *Buffer, uint32_t Size)
     {
         // Forward to all plugins until one handles it.
@@ -131,33 +116,6 @@ extern "C"
 
 // Utility functionality.
 std::string Temporarydir() { char Buffer[260]{}; GetTempPathA(260, Buffer); return std::move(Buffer); }
-size_t TLSCallbackaddress()
-{
-    // Module(NULL) gets the host application.
-    HMODULE Modulehandle = GetModuleHandleA(NULL);
-    if (!Modulehandle) return 0;
-
-    // Traverse the PE header.
-    PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
-    PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
-    IMAGE_DATA_DIRECTORY TLSDirectory = NTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
-
-    // Get the callback address.
-    if (!TLSDirectory.VirtualAddress) return 0;
-    return size_t(((size_t *)((DWORD_PTR)Modulehandle + TLSDirectory.VirtualAddress))[3]);
-}
-size_t PEEntrypoint()
-{
-    // Module(NULL) gets the host application.
-    HMODULE Modulehandle = GetModuleHandleA(NULL);
-    if (!Modulehandle) return 0;
-
-    // Traverse the PE header.
-    PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
-    PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
-
-    return (size_t)((DWORD_PTR)Modulehandle + NTHeader->OptionalHeader.AddressOfEntryPoint);
-}
 void Loadallplugins()
 {
     constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Ayria32" : ".Ayria64";

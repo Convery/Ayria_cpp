@@ -8,7 +8,6 @@ set(MODULENAME ${Directory})
 # Special case so we can differentiate between builds.
 if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
     string(APPEND MODULENAME "64")
-    file(GLOB_RECURSE ASSEMBLY "Source/*.asm")
     else()
     string(APPEND MODULENAME "32")
 endif()
@@ -25,6 +24,7 @@ set(MODULE_LIBS ${MODULE_LIBS})
 
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")
+file(GLOB_RECURSE ASSEMBLY "Source/*.asm")
 add_definitions(-DMODULENAME="${MODULENAME}")
 add_library(${MODULENAME} SHARED ${SOURCES} ${ASSEMBLY})
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
