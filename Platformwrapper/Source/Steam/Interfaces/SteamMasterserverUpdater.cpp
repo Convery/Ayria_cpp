@@ -36,15 +36,15 @@ namespace Steam
             Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n> Product: %s\n> Description: %s\n> Maxplayers: %u",
                           bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
 
-            auto Localserver = LANMatchmaking::Createserver();
-            Localserver->Gamedata["Serverregion"] = pRegionName;
-            Localserver->Gamedata["Productname"] = pProductName;
-            Localserver->Gamedata["isDedicated"] = bDedicatedServer;
-            Localserver->Gamedata["Playerlimit"] = nMaxReportedClients;
-            Localserver->Gamedata["Protocolversion"] = nProtocolVersion;
-            Localserver->Gamedata["needsPassword"] = bPasswordProtected;
-            Localserver->Gamedata["Gamedescription"] = pGameDescription;
-            LANMatchmaking::Updateserver();
+            auto Localserver = Matchmaking::Localserver();
+            Localserver->Gamedata["DML.Region"] = pRegionName;
+            Localserver->Gamedata["Steam.Productname"] = pProductName;
+            Localserver->Gamedata["Protocol.Version"] = nProtocolVersion;
+            Localserver->Gamedata["Players.Current"] = nMaxReportedClients;
+            Localserver->Gamedata["Server.isDedicated"] = bDedicatedServer;
+            Localserver->Gamedata["Server.needsPassword"] = bPasswordProtected;
+            Localserver->Gamedata["Steam.Productdescription"] = pGameDescription;
+            Matchmaking::Broadcastupdate();
         }
         void ClearAllKeyValues()
         {

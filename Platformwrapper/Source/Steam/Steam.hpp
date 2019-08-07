@@ -7,6 +7,7 @@
 #pragma once
 #include "Stdinclude.hpp"
 #include "Auxiliary/CSteamID.hpp"
+#include "../Common/Matchmaking.hpp"
 
 namespace Steam
 {
@@ -17,7 +18,6 @@ namespace Steam
         std::string Path;
         std::string Username;
         std::string Language;
-        std::thread LANThread;
         uint32_t ApplicationID;
         uint64_t Startuptimestamp;
     };
@@ -135,7 +135,7 @@ namespace Steam
         struct SteamServerConnectFailure_t { EResult m_eResult; bool m_bStillRetrying; };
         struct SteamServersDisconnected_t { EResult m_eResult; };
         struct ClientGameServerDeny_t { uint32_t m_uAppID; uint32_t m_unGameServerIP; uint16_t m_usGameServerPort; uint16_t m_bSecure; uint32_t m_uReason; };
-        struct ValidateAuthTicketResponse_t { CSteamID m_SteamID; enum EAuthSessionResponse m_eAuthSessionResponse; CSteamID m_OwnerSteamID; };
+        struct ValidateAuthTicketResponse_t { CSteamID m_SteamID; uint32_t m_eAuthSessionResponse; CSteamID m_OwnerSteamID; };
         struct MicroTxnAuthorizationResponse_t { uint32_t m_unAppID; uint64_t m_ulOrderID; uint8_t m_bAuthorized; };
         struct EncryptedAppTicketResponse_t { EResult m_eResult; };
         struct GetAuthSessionTicketResponse_t { uint32_t m_hAuthTicket; EResult m_eResult; };
@@ -305,38 +305,6 @@ namespace Steam
 }
 
 namespace Callbacks = Steam::Callbacks;
-
-// Matchmaking subsystem.
-namespace LANMatchmaking
-{
-    using SessionID_t = GUID;
-    struct Message_t
-    {
-        SessionID_t SessionID;
-        std::string Eventtype;
-        std::string Sender;
-        std::string Data;
-    };
-    struct Server_t
-    {
-        // Internal usage.
-        uint64_t Lastmessage{};
-        SessionID_t SessionID{};
-        std::string Hostaddress{};
-        nlohmann::json Gamedata{};
-
-        public:
-        template<typename T> void Set(std::string &&Property, T Value) { Gamedata[Property] = Value; }
-        template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Gamedata.value(Property, Defaultvalue); }
-    };
-
-    void Updateserver();
-    void Terminatesession();
-    SessionID_t Createsession();
-    std::shared_ptr<Server_t> Createserver();
-    std::thread Initialize(uint32_t Identifier);
-    std::vector<std::shared_ptr<Server_t>> Listservers();
-}
 
 // Interface exports.
 extern "C"

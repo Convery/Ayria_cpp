@@ -35,6 +35,7 @@
 
 // Platform-specific libraries.
 #if defined(_WIN32)
+#include <WinSock2.h>
 #include <Windows.h>
 #include <intrin.h>
 #include <direct.h>
