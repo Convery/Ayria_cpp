@@ -66,8 +66,14 @@ namespace Steam
         }
         bool UpdateStatus0(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
         {
-            Traceprint();
-            return false;
+            auto Localserver = Matchmaking::Localserver();
+            Localserver->Gamedata["Players.Max"] = cPlayersMax;
+            Localserver->Gamedata["Players.Bots"] = cBotPlayers;
+            Localserver->Gamedata["Players.Current"] = cPlayers;
+            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
+            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
+            // We do not force an update as this may be called multiple times with the same information.
+            return true;
         }
         bool BSecure()
         {
@@ -92,8 +98,15 @@ namespace Steam
         }
         bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            Traceprint();
-            return false;
+            auto Localserver = Matchmaking::Localserver();
+            Localserver->Gamedata["Players.Max"] = cPlayersMax;
+            Localserver->Gamedata["Players.Bots"] = cBotPlayers;
+            Localserver->Gamedata["Players.Current"] = cPlayers;
+            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
+            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
+            Localserver->Gamedata["Publicname"] = pSpectatorServerName ? pSpectatorServerName : "";
+            // We do not force an update as this may be called multiple times with the same information.
+            return true;
         }
         bool CreateUnauthenticatedUser(CSteamID *pSteamID)
         {
@@ -201,8 +214,7 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-            Matchmaking::Localserver()->Gamedata["Steam.Gametags"] = pchGameTags;
-            Debugprint(va("Gameserver tags: %s", pchGameTags));
+            Matchmaking::Localserver()->Set("Steam.Gametags", pchGameTags);
             Matchmaking::Broadcastupdate();
         }
         uint64_t GetServerReputation()
