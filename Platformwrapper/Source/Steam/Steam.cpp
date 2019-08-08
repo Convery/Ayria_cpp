@@ -190,9 +190,12 @@ extern "C"
                 Localserver->Gamedata["Gamedirectory"] = pchGameDir;
                 Localserver->Gamedata["Server.Gameport"] = usGamePort;
                 Localserver->Gamedata["Server.Queryport"] = usQueryPort;
-                Localserver->Gamedata["Server.Version"] = pchVersionString;
                 Localserver->Gamedata["Server.Spectatorport"] = usSpectatorPort;
                 Localserver->Gamedata["Server.Listenaddress"] = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+
+                uint32_t a{}, b{}, c{}, d{};
+                std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
+                Localserver->Gamedata["Server.Version"] = (d + c * 10 + b * 100 + a * 1000);
                 Matchmaking::Broadcastupdate();
             }
             if(Version == 11 || Version == 12)
@@ -210,8 +213,11 @@ extern "C"
                 Localserver->Gamedata["Server.Authport"] = usPort;
                 Localserver->Gamedata["Server.Gameport"] = usGamePort;
                 Localserver->Gamedata["Server.Queryport"] = usQueryPort;
-                Localserver->Gamedata["Server.Version"] = inet_addr(pchVersionString);
                 Localserver->Gamedata["Server.Listenaddress"] = va("%u.%u.%u.%u", ((uint8_t *)& unIP)[3], ((uint8_t *)& unIP)[2], ((uint8_t *)& unIP)[1], ((uint8_t *)& unIP)[0]);
+
+                uint32_t a{}, b{}, c{}, d{};
+                std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
+                Localserver->Gamedata["Server.Version"] = (d + c * 10 + b * 100 + a * 1000);
                 Matchmaking::Broadcastupdate();
             }
 
