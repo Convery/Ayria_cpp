@@ -145,6 +145,9 @@ namespace Steam
         void SetLobbyGameServer(CSteamID steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, CSteamID steamIDGameServer)
         {
             Traceprint();
+            Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
+                         ((uint8_t *)&unGameServerIP)[3], ((uint8_t *)&unGameServerIP)[2], ((uint8_t *)&unGameServerIP)[1], ((uint8_t *)&unGameServerIP)[0],
+                         0, unGameServerPort, 0, 0, ""));
         }
         uint64_t RequestLobbyList2()
         {

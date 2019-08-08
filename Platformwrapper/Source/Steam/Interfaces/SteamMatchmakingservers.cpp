@@ -113,19 +113,22 @@ namespace Steam
             // String-properties.
             Copy(Serialized->m_szGameDescription, "Steam.Productdescription");
             Copy(Serialized->m_szGameTags, "Steam.Gametags");
-            Copy(Serialized->m_szServerName, "Servername");
+            //Copy(Serialized->m_szServerName, "Servername");
             Copy(Serialized->m_szGameDir, "Gamedirectory");
             Copy(Serialized->m_szMap, "Mapname");
 
             // TODO(tcn): Get some real information.
-            Serialized->m_steamID = CSteamID(Hash::FNV1a_32(""), 1, k_EAccountTypeGameServer);
+            Serialized->m_steamID = CSteamID(Hash::FNV1a_32("ID"), 1, k_EAccountTypeAnonGameServer);
+            Serialized->m_bPassword = Server->Get("Server.needsPassword", false);
             Serialized->m_nServerVersion = Server->Get("Server.Version", 1001);
-            Serialized->m_bSecure = Server->Get("Server.needsPassword", false);
             Serialized->m_nBotPlayers = Server->Get("Players.Bots", 0);
             Serialized->m_nPlayers = Server->Get("Players.Current", 0);
             Serialized->m_nMaxPlayers = Server->Get("Players.Max", 0);
             Serialized->m_nAppID = Global.ApplicationID;
             Serialized->m_bHadSuccessfulResponse = true;
+            Serialized->m_bDoNotRefresh = false;
+            Serialized->m_ulTimeLastPlayed = 0;
+            Serialized->m_bSecure = true;
             Serialized->m_nPing = 33;
 
             return Serialized;
