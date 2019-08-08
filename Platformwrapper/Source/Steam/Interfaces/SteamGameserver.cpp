@@ -78,6 +78,13 @@ namespace Steam
         bool BSecure()
         {
             Traceprint();
+
+            const auto Request = new Callbacks::GSPolicyResponse_t();
+            const auto RequestID = Callbacks::Createrequest();
+            Request->m_bSecure = true;
+
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 15, Request);
+
             return true;
         }
         CSteamID GetSteamID()
@@ -168,7 +175,14 @@ namespace Steam
         bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, CSteamID *pSteamIDUser)
         {
             Traceprint();
-            return false;
+
+            const auto Request = new Callbacks::GSClientApprove_t();
+            *pSteamIDUser = *(CSteamID *)pvAuthBlob;
+            Request->m_OwnerSteamID = *pSteamIDUser;
+            Request->m_SteamID = *pSteamIDUser;
+
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamGameServerCallbacks + 1, Request);
+            return true;
         }
         bool BSetServerType1(uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t unSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
@@ -197,15 +211,8 @@ namespace Steam
         }
         uint32_t GetPublicIP()
         {
-            // One would think that this would be the default state..
-            const auto Request = new Callbacks::GSPolicyResponse_t();
-            const auto RequestID = Callbacks::Createrequest();
-            Request->m_bSecure = true;
-
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 15, Request);
-
             Traceprint();
-            return 0;
+            return ntohl(inet_addr("240.0.0.1"));
         }
         uint32_t UserHasLicenseForApp(CSteamID steamID, uint32_t appID)
         {
@@ -224,13 +231,25 @@ namespace Steam
         }
         uint32_t GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
         {
+            const auto Request = new Callbacks::GetAuthSessionTicketResponse_t();
+            Request->m_eResult = EResult::k_EResultOK;
+            Request->m_hAuthTicket = 1337;
+            *pcbTicket = cbMaxTicket;
             Traceprint();
-            return 0;
+
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
+            return Request->m_hAuthTicket;
         }
         uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
         {
-            Traceprint();
-            return 0;
+            Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
+            const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
+            Request->m_eAuthSessionResponse = 0; // k_EBeginAuthSessionResultOK
+            Request->m_OwnerSteamID = steamID;
+            Request->m_SteamID = steamID;
+
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 43, Request);
+            return 0; // k_EBeginAuthSessionResultOK
         }
         void EndAuthSession(CSteamID steamID)
         {

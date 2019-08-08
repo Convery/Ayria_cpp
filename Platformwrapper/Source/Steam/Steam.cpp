@@ -186,16 +186,16 @@ extern "C"
 
                 // New session for the server.
                 auto Localserver = Matchmaking::Localserver();
-                Localserver->Gamedata["Server.Authport"] = usPort;
-                Localserver->Gamedata["Gamedirectory"] = pchGameDir;
-                Localserver->Gamedata["Server.Gameport"] = usGamePort;
-                Localserver->Gamedata["Server.Queryport"] = usQueryPort;
-                Localserver->Gamedata["Server.Spectatorport"] = usSpectatorPort;
-                Localserver->Gamedata["Server.Listenaddress"] = va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]);
+                Localserver->Set("Server.Authport", usPort);
+                Localserver->Set("Gamedirectory", pchGameDir);
+                Localserver->Set("Server.Gameport", usGamePort);
+                Localserver->Set("Server.Queryport", usQueryPort);
+                Localserver->Set("Server.Spectatorport", usSpectatorPort);
+                Localserver->Set("Server.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
 
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                Localserver->Gamedata["Server.Version"] = (d + c * 10 + b * 100 + a * 1000);
+                Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
                 Matchmaking::Broadcastupdate();
             }
             if(Version == 11 || Version == 12)
@@ -210,19 +210,20 @@ extern "C"
 
                 // New session for the server.
                 auto Localserver = Matchmaking::Localserver();
-                Localserver->Gamedata["Server.Authport"] = usPort;
-                Localserver->Gamedata["Server.Gameport"] = usGamePort;
-                Localserver->Gamedata["Server.Queryport"] = usQueryPort;
-                Localserver->Gamedata["Server.Listenaddress"] = va("%u.%u.%u.%u", ((uint8_t *)& unIP)[3], ((uint8_t *)& unIP)[2], ((uint8_t *)& unIP)[1], ((uint8_t *)& unIP)[0]);
+                Localserver->Set("Server.Authport", usPort);
+                Localserver->Set("Server.Gameport", usGamePort);
+                Localserver->Set("Server.Queryport", usQueryPort);
+                Localserver->Set("Server.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
 
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                Localserver->Gamedata["Server.Version"] = (d + c * 10 + b * 100 + a * 1000);
+                Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
                 Matchmaking::Broadcastupdate();
             }
 
             va_end(Args);
         }
+
         return true;
     }
     EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
