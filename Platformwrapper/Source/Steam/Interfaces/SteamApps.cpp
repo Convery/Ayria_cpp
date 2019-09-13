@@ -45,11 +45,11 @@ namespace Steam
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {
-            return nAppID == Global.ApplicationID;
+            return true;
         }
         bool BIsDlcInstalled(uint32_t nAppID)
         {
-            return false;
+            return true;
         }
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)
         {
