@@ -123,6 +123,7 @@ namespace Winsock
     // Streamed connections just proxies the port.
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
     {
+        const auto Port = getPort(Name);
         const auto Readable = getAddress(Name);
         if (Localnetworking::isProxiedhost(Readable))
         {
@@ -136,8 +137,12 @@ namespace Winsock
         }
 
         const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
-        Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), getPort(Name), Result ? "FAILED" : "SUCCESS"));
-        if(Result == -1) WSASetLastError(WSAEWOULDBLOCK);
+        Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
+        if(Result == -1)
+        {
+            if(Localnetworking::isProxiedhost(Readable)) return 0;
+            WSASetLastError(WSAEWOULDBLOCK);
+        }
         return Result;
     }
 
