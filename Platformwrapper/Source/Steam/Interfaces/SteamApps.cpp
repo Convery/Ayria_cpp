@@ -54,7 +54,7 @@ namespace Steam
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)
         {
             Traceprint();
-            return uint32_t(Steam::Global.Startuptimestamp - 600);
+            return uint32_t(Ayria::Global.Startuptimestamp - 600);
         }
         bool BIsSubscribedFromFreeWeekend()
         {
@@ -117,7 +117,7 @@ namespace Steam
         CSteamID GetAppOwner()
         {
             Traceprint();
-            return CSteamID(Steam::Global.UserID);
+            return CSteamID(Ayria::Global.UserID);
         }
         const char *GetLaunchQueryParam(const char *pchKey)
         {
