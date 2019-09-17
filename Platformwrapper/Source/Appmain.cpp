@@ -51,7 +51,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // If there's a local bootstrap module, we'll load it and trigger TLS.
         if(LoadLibraryA("./Ayria/Bootstrapper64d.dll") || LoadLibraryA("./Ayria/Bootstrapper32d.dll"))
-            std::thread([]() { volatile bool NOP; }).detach();
+            std::thread([]() { volatile bool NOP{}; (void)NOP; }).detach();
     }
 
     return TRUE;
@@ -77,8 +77,8 @@ extern "C"
     EXPORT_ATTR void onStartup(bool)
     {
         // Initialize the various platforms.
+        Tencent_init();
         Steam_init();
-
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
