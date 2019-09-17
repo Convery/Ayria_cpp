@@ -12,12 +12,12 @@ namespace Steam
     {
         const char *GetPersonaName()
         {
-            return Global.Username.c_str();
+            return Ayria::Global.Username.c_str();
         }
         void SetPersonaName0(const char *pchPersonaName)
         {
             Traceprint();
-            Global.Username = pchPersonaName;
+            Ayria::Global.Username = pchPersonaName;
         }
         uint32_t GetPersonaState()
         {
@@ -173,7 +173,7 @@ namespace Steam
         CSteamID GetClanByIndex(int iClan)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Ayria::Global.UserID);
         }
         const char *GetClanName(CSteamID steamIDClan)
         {
@@ -285,7 +285,7 @@ namespace Steam
         CSteamID GetClanOwner(CSteamID steamIDClan)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Ayria::Global.UserID);
         }
         int GetClanOfficerCount(CSteamID steamIDClan)
         {
@@ -295,7 +295,7 @@ namespace Steam
         CSteamID GetClanOfficerByIndex(CSteamID steamIDClan, int iOfficer)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Ayria::Global.UserID);
         }
         uint32_t GetUserRestrictions()
         {
@@ -473,7 +473,7 @@ namespace Steam
         uint64_t SetPersonaName2(const char *pchPersonaName)
         {
             Traceprint();
-            Global.Username = pchPersonaName;
+            Ayria::Global.Username = pchPersonaName;
             return 0;
         }
         int GetFriendSteamLevel(CSteamID steamIDFriend)

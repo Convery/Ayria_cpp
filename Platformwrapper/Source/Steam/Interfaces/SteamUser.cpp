@@ -57,7 +57,7 @@ namespace Steam
         }
         CSteamID GetSteamID()
         {
-            return CSteamID(Global.UserID);
+            return CSteamID(Ayria::Global.UserID);
         }
         bool IsVACBanned(uint32_t eVACBan)
         {
@@ -342,8 +342,8 @@ namespace Steam
             // Fill the buffer with useful information.
             ((Steamappticket *)Ticketdata)->Reserved = 0;
             std::memcpy(&((Steamappticket *)Ticketdata)->Identifier, "Ayria", 6);
-            std::memcpy(&((Steamappticket *)Ticketdata)->SteamaccountID, &Steam::Global.UserID, 8);
-            std::memcpy(&((Steamappticket *)Ticketdata)->Steamusername, Steam::Global.Username.c_str(), Steam::Global.Username.size());
+            std::memcpy(&((Steamappticket *)Ticketdata)->SteamaccountID, &Ayria::Global.UserID, 8);
+            std::memcpy(&((Steamappticket *)Ticketdata)->Steamusername, Ayria::Global.Username.c_str(), Ayria::Global.Username.size());
 
             // Append game data.
             Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));

@@ -48,9 +48,9 @@ extern "C"
         // Query the Ayria platform for the account information.
         if (true /* TODO(tcn): Update when Ayria is done. */)
         {
-            Steam::Global.Username = "Ayria";
+            Ayria::Global.Username = "Ayria";
             Steam::Global.Language = "english";
-            Steam::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
+            Ayria::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
         }
 
         // Query the Steam platform for installation-location.
@@ -78,7 +78,7 @@ extern "C"
             if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Valve\\Steam\\ActiveProcess", 0, KEY_QUERY_VALUE, &Registrykey) == ERROR_SUCCESS)
             {
                 DWORD ProcessID = GetCurrentProcessId();
-                DWORD UserID = Steam::Global.UserID & 0xFFFFFFFF;
+                DWORD UserID = Ayria::Global.UserID & 0xFFFFFFFF;
 
                 // Legacy wants the dlls loaded.
                 std::string Clientpath32 = va("%s\\steamclient.dll", Steam::Global.Path.c_str());
@@ -160,7 +160,7 @@ extern "C"
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
     EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Matchmaking::Localserver()->Hostflags.Terminated = true; }
     EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
-    EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Steam::Global.UserID; }
+    EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Ayria::Global.UserID; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
     {
         // For AppID.
@@ -265,4 +265,113 @@ extern "C"
     EXPORT_ATTR void *SteamVideo() { return Steam::Fetchinterface(Steam::Interfacetype_t::VIDEO);  }
     EXPORT_ATTR void *SteamMasterServerUpdater() { return Steam::Fetchinterface(Steam::Interfacetype_t::MASTERSERVERUPDATER);  }
     EXPORT_ATTR void *SteamInternal_CreateInterface(const char *Interfacename) { return Steam::Fetchinterface(Interfacename);  }
+}
+
+// Initialize Steam as a plugin.
+void Steam_init()
+{
+    // Proxy Steams exports with our own information.
+    const auto Lambda = [&](std::string_view Name, void *Target) -> uint32_t
+    {
+        auto Address = GetProcAddress(GetModuleHandleA("steam_api64.dll"), Name.data());
+        if(!Address) Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data());
+        if(Address)
+        {
+            // If a developer has loaded the plugin as a DLL, ignore it.
+            if(Address == Target) return 0;
+
+            // Simple hook as fall-back.
+            if(!Mhook_SetHook((void **)&Address, Target))
+                Simplehook::Stomphook().Installhook(Address, Target);
+            return 1;
+        }
+
+        return 0;
+    };
+    #define Hook(x) Hookcount += Lambda(#x, (void *)x)
+
+    // Count the number of hooks.
+    uint32_t Hookcount{};
+
+    // Initialization and shutdown.
+    Hook(SteamAPI_Init);
+    Hook(SteamAPI_InitSafe);
+    Hook(SteamAPI_Shutdown);
+    Hook(SteamAPI_IsSteamRunning);
+    Hook(SteamAPI_GetSteamInstallPath);
+    Hook(SteamAPI_RestartAppIfNecessary);
+
+    // Callback management.
+    Hook(SteamAPI_RunCallbacks);
+    Hook(SteamAPI_RegisterCallback);
+    Hook(SteamAPI_UnregisterCallback);
+    Hook(SteamAPI_RegisterCallResult);
+    Hook(SteamAPI_UnregisterCallResult);
+
+    // Steam proxy.
+    Hook(SteamAPI_GetHSteamUser);
+    Hook(SteamAPI_GetHSteamPipe);
+    Hook(SteamGameServer_GetHSteamUser);
+    Hook(SteamGameServer_GetHSteamPipe);
+    Hook(SteamGameServer_BSecure);
+    Hook(SteamGameServer_Shutdown);
+    Hook(SteamGameServer_RunCallbacks);
+    Hook(SteamGameServer_GetSteamID);
+    Hook(SteamGameServer_Init);
+    Hook(SteamGameServer_InitSafe);
+    Hook(SteamInternal_GameServer_Init);
+
+    // Interface access.
+    Hook(SteamAppList);
+    Hook(SteamApps);
+    Hook(SteamClient);
+    Hook(SteamController);
+    Hook(SteamFriends);
+    Hook(SteamGameServer);
+    Hook(SteamGameServerHTTP);
+    Hook(SteamGameServerInventory);
+    Hook(SteamGameServerNetworking);
+    Hook(SteamGameServerStats);
+    Hook(SteamGameServerUGC);
+    Hook(SteamGameServerUtils);
+    Hook(SteamHTMLSurface);
+    Hook(SteamHTTP);
+    Hook(SteamInventory);
+    Hook(SteamMatchmaking);
+    Hook(SteamMatchmakingServers);
+    Hook(SteamMusic);
+    Hook(SteamMusicRemote);
+    Hook(SteamNetworking);
+    Hook(SteamRemoteStorage);
+    Hook(SteamScreenshots);
+    Hook(SteamUnifiedMessages);
+    Hook(SteamUGC);
+    Hook(SteamUser);
+    Hook(SteamUserStats);
+    Hook(SteamUtils);
+    Hook(SteamVideo);
+    Hook(SteamMasterServerUpdater);
+    Hook(SteamInternal_CreateInterface);
+    #undef Hook
+
+    // Verify that we are in Steam mode.
+    if(Hookcount)
+    {
+        // Legacy compatibility.
+        Steam::Redirectmodulehandle();
+
+        // Start processing the IPC separately.
+        std::thread(Steam::InitializeIPC).detach();
+
+        // Finally initialize the interfaces by module.
+        if(!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
+           !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
+           !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
+           !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))
+        {
+            Errorprint("Platformwrapper could not find the games interface version.");
+            Errorprint("This can cause a lot of errors, contact the developer.");
+            Errorprint("Alternatively provide a \"interfaces.txt\"");
+        }
+    }
 }
