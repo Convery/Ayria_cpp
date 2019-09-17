@@ -189,7 +189,7 @@ namespace Localnetworking
                     {
                         SOCKADDR_IN Client{ AF_INET, htons(Port) };
                         Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-                        sendto(Socket, Buffer, Datasize, 0, (SOCKADDR *)& Client, sizeof(SOCKADDR_IN));
+                        sendto(Socket, Buffer, Datasize, 0, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
                     }
                 }
             }
