@@ -149,10 +149,13 @@ extern "C"
     // Create the interface with the required version.
     EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
     {
-        Integerstore[18] = GameID;
         Debugprint(va("Initializing Tencent for game %u", GameID));
         static auto Localinterface = new Tencent();
         *Interface = &Localinterface;
+
+        // TODO(tcn): Name the indexes.
+        Arraystore[8][2] = va("%u", GameID);
+        Integerstore[18] = GameID;
     }
 }
 
