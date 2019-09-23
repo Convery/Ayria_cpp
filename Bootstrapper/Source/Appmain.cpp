@@ -26,9 +26,21 @@ size_t AddressofTLS()
     return size_t(((size_t *)((DWORD_PTR)Modulehandle + TLSDirectory.VirtualAddress))[3]);
 }
 
+// Sometimes plugins want to name their threads, and not all games support that..
+LONG WINAPI Threadname(PEXCEPTION_POINTERS Info)
+{
+    if(Info->ExceptionRecord->ExceptionCode == 0x406D1388)
+        return EXCEPTION_CONTINUE_EXECUTION;
+    else
+        return EXCEPTION_CONTINUE_SEARCH;
+}
+
 // Called after Ntdll.ldr's ctors but before main.
 void __stdcall TLSCallback(void *a, uint32_t b, void *c)
 {
+    // Sometimes plugins want to name their threads, and not all games support that..
+    AddVectoredExceptionHandler(0, Threadname);
+
     if(const auto Address = AddressofTLS())
     {
         auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
