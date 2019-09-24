@@ -18,7 +18,7 @@ set(CMAKE_DEBUG_POSTFIX "d")
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
-    if(CMAKE_BUILD_TYPE MATCHES RELEASE)
+    if(CMAKE_BUILD_TYPE MATCHES Release)
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /Gw /GS- /GL /Os /Ox /Brepro")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /safeseh:no /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
