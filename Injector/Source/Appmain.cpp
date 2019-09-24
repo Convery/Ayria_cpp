@@ -16,6 +16,7 @@ int wmain(int Argc, wchar_t **Argv)
     std::wstring Workingdirectory{};
     std::wstring Executablepath{};
     STARTUPINFOW Startupinfo{};
+    wchar_t CWD[512]{};
 
     // Skip the first argument if it's the bootstrapper, because Windows.
     for(int i = !!std::wcsstr(Argv[0], L"Injector"); i < Argc; ++i)
@@ -89,13 +90,11 @@ int wmain(int Argc, wchar_t **Argv)
 
             if(!std::wcsstr(Argv[0], L"Injector"))
             {
-                if(CreateProcessW(sizeof(void *) == sizeof(uint64_t) ? L"Injector32.exe " : L"Injector64.exe ",
-                                  GetCommandLineW(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
+                const auto Injector = sizeof(void *) == sizeof(uint64_t) ? L"\\Injector32.exe " : L"\\Injector64.exe ";
+                if(CreateProcessW(Injector, GetCommandLineW(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
                 {
                     WaitForSingleObject(Processinfo.hProcess, INFINITE);
-                    return 0;
                 }
-
             }
             else
             {
@@ -104,9 +103,10 @@ int wmain(int Argc, wchar_t **Argv)
                 if(CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
                 {
                     WaitForSingleObject(Processinfo.hProcess, INFINITE);
-                    return 0;
                 }
             }
+
+            return 0;
         }
     }
 
@@ -119,16 +119,15 @@ int wmain(int Argc, wchar_t **Argv)
     // Spawn the application and inject.
     if(CreateProcessW(NULL, Buffer, NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, Workingdirectory.c_str(), &Startupinfo, &Processinfo))
     {
-        wchar_t CWD[512]{};
-        GetCurrentDirectoryW(512, CWD);
-
-        std::wstring DLLPath(CWD);
-        DLLPath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
+        std::wstring Modulepath(CWD);
+        GetModuleFileNameW(GetModuleHandleW(NULL), CWD, 512);
+        Modulepath = Modulepath.substr(0, Modulepath.find_last_of(L'\\'));
+        Modulepath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
 
         auto Libraryaddress = GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
-        auto Remotestring = VirtualAllocEx(Processinfo.hProcess, NULL, DLLPath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        auto Remotestring = VirtualAllocEx(Processinfo.hProcess, NULL, Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-        WriteProcessMemory(Processinfo.hProcess, Remotestring, DLLPath.c_str(), DLLPath.size() * sizeof(wchar_t) + sizeof(wchar_t), NULL);
+        WriteProcessMemory(Processinfo.hProcess, Remotestring, Modulepath.c_str(), Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), NULL);
         auto Result = CreateRemoteThread(Processinfo.hProcess, NULL, NULL, LPTHREAD_START_ROUTINE(Libraryaddress), Remotestring, NULL, NULL);
 
         if(Result == NULL)
