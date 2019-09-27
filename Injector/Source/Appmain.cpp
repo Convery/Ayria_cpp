@@ -119,8 +119,7 @@ int wmain(int Argc, wchar_t **Argv)
     // Spawn the application and inject.
     if(CreateProcessW(NULL, Buffer, NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, Workingdirectory.c_str(), &Startupinfo, &Processinfo))
     {
-        std::wstring Modulepath(CWD);
-        GetModuleFileNameW(GetModuleHandleW(NULL), CWD, 512);
+        GetModuleFileNameW(GetModuleHandleW(NULL), CWD, 512); std::wstring Modulepath(CWD);
         Modulepath = Modulepath.substr(0, Modulepath.find_last_of(L'\\'));
         Modulepath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
 
