@@ -25,30 +25,25 @@ auto Arraystore = []()
     $[8] = { "auth3.qq.com:3074", "lsg.qq.com:3074", "1004" };
     return $;
 }();
-
-// Helper for fake classes.
-static std::any Hackery;
-#define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
-
 struct Tencentcore
 {
-    void Ctor() { Traceprint(); }
-    void Initialize() { Traceprint(); }
-    void Unknown0() { Traceprint(); }
-    void Unknown1() { Traceprint(); }
-    void Unknown2() { Traceprint(); }
-    int Shutdown_notify0() { Traceprint(); return 1; }
-    int Shutdown_notify1() { Traceprint(); return 1; }
-    void Shutdown_notify2() { Traceprint(); }
-    void Unknown3() { Traceprint(); }
-    bool getInteger(uint32_t Index, uint32_t *Buffer)
+    virtual void Ctor() { Traceprint(); }
+    virtual void Initialize() { Traceprint(); }
+    virtual void Unknown0() { Traceprint(); }
+    virtual void Unknown1() { Traceprint(); }
+    virtual void Unknown2() { Traceprint(); }
+    virtual int Shutdown_notify0() { Traceprint(); return 1; }
+    virtual int Shutdown_notify1() { Traceprint(); return 1; }
+    virtual void Shutdown_notify2() { Traceprint(); }
+    virtual void Unknown3() { Traceprint(); }
+    virtual bool getInteger(uint32_t Index, uint32_t *Buffer)
     {
         *Buffer = Integerstore[Index];
 
         Debugprint(va("Tencent_INT[%u] => %u", Index, *Buffer));
         return true;
     }
-    bool getString(uint32_t Index, char *Buffer, uint32_t *Size)
+    virtual bool getString(uint32_t Index, char *Buffer, uint32_t *Size)
     {
         if(Buffer) // If a buffer is provided, fill it.
         {
@@ -61,8 +56,8 @@ struct Tencentcore
 
         return true;
     }
-    void Unknown4() { Traceprint(); }
-    bool getArray(uint32_t Index, char *Buffer, uint32_t *Size, uint32_t UserID)
+    virtual void Unknown4() { Traceprint(); }
+    virtual bool getArray(uint32_t Index, char *Buffer, uint32_t *Size, uint32_t UserID)
     {
         std::string Readable{};
         for(const auto &Item : Arraystore[Index])
@@ -84,50 +79,115 @@ struct Tencentcore
 
         return true;
     }
-    void Unknown5() { Traceprint(); }
-    bool getArraysize(uint32_t Index, uint32_t *Buffer, uint32_t UserID)
+    virtual void Unknown5() { Traceprint(); }
+    virtual bool getArraysize(uint32_t Index, uint32_t *Buffer, uint32_t UserID)
     {
         // Off by one in the SDK?
         return getArray(Index + 1, nullptr, Buffer, UserID);
     }
 };
-struct Tencent : Ayria::Fakeclass_t
-{
-    Tencent()
-    {
-        Createmethod(0, Tencentcore, Ctor);
-        Createmethod(1, Tencentcore, Initialize);
-        Createmethod(2, Tencentcore, Unknown0);
-        Createmethod(3, Tencentcore, Unknown1);
-        Createmethod(4, Tencentcore, Unknown2);
-        Createmethod(5, Tencentcore, Shutdown_notify0);
-        Createmethod(6, Tencentcore, Shutdown_notify1);
-        Createmethod(7, Tencentcore, Shutdown_notify2);
-        Createmethod(8, Tencentcore, Unknown3);
-        Createmethod(9, Tencentcore, getInteger);
-        Createmethod(10, Tencentcore, getString);
-        Createmethod(11, Tencentcore, Unknown4);
-        Createmethod(12, Tencentcore, getArray);
-        Createmethod(13, Tencentcore, Unknown5);
-        Createmethod(14, Tencentcore, getArraysize);
-    }
-};
 
-// Temporary implementation of the Tensafe interface.
-int Verysafe0(int Index) { Debugprint(va("%s: 0x%X", __func__, Index)); return 1; }
-int Verysafe4(int Index) { Debugprint(va("%s: 0x%X", __func__, Index)); return 1; }
-int Verysafe8(int Index) { Debugprint(va("%s: 0x%X", __func__, Index)); return 1; }
-int Verysafe12(int Index) { Debugprint(va("%s: 0x%X", __func__, Index)); return 1; }
-int Verysafe16(int Index) { Debugprint(va("%s: 0x%X", __func__, Index)); return 1; }
-struct Tensafe : Ayria::Fakeclass_t
+// Temporary implementation of the Tensafe interface, TODO(tcn): Give it; it's own module?
+struct TencentCryptoblock
 {
-    Tensafe()
+    uint32_t Command;
+    uint8_t *Inputbuffer;
+    uint32_t Inputlength;
+    uint8_t *Outputbuffer;
+    uint32_t Outputlength;
+};
+struct TencentPacketheader
+{
+    uint32_t Unknown;
+    uint32_t SequenceID;
+    uint32_t CRC32Hash;
+    uint32_t Payloadlength;
+    uint32_t Packettype;
+};
+struct TencentAnticheat
+{
+    uint32_t UserID;
+    uint32_t Uin;
+    uint32_t Gameversion;
+    uint64_t pSink;
+    time_t Startuptime;
+    uint32_t Configneedsreload;
+    char Outgoingpacket[512];
+    char Incomingpacket[512];
+    uint32_t Packetssent;
+    uint32_t Unk5;
+    uint32_t Unk6;
+    uint32_t Unk7;
+    uint32_t SequenceID;
+    uint32_t Unk8;
+    char Config[1030];
+
+    virtual size_t setInit(void *Info)
     {
-        Hackery = &Verysafe0; VTABLE[0] = *(void **)&Hackery;
-        Hackery = &Verysafe4; VTABLE[1] = *(void **)&Hackery;
-        Hackery = &Verysafe8; VTABLE[2] = *(void **)&Hackery;
-        Hackery = &Verysafe12; VTABLE[3] = *(void **)&Hackery;
-        Hackery = &Verysafe16; VTABLE[4] = *(void **)&Hackery;
+        Traceprint();
+        Uin = ((uint32_t *)Info)[0];
+        Gameversion = ((uint32_t *)Info)[1];
+        pSink = *(size_t *)Info + sizeof(uint64_t);
+
+        return 1;
+    }
+    virtual size_t onLogin()
+    {
+        time(&Startuptime);
+        srand(Startuptime & 0xFFFFFFFF);
+        UserID = rand();
+
+        // TODO: Send to server.
+
+        return 1;
+    }
+    virtual size_t Encrypt(TencentCryptoblock *Block)
+    {
+        Traceprint();
+
+        /*
+            Too tired to implement.
+        */
+
+        return 1;
+    }
+    virtual size_t isCheatpacket(uint32_t Command)
+    {
+        Traceprint();
+
+        /*
+            Incomingpacket =
+            {
+                uint16_t Header;
+                uint16_t Commandcount;
+                uint32_t Commands[];
+                ...
+            };
+
+            for c in Commands => return c == Command;
+        */
+
+        return 1;
+    }
+    virtual size_t Decrypt(TencentCryptoblock *Block)
+    {
+        Traceprint();
+
+        /*
+            Too tired to implement.
+        */
+
+        return 1;
+    }
+    virtual size_t Release()
+    {
+        Traceprint();
+
+        /*
+            Call Dtor internally.
+        */
+
+        return 1;
     }
 };
 
@@ -136,13 +196,13 @@ extern "C"
     // Tencent anti-cheat initialization override.
     EXPORT_ATTR void *CreateObj(int Type)
     {
-        static auto Debug = new Tensafe();
-        return &Debug;
+        return new TencentAnticheat();
     }
 
     // Tencent OpenID resolving override.
     EXPORT_ATTR int InitCrossContextByOpenID(void *)
     {
+        Traceprint();
         return 0;
     }
 
@@ -150,8 +210,7 @@ extern "C"
     EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
     {
         Debugprint(va("Initializing Tencent for game %u", GameID));
-        static auto Localinterface = new Tencent();
-        *Interface = &Localinterface;
+        *Interface = new Tencentcore();
 
         // TODO(tcn): Name the indexes.
         Arraystore[8][2] = va("%u", GameID);
