@@ -111,7 +111,7 @@ int wmain(int Argc, wchar_t **Argv)
     }
 
     // Windows requires a mutable string for the command-line.
-    for(const auto &Item : Arguments) Executablepath += Item + L" ";
+    for(const auto &Item : Arguments) Executablepath += L" " + Item;
     wchar_t *Buffer = (wchar_t *)alloca(Executablepath.size() * sizeof(wchar_t) + sizeof(wchar_t));
     std::wmemset(Buffer, L'\0', Executablepath.size() + 1);
     std::wmemcpy(Buffer, Executablepath.c_str(), Executablepath.size());
