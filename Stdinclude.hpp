@@ -61,6 +61,7 @@
 
 // Global utilities.
 #include <Utilities/Variadicstring.hpp>
+#include <Utilities/Patternscan.hpp>
 #include <Utilities/Memprotect.hpp>
 #include <Utilities/Simplehook.hpp>
 #include <Utilities/Filesystem.hpp>
