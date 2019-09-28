@@ -17,8 +17,8 @@ extern char _etext, _end;
 
 namespace Patternscan
 {
-    using Patternmask_t = std::basic_string<uint8_t>;
     using Patternmask_view = std::basic_string_view<uint8_t>;
+    using Patternmask_t = std::basic_string<uint8_t>;
     using Range_t = std::pair<size_t, size_t>;
 
     // Find a single pattern in a range.
