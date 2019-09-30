@@ -18,6 +18,27 @@ extern "C"
     {
         Traceprint();
 
+        // Ensure that interfaces are loaded, this should only be relevant for developers.
+        if(Steam::Getinterfaceversion(Steam::Interfacetype_t::APPS) == 0)
+        {
+            // Legacy compatibility.
+            Steam::Redirectmodulehandle();
+
+            // Start processing the IPC separately.
+            std::thread(Steam::InitializeIPC).detach();
+
+            // Finally initialize the interfaces by module.
+            if(!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
+               !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
+               !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
+               !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))
+            {
+                Errorprint("Platformwrapper could not find the games interface version.");
+                Errorprint("This can cause a lot of errors, contact the developer.");
+                Errorprint("Alternatively provide a \"interfaces.txt\"");
+            }
+        }
+
         // Modern games provide the ApplicationID via SteamAPI_RestartAppIfNecessary.
         // While legacy/dedis have hardcoded steam_apis. Thus we need a configuration file.
         if (Steam::Global.ApplicationID == 0)
@@ -38,7 +59,7 @@ extern "C"
             if (Steam::Global.ApplicationID == 0)
             {
                 Errorprint("Platformwrapper could not find the games Application ID.");
-                Errorprint("This will cause a lot of errors, contact the developer.");
+                Errorprint("This may cause a quite a few errors, contact the developer.");
                 Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\"");
 
                 Steam::Global.ApplicationID = Hash::FNV1a_32("Ayria");

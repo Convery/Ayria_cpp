@@ -114,51 +114,30 @@ namespace Steam
     extern const std::vector<std::pair<std::string, std::string>> Scanstrings;
     bool Scanforinterfaces(std::string_view Filename)
     {
-        if (auto Filehandle = std::fopen(Filename.data(), "rb"))
+        const auto Filebuffer = FS::Readfile(Filename);
+        if(Filebuffer.empty()) return false;
+        std::vector<std::string> Foundnames;
+
+        // Scan through the binary for interface-names.
+        Patternscan::Range_t Range = { size_t(Filebuffer.data()), size_t(Filebuffer.data()) + Filebuffer.size() };
+        for(const auto Address : Patternscan::Findpatterns(Range, "53")) // 'S' in hexadecimal.
         {
-            std::vector<std::string> Foundnames;
-
-            // Load the entire file into memory.
-            std::fseek(Filehandle, SEEK_SET, SEEK_END);
-            const auto Size = std::ftell(Filehandle);
-            std::rewind(Filehandle);
-
-            auto Filebuffer = std::make_unique<char[]>(Size);
-            std::fread(Filebuffer.get(), Size, 1, Filehandle);
-            std::fclose(Filehandle);
-
-            // TODO(tcn): SSE4 has nice string-matching stuff.
-            // Scan for the names in the file, slow and should be optimized later.
-            for (long i = 0; i < Size; ++i)
+            // Match against the scan-strings.
+            for(const auto &[Scanstring, Name] : Scanstrings)
             {
-                // Naive skip forward.
-                if (Filebuffer[i] != 'S') continue;
-
-                // Match against the scan-strings.
-                for (const auto &[Scanstring, Name] : Scanstrings)
+                if(std::strstr((char *)Address, Scanstring.c_str()))
                 {
-                    if (std::strstr(&Filebuffer[i], Scanstring.c_str()))
-                    {
-                        // Load the interface to mark it as active.
-                        Debugprint(va("Loading interface %s", Name.c_str()));
-                        Foundnames.push_back(Scanstring);
-                        Fetchinterface(Name);
-                        break;
-                    }
+                    // Load the interface to mark it as active.
+                    Debugprint(va("Loading interface %s", Name.c_str()));
+                    Foundnames.push_back(Scanstring);
+                    Fetchinterface(Name);
+                    break;
                 }
-
             }
-
-            // Bad result-count. =(
-            if (Foundnames.size() == 0) return false;
-
-            // Save the interfaces to a cache of sorts.
-            // TODO(tcn): When we have the virtual FS, store a .txt
-
-            return true;
         }
 
-        return false;
+        // Did we find any results?
+        return !!Foundnames.size();
     }
     const std::vector<std::pair<std::string, std::string>> Scanstrings
     {
