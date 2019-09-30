@@ -36,11 +36,12 @@ LONG WINAPI Threadname(PEXCEPTION_POINTERS Info)
 }
 
 // Called after Ntdll.ldr's ctors but before main.
-void __stdcall TLSCallback(void *a, uint32_t b, void *c)
+void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 {
     // Sometimes plugins want to name their threads, and not all games support that..
     AddVectoredExceptionHandler(0, Threadname);
 
+    // Fixup the TLS callbacks.
     if(const auto Address = AddressofTLS())
     {
         auto Protection = Memprotect::Unprotectrange(Address, sizeof(size_t));
@@ -56,13 +57,18 @@ void __stdcall TLSCallback(void *a, uint32_t b, void *c)
         }
         Memprotect::Protectrange(Address, sizeof(size_t), Protection);
     }
+    else
+    {
+        // Check all the places plugins may reside.
+        Loadallplugins();
+    }
 
     // If there was a TLS callback already, call it directly.
     if(OriginalTLS) return ((decltype(TLSCallback) *)OriginalTLS)(a, b, c);
 }
 
 // Entrypoint when loaded as a shared library.
-BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
+BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
 {
     if (nReason == DLL_PROCESS_ATTACH)
     {
@@ -76,9 +82,6 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Only keep a log for this session.
         Logging::Clearlog();
 
-        // Opt out of further notifications.
-        DisableThreadLibraryCalls(hDllHandle);
-
         // Set TLS to run our callback when fully loaded.
         if(const auto Address = AddressofTLS())
         {
@@ -88,11 +91,18 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
                 *(size_t *)Address = (size_t)TLSCallback;
             }
             Memprotect::Protectrange(Address, sizeof(size_t), Protection);
+
+            // Opt out of further notifications.
+            DisableThreadLibraryCalls(hDllHandle);
         }
-        else
-        {
-            assert(false);
-        }
+    }
+    if(nReason == DLL_THREAD_ATTACH)
+    {
+        // Opt out of further notifications.
+        DisableThreadLibraryCalls(hDllHandle);
+
+        // Call TLS on the first thread as a fallback.
+        TLSCallback(hDllHandle, nReason, lpvReserved);
     }
 
     return TRUE;
