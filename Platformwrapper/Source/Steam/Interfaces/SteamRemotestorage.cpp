@@ -11,35 +11,51 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
+    std::string Filepath()
+    {
+        static std::string Internal{ va("./Ayria/Assets/Platformwrapper/%u/", Global.ApplicationID) };
+        return Internal;
+    }
+
     struct SteamRemotestorage
     {
         bool FileRead0(const char *filename, void *buffer, int size)
         {
-            Traceprint();
+            if(const auto Filebuffer = FS::Readfile(Filepath() + filename); !Filebuffer.empty())
+            {
+                std::memcpy(buffer, Filebuffer.data(), std::min(size_t(size), Filebuffer.size()));
+                return true;
+            }
             return false;
         }
         bool FileExists(const char *filename)
         {
-            Infoprint(va("Requesting file \"%s\" from cloud.", filename));
-            return false;
+            return FS::Fileexists(Filepath() + filename);
         }
         bool FileDelete(const char *filename)
         {
-            Traceprint();
-
-            return false;
+            return std::remove((Filepath() + filename).c_str());
         }
         const char *GetFileNameAndSize(int index, int *size)
         {
-            Traceprint();
-            return "";
+            const auto Filelist = FS::Findfiles(Filepath(), "");
+            if(Filelist.size() <= index)
+            {
+                *size = 0; return nullptr;
+            }
+
+            // Leaky leaky..
+            *size = FS::Filesize(Filelist[index]);
+            auto Leak = Filelist[index].substr(Filelist[index].find_last_of('/') + 1);
+            auto pLeak = new char[Leak.size() + 1]();
+            std::memcpy(pLeak, Leak.data(), Leak.size());
+            return pLeak;
         }
-        bool GetQuota(int *current, int *maximum)
+        bool GetQuota(int32_t *pnTotalBytes, uint32_t *puAvailableBytes)
         {
             Traceprint();
 
-            *current = 0;
-            *maximum = INT_MAX;
+            *pnTotalBytes = *puAvailableBytes = INT_MAX;
             return true;
         }
         bool FileWrite(const char *pchFile, const void *pvData, int32_t cubData)

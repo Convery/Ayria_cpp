@@ -66,6 +66,10 @@ extern "C"
             }
         }
 
+        // Ensure that we have folders for this game.
+        (void)_mkdir("./Ayria/Assets/Platformwrapper");
+        (void)_mkdir(va("./Ayria/Assets/Platformwrapper/%u", Steam::Global.ApplicationID).c_str());
+
         // Query the Ayria platform for the account information.
         if (true /* TODO(tcn): Update when Ayria is done. */)
         {
