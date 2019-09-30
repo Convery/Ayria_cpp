@@ -28,6 +28,7 @@ namespace Patternscan
         assert(Pattern.size() != 0);
         assert(Range.second != 0);
         assert(Range.first != 0);
+        assert(Mask[0] != 0); // The first byte can't be a wildcard.
 
         size_t Count = Range.second - Range.first - Pattern.size();
         auto Base = (const uint8_t *)Range.first;
@@ -37,7 +38,7 @@ namespace Patternscan
         auto Compare = [&](const uint8_t *Address) -> bool
         {
             const size_t Patternlength = Pattern.size();
-            for(size_t i = 0; i < Patternlength; ++i)
+            for(size_t i = 1; i < Patternlength; ++i)
             {
                 if(Mask[i] && Address[i] != Pattern[i])
                     return false;
@@ -150,9 +151,13 @@ namespace Patternscan
     }
 
     // IDA style pattern scanning.
-    inline std::vector<size_t> Findpatterns(Range_t &Range, std::string_view Pattern)
+    inline std::vector<size_t> Findpatterns(Range_t &Range, std::string IDAPattern)
     {
-        const auto Patternmask = from_string(Pattern);
-        return Findpatterns(Range, Patternmask, Patternmask);
+        const auto Pattern = from_string(IDAPattern);
+        while(IDAPattern.find('?') != std::string::npos)
+            IDAPattern.replace(IDAPattern.find('?'), 1, "01" );
+        const auto Mask = from_string(IDAPattern);
+
+        return Findpatterns(Range, Pattern, Mask);
     }
 }
