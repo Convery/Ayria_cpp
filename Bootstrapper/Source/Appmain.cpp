@@ -137,7 +137,6 @@ extern "C"
 }
 
 // Utility functionality.
-std::string Temporarydir() { char Buffer[260]{}; GetTempPathA(260, Buffer); return std::move(Buffer); }
 void Loadallplugins()
 {
     constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Ayria32" : ".Ayria64";
