@@ -70,7 +70,7 @@ void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 // Entrypoint when loaded as a shared library.
 BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
 {
-    if (nReason == DLL_PROCESS_ATTACH)
+    if(nReason == DLL_PROCESS_ATTACH)
     {
         // Ensure that Ayrias default directories exist.
         (void)_mkdir("./Ayria/");
