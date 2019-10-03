@@ -154,10 +154,10 @@ namespace Patternscan
     inline std::vector<size_t> Findpatterns(Range_t &Range, std::string IDAPattern)
     {
         const auto Pattern = from_string(IDAPattern);
-        while(IDAPattern.find('?') != std::string::npos)
-            IDAPattern.replace(IDAPattern.find('?'), 1, "01" );
-        const auto Mask = from_string(IDAPattern);
 
-        return Findpatterns(Range, Pattern, Mask);
+        while(IDAPattern.find(" 0 ") != std::string::npos) IDAPattern.replace(IDAPattern.find(" 0 "), 4, " 00 ");
+        while(IDAPattern.find("00") != std::string::npos) IDAPattern.replace(IDAPattern.find("00"), 2, "01" );
+
+        return Findpatterns(Range, Pattern, from_string(IDAPattern));
     }
 }
