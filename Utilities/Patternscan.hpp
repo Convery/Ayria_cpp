@@ -60,7 +60,7 @@ namespace Patternscan
     }
 
     // Scan until the end of the range and return all results.
-    inline std::vector<size_t> Findpatterns(Range_t &Range, Patternmask_view Pattern, Patternmask_view Mask)
+    inline std::vector<size_t> Findpatterns(const Range_t Range, Patternmask_view Pattern, Patternmask_view Mask)
     {
         std::vector<std::size_t> Results;
         Range_t Localrange = Range;
@@ -151,7 +151,7 @@ namespace Patternscan
     }
 
     // IDA style pattern scanning.
-    inline std::vector<size_t> Findpatterns(Range_t &Range, std::string IDAPattern)
+    inline std::vector<size_t> Findpatterns(const Range_t Range, std::string IDAPattern)
     {
         const auto Pattern = from_string(IDAPattern);
 
