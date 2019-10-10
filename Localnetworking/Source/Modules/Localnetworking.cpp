@@ -209,8 +209,8 @@ namespace Localnetworking
         for (int i = 0; i < 10; ++i)
         {
             SOCKADDR_IN Server{};
+            BackendTCPport = TCPPort++;
             Server.sin_family = AF_INET;
-            BackendTCPport = TCPPort + i;
             Server.sin_port = htons(BackendTCPport);
             Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
@@ -223,8 +223,8 @@ namespace Localnetworking
         for (int i = 0; i < 10; ++i)
         {
             SOCKADDR_IN Server{};
+            BackendUDPport = UDPPort++;
             Server.sin_family = AF_INET;
-            BackendUDPport = UDPPort + i;
             Server.sin_port = htons(BackendUDPport);
             Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             if (0 == bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
@@ -322,7 +322,7 @@ namespace Localnetworking
         if (Serverinstances.end() != Serverinstances.find(Hostname.data())) return true;
 
         // Keep a blacklist so we don't spam lookups.
-        static std::vector<std::string> Blacklist;
+        static std::vector<std::string> Blacklist{};
         for (const auto &Item : Blacklist)
             if (Item == Hostname)
                 return false;
