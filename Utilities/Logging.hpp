@@ -9,6 +9,10 @@
 #include <cstdio>
 #include <ctime>
 
+#if defined _WIN32
+#include <Windows.h>
+#endif
+
 namespace Logging
 {
     #if !defined(LOGPATH)
@@ -36,6 +40,10 @@ namespace Logging
     {
         std::fwrite(Message.data(), Message.size(), 1, stderr);
         std::fflush(stderr);
+
+        #if defined _WIN32
+        OutputDebugStringA(Message.data());
+        #endif
     }
 
     // Formatted standard printing.
