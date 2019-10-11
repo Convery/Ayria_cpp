@@ -75,7 +75,14 @@ extern "C"
         {
             Ayria::Global.Username = "Ayria";
             Steam::Global.Language = "english";
-            Ayria::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
+            Ayria::Global.UserID = 0x1100001DEADC0DE;
+
+            #if defined(_WIN32)
+            if (std::strstr(GetCommandLineA(), "-UID"))
+            {
+                Ayria::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
+            }
+            #endif
         }
 
         // Query the Steam platform for installation-location.
