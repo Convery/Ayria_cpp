@@ -12,7 +12,7 @@ namespace Steam
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
     // Authentication data.
-    uint8_t Ticketdata[128]{};
+    uint8_t Ticketdata[176]{};
 
     // Ayria-internal.
     #pragma pack(push, 1)
