@@ -23,7 +23,7 @@ namespace Logging
     #warning No module name specified for the logging.
         constexpr char Logfile[] = "./NoModuleName.log";
     #else
-    constexpr char Logfile[] = LOGPATH "/" MODULENAME ".log";
+        constexpr char Logfile[] = LOGPATH "/" MODULENAME ".log";
     #endif
 
     // NOTE(tcn): Not threadsafe but good enough.
