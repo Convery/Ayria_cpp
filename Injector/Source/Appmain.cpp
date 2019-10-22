@@ -11,52 +11,73 @@
 
 int wmain(int Argc, wchar_t **Argv)
 {
-    std::vector<std::wstring> Arguments;
     PROCESS_INFORMATION Processinfo{};
     std::wstring Workingdirectory{};
     std::wstring Executablepath{};
     STARTUPINFOW Startupinfo{};
-    wchar_t CWD[512]{};
+    std::wstring Executable{};
+    wchar_t Basemodule[512]{};
+    std::wstring Arguments{};
 
     // Skip the first argument if it's the bootstrapper, because Windows.
-    for(int i = !!std::wcsstr(Argv[0], L"Injector"); i < Argc; ++i)
+    for (int i = !!std::wcsstr(Argv[0], L"Injector"); i < Argc; ++i)
     {
-        const std::wstring Argument = Argv[i];
+        std::wstring_view Argument = Argv[i];
 
-        // Parse the executables location.
-        if(Executablepath.empty() && Argument.rfind(L".exe") != std::wstring::npos)
+        // Parse the executable-name.
+        if (Executable.empty() && Argument.rfind(L".exe") != std::wstring::npos)
         {
-            Executablepath = Argv[i];
+            Executable = Argument.substr(Argument.find_last_of(L'\\'));
+            if (Executable[0] == L'\\') Executable.erase(0, 1);
+            Executablepath = Argument;
             continue;
         }
 
         // If the first argument after the executable is a sub-path, assume CWD.
-        if(Workingdirectory.empty() && !!std::wcsstr(Executablepath.c_str(), Argv[i]))
+        if (Workingdirectory.empty())
         {
-            Workingdirectory = Argv[i];
-            continue;
+            if (Argument.find_last_of(L'\\') != std::wstring::npos)
+            {
+                Workingdirectory = Argument;
+                continue;
+            }
+
+            if (Executablepath.find_last_of(L'\\') != std::wstring::npos)
+            {
+                Workingdirectory = Executablepath.substr(0, Executablepath.find_last_of(L'\\') + 1);
+            }
+            else
+            {
+                GetModuleFileNameW(NULL, Basemodule, 512); Workingdirectory = Basemodule;
+                Workingdirectory = Workingdirectory.substr(0, Workingdirectory.find_last_of(L'\\') + 1);
+            }
         }
 
         // Take the rest as startup-arguments.
-        Arguments.push_back(Argv[i]);
+        Arguments += Argument.data() + L" "s;
     }
 
     // Sanity-checking.
-    if(Executablepath.empty())
+    if (Executable.empty())
     {
-        std::wprintf(L"Missing commands. Usage: Injector**.exe \"app_path.exe\" <working_directory> [startup args for app]\n");
+        std::wprintf(L"Missing commands. Usage: Injector**.exe \"app.exe\" <working_directory> [startup args for app]\n");
         return 1;
     }
-    else
+    if (Workingdirectory.empty())
     {
-        if(Workingdirectory.empty())
+        if (Executablepath.find_last_of(L'\\') != std::wstring::npos)
         {
-            Workingdirectory = Executablepath.substr(0, Executablepath.find_last_of(L'\\'));
+            Workingdirectory = Executablepath.substr(0, Executablepath.find_last_of(L'\\') + 1);
+        }
+        else
+        {
+            GetModuleFileNameW(NULL, Basemodule, 512); Workingdirectory = Basemodule;
+            Workingdirectory = Workingdirectory.substr(0, Workingdirectory.find_last_of(L'\\') + 1);
         }
     }
 
     // Find if the executable matches our configuration.
-    if(const auto Filehandle = _wfopen(Executablepath.c_str(), L"rb"))
+    if(const auto Filehandle = _wfopen((Workingdirectory + Executable).c_str(), L"rb"))
     {
         char PEBuffer[sizeof(IMAGE_NT_HEADERS)]{};
         const auto NTHeader = (PIMAGE_NT_HEADERS)PEBuffer;
@@ -111,15 +132,15 @@ int wmain(int Argc, wchar_t **Argv)
     }
 
     // Windows requires a mutable string for the command-line.
-    for(const auto &Item : Arguments) Executablepath += L" " + Item;
-    wchar_t *Buffer = (wchar_t *)alloca(Executablepath.size() * sizeof(wchar_t) + sizeof(wchar_t));
-    std::wmemset(Buffer, L'\0', Executablepath.size() + 1);
-    std::wmemcpy(Buffer, Executablepath.c_str(), Executablepath.size());
+    wchar_t *Buffer = (wchar_t *)alloca(Arguments.size() * sizeof(wchar_t) + sizeof(wchar_t));
+    std::wmemcpy(Buffer, Arguments.c_str(), Arguments.size() + 1);
 
     // Spawn the application and inject.
-    if(CreateProcessW(NULL, Buffer, NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, Workingdirectory.c_str(), &Startupinfo, &Processinfo))
+    if(CreateProcessW((Workingdirectory + Executable).c_str(), Buffer, NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, Workingdirectory.c_str(), &Startupinfo, &Processinfo))
     {
-        GetModuleFileNameW(GetModuleHandleW(NULL), CWD, 512); std::wstring Modulepath(CWD);
+        GetModuleFileNameW(NULL, Basemodule, 512);
+        std::wstring Modulepath = Basemodule;
+
         Modulepath = Modulepath.substr(0, Modulepath.find_last_of(L'\\'));
         Modulepath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
 
