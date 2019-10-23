@@ -46,11 +46,6 @@ int wmain(int Argc, wchar_t **Argv)
             {
                 Workingdirectory = Executablepath.substr(0, Executablepath.find_last_of(L'\\') + 1);
             }
-            else
-            {
-                GetModuleFileNameW(NULL, Basemodule, 512); Workingdirectory = Basemodule;
-                Workingdirectory = Workingdirectory.substr(0, Workingdirectory.find_last_of(L'\\') + 1);
-            }
         }
 
         // Take the rest as startup-arguments.
