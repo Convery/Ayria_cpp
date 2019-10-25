@@ -5,11 +5,19 @@
 */
 
 #include "Stdinclude.hpp"
+#include <winternl.h>
+#pragma comment(lib, "ntdll")
+
+#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#if _WIN64
+#define pInstruction Rip
+#else
+#define pInstruction Eip
+#endif
 
 namespace HWBP
 {
     enum Access : uint8_t { REMOVE = 0, READ = 1, WRITE = 2, EXEC = 4 };
-
     namespace Internal
     {
         struct Context_t
@@ -106,6 +114,7 @@ namespace HWBP
             // WTF?
             return DWORD(-1);
         }
+
     }
 
     DWORD Set(HANDLE Threadhandle, uintptr_t Address, uint8_t Accessflags = Access::EXEC, uint8_t Size = 1)
@@ -123,7 +132,7 @@ namespace HWBP
         if(!Localthread) return GetLastError();
 
         DWORD Result{}; // Wait for the thread to finish.
-        while (!GetExitCodeThread(Localthread, &Result)) Sleep(0);
+        while (!GetExitCodeThread(Localthread, &Result) || Result == STILL_ACTIVE) Sleep(0);
 
         // Close the handle if we opened it.
         if (Context.Threadhandle == GetCurrentThread())
@@ -145,13 +154,68 @@ namespace HWBP
     }
 }
 
+namespace Helpers
+{
+    uintptr_t getStartaddress(HANDLE Threadhandle)
+    {
+        uintptr_t Address{};
+        HANDLE Duplicate;
 
+        // Reopen the handle with proper access.
+        if (!DuplicateHandle(GetCurrentProcess(), Threadhandle, GetCurrentProcess(), &Duplicate, THREAD_QUERY_INFORMATION, FALSE, 0))
+            return 0;
+
+        // Query windows with class ThreadQuerySetWin32StartAddress
+        NtQueryInformationThread(Duplicate, (THREADINFOCLASS)9, &Address, sizeof(uintptr_t), NULL);
+        CloseHandle(Duplicate);
+        return Address;
+    }
+}
+
+namespace Customcontext
+{
+    std::unordered_map<HANDLE, CONTEXT> Savedcontext;
+    BOOL WINAPI getContext(HANDLE hThread, LPCONTEXT lpContext)
+    {
+        auto Result = Savedcontext.find(hThread);
+        if (Result != Savedcontext.end())
+        {
+            *lpContext = Result->second;
+            return TRUE;
+        }
+
+        return GetThreadContext(hThread, lpContext);
+    }
+}
+
+std::unordered_map<HANDLE, uintptr_t> Applicationthreads;
+std::vector<std::pair<uintptr_t, uintptr_t>> Hookedaddresses;
+LONG __stdcall Exceptionhandler(EXCEPTION_POINTERS *Exceptioninfo)
+{
+    // Not very interesting.
+    if (Exceptioninfo->ExceptionRecord->ExceptionCode != STATUS_BREAKPOINT)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    // Hooked functions.
+    for (const auto &Item : Hookedaddresses)
+    {
+        if (Item.first == Exceptioninfo->ContextRecord->pInstruction)
+        {
+            Exceptioninfo->ContextRecord->pInstruction = Item.second;
+            Exceptioninfo->ContextRecord->Dr6 = 0;
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+    }
+
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 
 // Entrypoint when loaded as a plugin.
 extern "C"
 {
     EXPORT_ATTR void onStartup(bool)
     {
+        AddVectoredExceptionHandler(1, Exceptionhandler);
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
@@ -161,9 +225,30 @@ extern "C"
 #if defined _WIN32
 BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
+    if (nReason == DLL_THREAD_ATTACH)
+    {
+        HMODULE Modulehandle;
+        const auto Thread = GetCurrentThread();
+        const auto Address = Helpers::getStartaddress(Thread);
+
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCSTR)Address, &Modulehandle))
+        {
+            char Filename[512]{};
+            GetModuleFileNameA(Modulehandle, Filename, 512);
+            if(std::strstr(Filename, ".exe")) Applicationthreads[Thread] = Address;
+        }
+    }
+    if (nReason == DLL_THREAD_DETACH)
+    {
+        auto Result = Applicationthreads.find(GetCurrentThread());
+        if (Result != Applicationthreads.end())
+            Applicationthreads.erase(Result);
+    }
+
     if (nReason == DLL_PROCESS_ATTACH)
     {
-        // Ensure that Ayrias default directories exist.
+        // Ensure that Ayria's default directories exist.
         _mkdir("./Ayria/");
         _mkdir("./Ayria/Plugins/");
         _mkdir("./Ayria/Assets/");
@@ -172,11 +257,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Only keep a log for this session.
         Logging::Clearlog();
-
-        // Opt out of further notifications.
-        DisableThreadLibraryCalls(hDllHandle);
     }
-
     return TRUE;
 }
 #else
