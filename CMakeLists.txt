@@ -20,7 +20,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     # Windows compilation.
     if(CMAKE_BUILD_TYPE MATCHES Release)
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /Gw /GR- /GL /Os /Oy /O2 /GF /Brepro")
-        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /safeseh:no /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
+        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy") # /d2cgsummary
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:fastlink /cgthreads:8")
@@ -74,6 +74,7 @@ endif()
 
 # Add the sub-projects.
 add_subdirectory(Injector)
+add_subdirectory(Integrity)
 add_subdirectory(Bootstrapper)
 add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
