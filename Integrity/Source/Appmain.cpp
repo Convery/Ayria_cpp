@@ -293,6 +293,16 @@ namespace Kernel32
 
         return ((decltype(CloseHandle) *)RealClosehandle)(Handle);
     };
+
+    void *RealisDebugged{ IsDebuggerPresent };
+    BOOL __stdcall CustomisDebugged()
+    {
+        // Only intercept the main module.
+        if (Applicationthreads.find(GetCurrentThread()) == Applicationthreads.end())
+            return FALSE;
+
+        return ((decltype(IsDebuggerPresent) *)RealisDebugged)();
+    }
 }
 
 // Entrypoint when loaded as a plugin.
@@ -306,6 +316,8 @@ extern "C"
         Mhook_SetHook(&NTDll::RealNTClose, NTDll::CustomNTClose);
         Mhook_SetHook(&NTDll::RealNTQuerysystem, NTDll::CustomNTQuerysystem);
         Mhook_SetHook(&NTDll::RealNTQueryprocess, NTDll::CustomNTQueryprocess);
+
+        Mhook_SetHook(&Kernel32::RealisDebugged, Kernel32::CustomisDebugged);
         Mhook_SetHook(&Kernel32::RealClosehandle, Kernel32::CustomClosehandle);
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
