@@ -6,9 +6,11 @@
 
 #include "Stdinclude.hpp"
 #include <winternl.h>
+#include <ntstatus.h>
+
 #pragma comment(lib, "ntdll")
 
-#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+//#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
 #if _WIN64
 #define pInstruction Rip
 #else
@@ -210,12 +212,101 @@ LONG __stdcall Exceptionhandler(EXCEPTION_POINTERS *Exceptioninfo)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+namespace NTDll
+{
+    void *RealNTClose{ NtClose };
+    NTSTATUS __stdcall CustomNTClose(HANDLE Handle)
+    {
+        DWORD Flags{};
+        if (!GetHandleInformation(Handle, &Flags))
+        {
+            return STATUS_INVALID_HANDLE;
+        }
+
+        if (Flags & HANDLE_FLAG_PROTECT_FROM_CLOSE)
+        {
+            return STATUS_SUCCESS;
+        }
+
+        return ((decltype(NtClose) *)RealNTClose)(Handle);
+    };
+
+    void *RealNTQuerysystem{ NtQuerySystemInformation };
+    NTSTATUS __stdcall CustomNTQuerysystem(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation,
+                                           ULONG SystemInformationLength, PULONG ReturnLength)
+    {
+        const auto Result = ((decltype(NtQuerySystemInformation) *)RealNTQuerysystem)(SystemInformationClass, SystemInformation,
+                                                                                    SystemInformationLength, ReturnLength);
+        // SystemKernelDebuggerInformation
+        if (SystemInformationClass == 35)
+        {
+            struct Kerneldbg { BOOLEAN Enabled; BOOLEAN notPresent; };
+            auto Info = static_cast<Kerneldbg *>(SystemInformation);
+            Info->notPresent = TRUE;
+            Info->Enabled = FALSE;
+        }
+
+        return Result;
+    }
+
+    void *RealNTQueryprocess{ NtQueryInformationProcess };
+    NTSTATUS __stdcall CustomNTQueryprocess(HANDLE ProcessHandle, PROCESSINFOCLASS ProcessInformationClass,
+                                            PVOID ProcessInformation, ULONG ProcessInformationLength, PULONG ReturnLength)
+    {
+        const auto Result = ((decltype(NtQueryInformationProcess) *)RealNTQueryprocess)(ProcessHandle, ProcessInformationClass,
+                                                                                        ProcessInformation, ProcessInformationLength,
+                                                                                        ReturnLength);
+
+        if (ProcessInformationClass == ProcessDebugPort)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 0;
+        }
+        if (ProcessInformationClass == 30)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 0;
+        }
+        if (ProcessInformationClass == 31)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 1;
+        }
+
+        return Result;
+    }
+
+
+}
+namespace Kernel32
+{
+    void *RealClosehandle{ CloseHandle };
+    BOOL __stdcall CustomClosehandle(HANDLE Handle)
+    {
+        DWORD Flags{};
+        if (!GetHandleInformation(Handle, &Flags))
+        {
+            return FALSE;
+        }
+
+        if (Flags & HANDLE_FLAG_PROTECT_FROM_CLOSE)
+        {
+            return TRUE;
+        }
+
+        return ((decltype(CloseHandle) *)RealClosehandle)(Handle);
+    };
+}
+
 // Entrypoint when loaded as a plugin.
 extern "C"
 {
     EXPORT_ATTR void onStartup(bool)
     {
         AddVectoredExceptionHandler(1, Exceptionhandler);
+        std::remove("./__iw6mp64_ship");
+
+        Mhook_SetHook(&NTDll::RealNTClose, NTDll::CustomNTClose);
+        Mhook_SetHook(&NTDll::RealNTQuerysystem, NTDll::CustomNTQuerysystem);
+        Mhook_SetHook(&NTDll::RealNTQueryprocess, NTDll::CustomNTQueryprocess);
+        Mhook_SetHook(&Kernel32::RealClosehandle, Kernel32::CustomClosehandle);
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
