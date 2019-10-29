@@ -273,6 +273,23 @@ namespace NTDll
         return Result;
     }
 
+    void *RealNTCreate{ NtCreateFile };
+    NTSTATUS __stdcall CustomNTCreate(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
+                                      PIO_STATUS_BLOCK IoStatusBlock, PLARGE_INTEGER AllocationSize, ULONG FileAttributes,
+                                      ULONG ShareAccess, ULONG CreateDisposition, ULONG CreateOptions, PVOID EaBuffer,
+                                      ULONG EaLength)
+    {
+        // Opening a exe is bad..
+        if (auto Pos = std::wcsstr(ObjectAttributes->ObjectName->Buffer, L".exe"))
+        {
+            std::wmemcpy(Pos, L".bak", 4);
+            CreateDisposition |= FILE_OPEN_IF;
+        }
+
+        return ((decltype(NtCreateFile) *)RealNTCreate)(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock,
+                                                                     AllocationSize, FileAttributes, ShareAccess, CreateDisposition,
+                                                                     CreateOptions, EaBuffer, EaLength);
+    }
 
 }
 namespace Kernel32
@@ -313,7 +330,10 @@ extern "C"
         AddVectoredExceptionHandler(1, Exceptionhandler);
         std::remove("./__iw6mp64_ship");
 
+        //NtCreateFile
+
         Mhook_SetHook(&NTDll::RealNTClose, NTDll::CustomNTClose);
+        Mhook_SetHook(&NTDll::RealNTCreate, NTDll::CustomNTCreate);
         Mhook_SetHook(&NTDll::RealNTQuerysystem, NTDll::CustomNTQuerysystem);
         Mhook_SetHook(&NTDll::RealNTQueryprocess, NTDll::CustomNTQueryprocess);
 
