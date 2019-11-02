@@ -328,9 +328,6 @@ extern "C"
     EXPORT_ATTR void onStartup(bool)
     {
         AddVectoredExceptionHandler(1, Exceptionhandler);
-        std::remove("./__iw6mp64_ship");
-
-        //NtCreateFile
 
         Mhook_SetHook(&NTDll::RealNTClose, NTDll::CustomNTClose);
         Mhook_SetHook(&NTDll::RealNTCreate, NTDll::CustomNTCreate);
