@@ -340,105 +340,77 @@ void Steam_init()
     #define Hook(x) Hookcount += Lambda(#x, (void *)x)
 
     // Count the number of hooks.
-    uint32_t Hookcount{1};
-
-    size_t *Address = (size_t *)0x0000000151435C98;
-
-    auto Prot = Memprotect::Unprotectrange(0x0000000151435C98, 20 * 8);
-
-    Address[0] = (size_t)SteamRemoteStorage;
-    Address[1] = (size_t)SteamAPI_RunCallbacks;
-    Address[2] = (size_t)SteamNetworking;
-    Address[3] = (size_t)SteamFriends;
-    Address[4] = (size_t)SteamAPI_RegisterCallResult;
-    Address[5] = (size_t)SteamAPI_UnregisterCallResult;
-    Address[6] = (size_t)SteamAPI_GetSteamInstallPath;
-    Address[7] = (size_t)SteamGameServer;
-    Address[8] = (size_t)SteamGameServer_Shutdown;
-    Address[9] = (size_t)SteamApps;
-    Address[10] = (size_t)SteamUserStats;
-    Address[11] = (size_t)SteamMatchmaking;
-    Address[12] = (size_t)SteamAPI_RegisterCallback;
-    Address[13] = (size_t)SteamUtils;
-    Address[14] = (size_t)SteamGameServer_RunCallbacks;
-    Address[15] = (size_t)SteamAPI_Init;
-    Address[16] = (size_t)SteamAPI_Shutdown;
-    Address[17] = (size_t)SteamAPI_UnregisterCallback;
-    Address[18] = (size_t)SteamUser;
-    Address[19] = (size_t)SteamGameServer_Init;
-
-    Memprotect::Protectrange(0x0000000151435C98, 20 * 8, Prot);
-
+    uint32_t Hookcount{};
 
     // Initialization and shutdown.
-    //Hook(SteamAPI_Init);
-    //Hook(SteamAPI_InitSafe);
-    //Hook(SteamAPI_Shutdown);
-    //Hook(SteamAPI_IsSteamRunning);
-    //Hook(SteamAPI_GetSteamInstallPath);
-    //Hook(SteamAPI_RestartAppIfNecessary);
+    Hook(SteamAPI_Init);
+    Hook(SteamAPI_InitSafe);
+    Hook(SteamAPI_Shutdown);
+    Hook(SteamAPI_IsSteamRunning);
+    Hook(SteamAPI_GetSteamInstallPath);
+    Hook(SteamAPI_RestartAppIfNecessary);
 
-    //// Callback management.
-    //Hook(SteamAPI_RunCallbacks);
-    //Hook(SteamAPI_RegisterCallback);
-    //Hook(SteamAPI_UnregisterCallback);
-    //Hook(SteamAPI_RegisterCallResult);
-    //Hook(SteamAPI_UnregisterCallResult);
+    // Callback management.
+    Hook(SteamAPI_RunCallbacks);
+    Hook(SteamAPI_RegisterCallback);
+    Hook(SteamAPI_UnregisterCallback);
+    Hook(SteamAPI_RegisterCallResult);
+    Hook(SteamAPI_UnregisterCallResult);
 
-    //// Steam proxy.
-    //Hook(SteamAPI_GetHSteamUser);
-    //Hook(SteamAPI_GetHSteamPipe);
-    //Hook(SteamGameServer_GetHSteamUser);
-    //Hook(SteamGameServer_GetHSteamPipe);
-    //Hook(SteamGameServer_BSecure);
-    //Hook(SteamGameServer_Shutdown);
-    //Hook(SteamGameServer_RunCallbacks);
-    //Hook(SteamGameServer_GetSteamID);
-    //Hook(SteamGameServer_Init);
-    //Hook(SteamGameServer_InitSafe);
-    //Hook(SteamInternal_GameServer_Init);
+    // Steam proxy.
+    Hook(SteamAPI_GetHSteamUser);
+    Hook(SteamAPI_GetHSteamPipe);
+    Hook(SteamGameServer_GetHSteamUser);
+    Hook(SteamGameServer_GetHSteamPipe);
+    Hook(SteamGameServer_BSecure);
+    Hook(SteamGameServer_Shutdown);
+    Hook(SteamGameServer_RunCallbacks);
+    Hook(SteamGameServer_GetSteamID);
+    Hook(SteamGameServer_Init);
+    Hook(SteamGameServer_InitSafe);
+    Hook(SteamInternal_GameServer_Init);
 
-    //// Interface access.
-    //Hook(SteamAppList);
-    //Hook(SteamApps);
-    //Hook(SteamClient);
-    //Hook(SteamController);
-    //Hook(SteamFriends);
-    //Hook(SteamGameServer);
-    //Hook(SteamGameServerHTTP);
-    //Hook(SteamGameServerInventory);
-    //Hook(SteamGameServerNetworking);
-    //Hook(SteamGameServerStats);
-    //Hook(SteamGameServerUGC);
-    //Hook(SteamGameServerUtils);
-    //Hook(SteamHTMLSurface);
-    //Hook(SteamHTTP);
-    //Hook(SteamInventory);
-    //Hook(SteamMatchmaking);
-    //Hook(SteamMatchmakingServers);
-    //Hook(SteamMusic);
-    //Hook(SteamMusicRemote);
-    //Hook(SteamNetworking);
-    //Hook(SteamRemoteStorage);
-    //Hook(SteamScreenshots);
-    //Hook(SteamUnifiedMessages);
-    //Hook(SteamUGC);
-    //Hook(SteamUser);
-    //Hook(SteamUserStats);
-    //Hook(SteamUtils);
-    //Hook(SteamVideo);
-    //Hook(SteamMasterServerUpdater);
-    //Hook(SteamInternal_CreateInterface);
+    // Interface access.
+    Hook(SteamAppList);
+    Hook(SteamApps);
+    Hook(SteamClient);
+    Hook(SteamController);
+    Hook(SteamFriends);
+    Hook(SteamGameServer);
+    Hook(SteamGameServerHTTP);
+    Hook(SteamGameServerInventory);
+    Hook(SteamGameServerNetworking);
+    Hook(SteamGameServerStats);
+    Hook(SteamGameServerUGC);
+    Hook(SteamGameServerUtils);
+    Hook(SteamHTMLSurface);
+    Hook(SteamHTTP);
+    Hook(SteamInventory);
+    Hook(SteamMatchmaking);
+    Hook(SteamMatchmakingServers);
+    Hook(SteamMusic);
+    Hook(SteamMusicRemote);
+    Hook(SteamNetworking);
+    Hook(SteamRemoteStorage);
+    Hook(SteamScreenshots);
+    Hook(SteamUnifiedMessages);
+    Hook(SteamUGC);
+    Hook(SteamUser);
+    Hook(SteamUserStats);
+    Hook(SteamUtils);
+    Hook(SteamVideo);
+    Hook(SteamMasterServerUpdater);
+    Hook(SteamInternal_CreateInterface);
     #undef Hook
 
     // Verify that we are in Steam mode.
     if(Hookcount)
     {
         // Legacy compatibility.
-        //Steam::Redirectmodulehandle();
+        Steam::Redirectmodulehandle();
 
         // Start processing the IPC separately.
-        //std::thread(Steam::InitializeIPC).detach();
+        std::thread(Steam::InitializeIPC).detach();
 
         // Finally initialize the interfaces by module.
         if(!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
