@@ -5,11 +5,21 @@
 */
 
 #include "Stdinclude.hpp"
+#include <winternl.h>
+#include <ntstatus.h>
+
+#pragma comment(lib, "ntdll")
+
+//#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#if _WIN64
+#define pInstruction Rip
+#else
+#define pInstruction Eip
+#endif
 
 namespace HWBP
 {
     enum Access : uint8_t { REMOVE = 0, READ = 1, WRITE = 2, EXEC = 4 };
-
     namespace Internal
     {
         struct Context_t
@@ -25,7 +35,7 @@ namespace HWBP
             CONTEXT Threadcontext{ CONTEXT_DEBUG_REGISTERS };
 
             // MSDN says thread-context on running threads is UB.
-            if(DWORD(-1) == SuspendThread(Context->Threadhandle))
+            if (DWORD(-1) == SuspendThread(Context->Threadhandle))
                 return GetLastError();
 
             // Get the current debug-registers.
@@ -106,6 +116,7 @@ namespace HWBP
             // WTF?
             return DWORD(-1);
         }
+
     }
 
     DWORD Set(HANDLE Threadhandle, uintptr_t Address, uint8_t Accessflags = Access::EXEC, uint8_t Size = 1)
@@ -115,15 +126,15 @@ namespace HWBP
         // Ensure that we have access rights.
         if (Context.Threadhandle == GetCurrentThread())
             Context.Threadhandle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT |
-                                      THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION,
-                                      FALSE, GetCurrentThreadId());
+                                              THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION,
+                                              FALSE, GetCurrentThreadId());
 
         // We need to suspend the current thread, so create a new one.
         auto Localthread = CreateThread(0, 0, Internal::Thread, &Context, 0, 0);
-        if(!Localthread) return GetLastError();
+        if (!Localthread) return GetLastError();
 
         DWORD Result{}; // Wait for the thread to finish.
-        while (!GetExitCodeThread(Localthread, &Result)) Sleep(0);
+        while (!GetExitCodeThread(Localthread, &Result) || Result == STILL_ACTIVE) Sleep(0);
 
         // Close the handle if we opened it.
         if (Context.Threadhandle == GetCurrentThread())
@@ -145,13 +156,186 @@ namespace HWBP
     }
 }
 
+namespace Helpers
+{
+    uintptr_t getStartaddress(HANDLE Threadhandle)
+    {
+        uintptr_t Address{};
+        HANDLE Duplicate;
 
+        // Reopen the handle with proper access.
+        if (!DuplicateHandle(GetCurrentProcess(), Threadhandle, GetCurrentProcess(), &Duplicate, THREAD_QUERY_INFORMATION, FALSE, 0))
+            return 0;
+
+        // Query windows with class ThreadQuerySetWin32StartAddress
+        NtQueryInformationThread(Duplicate, (THREADINFOCLASS)9, &Address, sizeof(uintptr_t), NULL);
+        CloseHandle(Duplicate);
+        return Address;
+    }
+}
+
+namespace Customcontext
+{
+    std::unordered_map<HANDLE, CONTEXT> Savedcontext;
+    BOOL WINAPI getContext(HANDLE hThread, LPCONTEXT lpContext)
+    {
+        auto Result = Savedcontext.find(hThread);
+        if (Result != Savedcontext.end())
+        {
+            *lpContext = Result->second;
+            return TRUE;
+        }
+
+        return GetThreadContext(hThread, lpContext);
+    }
+}
+
+std::unordered_map<HANDLE, uintptr_t> Applicationthreads;
+std::vector<std::pair<uintptr_t, uintptr_t>> Hookedaddresses;
+LONG __stdcall Exceptionhandler(EXCEPTION_POINTERS *Exceptioninfo)
+{
+    // Not very interesting.
+    if (Exceptioninfo->ExceptionRecord->ExceptionCode != STATUS_BREAKPOINT)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    // Hooked functions.
+    for (const auto &Item : Hookedaddresses)
+    {
+        if (Item.first == Exceptioninfo->ContextRecord->pInstruction)
+        {
+            Exceptioninfo->ContextRecord->pInstruction = Item.second;
+            Exceptioninfo->ContextRecord->Dr6 = 0;
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+    }
+
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+namespace NTDll
+{
+    void *RealNTClose{ NtClose };
+    NTSTATUS __stdcall CustomNTClose(HANDLE Handle)
+    {
+        DWORD Flags{};
+        if (!GetHandleInformation(Handle, &Flags))
+        {
+            return STATUS_INVALID_HANDLE;
+        }
+
+        if (Flags & HANDLE_FLAG_PROTECT_FROM_CLOSE)
+        {
+            return STATUS_SUCCESS;
+        }
+
+        return ((decltype(NtClose) *)RealNTClose)(Handle);
+    };
+
+    void *RealNTQuerysystem{ NtQuerySystemInformation };
+    NTSTATUS __stdcall CustomNTQuerysystem(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation,
+                                           ULONG SystemInformationLength, PULONG ReturnLength)
+    {
+        const auto Result = ((decltype(NtQuerySystemInformation) *)RealNTQuerysystem)(SystemInformationClass, SystemInformation,
+                                                                                      SystemInformationLength, ReturnLength);
+        // SystemKernelDebuggerInformation
+        if (SystemInformationClass == 35)
+        {
+            struct Kerneldbg { BOOLEAN Enabled; BOOLEAN notPresent; };
+            auto Info = static_cast<Kerneldbg *>(SystemInformation);
+            Info->notPresent = TRUE;
+            Info->Enabled = FALSE;
+        }
+
+        return Result;
+    }
+
+    void *RealNTQueryprocess{ NtQueryInformationProcess };
+    NTSTATUS __stdcall CustomNTQueryprocess(HANDLE ProcessHandle, PROCESSINFOCLASS ProcessInformationClass,
+                                            PVOID ProcessInformation, ULONG ProcessInformationLength, PULONG ReturnLength)
+    {
+        const auto Result = ((decltype(NtQueryInformationProcess) *)RealNTQueryprocess)(ProcessHandle, ProcessInformationClass,
+                                                                                        ProcessInformation, ProcessInformationLength,
+                                                                                        ReturnLength);
+
+        if (ProcessInformationClass == ProcessDebugPort)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 0;
+        }
+        if (ProcessInformationClass == 30)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 0;
+        }
+        if (ProcessInformationClass == 31)
+        {
+            *static_cast<DWORD_PTR *>(ProcessInformation) = 1;
+        }
+
+        return Result;
+    }
+
+    void *RealNTCreate{ NtCreateFile };
+    NTSTATUS __stdcall CustomNTCreate(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
+                                      PIO_STATUS_BLOCK IoStatusBlock, PLARGE_INTEGER AllocationSize, ULONG FileAttributes,
+                                      ULONG ShareAccess, ULONG CreateDisposition, ULONG CreateOptions, PVOID EaBuffer,
+                                      ULONG EaLength)
+    {
+        // Opening a exe is bad..
+        if (auto Pos = std::wcsstr(ObjectAttributes->ObjectName->Buffer, L".exe"))
+        {
+            std::wmemcpy(Pos, L".bak", 4);
+            CreateDisposition |= FILE_OPEN_IF;
+        }
+
+        return ((decltype(NtCreateFile) *)RealNTCreate)(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock,
+                                                        AllocationSize, FileAttributes, ShareAccess, CreateDisposition,
+                                                        CreateOptions, EaBuffer, EaLength);
+    }
+
+}
+namespace Kernel32
+{
+    void *RealClosehandle{ CloseHandle };
+    BOOL __stdcall CustomClosehandle(HANDLE Handle)
+    {
+        DWORD Flags{};
+        if (!GetHandleInformation(Handle, &Flags))
+        {
+            return FALSE;
+        }
+
+        if (Flags & HANDLE_FLAG_PROTECT_FROM_CLOSE)
+        {
+            return TRUE;
+        }
+
+        return ((decltype(CloseHandle) *)RealClosehandle)(Handle);
+    };
+
+    void *RealisDebugged{ IsDebuggerPresent };
+    BOOL __stdcall CustomisDebugged()
+    {
+        // Only intercept the main module.
+        if (Applicationthreads.find(GetCurrentThread()) == Applicationthreads.end())
+            return FALSE;
+
+        return ((decltype(IsDebuggerPresent) *)RealisDebugged)();
+    }
+}
 
 // Entrypoint when loaded as a plugin.
 extern "C"
 {
     EXPORT_ATTR void onStartup(bool)
     {
+        AddVectoredExceptionHandler(1, Exceptionhandler);
+
+        Mhook_SetHook(&NTDll::RealNTClose, NTDll::CustomNTClose);
+        Mhook_SetHook(&NTDll::RealNTCreate, NTDll::CustomNTCreate);
+        Mhook_SetHook(&NTDll::RealNTQuerysystem, NTDll::CustomNTQuerysystem);
+        Mhook_SetHook(&NTDll::RealNTQueryprocess, NTDll::CustomNTQueryprocess);
+
+        Mhook_SetHook(&Kernel32::RealisDebugged, Kernel32::CustomisDebugged);
+        Mhook_SetHook(&Kernel32::RealClosehandle, Kernel32::CustomClosehandle);
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
@@ -161,9 +345,30 @@ extern "C"
 #if defined _WIN32
 BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
+    if (nReason == DLL_THREAD_ATTACH)
+    {
+        HMODULE Modulehandle;
+        const auto Thread = GetCurrentThread();
+        const auto Address = Helpers::getStartaddress(Thread);
+
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCSTR)Address, &Modulehandle))
+        {
+            char Filename[512]{};
+            GetModuleFileNameA(Modulehandle, Filename, 512);
+            if (std::strstr(Filename, ".exe")) Applicationthreads[Thread] = Address;
+        }
+    }
+    if (nReason == DLL_THREAD_DETACH)
+    {
+        auto Result = Applicationthreads.find(GetCurrentThread());
+        if (Result != Applicationthreads.end())
+            Applicationthreads.erase(Result);
+    }
+
     if (nReason == DLL_PROCESS_ATTACH)
     {
-        // Ensure that Ayrias default directories exist.
+        // Ensure that Ayria's default directories exist.
         _mkdir("./Ayria/");
         _mkdir("./Ayria/Plugins/");
         _mkdir("./Ayria/Assets/");
@@ -172,11 +377,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Only keep a log for this session.
         Logging::Clearlog();
-
-        // Opt out of further notifications.
-        DisableThreadLibraryCalls(hDllHandle);
     }
-
     return TRUE;
 }
 #else
