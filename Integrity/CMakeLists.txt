@@ -21,7 +21,7 @@ endif()
 
 # Third-party libraries, prefer find_library() and find_path().
 find_path(MHOOK_INC mhook-lib/mhook.h)
-set(MODULE_LIBS ${MODULE_LIBS})
+set(MODULE_LIBS ${MODULE_LIBS} ${MHOOK})
 
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")
