@@ -105,35 +105,35 @@ namespace Hash
     }
 
     // Wrappers for runtime hashing of strings.
-    template<typename T> inline uint32_t FNV1_32(const std::basic_string<T> String)
+    template<typename T> constexpr inline uint32_t FNV1_32(const std::basic_string<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> inline uint64_t FNV1_64(const std::basic_string<T> String)
+    template<typename T> constexpr inline uint64_t FNV1_64(const std::basic_string<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> inline uint32_t FNV1a_32(const std::basic_string<T> String)
+    template<typename T> constexpr inline uint32_t FNV1a_32(const std::basic_string<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> inline uint64_t FNV1a_64(const std::basic_string<T> String)
+    template<typename T> constexpr inline uint64_t FNV1a_64(const std::basic_string<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }
-    template<typename T> inline uint32_t FNV1_32(const std::basic_string_view<T> String)
+    template<typename T> constexpr inline uint32_t FNV1_32(const std::basic_string_view<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> inline uint64_t FNV1_64(const std::basic_string_view<T> String)
+    template<typename T> constexpr inline uint64_t FNV1_64(const std::basic_string_view<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> inline uint32_t FNV1a_32(const std::basic_string_view<T> String)
+    template<typename T> constexpr inline uint32_t FNV1a_32(const std::basic_string_view<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> inline uint64_t FNV1a_64(const std::basic_string_view<T> String)
+    template<typename T> constexpr inline uint64_t FNV1a_64(const std::basic_string_view<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }

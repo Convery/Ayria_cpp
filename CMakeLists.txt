@@ -64,17 +64,15 @@ else()
     set(PLATFORM_LIBS dl pthread)
 endif()
 
-# Always include the root and VCPKG includes.
+# Search for CMAKE includes that are common.
 include_directories("${PROJECT_SOURCE_DIR}")
 find_path(MHOOK_INC mhook-lib/mhook.h)
-if(NOT HOOK_INC-NOTFOUND)
+find_path(JSON_INC nlohmann/json.hpp)
 include_directories(${MHOOK_INC})
-find_library(MHOOK mhook.lib)
-endif()
+include_directories(${JSON_INC})
 
 # Add the sub-projects.
 add_subdirectory(Injector)
-add_subdirectory(Integrity)
 add_subdirectory(Bootstrapper)
 add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
