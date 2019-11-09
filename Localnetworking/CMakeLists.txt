@@ -20,7 +20,7 @@ else()
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().
-find_path(MHOOK_INC mhook-lib/mhook.h)
+find_library(MHOOK "mhook.lib")
 set(MODULE_LIBS ${MODULE_LIBS} ${MHOOK})
 
 # Just pull all the files from /Source
