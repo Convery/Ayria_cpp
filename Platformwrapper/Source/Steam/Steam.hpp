@@ -6,7 +6,7 @@
 
 #pragma once
 #include "Stdinclude.hpp"
-#include "../Common/Common.hpp";
+#include "../Common/Common.hpp"
 #include "Auxiliary/CSteamID.hpp"
 #include "../Common/Matchmaking.hpp"
 

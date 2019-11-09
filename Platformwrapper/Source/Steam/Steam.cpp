@@ -329,10 +329,7 @@ void Steam_init()
             // If a developer has loaded the plugin as a DLL, ignore it.
             if(Address == Target) return 0;
 
-            // Simple hook as fall-back.
-            if(!Mhook_SetHook((void **)&Address, Target))
-                Simplehook::Stomphook().Installhook(Address, Target);
-            return 1;
+            return !!Mhook_SetHook((void **)&Address, Target);
         }
 
         return 0;

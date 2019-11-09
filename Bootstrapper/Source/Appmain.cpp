@@ -34,6 +34,7 @@ void WINAPI Dummycallback(PVOID, DWORD, PVOID) {}
 void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 {
     const auto Directory = getTLSDirectory();
+    HMODULE Valid;
 
     // Disable callbacks while loading plugins.
     Writeptr(Directory->AddressOfCallBacks, 0);
@@ -47,7 +48,8 @@ void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 
     // If the original had callbacks, we need to call the first one.
     if (auto Callback = (size_t *)Directory->AddressOfCallBacks; *(size_t *)Callback)
-        ((decltype(TLSCallback) *)Callback)(a, b, c);
+        if(GetModuleHandleExA(6, (LPCSTR)*(size_t *)Callback, &Valid))
+            ((decltype(TLSCallback) *)*(size_t *)Callback)(a, b, c);
 }
 
 // Sometimes plugins want to name their threads, and not all games support that..
@@ -91,7 +93,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
         }
 
         // Sometimes plugins want to name their threads, and not all games support that..
-        AddVectoredExceptionHandler(0, Threadname);
+        //AddVectoredExceptionHandler(0, Threadname);
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
