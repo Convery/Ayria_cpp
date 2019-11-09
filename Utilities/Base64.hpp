@@ -5,7 +5,6 @@
 */
 
 #pragma once
-#include <string>
 #include <cstdint>
 #include <string_view>
 
@@ -34,7 +33,7 @@ namespace Base64
         };
     }
 
-    inline std::string Encode(const std::basic_string_view<char> Input)
+    [[nodiscard]] inline std::string Encode(const std::string_view Input)
     {
         std::string Result((((Input.size() + 2) / 3) * 4), '=');
         size_t Outputposition = 0;
@@ -60,7 +59,7 @@ namespace Base64
 
         return Result;
     }
-    inline std::string Decode(const std::basic_string_view<char> Input)
+    [[nodiscard]] inline std::string Decode(const std::string_view Input)
     {
         std::string Result;
         uint32_t Accumulator = 0;
@@ -82,15 +81,14 @@ namespace Base64
 
         return Result;
     }
-    inline bool Validate(const std::basic_string_view<char> Input)
+    [[nodiscard]] constexpr inline bool isValid(const std::string_view Input)
     {
         for (const auto &Item : Input)
         {
             if (Item >= 'A' && Item <= 'Z') continue;
             if (Item >= 'a' && Item <= 'z') continue;
             if (Item >= '/' && Item <= '9') continue;
-            if (Item == '=') continue;
-            if (Item == '+') continue;
+            if (Item == '=' || Item == '+') continue;
             return false;
         }
 
@@ -98,7 +96,7 @@ namespace Base64
     }
 
     // RFC7515 compatibility.
-    inline std::string toURL(std::string Input)
+    [[nodiscard]] inline std::string toURL(std::string Input)
     {
         while (Input.back() == '=')
             Input.pop_back();
@@ -109,10 +107,9 @@ namespace Base64
             if (Item == '/') Item = '_';
         }
 
-
         return Input;
     }
-    inline std::string fromURL(std::string Input)
+    [[nodiscard]] inline std::string fromURL(std::string Input)
     {
         for (auto &Item : Input)
         {

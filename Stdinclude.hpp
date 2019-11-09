@@ -50,8 +50,10 @@
 #include <dlfcn.h>
 #endif
 
-// Third-party includes.
-#include <Utilities/JSON.hpp>
+// Third-party includes, usually included via VCPKG.
+#if __has_include(<nlohmann/json.hpp>)
+#include <nlohmann/json.hpp>
+#endif
 #if __has_include(<mhook-lib/mhook.h>)
 #include <mhook-lib/mhook.h>
 #endif
@@ -63,7 +65,6 @@
 #include <Utilities/Variadicstring.hpp>
 #include <Utilities/Patternscan.hpp>
 #include <Utilities/Memprotect.hpp>
-#include <Utilities/Simplehook.hpp>
 #include <Utilities/Filesystem.hpp>
 #include <Utilities/FNV1Hash.hpp>
 #include <Utilities/Logging.hpp>

@@ -3,12 +3,13 @@
     Started: 2019-09-28
     License: MIT
 
-    const auto [Textsegment, Datasegment] = Patternscan::Defaultranges();
-    for(const auto &Address : Patternscan::Findpatterns(Datasegment, "25 64 ? 25")) {}
+    const auto [Textsegment, Datasegment] = Defaultranges();
+    for(const auto &Address : Findpatterns(Datasegment, "25 64 ? 25")) {}
 */
 
 #pragma once
-#include <Stdinclude.hpp>
+#include "Variadicstring.hpp"
+#include <cstdint>
 
 // GCC exported.
 #if !defined(_WIN32)
@@ -17,12 +18,12 @@ extern char _etext, _end;
 
 namespace Patternscan
 {
+    using Range_t = std::pair<std::uintptr_t, std::uintptr_t>;
     using Patternmask_view = std::basic_string_view<uint8_t>;
     using Patternmask_t = std::basic_string<uint8_t>;
-    using Range_t = std::pair<size_t, size_t>;
 
     // Find a single pattern in a range.
-    inline size_t Findpattern(Range_t &Range, Patternmask_view Pattern, Patternmask_view Mask)
+    [[nodiscard]] inline std::uintptr_t Findpattern(Range_t &Range, Patternmask_view Pattern, Patternmask_view Mask)
     {
         assert(Pattern.size() == Mask.size());
         assert(Pattern.size() != 0);
@@ -35,7 +36,7 @@ namespace Patternscan
         uint8_t Firstbyte = Pattern[0];
 
         // Inline compare.
-        auto Compare = [&](const uint8_t *Address) -> bool
+        const auto Compare = [&](const uint8_t *Address) -> bool
         {
             const size_t Patternlength = Pattern.size();
             for(size_t i = 1; i < Patternlength; ++i)
@@ -60,9 +61,9 @@ namespace Patternscan
     }
 
     // Scan until the end of the range and return all results.
-    inline std::vector<size_t> Findpatterns(const Range_t Range, Patternmask_view Pattern, Patternmask_view Mask)
+    [[nodiscard]] inline std::vector<std::uintptr_t> Findpatterns(const Range_t Range, Patternmask_view Pattern, Patternmask_view Mask)
     {
-        std::vector<std::size_t> Results;
+        std::vector<std::uintptr_t> Results;
         Range_t Localrange = Range;
         size_t Lastresult = 0;
 
@@ -107,7 +108,7 @@ namespace Patternscan
             GetNativeSystemInfo(&SI);
 
             PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
-            PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Module + DOSHeader->e_lfanew);
+            PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
 
             Textsegment.first = size_t(Module) + NTHeader->OptionalHeader.BaseOfCode;
             Textsegment.second = Textsegment.first + NTHeader->OptionalHeader.SizeOfCode;
@@ -127,7 +128,7 @@ namespace Patternscan
     }
 
     // Create a pattern or mask from a readable string.
-    inline Patternmask_t from_string(std::string_view Readable)
+    [[nodiscard]] inline Patternmask_t from_string(std::string_view Readable)
     {
         uint32_t Count{ 0 };
         Patternmask_t Result;
@@ -151,7 +152,7 @@ namespace Patternscan
     }
 
     // IDA style pattern scanning.
-    inline std::vector<size_t> Findpatterns(const Range_t Range, std::string IDAPattern)
+    [[nodiscard]] inline std::vector<std::uintptr_t> Findpatterns(const Range_t Range, std::string IDAPattern)
     {
         const auto Pattern = from_string(IDAPattern);
 
@@ -160,4 +161,11 @@ namespace Patternscan
 
         return Findpatterns(Range, Pattern, from_string(IDAPattern));
     }
+
+    // Find strings in memory - helper.
+    [[nodiscard]] inline std::vector<std::uintptr_t> Findstrings(const Range_t Range, std::string_view String)
+    {
+        const Patternmask_t Hexstring{ String.begin(), String.end() };
+        return Findpatterns(Range, Hexstring, Hexstring);
+    };
 }
