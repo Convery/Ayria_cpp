@@ -82,4 +82,29 @@ namespace Memprotect
     {
         return Unprotectrange(reinterpret_cast<void *>(Address), Length);
     }
+
+    // std::lock_guard style protection.
+    struct RTTI_Memprotect
+    {
+        const std::uintptr_t Address;
+        unsigned long Protection;
+        const size_t Length;
+
+        explicit RTTI_Memprotect(const std::uintptr_t Address, const size_t Length) : Address(Address), Length(Length)
+        {
+            Protection = Unprotectrange(Address, Length);
+        }
+        ~RTTI_Memprotect()
+        {
+            Protectrange(Address, Length, Protection);
+        }
+    };
+    [[nodiscard]] inline RTTI_Memprotect Makewriteable(const std::uintptr_t Address, const size_t Length)
+    {
+        return RTTI_Memprotect(Address, Length);
+    }
+    [[nodiscard]] inline RTTI_Memprotect Makewriteable(void *Address, const size_t Length)
+    {
+        return RTTI_Memprotect(reinterpret_cast<std::uintptr_t>(Address), Length);
+    }
 }

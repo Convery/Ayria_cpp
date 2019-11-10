@@ -287,13 +287,13 @@ void Tencent_init()
 
     // Override the original interface generation.
     Address = GetProcAddress(LoadLibraryA("TenProxy.dll"), "Invoke");
-    if(Address) if(!Mhook_SetHook((void **)&Address, Invoke)) Simplehook::Stomphook().Installhook(Address, Invoke);
+    if(Address && !Mhook_SetHook((void **)&Address, Invoke)) assert(false);
 
     // Override the anti-cheat initialization.
     Address = GetProcAddress(LoadLibraryA("TerSafe.dll"), "CreateObj");
-    if(Address) if(!Mhook_SetHook((void **)&Address, CreateObj)) Simplehook::Stomphook().Installhook(Address, CreateObj);
+    if (Address && !Mhook_SetHook((void **)&Address, CreateObj)) assert(false);
 
     // Override the OpenID resolving.
     Address = GetProcAddress(LoadLibraryA("./Cross/CrossShell.dll"), "InitCrossContextByOpenID");
-    if(Address) if(!Mhook_SetHook((void **)&Address, InitCrossContextByOpenID)) Simplehook::Stomphook().Installhook(Address, InitCrossContextByOpenID);
+    if (Address && !Mhook_SetHook((void **)&Address, InitCrossContextByOpenID)) assert(false);
 }
