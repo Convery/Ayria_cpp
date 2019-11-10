@@ -34,6 +34,7 @@ void WINAPI Dummycallback(PVOID, DWORD, PVOID) {}
 void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 {
     const auto Directory = getTLSDirectory();
+    HMODULE Valid;
 
     // Disable callbacks while loading plugins.
     Writeptr(Directory->AddressOfCallBacks, 0);
@@ -47,20 +48,22 @@ void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 
     // If the original had callbacks, we need to call the first one.
     if (auto Callback = (size_t *)Directory->AddressOfCallBacks; *(size_t *)Callback)
-        ((decltype(TLSCallback) *)Callback)(a, b, c);
+        if(GetModuleHandleExA(6, (LPCSTR)*(size_t *)Callback, &Valid))
+            ((decltype(TLSCallback) *)*(size_t *)Callback)(a, b, c);
 }
 
 // Sometimes plugins want to name their threads, and not all games support that..
 LONG WINAPI Threadname(PEXCEPTION_POINTERS Info)
 {
+    // Via a Microsoft exception.
     if (Info->ExceptionRecord->ExceptionCode == 0x406D1388)
         return EXCEPTION_CONTINUE_EXECUTION;
-    else
-        return EXCEPTION_CONTINUE_SEARCH;
+
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 // Entrypoint when loaded as a shared library.
-BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
+BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
     if (nReason == DLL_PROCESS_ATTACH)
     {
@@ -91,7 +94,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
         }
 
         // Sometimes plugins want to name their threads, and not all games support that..
-        AddVectoredExceptionHandler(0, Threadname);
+        SetUnhandledExceptionFilter(Threadname);
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
@@ -119,6 +122,10 @@ extern "C"
     }
     EXPORT_ATTR void onInitializationdone()
     {
+        static bool Initialized = false;
+        if (Initialized) return;
+        Initialized = true;
+
         // Notify all plugins about being initialized.
         for (const auto &Item : Loadedplugins)
         {
@@ -159,4 +166,7 @@ void Loadallplugins()
         auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
         if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
     }
+
+    // If no-one have notified us about the game being initialized, we notify ourselves in 3 sec.
+    std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitializationdone(); }).detach();
 }
