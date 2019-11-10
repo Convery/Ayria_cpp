@@ -126,6 +126,24 @@ namespace Patternscan
 
         return { Textsegment, Datasegment };
     }
+    [[nodiscard]] inline Range_t Virtualrange()
+    {
+        auto Currentpage = Defaultranges().second.second;
+        Range_t Range{ Currentpage, 0 };
+
+        #if defined(_WIN32)
+        MEMORY_BASIC_INFORMATION Pageinformation{};
+        while (VirtualQueryEx(GetCurrentProcess(), (LPCVOID)(Currentpage + 1), &Pageinformation, sizeof(MEMORY_BASIC_INFORMATION)))
+        {
+            if (Pageinformation.State != MEM_COMMIT) break;
+            Currentpage = (size_t)Pageinformation.BaseAddress + Pageinformation.RegionSize;
+        }
+        #else
+        #endif
+
+        Range.second = Currentpage;
+        return Range;
+    }
 
     // Create a pattern or mask from a readable string.
     [[nodiscard]] inline Patternmask_t from_string(std::string_view Readable)
