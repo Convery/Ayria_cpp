@@ -175,8 +175,20 @@ extern "C"
         (void)Runonce;
 
         // Notify the game that it's properly connected.
-        //const auto RequestID = Callbacks::Createrequest();
-        //Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
+        const auto RequestID = Callbacks::Createrequest();
+        Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
+
+        // Notify the plugins that we are initialized.
+        #if defined(_WIN32)
+        auto Bootstrapper = GetModuleHandleA("Localbootstrap.dll");
+        if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%d.dll", Build::is64bit ? 64 : 32).c_str());
+        if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
+        if (Bootstrapper)
+        {
+            auto Callback = GetProcAddress(Bootstrapper, "onInitializationdone");
+            if (Callback) (reinterpret_cast<void (*)()>(Callback))();
+        }
+        #endif
 
         return true;
     }
