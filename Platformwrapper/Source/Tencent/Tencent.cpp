@@ -18,16 +18,16 @@ namespace Tencent
     };
     std::unordered_map<uint32_t, std::string> Bytestrings
     {
-        { 3, "7" },             // Game-signature length.
-        { 4, "Gamesig" },       // Also used for QQ stuff.
-        { 5, "Loginkey" },      // Seems to be more of a SessionID.
-        { 7, "Appticket" },     // For authentication.
+        { 3, "7" },                 // Game-signature length.
+        { 4, "Gamesig" },           // Also used for QQ stuff.
+        { 5, "Loginkey" },          // Seems to be more of a SessionID.
+        { 7, "Appticket" },         // For authentication.
         { 8, "auth3.qq.com:3074;lsg.qq.com:3074;1004" },   // Authentication-info, last ID being appID.
-        { 22, "PlatformID" },   //
-        { 24, "Tencentticket" },//
-        { 25, "OpenIDKey" },    // OpenID's standardized implementation.
-        { 26, "7" },            // Jump-signature length.
-        { 27, "Jumpsig" },      // Seems to be anti-cheat related.
+        { 22, "1100001DEADC0DE" },  // PlatformID of sorts.
+        { 24, "Tencentticket" },    //
+        { 25, "OpenIDKey" },        // OpenID's standardized implementation.
+        { 26, "7" },                // Jump-signature length.
+        { 27, "Jumpsig" },          // Seems to be anti-cheat related.
     };
     std::unordered_map<uint32_t, int32_t> Integers{};
     std::unordered_map<uint32_t, uint32_t> DWORDs
@@ -35,7 +35,7 @@ namespace Tencent
         { 1, 42 },          // Unknown, seems unused.
         { 5, 0x7F000001 },  // IP-address.
         { 7, 38 },          // Authentication-info size.
-        { 18, 1337 },       // UserID.
+        { 18, 1337 },       // UserID?
     };
 
     void Sendmessage(WPARAM wParam, LPARAM lParam)
@@ -198,11 +198,12 @@ namespace Tencent
         }
         virtual size_t onLogin()
         {
+            Traceprint();
             time(&Startuptime);
             srand(Startuptime & 0xFFFFFFFF);
             UserID = rand();
 
-            // TODO: Send to server.
+            // TODO: Send to pSink.
 
             return 1;
         }
