@@ -151,8 +151,11 @@ namespace Tencent
             return Result != DWORDs.end();
         }
     };
+}
 
-    // Temporary implementation of the Tensafe interface, TODO(tcn): Give it; it's own module?
+// Temporary implementation of the Tensafe interface, TODO(tcn): Give it; it's own module?
+namespace Tensafe
+{
     struct Cryptoblock
     {
         uint32_t Command;
@@ -169,7 +172,7 @@ namespace Tencent
         uint32_t Payloadlength;
         uint32_t Packettype;
     };
-    struct Anticheat
+    struct Interface
     {
         uint32_t UserID;
         uint32_t Uin;
@@ -258,43 +261,51 @@ namespace Tencent
     };
 }
 
-extern "C"
+// Create the interface with the required version.
+extern "C" EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
 {
-    // Tencent anti-cheat initialization override.
-    EXPORT_ATTR void *CreateObj(int Type)
-    {
-        return new Tencent::Anticheat();
-    }
+    Debugprint(va("Initializing Tencent for game %u", GameID));
+    *Interface = new Tencent::Interface();
 
-    // Tencent OpenID resolving override.
-    EXPORT_ATTR int InitCrossContextByOpenID(void *)
+    // Notify the plugins that we are initialized.
+    #if defined(_WIN32)
+    auto Bootstrapper = GetModuleHandleA("Localbootstrap.dll");
+    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%d.dll", Build::is64bit ? 64 : 32).c_str());
+    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
+    if (Bootstrapper)
     {
-        Traceprint();
-        return 0;
+        auto Callback = GetProcAddress(Bootstrapper, "onInitializationdone");
+        if (Callback) (reinterpret_cast<void (*)()>(Callback))();
     }
+    #endif
+}
 
-    // Create the interface with the required version.
-    EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
-    {
-        Debugprint(va("Initializing Tencent for game %u", GameID));
-        *Interface = new Tencent::Interface();
-    }
+// Tencent anti-cheat initialization override.
+extern "C" EXPORT_ATTR void *CreateObj(int Type)
+{
+    Traceprint();
+    return new Tensafe::Interface();
+}
+
+// Tencent OpenID resolving override.
+extern "C" EXPORT_ATTR int InitCrossContextByOpenID(void *)
+{
+    Traceprint();
+    return 0;
 }
 
 // Initialize Tencent as a plugin.
 void Tencent_init()
 {
-    void *Address{};
+    #define Hook(x, y, z) { void *Address = GetProcAddress(LoadLibraryA(x), y); \
+    if(Address && Address != z && !Mhook_SetHook((void **)&Address, z)) assert(false);  }
 
     // Override the original interface generation.
-    Address = GetProcAddress(LoadLibraryA("TenProxy.dll"), "Invoke");
-    if(Address && !Mhook_SetHook((void **)&Address, Invoke)) assert(false);
+    Hook("TenProxy.dll", "Invoke", Invoke);
 
     // Override the anti-cheat initialization.
-    Address = GetProcAddress(LoadLibraryA("TerSafe.dll"), "CreateObj");
-    if (Address && !Mhook_SetHook((void **)&Address, CreateObj)) assert(false);
+    Hook("TerSafe.dll", "CreateObj", CreateObj);
 
-    // Override the OpenID resolving.
-    Address = GetProcAddress(LoadLibraryA("./Cross/CrossShell.dll"), "InitCrossContextByOpenID");
-    if (Address && !Mhook_SetHook((void **)&Address, InitCrossContextByOpenID)) assert(false);
+    // Override the cross-platform system.
+    Hook("./Cross/CrossShell.dll", "InitCrossContextByOpenID", InitCrossContextByOpenID);
 }
