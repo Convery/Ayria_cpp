@@ -73,6 +73,15 @@ namespace Winsock
         return Result;
     }
 
+    // We don't allow binding to internal IPs.
+    int __stdcall Bind(size_t Socket, struct sockaddr *Name, int Namelength)
+    {
+        const auto Readable = getAddress(Name);
+        if (std::strstr(Readable.c_str(), "192.168."))
+            ((SOCKADDR_IN *)Name)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        return Calloriginal(bind)(Socket, Name, Namelength);
+    }
+
     // Datagram sockets need to remember the host-information.
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
     {
@@ -228,6 +237,7 @@ void InstallWinsock()
     Hook("connect", (void *)Winsock::Connectsocket);
     Hook("recvfrom", (void *)Winsock::Receivefrom);
     Hook("sendto", (void *)Winsock::Sendto);
+    Hook("bind", (void *)Winsock::Bind);
 
     // For debugging.
     #if !defined(NDEBUG)

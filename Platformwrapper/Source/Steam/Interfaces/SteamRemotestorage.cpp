@@ -13,8 +13,8 @@ namespace Steam
 
     std::string Filepath()
     {
-        static std::string Internal{ va("./Ayria/Assets/Platformwrapper/%u/", Global.ApplicationID) };
-        static bool doOnce{ [&]() { (void)_mkdir(Internal.c_str()); return true; }() };
+        static std::string Internal{ va("./Ayria/Assets/Platformwrapper/%u", Global.ApplicationID) };
+        static bool doOnce{ [&]() { std::filesystem::create_directories(Internal.c_str()); return true; }() };
         return Internal;
     }
 
