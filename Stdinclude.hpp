@@ -15,6 +15,7 @@
 // Standard-library includes.
 #include <unordered_map>
 #include <string_view>
+#include <filesystem>
 #include <functional>
 #include <algorithm>
 #include <typeindex>
