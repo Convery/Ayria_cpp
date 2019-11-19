@@ -22,11 +22,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     if (nReason == DLL_PROCESS_ATTACH)
     {
         // Ensure that Ayrias default directories exist.
-        _mkdir("./Ayria/");
-        _mkdir("./Ayria/Plugins/");
-        _mkdir("./Ayria/Assets/");
-        _mkdir("./Ayria/Local/");
-        _mkdir("./Ayria/Logs/");
+        std::filesystem::create_directories("./Ayria/Logs");
+        std::filesystem::create_directories("./Ayria/Assets");
+        std::filesystem::create_directories("./Ayria/Plugins");
 
         // Only keep a log for this session.
         Logging::Clearlog();
@@ -60,11 +58,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 __attribute__((constructor)) void DllMain()
 {
     // Ensure that Ayrias default directories exist.
-    mkdir("./Ayria/", S_IRWU | S_IRWG);
-    mkdir("./Ayria/Plugins/", S_IRWXU | S_IRWXG);
-    mkdir("./Ayria/Assets/", S_IRWU | S_IRWG);
-    mkdir("./Ayria/Local/", S_IRWU | S_IRWG);
-    mkdir("./Ayria/Logs/", S_IRWU | S_IRWG);
+    std::filesystem::create_directories("./Ayria/Logs");
+    std::filesystem::create_directories("./Ayria/Assets");
+    std::filesystem::create_directories("./Ayria/Plugins");
 
     // Only keep a log for this session.
     Logging::Clearlog();

@@ -8,10 +8,11 @@
 #include "Stdinclude.hpp"
 #include "../IServer.hpp"
 #include <WinSock2.h>
+#include <unordered_set>
 
 namespace Localnetworking
 {
-    std::unordered_map<IServer *, std::vector<uint16_t>> Proxyports;
+    std::unordered_map<IServer *, std::unordered_set<uint16_t>> Proxyports;
     std::unordered_map<std::string, std::string> Resolvercache;
     std::unordered_map<std::string, IServer *> Serverinstances;
     std::unordered_map<IServer *, size_t> Datagramsockets;
@@ -19,6 +20,7 @@ namespace Localnetworking
     uint16_t BackendTCPport, BackendUDPport;
     std::vector<void *> Pluginslist;
     size_t Listensocket, UDPSocket;
+    std::mutex Bottleneck;
 
     // Poll on the local sockets.
     void Pollthread()
@@ -87,7 +89,8 @@ namespace Localnetworking
                     if (Size <= 0)
                     {
                         // Winsock had some internal issue.
-                        if (Size == -1) Infoprint(va("Error on socket 0x%X - %u", WSAGetLastError()));
+                        if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                        if (Server) Server->onDisconnect();
                         Streamsockets.erase(Socket);
                         closesocket(Socket);
                         goto LABEL_LOOP;
@@ -137,7 +140,7 @@ namespace Localnetworking
 
                                         // Query the port assigned to the socket.
                                         getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
-                                        Proxyports[Server].push_back(ntohs(Client.sin_port));
+                                        Proxyports[Server].insert(ntohs(Client.sin_port));
 
                                         // Associate the server with the socket.
                                         Entry = Socket;
@@ -151,16 +154,8 @@ namespace Localnetworking
                     }
                 }
             }
-        }
-    }
 
-    // Poll the servers for a single packet and forward it.
-    void TCPPushthread()
-    {
-        char Buffer[8192];
-
-        while(true)
-        {
+            // Check for incoming data.
             for (const auto &[Socket, Server] : Streamsockets)
             {
                 uint32_t Datasize{ 8192 };
@@ -169,16 +164,6 @@ namespace Localnetworking
                     send(Socket, Buffer, Datasize, 0);
                 }
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        }
-    }
-    void UDPPushthread()
-    {
-        char Buffer[8192];
-
-        while (true)
-        {
             for (const auto &[Server, Socket] : Datagramsockets)
             {
                 uint32_t Datasize{ 8192 };
@@ -193,8 +178,6 @@ namespace Localnetworking
                     }
                 }
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
         }
     }
 
@@ -231,7 +214,7 @@ namespace Localnetworking
                 break;
         }
 
-        // Should not block.
+        // Must not block.
         unsigned long Noblocky = 1;
         ioctlsocket(UDPSocket, FIONBIO, &Noblocky);
 
@@ -254,9 +237,7 @@ namespace Localnetworking
         // Notify the developer.
         Debugprint(va("Spawning server on TCP %u and UDP %u", BackendTCPport, BackendUDPport));
 
-        // Keep the polling and pushing away from the main thread.
-        std::thread(TCPPushthread).detach();
-        std::thread(UDPPushthread).detach();
+        // Keep the polling away from the main thread.
         std::thread(Pollthread).detach();
     }
 
@@ -267,7 +248,7 @@ namespace Localnetworking
         auto Hostname = Serverinstances.find(Address.data());
         if (Hostname != Serverinstances.end())
         {
-            Proxyports[Hostname->second].push_back(Port);
+            Proxyports[Hostname->second].insert(Port);
             return;
         }
 
@@ -291,7 +272,7 @@ namespace Localnetworking
             return Address->first;
 
         // Create a new address for this host in the internal IPaddress range.
-        static uint16_t Counter = 2; // 240.0.0.1 is reserved for localhost.
+        static std::atomic<uint16_t> Counter = 2; // 240.0.0.1 is reserved for localhost.
         return va("240.0.%u.%u", HIBYTE(Counter), LOBYTE(Counter++));
     }
     std::string_view getAddress(uint16_t Senderport)
@@ -337,13 +318,13 @@ namespace Localnetworking
                     const auto Proxyaddress = getAddress(Hostname);
                     Resolvercache[Hostname.data()] = Proxyaddress;
                     Serverinstances[Proxyaddress.data()] = Server;
-
                     return true;
                 }
             }
         }
 
         // Blacklist the host so we don't have to ask the plugins again.
+        std::lock_guard Threadsafe(Bottleneck);
         Blacklist.push_back(Hostname.data());
         return false;
     }
