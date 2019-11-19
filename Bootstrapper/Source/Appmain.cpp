@@ -68,11 +68,9 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     if (nReason == DLL_PROCESS_ATTACH)
     {
         // Ensure that Ayrias default directories exist.
-        (void)_mkdir("./Ayria/");
-        (void)_mkdir("./Ayria/Logs/");
-        (void)_mkdir("./Ayria/Local/");
-        (void)_mkdir("./Ayria/Assets/");
-        (void)_mkdir("./Ayria/Plugins/");
+        std::filesystem::create_directories("./Ayria/Logs");
+        std::filesystem::create_directories("./Ayria/Assets");
+        std::filesystem::create_directories("./Ayria/Plugins");
 
         // Only keep a log for this session.
         Logging::Clearlog();

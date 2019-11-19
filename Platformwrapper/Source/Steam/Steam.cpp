@@ -59,19 +59,15 @@ extern "C"
             if (Steam::Global.ApplicationID == 0)
             {
                 Errorprint("Platformwrapper could not find the games Application ID.");
-                Errorprint("This may cause a quite a few errors, contact the developer.");
-                Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\"");
+                Errorprint("This may cause errors, contact the developer if you experience issues.");
+                Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\" with the ID");
 
                 Steam::Global.ApplicationID = Hash::FNV1a_32("Ayria");
             }
         }
 
         // Ensure that we have folders for this game.
-        #if defined(_WIN32)
-        (void)_mkdir("./Ayria/Assets/Platformwrapper");
-        #else
-        mkdir("./Ayria/Assets/Platformwrapper", S_IRWU | S_IRWG);
-        #endif
+        std::filesystem::create_directories("./Ayria/Assets/Platformwrapper");
 
         /*
             TODO(tcn): We should query the Ayria client, probably through
@@ -335,11 +331,11 @@ void Steam_init()
     const auto Lambda = [&](std::string_view Name, void *Target) -> uint32_t
     {
         auto Address = GetProcAddress(GetModuleHandleA("steam_api64.dll"), Name.data());
-        if(!Address) Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data());
-        if(Address)
+        if (!Address) Address = GetProcAddress(GetModuleHandleA("steam_api.dll"), Name.data());
+        if (Address)
         {
             // If a developer has loaded the plugin as a DLL, ignore it.
-            if(Address == Target) return 0;
+            if (Address == Target) return 0;
 
             return !!Mhook_SetHook((void **)&Address, Target);
         }
@@ -413,7 +409,7 @@ void Steam_init()
     #undef Hook
 
     // Verify that we are in Steam mode.
-    if(Hookcount)
+    if (Hookcount)
     {
         // Legacy compatibility.
         Steam::Redirectmodulehandle();
@@ -422,10 +418,10 @@ void Steam_init()
         std::thread(Steam::InitializeIPC).detach();
 
         // Finally initialize the interfaces by module.
-        if(!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
-           !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
-           !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
-           !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))
+        if (!Steam::Scanforinterfaces("interfaces.txt") && /* TODO(tcn): Parse interfaces from cache. */
+            !Steam::Scanforinterfaces("steam_api.bak") && !Steam::Scanforinterfaces("steam_api64.bak") &&
+            !Steam::Scanforinterfaces("steam_api.dll") && !Steam::Scanforinterfaces("steam_api64.dll") &&
+            !Steam::Scanforinterfaces("steam_api.so") && !Steam::Scanforinterfaces("steam_api64.so"))
         {
             Errorprint("Platformwrapper could not find the games interface version.");
             Errorprint("This can cause a lot of errors, contact the developer.");
