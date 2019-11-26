@@ -146,12 +146,8 @@ namespace Winsock
         }
 
         const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
+        if (Result == -1 && Localnetworking::isProxiedhost(Readable)) WSASetLastError(WSAEWOULDBLOCK);
         Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
-        if(Result == -1)
-        {
-            if(Localnetworking::isProxiedhost(Readable)) return 0;
-            WSASetLastError(WSAEWOULDBLOCK);
-        }
         return Result;
     }
 
@@ -159,13 +155,12 @@ namespace Winsock
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         Debugprint(va("Performing hostname lookup for \"%s\"", Hostname));
-        auto Result = Calloriginal(gethostbyname)(Hostname);
 
         // If the host is interesting, give it a fake IP to work offline.
         if (Localnetworking::isProxiedhost(Hostname))
         {
             // Resolve to a known host and replace the address.
-            Result = Calloriginal(gethostbyname)("localhost");
+            auto Result = Calloriginal(gethostbyname)("localhost");
             Result->h_name = const_cast<char *>(Hostname);
             Result->h_addrtype = AF_INET;
             *Result->h_aliases = nullptr;
@@ -173,13 +168,13 @@ namespace Winsock
 
             ((in_addr *)Result->h_addr_list[0])->s_addr = inet_addr(Localnetworking::getAddress(Hostname).data());
             Result->h_addr_list[1] = nullptr;
+            return Result;
         }
 
-        return Result;
+        return Calloriginal(gethostbyname)(Hostname);
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
-        int lResult{};
         if (Hints) Hints->ai_family = PF_INET;
         Debugprint(va("Performing hostname lookup for \"%s\"", Nodename));
 
@@ -187,20 +182,18 @@ namespace Winsock
         if (Localnetworking::isProxiedhost(Nodename))
         {
             // Resolve to a known host and replace the address.
-            lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
+            auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
 
             // Set the IP for all records.
             for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
             {
                 ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(Localnetworking::getAddress(Nodename).data());
             }
-        }
-        else
-        {
-            lResult = Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
+
+            return lResult;
         }
 
-        return lResult;
+        return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
     }
 
     #if 0
