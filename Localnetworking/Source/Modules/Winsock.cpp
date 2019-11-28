@@ -16,6 +16,13 @@ namespace Winsock
     std::unordered_map<std::string, sockaddr_in6> Proxyhosts;
 
     // Utility functionality.
+    inline std::string getAddress(const sockaddr *Sockaddr)
+    {
+        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
+        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
+        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
+        return std::string(Address.get());
+    }
     inline uint16_t getPort(const sockaddr *Sockaddr)
     {
         if (Sockaddr->sa_family == AF_INET6) return ntohs(((sockaddr_in6 *)Sockaddr)->sin6_port);
@@ -35,13 +42,6 @@ namespace Winsock
 
         // Return with the hosts endian.
         return getPort((SOCKADDR *)&Client);
-    }
-    inline std::string getAddress(const sockaddr *Sockaddr)
-    {
-        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
-        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
-        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
-        return std::string(Address.get());
     }
 
     // Only relevant while debugging.
