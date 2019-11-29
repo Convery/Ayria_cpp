@@ -146,8 +146,12 @@ namespace Winsock
         }
 
         const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
-        if (Result == -1 && Localnetworking::isProxiedhost(Readable)) WSASetLastError(WSAEWOULDBLOCK);
         Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
+        if (Result == -1)
+        {
+            if (Localnetworking::isProxiedhost(Readable)) return 0;
+            WSASetLastError(WSAEWOULDBLOCK);
+        }
         return Result;
     }
 
