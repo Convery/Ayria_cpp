@@ -16,6 +16,13 @@ namespace Winsock
     std::unordered_map<std::string, sockaddr_in6> Proxyhosts;
 
     // Utility functionality.
+    inline std::string getAddress(const sockaddr *Sockaddr)
+    {
+        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
+        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
+        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
+        return std::string(Address.get());
+    }
     inline uint16_t getPort(const sockaddr *Sockaddr)
     {
         if (Sockaddr->sa_family == AF_INET6) return ntohs(((sockaddr_in6 *)Sockaddr)->sin6_port);
@@ -24,10 +31,9 @@ namespace Winsock
     inline uint16_t getPort(const size_t Socket)
     {
         int Clientsize{ sizeof(SOCKADDR_IN) };
-        SOCKADDR_IN Client{ AF_INET, 0 };
+        static const SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
 
         // Ensure that the socket is bound somewhere.
-        Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
 
         // Query the port assigned to the socket.
@@ -35,13 +41,6 @@ namespace Winsock
 
         // Return with the hosts endian.
         return getPort((SOCKADDR *)&Client);
-    }
-    inline std::string getAddress(const sockaddr *Sockaddr)
-    {
-        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
-        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
-        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
-        return std::string(Address.get());
     }
 
     // Only relevant while debugging.
@@ -56,7 +55,7 @@ namespace Winsock
         {
             switch (Protocol)
             {
-                // NOTE(tcn): Case 0 (IPPROTO_IP) is actually the same as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
+                // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
                 case IPPROTO_IP: return "Any"s; case IPPROTO_ICMP: return "ICMP"s; case IPPROTO_TCP: return "TCP"s; case IPPROTO_UDP: return "UDP"s;
                 case /*NSPROTO_IPX*/ 1000: return "IPX"s; case /*NSPROTO_SPX*/ 1256: return "SPX"s; case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
                 default: return va("%u", Protocol);
@@ -67,7 +66,7 @@ namespace Winsock
             TODO(tcn):
             Given that Windows Vista+ doesn't support the IPX protocol anymore,
             we should probably create a IPX<->UDP solution for such sockets.
-            It was a very popular protocol in older games.
+            It was a very popular protocol in older games for LAN-play.
         */
 
         return Result;
@@ -77,8 +76,11 @@ namespace Winsock
     int __stdcall Bind(size_t Socket, struct sockaddr *Name, int Namelength)
     {
         const auto Readable = getAddress(Name);
-        if (std::strstr(Readable.c_str(), "192.168."))
+
+        // Rather than tracking our internal address, just set it to loopback when binding.
+        if (std::strstr(Readable.c_str(), "192.168.") || std::strstr(Readable.c_str(), "10."))
             ((SOCKADDR_IN *)Name)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
         return Calloriginal(bind)(Socket, Name, Namelength);
     }
 
@@ -97,19 +99,20 @@ namespace Winsock
             std::memcpy(Entry, To, Tolength);
 
             // Replace the target with our IPv4 proxy.
-            ((SOCKADDR_IN *)To)->sin_family = AF_INET;
-            ((SOCKADDR_IN *)To)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
+            static const SOCKADDR_IN Localhost{ AF_INET, htons(Localnetworking::BackendUDPport), {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+            Tolength = sizeof(Localhost);
+            To = (sockaddr *)&Localhost;
         }
 
-        //Debugprint(va("[%lu]Sending to %s:%u", GetCurrentProcessId(), Address.c_str(), getPort(To)));
+        // Debugprint(va("[%lu]Sending to %s:%u", Socket, Address.c_str(), getPort(To)));
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
         const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
         if (!From || !Fromlength || Result < 0) return Result;
-        //Debugprint(va("[%lu]Recv from %s:%u", GetCurrentProcessId(), getAddress(From).c_str(), getPort(From)));
+
+        // Debugprint(va("[%lu]Recv from %s:%u", Socket, getAddress(From).c_str(), getPort(From)));
 
         // Check if the sender is our backend.
         if(((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
@@ -147,9 +150,10 @@ namespace Winsock
 
         const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
         Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
-        if(Result == -1)
+        if (Result == -1)
         {
-            if(Localnetworking::isProxiedhost(Readable)) return 0;
+            // Some silly firewalls delay the connection longer than the non-blocking timeout.
+            if (Localnetworking::isProxiedhost(Readable)) return 0;
             WSASetLastError(WSAEWOULDBLOCK);
         }
         return Result;
@@ -159,13 +163,12 @@ namespace Winsock
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         Debugprint(va("Performing hostname lookup for \"%s\"", Hostname));
-        auto Result = Calloriginal(gethostbyname)(Hostname);
 
         // If the host is interesting, give it a fake IP to work offline.
         if (Localnetworking::isProxiedhost(Hostname))
         {
             // Resolve to a known host and replace the address.
-            Result = Calloriginal(gethostbyname)("localhost");
+            auto Result = Calloriginal(gethostbyname)("localhost");
             Result->h_name = const_cast<char *>(Hostname);
             Result->h_addrtype = AF_INET;
             *Result->h_aliases = nullptr;
@@ -173,13 +176,13 @@ namespace Winsock
 
             ((in_addr *)Result->h_addr_list[0])->s_addr = inet_addr(Localnetworking::getAddress(Hostname).data());
             Result->h_addr_list[1] = nullptr;
+            return Result;
         }
 
-        return Result;
+        return Calloriginal(gethostbyname)(Hostname);
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
-        int lResult{};
         if (Hints) Hints->ai_family = PF_INET;
         Debugprint(va("Performing hostname lookup for \"%s\"", Nodename));
 
@@ -187,20 +190,18 @@ namespace Winsock
         if (Localnetworking::isProxiedhost(Nodename))
         {
             // Resolve to a known host and replace the address.
-            lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
+            auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
 
             // Set the IP for all records.
             for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
             {
                 ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(Localnetworking::getAddress(Nodename).data());
             }
-        }
-        else
-        {
-            lResult = Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
+
+            return lResult;
         }
 
-        return lResult;
+        return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
     }
 
     #if 0

@@ -4,6 +4,7 @@
     License: MIT
 */
 
+#include <winternl.h>
 #include <Stdinclude.hpp>
 #include "../Common/Common.hpp"
 
@@ -22,8 +23,10 @@ namespace Tencent
         { 4, "Gamesig" },           // Also used for QQ stuff.
         { 5, "Loginkey" },          // Seems to be more of a SessionID.
         { 7, "Appticket" },         // For authentication.
-        { 8, "auth3.qq.com:3074;lsg.qq.com:3074;1004" },   // Authentication-info, last ID being appID.
-        { 22, "1100001DEADC0DE" },  // PlatformID of sorts.
+        { 8, "auth3.qq.com:3074;"   // Authentication address.
+             "lsg.qq.com:3074;"     // Service address.
+             "1004" },              // App-ID for auth.
+        { 22, "1100001DEADC0DE" },         // PlatformID of sorts.
         { 24, "Tencentticket" },    //
         { 25, "OpenIDKey" },        // OpenID's standardized implementation.
         { 26, "7" },                // Jump-signature length.
@@ -32,10 +35,10 @@ namespace Tencent
     std::unordered_map<uint32_t, int32_t> Integers{};
     std::unordered_map<uint32_t, uint32_t> DWORDs
     {
-        { 1, 42 },          // Unknown, seems unused.
-        { 5, 0x7F000001 },  // IP-address.
+        { 1, 42 },          // Game-version.
+        { 5, 83886082 },    // Zone-ID.
         { 7, 38 },          // Authentication-info size.
-        { 18, 1337 },       // UserID?
+        { 18, 1 },          // Server-ID.
     };
 
     void Sendmessage(WPARAM wParam, LPARAM lParam)
@@ -61,7 +64,13 @@ namespace Tencent
         }
         virtual BOOL Initialize()
         {
+            // Other components may expect us to have a mapping with at least 64 'entries'. See the unordered_maps above.
+            auto Handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 4096, va("TCLS_SHAREDMEMEMORY%u", GetCurrentProcessId()).c_str());
+            auto Pointer = MapViewOfFile(Handle, 0xF001F, 0, 0, 0);
+            *(DWORD *)Pointer = 64;
             Traceprint();
+
+            // TODO(tcn): Investigate what else needs to be initialized.
 
             // Notify listeners.
             Sendmessage(1 | 0x640000, 0);
@@ -103,7 +112,7 @@ namespace Tencent
         }
 
         // User info. NOTE(tcn): '_' because it needs to have a different name or CL changes the layout.
-        virtual BOOL getBytestring_(uint32_t Tag, uint8_t *Buffer, uint32_t *Size, uint32_t UserID)
+        virtual BOOL getBytestring_(uint32_t Tag, uint8_t *Buffer, uint32_t *Size, uint32_t ServerID)
         {
             auto Result = Bytestrings.find(Tag);
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
@@ -116,11 +125,11 @@ namespace Tencent
             *Size = Result->second.size();
 
             // Notify listeners.
-            Sendmessage(1 | (Tag << 0x10), UserID != 0);
+            Sendmessage(1 | (Tag << 0x10), ServerID != 0);
 
             return TRUE;
         }
-        virtual BOOL getWidestring_(uint32_t Tag, wchar_t *Buffer, uint32_t *Size, uint32_t UserID)
+        virtual BOOL getWidestring_(uint32_t Tag, wchar_t *Buffer, uint32_t *Size, uint32_t ServerID)
         {
             auto Result = Widestrings.find(Tag);
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
@@ -133,11 +142,11 @@ namespace Tencent
             *Size = Result->second.size() * sizeof(wchar_t);
 
             // Notify listeners.
-            Sendmessage(1 | (Tag << 0x10), UserID != 0);
+            Sendmessage(1 | (Tag << 0x10), ServerID != 0);
 
             return TRUE;
         }
-        virtual BOOL getDWORD_(uint32_t Tag, uint32_t *Buffer, uint32_t UserID)
+        virtual BOOL getDWORD_(uint32_t Tag, uint32_t *Buffer, uint32_t ServerID)
         {
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
 
@@ -146,56 +155,67 @@ namespace Tencent
                 *Buffer = Result->second;
 
             // Notify listeners.
-            Sendmessage(1 | (Tag << 0x10), UserID != 0);
+            Sendmessage(1 | (Tag << 0x10), ServerID != 0);
 
             return Result != DWORDs.end();
         }
     };
 }
 
-// Temporary implementation of the Tensafe interface, TODO(tcn): Give it; it's own module?
+// Temporary implementation of the Tensafe interface, TODO(tcn): Give it; its own module?
 namespace Tensafe
 {
-    struct Cryptoblock
+    struct Encryptedpackage_t
     {
         uint32_t Command;
-        uint8_t *Inputbuffer;
-        uint32_t Inputlength;
-        uint8_t *Outputbuffer;
-        uint32_t Outputlength;
+        uint8_t *Gamepackage;
+        uint32_t Gamelength;
+        uint8_t *Encryptedpackage;
+        uint32_t Encryptedlength;
     };
     struct Packetheader
     {
-        uint32_t Unknown;
+        uint32_t Totalsize;
         uint32_t SequenceID;
         uint32_t CRC32Hash;
         uint32_t Payloadlength;
-        uint32_t Packettype;
+        uint8_t Packettype;
+        uint16_t Maxsize;
     };
-    struct Interface
+
+    struct Interface000
     {
         uint32_t UserID;
-        uint32_t Uin;
+        uint32_t UIn;
         uint32_t Gameversion;
         uint64_t pSink;
         time_t Startuptime;
         uint32_t Configneedsreload;
         char Outgoingpacket[512];
         char Incomingpacket[512];
-        uint32_t Packetssent;
-        uint32_t Unk5;
-        uint32_t Unk6;
-        uint32_t Unk7;
+        uint32_t Unknown;
         uint32_t SequenceID;
-        uint32_t Unk8;
+        uint32_t Packetsrecieved;
+        uint32_t Unknown2;
+        uint32_t Encryptedpacketsrecieved;
+        uint32_t Unknown3;
+        uint32_t Clientsent;
+        uint32_t Clientrecvd;
         char Config[1030];
 
-        virtual size_t setInit(void *Info)
+        struct Initinfo
         {
-            Traceprint();
-            Uin = ((uint32_t *)Info)[0];
-            Gameversion = ((uint32_t *)Info)[1];
-            pSink = *(size_t *)Info + sizeof(uint64_t);
+            uint32_t UIn;
+            uint32_t Gameversion;
+            size_t pSink;
+        };
+        virtual size_t setInitinfo(Initinfo *Info)
+        {
+            UIn = Info->UIn;
+            pSink = Info->pSink;
+            Gameversion = Info->Gameversion;
+
+            Debugprint(va("TSS init: UIn %u, Gameversion %u, pSink %p", UIn, Gameversion, pSink));
 
             return 1;
         }
@@ -207,45 +227,51 @@ namespace Tensafe
             UserID = rand();
 
             // TODO: Send to pSink.
-
             return 1;
         }
-        virtual size_t Encrypt(Cryptoblock *Block)
+        virtual size_t Encrypt(Encryptedpackage_t *Packet)
         {
             Traceprint();
+            if (!Packet) { Debugprint("Encrypt with invalid Packet-pointer"); return 2; }
+            auto k = Memprotect::Makewriteable(Packet, sizeof(*Packet));
 
-            /*
-                Too tired to implement.
-            */
+            std::string Buffer = "Testing";
+            Debugprint(Buffer);
 
+            Buffer = va("Encrypt Command %u, Enclen %u, Gamelen %u\n", Packet->Command, Packet->Encryptedlength, Packet->Gamelength);
+            Debugprint(Buffer);
+
+            auto Ptr = Packet->Gamepackage;
+            for (size_t i = 0; i < Packet->Gamelength; ++i)
+            {
+                if (i % 16 == 0) Buffer += "\n\t\t";
+                Buffer += va("%02x ", Ptr[i]);
+            }
+
+            Debugprint(Buffer);
+
+            // Return that we don't need to encrypt.
             return 1;
         }
         virtual size_t isCheatpacket(uint32_t Command)
         {
-            Traceprint();
+            Debugprint(va("Packet ID: %u", Command));
 
             /*
-                Incomingpacket =
-                {
-                    uint16_t Header;
-                    uint16_t Commandcount;
-                    uint32_t Commands[];
-                    ...
-                };
+                NOTE(tcn): Commands seem to be:
 
-                for c in Commands => return c == Command;
+                1 - Startup
+                2 - Server_ack
+                3 - Client_ack
+                4 - Server statistics / heartbeat
+                5 - Cheat packet.
             */
 
-            return 1;
+            return 0;
         }
-        virtual size_t Decrypt(Cryptoblock *Block)
+        virtual size_t Decrypt(Encryptedpackage_t *Packet)
         {
             Traceprint();
-
-            /*
-                Too tired to implement.
-            */
-
             return 1;
         }
         virtual size_t Release()
@@ -259,6 +285,101 @@ namespace Tensafe
             return 1;
         }
     };
+
+    /*
+        NOTE(tcn):
+        IOCTRL codes when interacting with the TenSafe driver:
+
+        0x22C400 - Format as struct?
+        0x22C404 - Apply?
+        0x22E4A0 - 4 bytes in
+        0x22E484
+        0x22E488
+        0x22E4A4
+        0x22E544
+        0x22E490 - Returns essential data
+        0x22E4AC
+        0x22E4B4
+        0x22E4A8 - Version info
+    */
+    void *OriginalIO;
+    BOOL __stdcall IOCTRL(HANDLE hDevice, DWORD dwIoControlCode, uint8_t *lpInBuffer, DWORD nInBufferSize, uint8_t *lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped)
+    {
+        Debugprint(va("IOCTRL: 0x%X from %p", dwIoControlCode, _ReturnAddress()));
+        return ((decltype(DeviceIoControl) *)OriginalIO)(hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer, nOutBufferSize, lpBytesReturned, lpOverlapped);
+
+        #if 0
+        auto XORFunc1 = [](uint32_t a1, bool Encode, uint8_t *Input, uint32_t Length)
+        {
+            for (int i = 0; i < Length; ++i)
+            {
+                if (Encode) Input[i] ^= i;
+                Input[i] = ((i & 7) + a1) ^ Input[i];
+                if (!Encode) Input[i] ^= i;
+            }
+        };
+
+        switch (dwIoControlCode)
+        {
+            case 0x22E484:
+            {
+                // Decode input data.
+                XORFunc1(NULL, false, lpInBuffer, nInBufferSize - 8);
+
+                // Nothing returned.
+                return 1;
+            }
+            case 0x22E488:
+            {
+                // Decode input data.
+                XORFunc1(NULL, false, lpInBuffer, nInBufferSize - 8);
+
+                // Nothing returned.
+                return 1;
+            }
+            case 0x22E5DC:
+            {
+                // Decode input data.
+                XORFunc1(NULL, false, lpInBuffer, nInBufferSize - 8);
+
+                // Nothing returned.
+                return 1;
+            }
+            case 0x22E4A8:
+            {
+                std::memset(lpOutBuffer, 0, 16);
+                *(DWORD *)lpOutBuffer = 1377;
+                *lpBytesReturned = 16;
+
+                // Obfuscate.
+                for (int i = 0; i < 8; ++i)
+                {
+                    lpOutBuffer[i] ^= i ^ lpOutBuffer[(i & 7) + 8];
+                }
+                return 1;
+            }
+            case 0x22E490:
+            {
+                std::memset(lpOutBuffer, 0, 16);
+                *(DWORD *)lpOutBuffer = 1377;
+
+                XORFunc1(0, 1, lpOutBuffer, 4);
+                return 1;
+            }
+
+
+
+            default:
+            {
+                return ((decltype(DeviceIoControl) *)OriginalIO)(hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer, nOutBufferSize, lpBytesReturned, lpOverlapped);
+            }
+        }
+
+        #endif
+    }
+
+    //OriginalIO = GetProcAddress(LoadLibraryA("kernel32.dll"), "DeviceIoControl");
+    //Mhook_SetHook(&OriginalIO, MyDeviceIoControl);
 }
 
 // Create the interface with the required version.
@@ -283,8 +404,10 @@ extern "C" EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
 // Tencent anti-cheat initialization override.
 extern "C" EXPORT_ATTR void *CreateObj(int Type)
 {
-    Traceprint();
-    return new Tensafe::Interface();
+    Debugprint(va("Create anti-cheat v%u", Type));
+
+    if(Type == 0) return new Tensafe::Interface000();
+    return nullptr;
 }
 
 // Tencent OpenID resolving override.
