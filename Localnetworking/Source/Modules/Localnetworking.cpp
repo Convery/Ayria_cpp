@@ -44,7 +44,7 @@ namespace Localnetworking
             // While the TCP ones need their own socket, because reasons.
             for (const auto &[Socket, Server] : Streamsockets) FD_SET(Socket, &ReadFD);
 
-            // NOTE(tcn): Not portable! POSIX select timeout is not const *.
+            // NOTE(tcn): Not portable! POSIX select timeout is not const * nor is nfds set.
             if (select(NULL, &ReadFD, NULL, NULL, &Timeout))
             {
                 // If there's data on the listen-socket, it's a new connection.
@@ -185,38 +185,39 @@ namespace Localnetworking
     void Createbackend(uint16_t TCPPort, uint16_t UDPPort)
     {
         WSADATA wsaData;
+        unsigned long Argument = TRUE;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-        // Find an available port for TCP.
+        // Don't block the sockets since we are in a single-threaded mode.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        for (int i = 0; i < 10; ++i)
-        {
-            SOCKADDR_IN Server{};
-            BackendTCPport = TCPPort++;
-            Server.sin_family = AF_INET;
-            Server.sin_port = htons(BackendTCPport);
-            Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
-                break;
-        }
-        listen(Listensocket, 15);
-
-        // Find an available port for UDP.
         UDPSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        for (int i = 0; i < 10; ++i)
-        {
-            SOCKADDR_IN Server{};
-            BackendUDPport = UDPPort++;
-            Server.sin_family = AF_INET;
-            Server.sin_port = htons(BackendUDPport);
-            Server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            if (0 == bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
-                break;
-        }
+        ioctlsocket(Listensocket, FIONBIO, &Argument);
+        ioctlsocket(UDPSocket, FIONBIO, &Argument);
 
-        // Must not block.
-        unsigned long Noblocky = 1;
-        ioctlsocket(UDPSocket, FIONBIO, &Noblocky);
+        // Enable address reuse so developers can run multiple instances on one machine.
+        setsockopt(UDPSocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+        setsockopt(Listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+
+        // Only listen on localhost.
+        SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+
+        // Find an available ports.
+        for (int i = 0; i < 32; ++i)
+        {
+            BackendTCPport = TCPPort++;
+            Server.sin_port = htons(BackendTCPport);
+            if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+            {
+                listen(Listensocket, 15);
+                break;
+            };
+        }
+        for (int i = 0; i < 32; ++i)
+        {
+            BackendUDPport = UDPPort++;
+            Server.sin_port = htons(BackendUDPport);
+            if (0 == bind(UDPSocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN))) break;
+        }
 
         // Add a default entry for localhost proxying.
         Resolvercache["240.0.0.1"] = "127.0.0.1";
