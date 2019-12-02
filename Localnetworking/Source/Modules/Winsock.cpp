@@ -31,10 +31,9 @@ namespace Winsock
     inline uint16_t getPort(const size_t Socket)
     {
         int Clientsize{ sizeof(SOCKADDR_IN) };
-        SOCKADDR_IN Client{ AF_INET, 0 };
+        static const SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
 
         // Ensure that the socket is bound somewhere.
-        Client.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
 
         // Query the port assigned to the socket.
@@ -56,7 +55,7 @@ namespace Winsock
         {
             switch (Protocol)
             {
-                // NOTE(tcn): Case 0 (IPPROTO_IP) is actually the same as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
+                // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
                 case IPPROTO_IP: return "Any"s; case IPPROTO_ICMP: return "ICMP"s; case IPPROTO_TCP: return "TCP"s; case IPPROTO_UDP: return "UDP"s;
                 case /*NSPROTO_IPX*/ 1000: return "IPX"s; case /*NSPROTO_SPX*/ 1256: return "SPX"s; case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
                 default: return va("%u", Protocol);
@@ -67,7 +66,7 @@ namespace Winsock
             TODO(tcn):
             Given that Windows Vista+ doesn't support the IPX protocol anymore,
             we should probably create a IPX<->UDP solution for such sockets.
-            It was a very popular protocol in older games.
+            It was a very popular protocol in older games for LAN-play.
         */
 
         return Result;
@@ -77,8 +76,11 @@ namespace Winsock
     int __stdcall Bind(size_t Socket, struct sockaddr *Name, int Namelength)
     {
         const auto Readable = getAddress(Name);
-        if (std::strstr(Readable.c_str(), "192.168."))
+
+        // Rather than tracking our internal address, just set it to loopback when binding.
+        if (std::strstr(Readable.c_str(), "192.168.") || std::strstr(Readable.c_str(), "10."))
             ((SOCKADDR_IN *)Name)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
         return Calloriginal(bind)(Socket, Name, Namelength);
     }
 
@@ -97,19 +99,20 @@ namespace Winsock
             std::memcpy(Entry, To, Tolength);
 
             // Replace the target with our IPv4 proxy.
-            ((SOCKADDR_IN *)To)->sin_family = AF_INET;
-            ((SOCKADDR_IN *)To)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            ((SOCKADDR_IN *)To)->sin_port = htons(Localnetworking::BackendUDPport);
+            static const SOCKADDR_IN Localhost{ AF_INET, htons(Localnetworking::BackendUDPport), {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+            Tolength = sizeof(Localhost);
+            To = (sockaddr *)&Localhost;
         }
 
-        //Debugprint(va("[%lu]Sending to %s:%u", GetCurrentProcessId(), Address.c_str(), getPort(To)));
+        // Debugprint(va("[%lu]Sending to %s:%u", Socket, Address.c_str(), getPort(To)));
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
         const auto Result = Calloriginal(recvfrom)(Socket, Buffer, Length, Flags, From, Fromlength);
         if (!From || !Fromlength || Result < 0) return Result;
-        //Debugprint(va("[%lu]Recv from %s:%u", GetCurrentProcessId(), getAddress(From).c_str(), getPort(From)));
+
+        // Debugprint(va("[%lu]Recv from %s:%u", Socket, getAddress(From).c_str(), getPort(From)));
 
         // Check if the sender is our backend.
         if(((sockaddr_in *)From)->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
@@ -149,6 +152,7 @@ namespace Winsock
         Debugprint(va("Connecting (0x%X) to %s:%u - %s", Socket, Readable.c_str(), Port, Result ? "FAILED" : "SUCCESS"));
         if (Result == -1)
         {
+            // Some silly firewalls delay the connection longer than the non-blocking timeout.
             if (Localnetworking::isProxiedhost(Readable)) return 0;
             WSASetLastError(WSAEWOULDBLOCK);
         }
