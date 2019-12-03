@@ -147,3 +147,11 @@ namespace FNV
     constexpr inline auto Hash = [](const auto &v) { return Hash::FNV1a_64(&v, sizeof(v)); };
     constexpr inline auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }
+
+// Drop-in generic functions for std:: algorithms, containers, and such.
+// e.g. std::unordered_map<SillyType, int, decltype(FNV::Hash), decltype(FNV::Equal)>
+namespace FNV
+{
+    constexpr inline auto Hash = [](const auto &v) { return Hash::FNV1a_64(&v, sizeof(v)); };
+    constexpr inline auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
+}
