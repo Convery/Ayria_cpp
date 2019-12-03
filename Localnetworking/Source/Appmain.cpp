@@ -5,21 +5,18 @@
 */
 
 #include "Stdinclude.hpp"
-
-// Install the frontend hooks.
-extern void InstallWinsock();
-namespace Localnetworking { extern void Createbackend(uint16_t TCPPort = 4200, uint16_t UDPPort = 4201); };
+#include "Localnetworking.hpp"
 
 // Entrypoint when loaded as a plugin.
 extern "C"
 {
     EXPORT_ATTR void onStartup(bool)
     {
-        // Hook the front-facing APIs.
-        InstallWinsock();
-
         // Initialize the background thread.
-        Localnetworking::Createbackend();
+        Localnetworking::Createbackend(4200);
+
+        // Hook the various frontends.
+
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
@@ -57,3 +54,223 @@ __attribute__((constructor)) void DllMain()
     Logging::Clearlog();
 }
 #endif
+
+namespace Localnetworking
+{
+    std::unordered_map<IServer::Endpoints_t, IServer *, decltype(FNV::Hash), decltype(FNV::Equal)> Associations;
+    std::unordered_map<size_t, IServer *> Streamsockets, Datagramsockets;
+    std::unordered_map<std::string, IServer *> Resolvedhosts;
+    std::unordered_map<uint16_t, std::string> Proxyports;
+    std::vector<size_t> Pluginhandles;
+    std::mutex Bottleneck;
+    uint16_t Backendport;
+    size_t Listensocket;
+
+    // Poll all sockets in the background.
+    void Pollthread()
+    {
+        // ~100 FPS in-case someone proxies game-data.
+        timeval Timeout{ NULL, 10000 };
+        char Buffer[8192];
+
+        // Sleeps through select().
+        while (true)
+        {
+            FD_SET ReadFD{};
+            FD_SET(Listensocket, &ReadFD);
+            for (const auto &[Socket, _] : Streamsockets) FD_SET(Socket, &ReadFD);
+            for (const auto &[Socket, _] : Datagramsockets) FD_SET(Socket, &ReadFD);
+
+            /*
+                NOTE(tcn): Not portable!!one!
+                POSIX select timeout is not const and nfds should not be NULL.
+            */
+            if (select(NULL, &ReadFD, NULL, NULL, &Timeout))
+            {
+                // If there's data on the listen-socket, it's a new connection.
+                if (FD_ISSET(Listensocket, &ReadFD))
+                {
+                    SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
+                    if (auto Socket = accept(Listensocket, (SOCKADDR *)&Client, &Clientsize))
+                    {
+                        std::lock_guard _(Bottleneck);
+                        auto Entry = Proxyports.find(Client.sin_port);
+                        if (Entry == Proxyports.end()) { closesocket(Socket); break; }
+
+                        auto Server = Streamsockets.emplace(Socket, Resolvedhosts[Entry->second]);
+                        if (Server.second) Server.first->second->onConnect();
+                        else Debugprint("Failed to allocate stream-socket");
+                        Proxyports.erase(Entry);
+                    }
+                }
+
+                // If there's data on the sockets, we just forward it as is.
+                std::function<void(std::unordered_map<size_t, IServer *> &)> Lambda = [&](std::unordered_map<size_t, IServer *> &Sockets) -> void
+                {
+                    for (const auto &[Socket, Server] : Sockets)
+                    {
+                        if (!FD_ISSET(Socket, &ReadFD)) continue;
+                        const auto Size = recv(Socket, Buffer, 8192, 0);
+
+                        // Broken connection.
+                        if (Size <= 0)
+                        {
+                            // Lock scope.
+                            {
+                                // Winsock had some internal issue that we can't be arsed to recover from..
+                                if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                                if (Server) Server->onDisconnect();
+                                std::lock_guard _(Bottleneck);
+                                Sockets.erase(Socket);
+                                closesocket(Socket);
+                            }
+                            return Lambda(Sockets);
+                        }
+
+                        // Client-server associations indicate a datagram socket.
+                        for (const auto &[Endpoint, Instance] : Associations)
+                            if (Server == Instance)
+                                Server->onPacketwrite(Buffer, Size, &Endpoint);
+
+                        Server->onStreamwrite(Buffer, Size);
+
+                        // NOTE(tcn): Not using std::find_if yet because MSVC breaks the lambda captures.
+                        // auto Result = std::find_if(Associations.begin(), Associations.end(), [&Server](auto &a) { return a.second == Server; });
+                        // if (Result == Associations.end()) Server->onStreamwrite(Buffer, Size);
+                        // else Server->onPacketwrite(Buffer, Size, &Result->first);
+                    }
+                };
+                Lambda(Datagramsockets);
+                Lambda(Streamsockets);
+            }
+
+            // We process datagrams the same way as regular streams.
+            for (const auto &[_, Server] : Datagramsockets)
+            {
+                uint32_t Datasize{ 8192 };
+                if (Server->onPacketread(Buffer, &Datasize))
+                {
+                    // Servers can have multiple associated sockets, so we duplicate.
+                    for (const auto &[Socket, Instance] : Datagramsockets)
+                        if (Instance == Server)
+                            send(Socket, Buffer, Datasize, 0);
+                }
+            }
+            for (const auto &[_, Server] : Streamsockets)
+            {
+                uint32_t Datasize{ 8192 };
+                if (Server->onStreamread(Buffer, &Datasize))
+                {
+                    for (const auto &[Socket, Instance] : Streamsockets)
+                        if (Instance == Server)
+                            send(Socket, Buffer, Datasize, 0);
+                }
+            }
+        }
+    }
+
+    // Whether or not a plugin claims ownership of this host.
+    bool isProxiedhost(std::string_view Hostname)
+    {
+        // Common case, already resolved the host through getHostbyname.
+        if (Resolvedhosts.find(Hostname.data()) != Resolvedhosts.end()) return true;
+
+        // Blacklist for uninteresting hostnames that no plugin wants to handle.
+        static std::vector<std::string> Blacklist{}; std::lock_guard _(Bottleneck);
+        if (std::find(Blacklist.begin(), Blacklist.end(), Hostname.data()) != Blacklist.end()) return false;
+
+        // Request a server to associate with the hostname.
+        for (const auto &Handle : Pluginhandles)
+        {
+            if (auto Callback = GetProcAddress((HMODULE)Handle, "Createserver"))
+            {
+                if (auto Server = (reinterpret_cast<IServer * (*)(const char *)>(Callback))(Hostname.data()))
+                {
+                    Resolvedhosts[Hostname.data()] = Server;
+                    return true;
+                }
+            }
+        }
+
+        // No servers can handle this host, blacklist.
+        Blacklist.push_back(Hostname.data());
+        return false;
+    }
+
+    // Notify the backend about a client-port that will connect to us.
+    void Associateport(std::string_view Hostname, uint16_t Port)
+    {
+        std::lock_guard _(Bottleneck);
+        Proxyports[Port] = Hostname;
+    }
+
+    // A datagram socket, which internally is sent over TCP.
+    size_t Createsocket(IServer::Address_t Serveraddress, std::string_view Hostname)
+    {
+        SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+        auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        int Clientsize{ sizeof(SOCKADDR_IN) };
+
+        // Never block or complain.
+        unsigned long Argument = TRUE;
+        ioctlsocket(Socket, FIONBIO, &Argument);
+        setsockopt(Socket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+
+        // Assign a random port to the client for identification..
+        bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
+        getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+
+        // We assume that the caller have already resolved the requested hostname.
+        Associations[{ IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port }, Serveraddress}] = \
+        Datagramsockets[Socket] = Resolvedhosts[Hostname.data()];
+
+        return Socket;
+    }
+
+    // Initialize the server backend.
+    void Createbackend(uint16_t Serverport)
+    {
+        WSADATA wsaData;
+        unsigned long Argument = TRUE;
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+        // Don't block the sockets since we are in a single-threaded mode.
+        Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        ioctlsocket(Listensocket, FIONBIO, &Argument);
+
+        // Enable address reuse so developers can run multiple instances on one machine.
+        setsockopt(Listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+
+        // Find an available port to listen on, if we fail after 64 tries we have other issues.
+        SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+        for (int i = 0; i < 64; ++i)
+        {
+            Backendport = Serverport++;
+            Server.sin_port = htons(Backendport);
+            if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+            {
+                listen(Listensocket, 16);
+                break;
+            };
+        }
+
+        // Load all plugins from disk.
+        constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Localnet32" : ".Localnet64";
+        auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
+        for (const auto &Item : Results)
+        {
+            auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str());
+            if (Module)
+            {
+                Infoprint(va("Loaded localnet plugin \"%s\"", Item.c_str()));
+                Pluginhandles.push_back(size_t(Module));
+            }
+        }
+
+        // Notify the developer.
+        Debugprint(va("Spawning localnet backend on %u", Backendport));
+
+        // Keep the polling away from the main thread.
+        std::thread(Pollthread).detach();
+    }
+}
