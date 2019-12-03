@@ -26,7 +26,7 @@ namespace Tencent
         { 8, "auth3.qq.com:3074;"   // Authentication address.
              "lsg.qq.com:3074;"     // Service address.
              "1004" },              // App-ID for auth.
-        { 22, "1100001DEADC0DE" },         // PlatformID of sorts.
+        { 22, "1100001DEADC0DE" },  // PlatformID of sorts.
         { 24, "Tencentticket" },    //
         { 25, "OpenIDKey" },        // OpenID's standardized implementation.
         { 26, "7" },                // Jump-signature length.
