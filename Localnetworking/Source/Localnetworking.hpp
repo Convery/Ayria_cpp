@@ -5,8 +5,8 @@
 */
 
 #pragma once
-#include "IServer.hpp"
 #include <Stdinclude.hpp>
+#include "IServer.hpp"
 
 namespace Localnetworking
 {
@@ -23,4 +23,7 @@ namespace Localnetworking
 
     // Initialize the server backends, only TCP and UDP for now.
     void Createbackend(uint16_t Serverport);
+
+    // Hook the various frontends.
+    void Initializewinsock();
 }
