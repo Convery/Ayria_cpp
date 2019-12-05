@@ -16,7 +16,7 @@ extern "C"
         Localnetworking::Createbackend(4200);
 
         // Hook the various frontends.
-
+        Localnetworking::Initializewinsock();
     }
     EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
     EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
@@ -65,6 +65,7 @@ namespace Localnetworking
     std::mutex Bottleneck;
     uint16_t Backendport;
     size_t Listensocket;
+    size_t Proxysocket;
 
     // Poll all sockets in the background.
     void Pollthread()
@@ -91,7 +92,7 @@ namespace Localnetworking
                 if (FD_ISSET(Listensocket, &ReadFD))
                 {
                     SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
-                    if (auto Socket = accept(Listensocket, (SOCKADDR *)&Client, &Clientsize))
+                    if (const auto Socket = accept(Listensocket, (SOCKADDR *)&Client, &Clientsize); Socket != size_t(-1))
                     {
                         std::lock_guard _(Bottleneck);
                         auto Entry = Proxyports.find(Client.sin_port);
@@ -207,8 +208,10 @@ namespace Localnetworking
     // A datagram socket, which internally is sent over TCP.
     size_t Createsocket(IServer::Address_t Serveraddress, std::string_view Hostname)
     {
+        SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
         SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
         auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        int Serversize{ sizeof(SOCKADDR_IN) };
         int Clientsize{ sizeof(SOCKADDR_IN) };
 
         // Never block or complain.
@@ -220,10 +223,16 @@ namespace Localnetworking
         bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
         getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
 
-        // We assume that the caller have already resolved the requested hostname.
-        Associations[{ IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port }, Serveraddress}] = \
-        Datagramsockets[Socket] = Resolvedhosts[Hostname.data()];
+        // Find wherever the proxy is listening and connect to it..
+        getsockname(Proxysocket, (SOCKADDR *)&Server, &Serversize);
+        connect(Socket, (SOCKADDR *)&Server, Serversize);
 
+        std::lock_guard _(Bottleneck);
+        // Accept and associate the address-pairs, looks messy but: [] = [] = IServer *
+        Associations[{ IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port }, Serveraddress}] = \
+        Datagramsockets[accept(Proxysocket, (SOCKADDR *)&Client, &Clientsize)] = Resolvedhosts[Hostname.data()];
+
+        Debugprint(va("Proxy socket: 0x%X", Socket));
         return Socket;
     }
 
@@ -234,15 +243,17 @@ namespace Localnetworking
         unsigned long Argument = TRUE;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-        // Don't block the sockets since we are in a single-threaded mode.
+        // We really shouldn't block on these sockets, but it's not a problem for now.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        ioctlsocket(Listensocket, FIONBIO, &Argument);
+        Proxysocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
         // Enable address reuse so developers can run multiple instances on one machine.
         setsockopt(Listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+        setsockopt(Proxysocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
 
         // Find an available port to listen on, if we fail after 64 tries we have other issues.
         SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+        bind(Proxysocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
         for (int i = 0; i < 64; ++i)
         {
             Backendport = Serverport++;
@@ -250,6 +261,7 @@ namespace Localnetworking
             if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             {
                 listen(Listensocket, 16);
+                listen(Proxysocket, 16);
                 break;
             };
         }
