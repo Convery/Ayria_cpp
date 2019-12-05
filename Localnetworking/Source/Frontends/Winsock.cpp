@@ -10,9 +10,8 @@
 namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
-    std::unordered_map<std::string_view, void *> Originalfunctions;
-
     std::unordered_map<size_t, IServer::Endpoints_t> Datagramsockets;
+    std::unordered_map<std::string_view, void *> Originalfunctions;
     std::unordered_map<std::string, std::string> Proxyaddresses;
     std::unordered_map<size_t, IServer::Address_t> Bindings;
     SOCKADDR_IN Localhost{};
@@ -62,13 +61,8 @@ namespace Winsock
         const auto Lasterror = WSAGetLastError(); // Debugprint may invalidate this.
         Debugprint(va("Connecting (0x%X) to %s - %s", Socket, Readable.c_str(), Result ? "FAILED" : "SUCCESS"));
 
-        // Errors everywhere.
-        if (Result == -1)
-        {
-            // Some silly firewalls delay the connection longer than the non-blocking timeout.
-            if (Localnetworking::isProxiedhost(Readable)) return 0;
-            //WSASetLastError(WSAEWOULDBLOCK);
-        }
+        // Some silly firewalls delay the connection longer than the non-blocking timeout.
+        if (Result == -1 && Localnetworking::isProxiedhost(Readable)) return 0;
         WSASetLastError(Lasterror);
         return Result;
     }
