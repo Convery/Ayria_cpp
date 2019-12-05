@@ -25,12 +25,6 @@ namespace Winsock
         else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
         return std::string(Address.get());
     }
-    inline uint16_t getPort(const sockaddr *Sockaddr)
-    {
-        return Sockaddr->sa_family == AF_INET6 ?
-            ((sockaddr_in6 *)Sockaddr)->sin6_port :
-            ((sockaddr_in *)Sockaddr)->sin_port;
-    }
     inline uint16_t getPort(const size_t Socket)
     {
         SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
