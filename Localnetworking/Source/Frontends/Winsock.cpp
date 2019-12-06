@@ -60,7 +60,7 @@ namespace Winsock
         const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
         const auto Lasterror = WSAGetLastError(); // Debugprint may invalidate this.
         Debugprint(va("Connecting (0x%X) to %s - %s", Socket, Readable.c_str(), Result ? "FAILED" : "SUCCESS"));
-      
+
         // Some silly firewalls delay the connection longer than the non-blocking timeout.
         if (Result == -1 && Localnetworking::isProxiedhost(Readable)) return 0;
 
