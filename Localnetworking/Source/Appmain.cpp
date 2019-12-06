@@ -217,7 +217,6 @@ namespace Localnetworking
         // Never block or complain.
         unsigned long Argument = TRUE;
         ioctlsocket(Socket, FIONBIO, &Argument);
-        setsockopt(Socket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
 
         // Assign a random port to the client for identification..
         bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
@@ -246,10 +245,6 @@ namespace Localnetworking
         // We really shouldn't block on these sockets, but it's not a problem for now.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         Proxysocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-        // Enable address reuse so developers can run multiple instances on one machine.
-        setsockopt(Listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
-        setsockopt(Proxysocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
 
         // Find an available port to listen on, if we fail after 64 tries we have other issues.
         SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
