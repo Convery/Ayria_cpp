@@ -166,8 +166,9 @@ extern "C"
         }
         #endif
 
-        // Enable LAN-matchmaking for this title.
+        // Enable LAN-communication for this title.
         Communication::Initialize(0x4321);
+        Communication::Broadcast("Social::Startup", "");
 
         // Notify the game that it's properly connected.
         const auto RequestID = Callbacks::Createrequest();

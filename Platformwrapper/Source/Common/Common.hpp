@@ -37,8 +37,8 @@ namespace Matchmaking
 {
     struct Server_t
     {
-        nlohmann::json Session{};
         std::shared_ptr<Communication::Node_t> Core;
+        nlohmann::json Session{ nlohmann::json::object() };
         template<typename T> void Set(std::string &&Property, T Value) { Session[Property] = Value; }
         template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Session.value(Property, Defaultvalue); }
     };
@@ -58,12 +58,14 @@ namespace Social
 {
     struct Social_t
     {
-        uint64_t UserID;
-        nlohmann::json Richpresence{};
         std::shared_ptr<Communication::Node_t> Core;
+        nlohmann::json Richpresence{ nlohmann::json::object() };
         template<typename T> void Set(std::string &&Property, T Value) { Richpresence[Property] = Value; }
         template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Richpresence.value(Property, Defaultvalue); }
     };
+
+    // List all clients on the network as friends.
+    std::vector<std::shared_ptr<Social_t>> Friendlyclients();
 
     // Callbacks on events by name.
     using Eventcallback_t = std::function<void(std::shared_ptr<Social_t> Sender, std::string && Payload)>;
