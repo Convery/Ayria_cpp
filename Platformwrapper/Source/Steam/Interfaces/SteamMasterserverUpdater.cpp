@@ -37,14 +37,14 @@ namespace Steam
                           bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
 
             auto Localserver = Matchmaking::Localserver();
-            Localserver->Gamedata["DML.Region"] = pRegionName;
-            Localserver->Gamedata["Steam.Productname"] = pProductName;
-            Localserver->Gamedata["Protocol.Version"] = nProtocolVersion;
-            Localserver->Gamedata["Players.Current"] = nMaxReportedClients;
-            Localserver->Gamedata["Server.isDedicated"] = bDedicatedServer;
-            Localserver->Gamedata["Server.needsPassword"] = bPasswordProtected;
-            Localserver->Gamedata["Steam.Productdescription"] = pGameDescription;
-            Matchmaking::Broadcastupdate();
+            Localserver->Set("Server.Region", pRegionName);
+            Localserver->Set("Steam.Productname", pProductName);
+            Localserver->Set("Network.Version", nProtocolVersion);
+            Localserver->Set("Players.Current", nMaxReportedClients);
+            Localserver->Set("Server.isDedicated", bDedicatedServer);
+            Localserver->Set("Steam.Productdescription", pGameDescription);
+            Localserver->Set("Security.Passwordprotected", bPasswordProtected);
+            Matchmaking::Broadcast();
         }
         void ClearAllKeyValues()
         {
@@ -52,7 +52,7 @@ namespace Steam
         }
         void SetKeyValue(const char *pKey, const char *pValue)
         {
-            Debugprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pKey, pValue));
+            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pKey, pValue));
         }
         void NotifyShutdown()
         {

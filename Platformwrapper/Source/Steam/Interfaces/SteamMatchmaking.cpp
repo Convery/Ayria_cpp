@@ -89,7 +89,7 @@ namespace Steam
         }
         void SetLobbyData0(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
         {
-            Debugprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
         }
         const char *GetLobbyMemberData(CSteamID steamIDLobby, CSteamID steamIDUser, const char *pchKey)
         {
@@ -98,7 +98,7 @@ namespace Steam
         }
         void SetLobbyMemberData(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
         {
-            Debugprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
         }
         void ChangeLobbyAdmin(CSteamID steamIDLobby, CSteamID steamIDNewAdmin)
         {
@@ -144,10 +144,13 @@ namespace Steam
         }
         void SetLobbyGameServer(CSteamID steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, CSteamID steamIDGameServer)
         {
-            Traceprint();
             Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
                          ((uint8_t *)&unGameServerIP)[3], ((uint8_t *)&unGameServerIP)[2], ((uint8_t *)&unGameServerIP)[1], ((uint8_t *)&unGameServerIP)[0],
                          0, unGameServerPort, 0, 0, ""));
+
+            auto Localserver = Matchmaking::Localserver();
+            Localserver->Set("Network.Gameport", unGameServerPort);
+            Localserver->Set("Server.XUID", steamIDGameServer.ConvertToUint64());
         }
         uint64_t RequestLobbyList2()
         {
@@ -168,7 +171,7 @@ namespace Steam
         }
         bool SetLobbyData1(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
         {
-            Debugprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
             return true;
         }
         bool GetLobbyGameServer(CSteamID steamIDLobby, uint32_t *punGameServerIP, uint16_t *punGameServerPort, CSteamID *psteamIDGameServer)

@@ -99,9 +99,9 @@ namespace Steam
             auto Server = Servers[iServer];
 
             // Address in host-order.
-            Serialized->m_NetAdr.m_unIP = ntohl(inet_addr(Server->Hostname.c_str()));
-            Serialized->m_NetAdr.m_usQueryPort = Server->Get("Server.Queryport", uint16_t());
-            Serialized->m_NetAdr.m_usConnectionPort = Server->Get("Server.Gameport", uint16_t());
+            Serialized->m_NetAdr.m_unIP = ntohl(Server->Core->Address);
+            Serialized->m_NetAdr.m_usQueryPort = Server->Get("Network.Queryport", uint16_t());
+            Serialized->m_NetAdr.m_usConnectionPort = Server->Get("Network.Gameport", uint16_t());
 
             // To make it a little more readable.
             #define Copy(x, y) lCopy(x, sizeof(x), Server->Get(y, std::string()));
@@ -112,15 +112,16 @@ namespace Steam
 
             // String-properties.
             Copy(Serialized->m_szGameDescription, "Steam.Productdescription");
-            Copy(Serialized->m_szGameTags, "Steam.Gametags");
-            //Copy(Serialized->m_szServerName, "Servername");
-            Copy(Serialized->m_szGameDir, "Gamedirectory");
-            Copy(Serialized->m_szMap, "Mapname");
+            Copy(Serialized->m_szGameDir, "Steam.Gamedirectory");
+            Copy(Serialized->m_szServerName, "Server.Hostname");
+            Copy(Serialized->m_szGameTags, "Session.Gametags");
+            Copy(Serialized->m_szMap, "Session.Mapname");
 
             // TODO(tcn): Get some real information.
-            Serialized->m_steamID = CSteamID(Hash::FNV1a_32("ID"), 1, k_EAccountTypeAnonGameServer);
-            Serialized->m_bPassword = Server->Get("Server.needsPassword", false);
+            Serialized->m_bSecure = Serialized->m_bPassword = Server->Get("Security.Anticheat", false);
+            Serialized->m_bPassword = Server->Get("Security.Passwordprotected", false);
             Serialized->m_nServerVersion = Server->Get("Server.Version", 1001);
+            Serialized->m_steamID = Server->Get("Server.XUID", uint64_t());
             Serialized->m_nBotPlayers = Server->Get("Players.Bots", 0);
             Serialized->m_nPlayers = Server->Get("Players.Current", 0);
             Serialized->m_nMaxPlayers = Server->Get("Players.Max", 0);
@@ -128,7 +129,6 @@ namespace Steam
             Serialized->m_bHadSuccessfulResponse = true;
             Serialized->m_bDoNotRefresh = false;
             Serialized->m_ulTimeLastPlayed = 0;
-            Serialized->m_bSecure = true;
             Serialized->m_nPing = 33;
 
             return Serialized;

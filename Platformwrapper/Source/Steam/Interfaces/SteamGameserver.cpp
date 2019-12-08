@@ -67,11 +67,11 @@ namespace Steam
         bool UpdateStatus0(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
         {
             auto Localserver = Matchmaking::Localserver();
-            Localserver->Gamedata["Players.Max"] = cPlayersMax;
-            Localserver->Gamedata["Players.Bots"] = cBotPlayers;
-            Localserver->Gamedata["Players.Current"] = cPlayers;
-            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
-            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
+            Localserver->Set("Players.Max", cPlayersMax);
+            Localserver->Set("Players.Bots", cBotPlayers);
+            Localserver->Set("Players.Current", cPlayers);
+            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
+            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
             // We do not force an update as this may be called multiple times with the same information.
             return true;
         }
@@ -106,12 +106,12 @@ namespace Steam
         bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
             auto Localserver = Matchmaking::Localserver();
-            Localserver->Gamedata["Players.Max"] = cPlayersMax;
-            Localserver->Gamedata["Players.Bots"] = cBotPlayers;
-            Localserver->Gamedata["Players.Current"] = cPlayers;
-            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
-            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
-            Localserver->Gamedata["Publicname"] = pSpectatorServerName ? pSpectatorServerName : "";
+            Localserver->Set("Players.Max", cPlayersMax);
+            Localserver->Set("Players.Bots", cBotPlayers);
+            Localserver->Set("Players.Current", cPlayers);
+            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
+            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
+            Localserver->Set("Server.Friendlyname", pSpectatorServerName ? pSpectatorServerName : "");
             // We do not force an update as this may be called multiple times with the same information.
             return true;
         }
@@ -192,12 +192,12 @@ namespace Steam
         void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
             auto Localserver = Matchmaking::Localserver();
-            Localserver->Gamedata["Players.Max"] = cPlayersMax;
-            Localserver->Gamedata["Players.Bots"] = cBotPlayers;
-            Localserver->Gamedata["Players.Current"] = cPlayers;
-            Localserver->Gamedata["Mapname"] = pchMapName ? pchMapName : "";
-            Localserver->Gamedata["Servername"] = pchServerName ? pchServerName : "";
-            Localserver->Gamedata["Publicname"] = pSpectatorServerName ? pSpectatorServerName : "";
+            Localserver->Set("Players.Max", cPlayersMax);
+            Localserver->Set("Players.Bots", cBotPlayers);
+            Localserver->Set("Players.Current", cPlayers);
+            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
+            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
+            Localserver->Set("Server.Friendlyname", pSpectatorServerName ? pSpectatorServerName : "");
             // We do not force an update as this may be called multiple times with the same information.
         }
         void GetGameplayStats()
@@ -221,8 +221,8 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-            Matchmaking::Localserver()->Set("Steam.Gametags", pchGameTags);
-            Matchmaking::Broadcastupdate();
+            Matchmaking::Localserver()->Set("Session.Gametags", pchGameTags);
+            Matchmaking::Broadcast();
         }
         uint64_t GetServerReputation()
         {
