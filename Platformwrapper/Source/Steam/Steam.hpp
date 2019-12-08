@@ -8,7 +8,6 @@
 #include "Stdinclude.hpp"
 #include "../Common/Common.hpp"
 #include "Auxiliary/CSteamID.hpp"
-#include "../Common/Matchmaking.hpp"
 
 namespace Steam
 {

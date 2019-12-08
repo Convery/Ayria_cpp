@@ -167,8 +167,7 @@ extern "C"
         #endif
 
         // Enable LAN-matchmaking for this title.
-        static bool Runonce{ []() { Matchmaking::Startlistening(Steam::Global.ApplicationID).detach(); return false; }() };
-        (void)Runonce;
+        Communication::Initialize(0x4321);
 
         // Notify the game that it's properly connected.
         const auto RequestID = Callbacks::Createrequest();
@@ -215,7 +214,7 @@ extern "C"
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser() { Traceprint(); return { }; }
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
-    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Matchmaking::Localserver()->Hostflags.Terminated = true; }
+    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Matchmaking::Localserver()->Core->SessionID = 0; }
     EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Ayria::Global.UserID; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
@@ -243,17 +242,17 @@ extern "C"
 
                 // New session for the server.
                 auto Localserver = Matchmaking::Localserver();
-                Localserver->Set("Server.Authport", usPort);
-                Localserver->Set("Gamedirectory", pchGameDir);
-                Localserver->Set("Server.Gameport", usGamePort);
-                Localserver->Set("Server.Queryport", usQueryPort);
-                Localserver->Set("Server.Spectatorport", usSpectatorPort);
-                Localserver->Set("Server.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
+                Localserver->Set("Network.Authport", usPort);
+                Localserver->Set("Steam.Gamedirectory", pchGameDir);
+                Localserver->Set("Network.Gameport", usGamePort);
+                Localserver->Set("Network.Queryport", usQueryPort);
+                Localserver->Set("Network.Spectatorport", usSpectatorPort);
+                Localserver->Set("Network.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
 
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
                 Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
-                Matchmaking::Broadcastupdate();
+                Matchmaking::Broadcast();
             }
             if(Version == 11 || Version == 12)
             {
@@ -267,15 +266,15 @@ extern "C"
 
                 // New session for the server.
                 auto Localserver = Matchmaking::Localserver();
-                Localserver->Set("Server.Authport", usPort);
-                Localserver->Set("Server.Gameport", usGamePort);
-                Localserver->Set("Server.Queryport", usQueryPort);
-                Localserver->Set("Server.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
+                Localserver->Set("Network.Authport", usPort);
+                Localserver->Set("Network.Gameport", usGamePort);
+                Localserver->Set("Network.Queryport", usQueryPort);
+                Localserver->Set("Network.Listenaddress", va("%u.%u.%u.%u", ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0]));
 
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
                 Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
-                Matchmaking::Broadcastupdate();
+                Matchmaking::Broadcast();
             }
 
             va_end(Args);
