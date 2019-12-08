@@ -64,7 +64,7 @@ namespace Matchmaking
     }
 
     // Standard matchmaking callbacks.
-    void onUpdate(std::shared_ptr<Server_t> Sender, std::string &&Payload)
+    static void onUpdate(std::shared_ptr<Server_t> Sender, std::string &&Payload)
     {
         try
         {
@@ -72,7 +72,7 @@ namespace Matchmaking
             Sender->Session = nlohmann::json::parse(Base64::Decode(Payload).c_str());
         } catch (std::exception &) {}
     }
-    void onTerminate(std::shared_ptr<Server_t> Sender, std::string &&)
+    static void onTerminate(std::shared_ptr<Server_t> Sender, std::string &&)
     {
         Sender->Core->Timestamp = 0;
     }
