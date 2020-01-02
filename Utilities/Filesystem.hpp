@@ -13,7 +13,7 @@
 
 namespace FS
 {
-    inline std::basic_string<uint8_t> Readfile(std::string_view Path)
+    [[nodiscard]] inline std::basic_string<uint8_t> Readfile(std::string_view Path)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "rb");
         if (!Filehandle) return {};
@@ -64,14 +64,14 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
-    inline bool Fileexists(std::string_view Path)
+    [[nodiscard]] inline bool Fileexists(std::string_view Path)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "rb");
         if (!Filehandle) return false;
         std::fclose(Filehandle);
         return true;
     }
-    inline size_t Filesize(std::string_view Path)
+    [[nodiscard]] inline size_t Filesize(std::string_view Path)
     {
         size_t Filesize{};
 
@@ -91,7 +91,7 @@ namespace FS
     // Windows.
     #if defined(_WIN32)
     #include <Windows.h>
-    inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
     {
         std::vector<std::string> Filepaths{};
         WIN32_FIND_DATAA Filedata;
@@ -131,7 +131,7 @@ namespace FS
         FindClose(Filehandle);
         return Filepaths;
     }
-    inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Criteria)
     {
         std::vector<std::string> Filenames{};
         WIN32_FIND_DATAA Filedata;
@@ -166,7 +166,7 @@ namespace FS
         FindClose(Filehandle);
         return Filenames;
     }
-    inline Stat_t Filestats(std::string_view Path)
+    [[nodiscard]] inline Stat_t Filestats(std::string_view Path)
     {
         Stat_t Result{};
         if (const auto Filehandle = CreateFileA(Path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr))
@@ -188,12 +188,12 @@ namespace FS
     #if !defined(_WIN32)
     #include <sys/types.h>
     #include <dirent.h>
-    inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
     {
         // TODO(tcn): Just port the NT version.
         return {};
     }
-    inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Extension)
+    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Extension)
     {
         std::vector<std::string> Filenames{};
         struct stat Fileinfo;
@@ -224,7 +224,7 @@ namespace FS
 
         return std::move(Filenames);
     }
-    inline Stat_t Filestats(std::string_view Path)
+    [[nodiscard]] inline Stat_t Filestats(std::string_view Path)
     {
         assert(false);
         return {};

@@ -21,7 +21,7 @@ namespace Logging
     #warning No module name specified for the logging.
     #endif
 
-    // Set in Configuration.hpp
+    // Set in Common.hpp
     #if !defined(LOGPATH)
     #define LOGPATH "."
     #endif

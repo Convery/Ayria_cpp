@@ -12,7 +12,7 @@ namespace Base64
 {
     namespace
     {
-        static constexpr char Table[64] =
+        constexpr char Table[64] =
         {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
             'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
@@ -20,7 +20,7 @@ namespace Base64
             'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
             's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
             '3', '4', '5', '6', '7', '8', '9', '+', '/' };
-        static constexpr char Reversetable[128] =
+        constexpr char Reversetable[128] =
         {
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
@@ -36,9 +36,9 @@ namespace Base64
     [[nodiscard]] inline std::string Encode(const std::string_view Input)
     {
         std::string Result((((Input.size() + 2) / 3) * 4), '=');
-        size_t Outputposition = 0;
-        uint32_t Accumulator = 0;
-        int32_t Bits = 0;
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
 
         for (const auto &Item : Input)
         {
@@ -61,9 +61,10 @@ namespace Base64
     }
     [[nodiscard]] inline std::string Decode(const std::string_view Input)
     {
-        std::string Result;
-        uint32_t Accumulator = 0;
-        int32_t Bits = 0;
+        std::string Result(((Input.size() / 4) * 3), '=');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
 
         for (const auto &Item : Input)
         {
@@ -75,7 +76,7 @@ namespace Base64
             if (Bits >= 8)
             {
                 Bits -= 8;
-                Result += char((Accumulator >> Bits) & 0xFF);
+                Result[Outputposition++] = char((Accumulator >> Bits) & 0xFF);
             }
         }
 
@@ -96,7 +97,7 @@ namespace Base64
     }
 
     // RFC7515 compatibility.
-    [[nodiscard]] inline std::string toURL(std::string Input)
+    [[nodiscard]] inline std::string toURL(std::string &&Input)
     {
         while (Input.back() == '=')
             Input.pop_back();
@@ -109,7 +110,7 @@ namespace Base64
 
         return Input;
     }
-    [[nodiscard]] inline std::string fromURL(std::string Input)
+    [[nodiscard]] inline std::string fromURL(std::string &&Input)
     {
         for (auto &Item : Input)
         {

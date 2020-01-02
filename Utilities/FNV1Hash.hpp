@@ -18,26 +18,26 @@ namespace Hash
         constexpr uint64_t FNV1_Offset_64 = 14695981039346656037u;
 
         // Compile-time hashing for null-terminated strings.
-        constexpr uint32_t FNV1_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
+        [[nodiscard]] constexpr uint32_t FNV1_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
         {
             return *String ? FNV1_32(String + 1, (Lastvalue * FNV1_Prime_32) ^ *String) : Lastvalue;
         }
-        constexpr uint64_t FNV1_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
+        [[nodiscard]] constexpr uint64_t FNV1_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
         {
             return *String ? FNV1_64(String + 1, (Lastvalue * FNV1_Prime_64) ^ *String) : Lastvalue;
         }
-        constexpr uint32_t FNV1a_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
+        [[nodiscard]] constexpr uint32_t FNV1a_32(const char *String, const uint32_t Lastvalue = FNV1_Offset_32)
         {
             return *String ? FNV1a_32(String + 1, (*String ^ Lastvalue) * FNV1_Prime_32) : Lastvalue;
         }
-        constexpr uint64_t FNV1a_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
+        [[nodiscard]] constexpr uint64_t FNV1a_64(const char *String, const uint64_t Lastvalue = FNV1_Offset_64)
         {
             return *String ? FNV1a_64(String + 1, (*String ^ Lastvalue) * FNV1_Prime_64) : Lastvalue;
         }
     }
 
     // Compile-time hashing for fixed-length datablocks.
-    constexpr uint32_t FNV1_32(const void *Input, const uint32_t Length)
+    [[nodiscard]] constexpr uint32_t FNV1_32(const void *Input, const uint32_t Length)
     {
         uint32_t Hash = Internal::FNV1_Offset_32;
 
@@ -49,7 +49,7 @@ namespace Hash
 
         return Hash;
     }
-    constexpr uint64_t FNV1_64(const void *Input, const size_t Length)
+    [[nodiscard]] constexpr uint64_t FNV1_64(const void *Input, const size_t Length)
     {
         uint64_t Hash = Internal::FNV1_Offset_64;
 
@@ -61,7 +61,7 @@ namespace Hash
 
         return Hash;
     }
-    constexpr uint32_t FNV1a_32(const void *Input, const uint32_t Length)
+    [[nodiscard]] constexpr uint32_t FNV1a_32(const void *Input, const uint32_t Length)
     {
         uint32_t Hash = Internal::FNV1_Offset_32;
 
@@ -73,7 +73,7 @@ namespace Hash
 
         return Hash;
     }
-    constexpr uint64_t FNV1a_64(const void *Input, const size_t Length)
+    [[nodiscard]] constexpr uint64_t FNV1a_64(const void *Input, const size_t Length)
     {
         uint64_t Hash = Internal::FNV1_Offset_64;
 
@@ -87,53 +87,53 @@ namespace Hash
     }
 
     // Compile-time hashing for null-terminated strings.
-    constexpr uint32_t FNV1_32(const char *String)
+    [[nodiscard]] constexpr uint32_t FNV1_32(const char *String)
     {
         return Internal::FNV1_32(String);
     }
-    constexpr uint64_t FNV1_64(const char *String)
+    [[nodiscard]] constexpr uint64_t FNV1_64(const char *String)
     {
         return Internal::FNV1_64(String);
     }
-    constexpr uint32_t FNV1a_32(const char *String)
+    [[nodiscard]] constexpr uint32_t FNV1a_32(const char *String)
     {
         return Internal::FNV1a_32(String);
     }
-    constexpr uint64_t FNV1a_64(const char *String)
+    [[nodiscard]] constexpr uint64_t FNV1a_64(const char *String)
     {
         return Internal::FNV1a_64(String);
     }
 
     // Wrappers for runtime hashing of strings.
-    template<typename T> constexpr inline uint32_t FNV1_32(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1_32(const std::basic_string<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> constexpr inline uint64_t FNV1_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1_64(const std::basic_string<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> constexpr inline uint32_t FNV1a_32(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1a_32(const std::basic_string<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> constexpr inline uint64_t FNV1a_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1a_64(const std::basic_string<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }
-    template<typename T> constexpr inline uint32_t FNV1_32(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1_32(const std::basic_string_view<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> constexpr inline uint64_t FNV1_64(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1_64(const std::basic_string_view<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> constexpr inline uint32_t FNV1a_32(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1a_32(const std::basic_string_view<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> constexpr inline uint64_t FNV1a_64(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1a_64(const std::basic_string_view<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }
