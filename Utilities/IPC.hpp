@@ -19,7 +19,7 @@ namespace IPC
         char Base64data;
     };
 
-    inline Filemap_t *Createmap(std::string_view Name, size_t Mapsize)
+    inline Filemap_t *Createmap(std::string_view Name, uint32_t Mapsize)
     {
         assert(Mapsize > 8);
 
