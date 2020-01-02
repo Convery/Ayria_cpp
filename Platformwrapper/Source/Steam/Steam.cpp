@@ -181,10 +181,17 @@ extern "C"
         if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
         if (Bootstrapper)
         {
-            auto Callback = GetProcAddress(Bootstrapper, "onInitializationdone");
-            if (Callback) (reinterpret_cast<void (*)()>(Callback))();
+            auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
+            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
         }
         #endif
+
+        // Share our current state..
+        auto Object = nlohmann::json::object();
+        Object["Ayria.UserID"] = Ayria::Global.UserID;
+        Object["Ayria.Username"] = Ayria::Global.Username;
+        Object["Steam.ApplicationID"] = Steam::Global.ApplicationID;
+        IPC::Updatemapping("Platformwrapper", Base64::Encode(Object.dump()));
 
         return true;
     }

@@ -81,6 +81,7 @@ namespace Ayria
         uint64_t UserID;
         std::string Username;
         uint64_t Startuptimestamp;
+        IPC::Filemap_t *Filemapping;
     };
     extern Globalstate_t Global;
     #pragma pack(pop)
