@@ -9,12 +9,18 @@
 // Optional callbacks when loaded as a plugin.
 extern "C"
 {
-    // NOTE(tcn): All of these are optional, simply comment them out if not needed. See docs for example usage.
+    // NOTE(tcn): All of these are optional, simply comment them out if not needed.
+    // See docs for usage examples.
+
+    // Callbacks from the Bootstrapper module.
     EXPORT_ATTR void __cdecl onReload(void *Previousinstance) { (void)Previousinstance; }   // User-defined, called by devs for hotpatching plugins.
     EXPORT_ATTR bool __cdecl onEvent(const void *Data, uint32_t Length)                     // User-defined, returns if the event was handled.
     { (void)Data; (void)Length; return false; }
     EXPORT_ATTR void __cdecl onInitialized(bool) {}                                         // Do .data edits in this callback.
     EXPORT_ATTR void __cdecl onStartup(bool) {}                                             // Do .text edits in this callback.
+
+    // Callbacks from the Localnetworking module.
+    EXPORT_ATTR IServer * __cdecl Createserver(const char *Hostname) { (void)Hostname; return nullptr; }
 }
 
 // Entrypoint when loaded as a shared library.
