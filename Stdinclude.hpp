@@ -6,32 +6,28 @@
 
 #pragma once
 
-// Our configuration-settings.
-#include "Configuration.hpp"
+// Our configuration-, define-, macro-options.
+#include "Common.hpp"
 
 // Ignore warnings from third-party code.
 #pragma warning(push, 0)
 
-// Standard-library includes.
+// Standard-library includes for all projects in this repository.
 #include <unordered_map>
 #include <string_view>
 #include <filesystem>
 #include <functional>
 #include <algorithm>
-#include <typeindex>
-#include <typeinfo>
 #include <cassert>
 #include <cstdint>
-#include <cstdarg>
-#include <cstring>
 #include <cstdio>
 #include <vector>
 #include <memory>
 #include <chrono>
 #include <thread>
 #include <atomic>
-#include <queue>
 #include <mutex>
+#include <queue>
 #include <any>
 
 // Platform-specific libraries.
