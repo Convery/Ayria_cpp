@@ -91,81 +91,6 @@ namespace FS
     // Windows.
     #if defined(_WIN32)
     #include <Windows.h>
-    [[nodiscard]] inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
-    {
-        std::vector<std::string> Filepaths{};
-        WIN32_FIND_DATAA Filedata;
-
-        // Ensure that we have the backslash if the user forgot.
-        if (Searchpath.back() != '/') Searchpath.append("/");
-
-        // Initial query, fails if the searchpath is broken.
-        HANDLE Filehandle = FindFirstFileA(va("%s*", Searchpath.c_str()).c_str(), &Filedata);
-        if (Filehandle == static_cast<void *>(INVALID_HANDLE_VALUE))
-        {
-            FindClose(Filehandle);
-            return Filepaths;
-        }
-
-        do
-        {
-            // Respect hidden files and folders.
-            if (Filedata.cFileName[0] == '.')
-                continue;
-
-            // Recurse into the directories.
-            if(Filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            {
-                auto Local = Findfilesrecursive(va("%s%s", Searchpath.c_str(), Filedata.cFileName), Criteria);
-                Filepaths.reserve(Local.size());
-                Filepaths.insert(Filepaths.end(), Local.begin(), Local.end());
-                continue;
-            }
-
-            // Only add the file to the list if matching the criteria.
-            if(std::strstr(Filedata.cFileName, Criteria.data()))
-                Filepaths.push_back(va("%s%s", Searchpath.c_str(), Filedata.cFileName));
-
-        } while (FindNextFileA(Filehandle, &Filedata));
-
-        FindClose(Filehandle);
-        return Filepaths;
-    }
-    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Criteria)
-    {
-        std::vector<std::string> Filenames{};
-        WIN32_FIND_DATAA Filedata;
-
-        // Ensure that we have the backslash if the user forgot.
-        if (Searchpath.back() != '/') Searchpath.append("/");
-
-        // Initial query, fails if the searchpath is broken.
-        HANDLE Filehandle = FindFirstFileA(va("%s*", Searchpath.c_str()).c_str(), &Filedata);
-        if (Filehandle == static_cast<void *>(INVALID_HANDLE_VALUE))
-        {
-            FindClose(Filehandle);
-            return Filenames;
-        }
-
-        do
-        {
-            // Respect hidden files and folders.
-            if (Filedata.cFileName[0] == '.')
-                continue;
-
-            // Skip the directories.
-            if(Filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-                continue;
-
-            // Only add the file to the list if matching the criteria.
-            if(std::strstr(Filedata.cFileName, Criteria.data()))
-                Filenames.push_back(Filedata.cFileName);
-
-        } while (FindNextFileA(Filehandle, &Filedata));
-
-        FindClose(Filehandle);
-        return Filenames;
-    }
     [[nodiscard]] inline Stat_t Filestats(std::string_view Path)
     {
         Stat_t Result{};
@@ -181,7 +106,69 @@ namespace FS
 
         return Result;
     }
+    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Criteria)
+    {
+        std::vector<std::string> Results{};
+        WIN32_FIND_DATAA Filedata;
 
+        // Ensure that we have the backslash if the user forgot.
+        if (Searchpath.back() != '/') Searchpath.append("/");
+
+        // Initial query, fails if the search-path is broken.
+        HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
+        if (Filehandle == INVALID_HANDLE_VALUE) { FindClose(Filehandle); return Results; }
+
+        do
+        {
+            // Respect hidden files and folders.
+            if (Filedata.cFileName[0] == '.') continue;
+
+            // Skip sub-directories.
+            if (Filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+            // Only add the file to the list if matching the criteria.
+            if (std::strstr(Filedata.cFileName, Criteria.data()))
+                Results.push_back(Filedata.cFileName);
+
+        } while (FindNextFileA(Filehandle, &Filedata));
+
+        FindClose(Filehandle);
+        return Results;
+    }
+    [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
+    {
+        std::vector<std::pair<std::string, std::string>> Results{};
+        WIN32_FIND_DATAA Filedata;
+
+        // Ensure that we have the backslash if the user forgot.
+        if (Searchpath.back() != '/') Searchpath.append("/");
+
+        // Initial query, fails if the search-path is broken.
+        HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
+        if (Filehandle == INVALID_HANDLE_VALUE) { FindClose(Filehandle); return Results; }
+
+        do
+        {
+            // Respect hidden files and folders.
+            if (Filedata.cFileName[0] == '.') continue;
+
+            // Recurse into the directories.
+            if (Filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                const auto Local = Findfilesrecursive(Searchpath + Filedata.cFileName, Criteria);
+                Results.insert(Results.end(), Local.begin(), Local.end());
+                continue;
+            }
+
+            // Only add the file to the list if matching the criteria.
+            if (std::strstr(Filedata.cFileName, Criteria.data()))
+                Results.push_back({ Searchpath, Filedata.cFileName });
+
+        } while (FindNextFileA(Filehandle, &Filedata));
+
+        FindClose(Filehandle);
+        return Results;
+    }
     #endif
 
     // *nix.

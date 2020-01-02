@@ -44,7 +44,7 @@ extern "C"
         {
             if (auto Callback = GetProcAddress(HMODULE(Item), "onInitialized"))
             {
-                (reinterpret_cast<void (*)(bool)>(Callback))(false);
+                (reinterpret_cast<void (__cdecl *)(bool)>(Callback))(false);
             }
         }
     }
@@ -74,7 +74,7 @@ extern "C"
 
                     if (auto Callback = GetProcAddress(Module, "onReload"))
                     {
-                        (reinterpret_cast<void (*)(void *)>(Callback))(Plugin);
+                        (reinterpret_cast<void (__cdecl *)(void *)>(Callback))(Plugin);
                     }
 
                     Loadedplugins.push_back(Module);
@@ -93,7 +93,7 @@ extern "C"
         {
             if (auto Callback = GetProcAddress(HMODULE(Item), "onEvent"))
             {
-                Handledcount += (reinterpret_cast<bool (*)(const void *, uint32_t)>(Callback))(Data, Length);
+                Handledcount += (reinterpret_cast<bool (__cdecl *)(const void *, uint32_t)>(Callback))(Data, Length);
             }
         }
 
@@ -107,7 +107,7 @@ void Loadallplugins()
     std::vector<void *> Freshplugins;
 
     // Really just load all files from the directory.
-    auto Results = FS::Findfiles("./Ayria/Plugins", Pluginextension);
+    const auto Results = FS::Findfiles("./Ayria/Plugins", Pluginextension);
     for (const auto &Item : Results)
     {
         /*
@@ -127,7 +127,7 @@ void Loadallplugins()
     for (const auto &Item : Freshplugins)
     {
         auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
-        if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
+        if (Callback) (reinterpret_cast<void (__cdecl *)(bool)>(Callback))(false);
     }
 }
 

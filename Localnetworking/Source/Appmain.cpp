@@ -124,16 +124,9 @@ namespace Localnetworking
                         }
 
                         // Client-server associations indicate a datagram socket.
-                        for (const auto &[Endpoint, Instance] : Associations)
-                            if (Server == Instance)
-                                Server->onPacketwrite(Buffer, Size, &Endpoint);
-
-                        Server->onStreamwrite(Buffer, Size);
-
-                        // NOTE(tcn): Not using std::find_if yet because MSVC breaks the lambda captures.
-                        // auto Result = std::find_if(Associations.begin(), Associations.end(), [&Server](auto &a) { return a.second == Server; });
-                        // if (Result == Associations.end()) Server->onStreamwrite(Buffer, Size);
-                        // else Server->onPacketwrite(Buffer, Size, &Result->first);
+                        const auto Result = std::find_if(Associations.begin(), Associations.end(), [&Server](auto &a) { return a.second == Server; });
+                        if (Result == Associations.end()) Server->onStreamwrite(Buffer, Size);
+                        else Server->onPacketwrite(Buffer, Size, &Result->first);
                     }
                 };
                 Lambda(Datagramsockets);
@@ -180,7 +173,7 @@ namespace Localnetworking
         {
             if (auto Callback = GetProcAddress((HMODULE)Handle, "Createserver"))
             {
-                if (auto Server = (reinterpret_cast<IServer * (*)(const char *)>(Callback))(Hostname.data()))
+                if (auto Server = (reinterpret_cast<IServer * (__cdecl *)(const char *)>(Callback))(Hostname.data()))
                 {
                     Resolvedhosts[Hostname.data()] = Server;
                     return true;
@@ -234,7 +227,6 @@ namespace Localnetworking
     void Createbackend(uint16_t Serverport)
     {
         WSADATA wsaData;
-        unsigned long Argument = TRUE;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
         // We really shouldn't block on these sockets, but it's not a problem for now.
