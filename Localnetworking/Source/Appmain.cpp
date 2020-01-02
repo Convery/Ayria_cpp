@@ -166,13 +166,13 @@ namespace Localnetworking
     }
 
     // Whether or not a plugin claims ownership of this host.
+    std::vector<std::string> Blacklist{};
     bool isProxiedhost(std::string_view Hostname)
     {
         // Common case, already resolved the host through getHostbyname.
         if (Resolvedhosts.find(Hostname.data()) != Resolvedhosts.end()) return true;
 
-        // Blacklist for uninteresting hostnames that no plugin wants to handle.
-        static std::vector<std::string> Blacklist{}; std::lock_guard _(Bottleneck);
+        std::lock_guard _(Bottleneck); // Blacklist for uninteresting hostnames that no plugin wants to handle.
         if (std::find(Blacklist.begin(), Blacklist.end(), Hostname.data()) != Blacklist.end()) return false;
 
         // Request a server to associate with the hostname.
@@ -256,7 +256,7 @@ namespace Localnetworking
             };
         }
 
-        // Load all plugins from disk.
+        // LEGACY(tcn): Load all plugins from disk.
         constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Localnet32" : ".Localnet64";
         auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
         for (const auto &Item : Results)
