@@ -70,3 +70,35 @@ namespace Build
 
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)
+
+// Server interfaces for localnetworking-plugins.
+// Callbacks return false on error or if there's no data.
+struct IServer
+{
+    struct Address_t { unsigned int IPv4; unsigned short Port; };
+    struct Endpoints_t { Address_t Client, Server; };
+
+    // Utility functionality.
+    virtual void onConnect() {};
+    virtual void onDisconnect() {};
+
+    // Stream-based IO for protocols such as TCP.
+    virtual bool onStreamread(void *Databuffer, unsigned int *Datasize) = 0;
+    virtual bool onStreamwrite(const void *Databuffer, const unsigned int Datasize) = 0;
+
+    // Packet-based IO for protocols such as UDP and ICMP.
+    virtual bool onPacketread(void *Databuffer, unsigned int *Datasize) = 0;
+    virtual bool onPacketwrite(const void *Databuffer, const unsigned int Datasize, const Endpoints_t *Endpoints) = 0;
+};
+struct IStreamserver : IServer
+{
+    // Nullsub packet-based IO.
+    virtual bool onPacketread(void *, unsigned int *) { return false; }
+    virtual bool onPacketwrite(const void *, const unsigned int, const Endpoints_t *) { return false; }
+};
+struct IDatagramserver : IServer
+{
+    // Nullsub stream-based IO.
+    virtual bool onStreamread(void *, unsigned int *) { return false; }
+    virtual bool onStreamwrite(const void *, const unsigned int) { return false; }
+};

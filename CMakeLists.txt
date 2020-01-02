@@ -78,4 +78,4 @@ add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
 
 # Examples.
-add_subdirectory(Plugintemplate_cpp)
+add_subdirectory(Plugintemplate)
