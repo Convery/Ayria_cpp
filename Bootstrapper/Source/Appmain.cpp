@@ -6,13 +6,14 @@
 
 #include "Stdinclude.hpp"
 
-void Loadallplugins();
-#define Writeptr(where, what) { \
-auto Protection = Memprotect::Unprotectrange(where, sizeof(size_t)); \
-*(size_t *)where = (size_t)what; Memprotect::Protectrange(where, sizeof(size_t), Protection); }
+#define Writeptr(where, what) { const auto Lock = Memprotect::Makewriteable(where, sizeof(size_t)); *(size_t *)where = (size_t)what; }
 
-// Saved directory.
+// The type of plugins to support.
+constexpr const char *Pluginextension = Build::is64bit ? ".Ayria64" : ".Ayria32";
+
+// Saved directory and all plugins.
 std::vector<size_t> OriginalTLS{};
+std::vector<void *> Loadedplugins;
 
 // Parse the header to get the directory.
 PIMAGE_TLS_DIRECTORY getTLSDirectory()
@@ -29,9 +30,110 @@ PIMAGE_TLS_DIRECTORY getTLSDirectory()
     return (PIMAGE_TLS_DIRECTORY)((DWORD_PTR)Modulehandle + Directory.VirtualAddress);
 }
 
-// Callback from Ntdll::CallTlsInitializers
-void WINAPI Dummycallback(PVOID, DWORD, PVOID) {}
-void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
+// Poke at the plugins from other modules.
+extern "C"
+{
+    EXPORT_ATTR void __cdecl onInitialized(bool)
+    {
+        // Only notify the plugins once to prevent confusion.
+        static bool Initialized = false;
+        if (Initialized) return;
+        Initialized = true;
+
+        for (const auto &Item : Loadedplugins)
+        {
+            if (auto Callback = GetProcAddress(HMODULE(Item), "onInitialized"))
+            {
+                (reinterpret_cast<void (*)(bool)>(Callback))(false);
+            }
+        }
+    }
+    EXPORT_ATTR void __cdecl onReload(const char *Pluginname)
+    {
+        // Get the latest version of the plugin.
+        auto Results = FS::Findfiles("./Ayria/Plugins", Pluginname);
+        std::sort(Results.begin(), Results.end(), [](auto &a, auto &b) -> bool
+        {
+            return FS::Filestats(("./Ayria/Plugins/"s + a).c_str()).Modified >
+                   FS::Filestats(("./Ayria/Plugins/"s + b).c_str()).Modified;
+        });
+
+        // Actually only get the first one.
+        for (const auto &Filename : Results)
+        {
+            // Sanity-checking.
+            if (!std::strstr(Filename.c_str(), Pluginextension)) continue;
+
+            for (const auto Plugin : Loadedplugins)
+            {
+                char Localname[512]{};
+                GetModuleFileNameA((HMODULE)Plugin, Localname, 512);
+                if (std::strstr(Localname, Pluginname))
+                {
+                    auto Module = LoadLibraryA(("./Ayria/Plugins/%s"s + Filename).c_str());
+
+                    if (auto Callback = GetProcAddress(Module, "onReload"))
+                    {
+                        (reinterpret_cast<void (*)(void *)>(Callback))(Plugin);
+                    }
+
+                    Loadedplugins.push_back(Module);
+                    FreeLibrary((HMODULE)Plugin);
+                    return;
+                }
+            }
+        }
+    }
+    EXPORT_ATTR bool __cdecl Broadcastevent(const void *Data, uint32_t Length)
+    {
+        uint32_t Handledcount{};
+
+        // Forward to all plugins to enable snooping.
+        for (const auto &Item : Loadedplugins)
+        {
+            if (auto Callback = GetProcAddress(HMODULE(Item), "onEvent"))
+            {
+                Handledcount += (reinterpret_cast<bool (*)(const void *, uint32_t)>(Callback))(Data, Length);
+            }
+        }
+
+        return !!Handledcount;
+    }
+}
+
+// Utility functionality.
+void Loadallplugins()
+{
+    std::vector<void *> Freshplugins;
+
+    // Really just load all files from the directory.
+    auto Results = FS::Findfiles("./Ayria/Plugins", Pluginextension);
+    for (const auto &Item : Results)
+    {
+        /*
+            TODO(tcn):
+            We should really check that the plugins are signed by us.
+            Then prompt the user for whitelisting.
+        */
+        if (auto Module = LoadLibraryA(("./Ayria/Plugins/"s + Item).c_str()))
+        {
+            Infoprint(va("Loaded plugin \"%s\"", Item.c_str()));
+            Loadedplugins.push_back(Module);
+            Freshplugins.push_back(Module);
+        }
+    }
+
+    // Notify all plugins about starting up.
+    for (const auto &Item : Freshplugins)
+    {
+        auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
+        if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
+    }
+}
+
+// Callback from ntdll::CallTlsInitializers
+void __stdcall Dummycallback(PVOID, DWORD, PVOID) {}
+void __stdcall TLSCallback(PVOID a, DWORD b, PVOID c)
 {
     const auto Directory = getTLSDirectory();
     HMODULE Valid;
@@ -48,22 +150,28 @@ void WINAPI TLSCallback(PVOID a, DWORD b, PVOID c)
 
     // If the original had callbacks, we need to call the first one.
     if (auto Callback = (size_t *)Directory->AddressOfCallBacks; *(size_t *)Callback)
-        if(GetModuleHandleExA(6, (LPCSTR)*(size_t *)Callback, &Valid))
+        if (GetModuleHandleExA(6, (LPCSTR) * (size_t *)Callback, &Valid))
             ((decltype(TLSCallback) *)*(size_t *)Callback)(a, b, c);
 }
 
 // Sometimes plugins want to name their threads, and not all games support that..
-LONG WINAPI Threadname(PEXCEPTION_POINTERS Info)
+LONG __stdcall Threadname(PEXCEPTION_POINTERS Info)
 {
-    // Via a Microsoft exception.
+    // Via a MSVC exception, not sure about the official name.
     if (Info->ExceptionRecord->ExceptionCode == 0x406D1388)
-        return EXCEPTION_CONTINUE_EXECUTION;
+    {
+        // Double-check, and allow any debugger to handle it if available.
+        if (Info->ExceptionRecord->ExceptionInformation[0] == 0x1000 && !IsDebuggerPresent())
+        {
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+    }
 
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 // Entrypoint when loaded as a shared library.
-BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
+BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
     if (nReason == DLL_PROCESS_ATTACH)
     {
@@ -77,8 +185,10 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Save the callbacks and add ours.
         const auto Directory = getTLSDirectory();
-        auto Callback = (size_t *)Directory->AddressOfCallBacks;
-        if (*Callback) { OriginalTLS.push_back(*Callback); Writeptr(Callback, TLSCallback); }
+        if (auto Callback = (size_t *)Directory->AddressOfCallBacks)
+        {
+            OriginalTLS.push_back(*Callback); Writeptr(Callback, TLSCallback);
+        }
         else
         {
             do
@@ -96,75 +206,10 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
+
+        // If no-one have notified us about the game being initialized, we notify ourselves in 3 sec.
+        std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitialized(false); }).detach();
     }
 
     return TRUE;
-}
-
-// Poke at the plugins from other modules.
-std::vector<void *> Loadedplugins;
-extern "C"
-{
-    EXPORT_ATTR bool Broadcastmessage(const void *Buffer, uint32_t Size)
-    {
-        // Forward to all plugins until one handles it.
-        for (const auto &Item : Loadedplugins)
-        {
-            auto Callback = GetProcAddress(HMODULE(Item), "onMessage");
-            if (!Callback) continue;
-            auto Result = (reinterpret_cast<bool (*)(const void *, uint32_t)>(Callback))(Buffer, Size);
-            if (Result) return true;
-        }
-
-        return false;
-    }
-    EXPORT_ATTR void onInitializationdone()
-    {
-        static bool Initialized = false;
-        if (Initialized) return;
-        Initialized = true;
-
-        // Notify all plugins about being initialized.
-        for (const auto &Item : Loadedplugins)
-        {
-            auto Callback = GetProcAddress(HMODULE(Item), "onInitialized");
-            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
-        }
-    }
-}
-
-// Utility functionality.
-void Loadallplugins()
-{
-    constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Ayria32" : ".Ayria64";
-    std::vector<void *> Freshplugins;
-
-    // Really just load all files from the directory.
-    auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
-    for (const auto &Item : Results)
-    {
-        /*
-            TODO(tcn):
-            We should really check that the plugins are signed by us.
-            Then prompt the user for whitelisting.
-        */
-
-        auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str());
-        if (Module)
-        {
-            Infoprint(va("Loaded plugin \"%s\"", Item.c_str()));
-            Loadedplugins.push_back(Module);
-            Freshplugins.push_back(Module);
-        }
-    }
-
-    // Notify all plugins about starting up.
-    for (const auto &Item : Freshplugins)
-    {
-        auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
-        if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
-    }
-
-    // If no-one have notified us about the game being initialized, we notify ourselves in 3 sec.
-    std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitializationdone(); }).detach();
 }
