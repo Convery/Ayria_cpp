@@ -82,7 +82,7 @@ namespace Patternscan
     }
 
     // Calculate the hosts default ranges, once per compilation-module on some compilers.
-    inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges()
+    [[nodiscard]] inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges()
     {
         /*
             NOTE(tcn):
@@ -139,6 +139,7 @@ namespace Patternscan
             Currentpage = (size_t)Pageinformation.BaseAddress + Pageinformation.RegionSize;
         }
         #else
+        assert(false);
         #endif
 
         Range.second = Currentpage;
