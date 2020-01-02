@@ -6,6 +6,7 @@
 
 #include "Stdinclude.hpp"
 #include "Steam.hpp"
+#pragma warning(disable : 4100)
 
 // Keep the global state together.
 namespace Steam { Globalstate_t Global{}; }
@@ -238,9 +239,9 @@ extern "C"
 
             if(Version == 10)
             {
-                uint16_t usSpectatorPort = va_arg(Args, uint16_t);
-                uint16_t usQueryPort = va_arg(Args, uint16_t);
-                uint32_t eServerMode = va_arg(Args, uint32_t);
+                const uint16_t usSpectatorPort = va_arg(Args, uint16_t);
+                const uint16_t usQueryPort = va_arg(Args, uint16_t);
+                const uint32_t eServerMode = va_arg(Args, uint32_t);
                 const char *pchGameDir = va_arg(Args, char *);
                 const char *pchVersionString = va_arg(Args, char *);
 
@@ -264,8 +265,8 @@ extern "C"
             }
             if(Version == 11 || Version == 12)
             {
-                uint16_t usQueryPort = va_arg(Args, uint16_t);
-                uint32_t eServerMode = va_arg(Args, uint32_t);
+                const uint16_t usQueryPort = va_arg(Args, uint16_t);
+                const uint32_t eServerMode = va_arg(Args, uint32_t);
                 const char *pchVersionString = va_arg(Args, char *);
 
                 Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Query-port: %u\n> Version \"%s\"",

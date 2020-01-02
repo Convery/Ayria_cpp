@@ -6,6 +6,7 @@
 
 #include "../Steam.hpp"
 #include <WinSock2.h>
+#pragma warning(disable : 4100)
 
 namespace Steam
 {

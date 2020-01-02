@@ -13,7 +13,7 @@
 
 namespace FS
 {
-    [[nodiscard]] inline std::basic_string<uint8_t> Readfile(std::string_view Path)
+    [[nodiscard]] inline std::basic_string<uint8_t> Readfile(const std::string_view Path)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "rb");
         if (!Filehandle) return {};
@@ -28,7 +28,7 @@ namespace FS
 
         return std::basic_string<uint8_t>(Buffer.get(), Length);
     }
-    inline bool Writefile(std::string_view Path, const std::basic_string<uint8_t> &Buffer)
+    inline bool Writefile(const std::string_view Path, const std::basic_string<uint8_t> &Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
@@ -37,7 +37,7 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
-    inline bool Writefile(std::string_view Path, std::basic_string_view<uint8_t> Buffer)
+    inline bool Writefile(const std::string_view Path, const std::basic_string_view<uint8_t> Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
@@ -46,7 +46,7 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
-    inline bool Writefile(std::string_view Path, std::string_view Buffer)
+    inline bool Writefile(const std::string_view Path, const std::string_view Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
@@ -55,7 +55,7 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
-    inline bool Writefile(std::string_view Path, std::string &&Buffer)
+    inline bool Writefile(const std::string_view Path, const std::string &&Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
@@ -64,14 +64,14 @@ namespace FS
         std::fclose(Filehandle);
         return true;
     }
-    [[nodiscard]] inline bool Fileexists(std::string_view Path)
+    [[nodiscard]] inline bool Fileexists(const std::string_view Path)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "rb");
         if (!Filehandle) return false;
         std::fclose(Filehandle);
         return true;
     }
-    [[nodiscard]] inline size_t Filesize(std::string_view Path)
+    [[nodiscard]] inline size_t Filesize(const std::string_view Path)
     {
         size_t Filesize{};
 
@@ -91,7 +91,7 @@ namespace FS
     // Windows.
     #if defined(_WIN32)
     #include <Windows.h>
-    [[nodiscard]] inline Stat_t Filestats(std::string_view Path)
+    [[nodiscard]] inline Stat_t Filestats(const std::string_view Path)
     {
         Stat_t Result{};
         if (const auto Filehandle = CreateFileA(Path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr))
@@ -106,7 +106,7 @@ namespace FS
 
         return Result;
     }
-    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, const std::string_view Criteria)
     {
         std::vector<std::string> Results{};
         WIN32_FIND_DATAA Filedata;
@@ -135,7 +135,7 @@ namespace FS
         FindClose(Filehandle);
         return Results;
     }
-    [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> Findfilesrecursive(std::string Searchpath, const std::string_view Criteria)
     {
         std::vector<std::pair<std::string, std::string>> Results{};
         WIN32_FIND_DATAA Filedata;
@@ -175,9 +175,10 @@ namespace FS
     #if !defined(_WIN32)
     #include <sys/types.h>
     #include <dirent.h>
-    [[nodiscard]] inline std::vector<std::string> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
+    [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> Findfilesrecursive(std::string Searchpath, std::string_view Criteria)
     {
         // TODO(tcn): Just port the NT version.
+        assert(false);
         return {};
     }
     [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Searchpath, std::string_view Extension)

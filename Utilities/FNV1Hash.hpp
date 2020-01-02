@@ -104,36 +104,36 @@ namespace Hash
         return Internal::FNV1a_64(String);
     }
 
-    // Wrappers for runtime hashing of strings.
-    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1_32(const std::basic_string<T> String)
+    // Wrappers for runtime hashing of strings, and C++ 20 compiletime std::strings.
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const std::basic_string<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1a_32(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const std::basic_string<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1a_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const std::basic_string<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1_32(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string_view<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1_64(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const std::basic_string_view<T> String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr inline uint32_t FNV1a_32(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const std::basic_string_view<T> String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr inline uint64_t FNV1a_64(const std::basic_string_view<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const std::basic_string_view<T> String)
     {
         return FNV1a_64(String.data(), String.size());
     }
@@ -143,7 +143,6 @@ namespace Hash
 // e.g. std::unordered_map<SillyType, int, decltype(FNV::Hash), decltype(FNV::Equal)>
 namespace FNV
 {
-    constexpr inline auto Hash = [](const auto &v) { return Hash::FNV1a_64(&v, sizeof(v)); };
-    constexpr inline auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
+    constexpr auto Hash = [](const auto &v) { return Hash::FNV1a_64(&v, sizeof(v)); };
+    constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }
-

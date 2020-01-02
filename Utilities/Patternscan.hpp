@@ -147,12 +147,11 @@ namespace Patternscan
     }
 
     // Create a pattern or mask from a readable string.
-    [[nodiscard]] inline Patternmask_t from_string(std::string_view Readable)
+    [[nodiscard]] inline Patternmask_t from_string(const std::string_view Readable)
     {
         uint32_t Count{ 0 };
-        Patternmask_t Result;
-        Result.reserve(Readable.size() >> 1);
-        const char Hex[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+        Patternmask_t Result(Readable.size() >> 1, '\0');
+        constexpr char Hex[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
             0, 0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15 };
@@ -182,7 +181,7 @@ namespace Patternscan
     }
 
     // Find strings in memory - helper.
-    [[nodiscard]] inline std::vector<std::uintptr_t> Findstrings(const Range_t Range, std::string_view String)
+    [[nodiscard]] inline std::vector<std::uintptr_t> Findstrings(const Range_t Range, const std::string_view String)
     {
         const Patternmask_t Hexstring{ String.begin(), String.end() };
         return Findpatterns(Range, Hexstring, Hexstring);
