@@ -62,7 +62,7 @@ namespace Communication
     // Spawn a thread that polls for packets in the background.
     void Initialize(const uint16_t Port)
     {
-        static unsigned long Argument{ 1 };
+        unsigned long Argument{ 1 };
         static void *Threadhandle{};
         if (Threadhandle) return;
         Broadcastport = Port;
