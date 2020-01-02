@@ -10,15 +10,16 @@
 extern "C"
 {
     // NOTE(tcn): All of these are optional, simply comment them out if not needed. See docs for example usage.
-    EXPORT_ATTR void onStartup(bool) {}                                             // Do .text edits in this callback.
-    EXPORT_ATTR void onInitialized(bool) {}                                         // Do .data edits in this callback.
-    EXPORT_ATTR void onReload(void *Previousinstance) {}                            // User-defined, called by devs for hotpatching while developing.
-    EXPORT_ATTR bool onEvent(const void *Data, uint32_t Length) { return false; }   // User-defined, returns if the event was handled.
+    EXPORT_ATTR void __cdecl onReload(void *Previousinstance) { (void)Previousinstance; }   // User-defined, called by devs for hotpatching plugins.
+    EXPORT_ATTR bool __cdecl onEvent(const void *Data, uint32_t Length)                     // User-defined, returns if the event was handled.
+    { (void)Data; (void)Length; return false; }
+    EXPORT_ATTR void __cdecl onInitialized(bool) {}                                         // Do .data edits in this callback.
+    EXPORT_ATTR void __cdecl onStartup(bool) {}                                             // Do .text edits in this callback.
 }
 
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
-BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
+BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
     if (nReason == DLL_PROCESS_ATTACH)
     {
@@ -37,7 +38,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     return TRUE;
 }
 #else
-__attribute__((constructor)) void DllMain()
+__attribute__((constructor)) void __stdcall DllMain()
 {
     // Ensure that Ayrias default directories exist.
     std::filesystem::create_directories("./Ayria/Logs");

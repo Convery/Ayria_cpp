@@ -17,7 +17,7 @@ extern void Steam_init();
 
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
-BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
+BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
     if (nReason == DLL_PROCESS_ATTACH)
     {
@@ -55,7 +55,7 @@ BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     return TRUE;
 }
 #else
-__attribute__((constructor)) void DllMain()
+__attribute__((constructor)) void __stdcall DllMain()
 {
     // Ensure that Ayrias default directories exist.
     std::filesystem::create_directories("./Ayria/Logs");
@@ -67,15 +67,10 @@ __attribute__((constructor)) void DllMain()
 }
 #endif
 
-// Entrypoint when loaded as a plugin.
-extern "C"
+//Callback when loaded as a plugin.
+extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
 {
-    EXPORT_ATTR void onStartup(bool)
-    {
-        // Initialize the various platforms.
-        Tencent_init();
-        Steam_init();
-    }
-    EXPORT_ATTR void onInitialized(bool) { /* Do .data edits */ }
-    EXPORT_ATTR bool onMessage(const void *, uint32_t) { return false; }
+    // Initialize the various platforms.
+    Tencent_init();
+    Steam_init();
 }
