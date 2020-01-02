@@ -5,6 +5,7 @@
 */
 
 #include "../Steam.hpp"
+#pragma warning(disable : 4100)
 
 namespace Steam
 {

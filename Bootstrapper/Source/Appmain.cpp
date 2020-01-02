@@ -42,7 +42,7 @@ extern "C"
 
         for (const auto &Item : Loadedplugins)
         {
-            if (auto Callback = GetProcAddress(HMODULE(Item), "onInitialized"))
+            if (const auto Callback = GetProcAddress(HMODULE(Item), "onInitialized"))
             {
                 (reinterpret_cast<void (__cdecl *)(bool)>(Callback))(false);
             }
@@ -70,9 +70,9 @@ extern "C"
                 GetModuleFileNameA((HMODULE)Plugin, Localname, 512);
                 if (std::strstr(Localname, Pluginname))
                 {
-                    auto Module = LoadLibraryA(("./Ayria/Plugins/%s"s + Filename).c_str());
+                    const auto Module = LoadLibraryA(("./Ayria/Plugins/%s"s + Filename).c_str());
 
-                    if (auto Callback = GetProcAddress(Module, "onReload"))
+                    if (const auto Callback = GetProcAddress(Module, "onReload"))
                     {
                         (reinterpret_cast<void (__cdecl *)(void *)>(Callback))(Plugin);
                     }
@@ -91,7 +91,7 @@ extern "C"
         // Forward to all plugins to enable snooping.
         for (const auto &Item : Loadedplugins)
         {
-            if (auto Callback = GetProcAddress(HMODULE(Item), "onEvent"))
+            if (const auto Callback = GetProcAddress(HMODULE(Item), "onEvent"))
             {
                 Handledcount += (reinterpret_cast<bool (__cdecl *)(const void *, uint32_t)>(Callback))(Data, Length);
             }
@@ -115,7 +115,7 @@ void Loadallplugins()
             We should really check that the plugins are signed by us.
             Then prompt the user for whitelisting.
         */
-        if (auto Module = LoadLibraryA(("./Ayria/Plugins/"s + Item).c_str()))
+        if (const auto Module = LoadLibraryA(("./Ayria/Plugins/"s + Item).c_str()))
         {
             Infoprint(va("Loaded plugin \"%s\"", Item.c_str()));
             Loadedplugins.push_back(Module);
@@ -126,7 +126,7 @@ void Loadallplugins()
     // Notify all plugins about starting up.
     for (const auto &Item : Freshplugins)
     {
-        auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
+        const auto Callback = GetProcAddress(HMODULE(Item), "onStartup");
         if (Callback) (reinterpret_cast<void (__cdecl *)(bool)>(Callback))(false);
     }
 }

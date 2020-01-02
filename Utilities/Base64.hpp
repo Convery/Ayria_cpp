@@ -61,7 +61,7 @@ namespace Base64
     }
     [[nodiscard]] inline std::string Decode(const std::string_view Input)
     {
-        std::string Result(((Input.size() / 4) * 3), '=');
+        std::string Result(((Input.size() / 4) * 3), '\0');
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};

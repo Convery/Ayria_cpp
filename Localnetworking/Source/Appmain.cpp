@@ -171,9 +171,9 @@ namespace Localnetworking
         // Request a server to associate with the hostname.
         for (const auto &Handle : Pluginhandles)
         {
-            if (auto Callback = GetProcAddress((HMODULE)Handle, "Createserver"))
+            if (const auto Callback = GetProcAddress((HMODULE)Handle, "Createserver"))
             {
-                if (auto Server = (reinterpret_cast<IServer * (__cdecl *)(const char *)>(Callback))(Hostname.data()))
+                if (const auto Server = (reinterpret_cast<IServer * (__cdecl *)(const char *)>(Callback))(Hostname.data()))
                 {
                     Resolvedhosts[Hostname.data()] = Server;
                     return true;
@@ -253,8 +253,7 @@ namespace Localnetworking
         auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
         for (const auto &Item : Results)
         {
-            auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str());
-            if (Module)
+            if (const auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
                 Infoprint(va("Loaded localnet plugin \"%s\"", Item.c_str()));
                 Pluginhandles.push_back(size_t(Module));

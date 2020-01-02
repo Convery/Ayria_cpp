@@ -25,7 +25,7 @@ namespace Internal
     }
 }
 
-[[nodiscard]] inline std::string va(std::string_view Format, ...)
+[[nodiscard]] inline std::string va(const std::string_view Format, ...)
 {
     auto Buffer{ std::make_unique<char[]>(Internal::Defaultsize) };
     std::va_list Varlist;
