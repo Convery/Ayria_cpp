@@ -150,7 +150,7 @@ namespace Patternscan
     [[nodiscard]] inline Patternmask_t from_string(const std::string_view Readable)
     {
         uint32_t Count{ 0 };
-        Patternmask_t Result(Readable.size() >> 1, '\0');
+        Patternmask_t Result; Result.reserve(Readable.size() >> 1);
         constexpr char Hex[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
             0, 0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
