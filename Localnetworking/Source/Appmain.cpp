@@ -57,13 +57,14 @@ namespace Localnetworking
     std::unordered_map<std::string, IServer *> Resolvedhosts;
     std::unordered_map<uint16_t, std::string> Proxyports;
     std::vector<size_t> Pluginhandles;
+    std::thread Pollthread;
     std::mutex Bottleneck;
     uint16_t Backendport;
     size_t Listensocket;
     size_t Proxysocket;
 
     // Poll all sockets in the background.
-    void Pollthread()
+    void Pollsockets()
     {
         // ~100 FPS in-case someone proxies game-data.
         timeval Timeout{ NULL, 10000 };
@@ -111,15 +112,13 @@ namespace Localnetworking
                         // Broken connection.
                         if (Size <= 0)
                         {
-                            // Lock scope.
-                            {
-                                // Winsock had some internal issue that we can't be arsed to recover from..
-                                if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
-                                if (Server) Server->onDisconnect();
-                                std::lock_guard _(Bottleneck);
-                                Sockets.erase(Socket);
-                                closesocket(Socket);
-                            }
+
+                            // Winsock had some internal issue that we can't be arsed to recover from..
+                            if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                            if (Server) Server->onDisconnect();
+
+                            closesocket(Socket);
+                            Sockets.erase(Socket);
                             return Lambda(Sockets);
                         }
 
@@ -129,6 +128,7 @@ namespace Localnetworking
                         else Server->onPacketwrite(Buffer, Size, &Result->first);
                     }
                 };
+                std::lock_guard _(Bottleneck);
                 Lambda(Datagramsockets);
                 Lambda(Streamsockets);
             }
@@ -264,6 +264,8 @@ namespace Localnetworking
         Debugprint(va("Spawning localnet backend on %u", Backendport));
 
         // Keep the polling away from the main thread.
-        std::thread(Pollthread).detach();
+        std::atexit([]() { TerminateThread(Pollthread.native_handle(), 0); });
+        Pollthread = std::thread(Pollsockets);
+        Pollthread.detach();
     }
 }
