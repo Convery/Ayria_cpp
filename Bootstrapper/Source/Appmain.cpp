@@ -70,15 +70,16 @@ extern "C"
                 GetModuleFileNameA((HMODULE)Plugin, Localname, 512);
                 if (std::strstr(Localname, Pluginname))
                 {
-                    const auto Module = LoadLibraryA(("./Ayria/Plugins/%s"s + Filename).c_str());
-
-                    if (const auto Callback = GetProcAddress(Module, "onReload"))
+                    if (const auto Module = LoadLibraryA(("./Ayria/Plugins/%s"s + Filename).c_str()))
                     {
-                        (reinterpret_cast<void (__cdecl *)(void *)>(Callback))(Plugin);
-                    }
+                        if (const auto Callback = GetProcAddress(Module, "onReload"))
+                        {
+                            (reinterpret_cast<void(__cdecl*)(void*)>(Callback))(Plugin);
+                        }
 
-                    Loadedplugins.push_back(Module);
-                    FreeLibrary((HMODULE)Plugin);
+                        Loadedplugins.push_back(Module);
+                        FreeLibrary((HMODULE)Plugin);
+                    }
                     return;
                 }
             }
@@ -132,26 +133,26 @@ void Loadallplugins()
 }
 
 // Callback from ntdll::CallTlsInitializers
-void __stdcall Dummycallback(PVOID, DWORD, PVOID) {}
 void __stdcall TLSCallback(PVOID a, DWORD b, PVOID c)
 {
-    const auto Directory = getTLSDirectory();
     HMODULE Valid;
+    const auto Directory = getTLSDirectory();
+    auto Callbacks = (size_t*)Directory->AddressOfCallBacks;
 
     // Disable callbacks while loading plugins.
-    Writeptr(Directory->AddressOfCallBacks, 0);
+    Writeptr(&Callbacks[0], 0);
 
     // Load any plugins found in ./Ayria/
     Loadallplugins();
 
     // Restore the callback directory.
-    for (size_t i = 0; i < OriginalTLS.size(); ++i)
-        Writeptr((Directory->AddressOfCallBacks + i * sizeof(size_t)), OriginalTLS[i]);
+    for (const auto& Address : OriginalTLS)
+        Writeptr(Callbacks++, Address);
 
-    // If the original had callbacks, we need to call the first one.
-    if (auto Callback = (size_t *)Directory->AddressOfCallBacks; *(size_t *)Callback)
-        if (GetModuleHandleExA(6, (LPCSTR) * (size_t *)Callback, &Valid))
-            ((decltype(TLSCallback) *)*(size_t *)Callback)(a, b, c);
+    // Call the first real callback if we had one.
+    Callbacks = (size_t*)Directory->AddressOfCallBacks;
+    if (*Callbacks && GetModuleHandleExA(6, (LPCSTR)*Callbacks, &Valid))
+        ((decltype(TLSCallback)*)*Callbacks)(a, b, c);
 }
 
 // Sometimes plugins want to name their threads, and not all games support that..
@@ -183,23 +184,15 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Only keep a log for this session.
         Logging::Clearlog();
 
-        // Save the callbacks and add ours.
+        // Save any existing callbacks.
         const auto Directory = getTLSDirectory();
-        if (auto Callback = (size_t *)Directory->AddressOfCallBacks)
-        {
-            OriginalTLS.push_back(*Callback); Writeptr(Callback, TLSCallback);
-        }
-        else
-        {
-            do
-            {
-                OriginalTLS.push_back(*Callback);
-                Writeptr(Callback, Dummycallback);
-            } while (*(++Callback));
+        auto Callbacks = (size_t*)Directory->AddressOfCallBacks;
+        while (*Callbacks) { OriginalTLS.push_back(*(Callbacks++)); }
 
-            Callback--;
-            Writeptr(Callback, TLSCallback);
-        }
+        // Overwrite with ours.
+        Callbacks = (size_t*)Directory->AddressOfCallBacks;
+        Writeptr(&Callbacks[0], TLSCallback);
+        Writeptr(&Callbacks[1], nullptr);
 
         // Sometimes plugins want to name their threads, and not all games support that..
         SetUnhandledExceptionFilter(Threadname);
