@@ -246,10 +246,10 @@ namespace Localnetworking
     void Initializewinsock()
     {
         // Proxy Winsocks exports with our own information.
-        const auto Hook = [&](std::string_view Name, void *Target)
+        const auto Hook = [&](const char *Name, void *Target)
         {
-            auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name.data());
-            auto Address2 = GetProcAddress(LoadLibraryA("ws2_32.dll"), Name.data());
+            auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name);
+            auto Address2 = GetProcAddress(LoadLibraryA("ws2_32.dll"), Name);
             if (Address1 == Address2) Address2 = 0;
 
             if (Address1)

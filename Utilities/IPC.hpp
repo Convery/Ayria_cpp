@@ -42,7 +42,7 @@ namespace IPC
         {
             if (auto Buffer = (Filemap_t *)MapViewOfFile(Mapping, FILE_MAP_ALL_ACCESS, 0, 0, 0))
             {
-                const auto B64 = Base64::isValid(Data.data()) ? Data : Base64::Encode(Data);
+                const std::string B64 = Base64::isValid(Data.data()) ? Data.data() : Base64::Encode(Data);
                 if (B64.size() < Buffer->Mapsize)
                 {
                     std::memcpy(&Buffer->Base64data, B64.data(), B64.size());
