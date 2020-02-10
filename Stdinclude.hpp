@@ -62,6 +62,7 @@
 // Global utilities.
 #include <Utilities/Variadicstring.hpp>
 #include <Utilities/Patternscan.hpp>
+#include <Utilities/Bytebuffer.hpp>
 #include <Utilities/Memprotect.hpp>
 #include <Utilities/Filesystem.hpp>
 #include <Utilities/FNV1Hash.hpp>

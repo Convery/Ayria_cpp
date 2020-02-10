@@ -71,6 +71,9 @@ find_path(JSON_INC nlohmann/json.hpp)
 include_directories(${MHOOK_INC})
 include_directories(${JSON_INC})
 
+# Global utilities.
+add_subdirectory(Utilities)
+
 # Add the sub-projects.
 add_subdirectory(Injector)
 add_subdirectory(Bootstrapper)
