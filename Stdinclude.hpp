@@ -61,14 +61,16 @@
 
 // Global utilities.
 #include <Utilities/Crypto/FNV1Hash.hpp>
+#include <Utilities/Crypto/OpenSSLWrappers.hpp>
+#include <Utilities/Crypto/Tiger192Hash.hpp>
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>
+#include <Utilities/Internal/IPC.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
-#include <Utilities/Internal/IPC.hpp>
 
 // Extensions to the language.
 using namespace std::string_literals;
