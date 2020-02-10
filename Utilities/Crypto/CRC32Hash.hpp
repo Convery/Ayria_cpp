@@ -5,6 +5,7 @@
 
     // 32A = 0x04C11DB7
     // 32B = 0xEDB88320
+    // 32T = Tencents alternative
 */
 
 #pragma once
@@ -78,7 +79,18 @@ namespace Hash
 
         return ~Block;
     }
+    [[nodiscard]] constexpr uint32_t CRC32T(const char *Input, const uint32_t Length)
+    {
+        uint32_t Block = ~Length;
+        for (uint32_t i = 0; i < Length; ++i)
+        {
+            Block = Internal::CRC32B_Table()[(Block ^ Input[i]) & 0xFF] ^ (Block >> 8);
+        }
+
+        return ~Block;
+    }
 
     static_assert(CRC32A("123456789", 9) == 0xFC891918, "CRC32-A is broken =(");
     static_assert(CRC32B("123456789", 9) == 0xCBF43926, "CRC32-B is broken =(");
+    static_assert(CRC32T("123456789", 9) == 0x67578F7D, "CRC32-T is broken =(");
 }
