@@ -29,6 +29,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <array>
 #include <any>
 
 // Platform-specific libraries.
@@ -61,6 +62,7 @@
 
 // Global utilities.
 #include <Utilities/Crypto/FNV1Hash.hpp>
+#include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
 #include <Utilities/Encoding/Base64.hpp>
