@@ -56,11 +56,6 @@ struct Bytebuffer
     template <typename Type> bool Read(Type &Buffer, bool Typechecked = true);
     template <typename Type> void Write(const Type Value, bool Typechecked = true);
 
-    // Special IO
-    template <typename Type> Type Readcompressed();
-    template <typename Type> bool Readcompressed(Type &Buffer);
-    template <typename Type> void Writecompressed(const Type Value);
-
     // Utility functionality.
     [[nodiscard]] size_t Remaininglength() const;
     [[nodiscard]] std::string to_string();

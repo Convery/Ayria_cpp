@@ -66,6 +66,7 @@
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
 #include <Utilities/Encoding/Base64.hpp>
+#include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
