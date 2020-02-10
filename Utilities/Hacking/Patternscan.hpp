@@ -8,8 +8,7 @@
 */
 
 #pragma once
-#include "Variadicstring.hpp"
-#include <cstdint>
+#include <Stdinclude.hpp>
 
 // GCC exported.
 #if !defined(_WIN32)

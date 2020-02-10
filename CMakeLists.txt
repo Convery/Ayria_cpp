@@ -73,6 +73,7 @@ include_directories(${JSON_INC})
 
 # Global utilities.
 add_subdirectory(Utilities)
+set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 
 # Add the sub-projects.
 add_subdirectory(Injector)

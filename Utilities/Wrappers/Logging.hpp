@@ -5,13 +5,7 @@
 */
 
 #pragma once
-#include "Variadicstring.hpp"
-#include <cstdio>
-#include <ctime>
-
-#if defined _WIN32
-#include <Windows.h>
-#endif
+#include <Stdinclude.hpp>
 
 namespace Logging
 {

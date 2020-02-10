@@ -60,15 +60,15 @@
 #pragma warning(pop)
 
 // Global utilities.
-#include <Utilities/Variadicstring.hpp>
-#include <Utilities/Patternscan.hpp>
-#include <Utilities/Bytebuffer.hpp>
-#include <Utilities/Memprotect.hpp>
-#include <Utilities/Filesystem.hpp>
-#include <Utilities/FNV1Hash.hpp>
-#include <Utilities/Logging.hpp>
-#include <Utilities/Base64.hpp>
-#include <Utilities/IPC.hpp>
+#include <Utilities/Crypto/FNV1Hash.hpp>
+#include <Utilities/Encoding/Base64.hpp>
+#include <Utilities/Encoding/Bytebuffer.hpp>
+#include <Utilities/Encoding/Variadicstring.hpp>
+#include <Utilities/Hacking/Memprotect.hpp>
+#include <Utilities/Hacking/Patternscan.hpp>
+#include <Utilities/Wrappers/Logging.hpp>
+#include <Utilities/Wrappers/Filesystem.hpp>
+#include <Utilities/Internal/IPC.hpp>
 
 // Extensions to the language.
 using namespace std::string_literals;
