@@ -82,4 +82,5 @@ add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
 
 # Examples.
+add_subdirectory(Ingame_GUI)
 add_subdirectory(Plugintemplate)
