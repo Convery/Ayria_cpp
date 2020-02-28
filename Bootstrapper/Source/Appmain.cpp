@@ -27,6 +27,7 @@ PIMAGE_TLS_DIRECTORY getTLSDirectory()
     const PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
     const IMAGE_DATA_DIRECTORY Directory = NTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
 
+    if (Directory.Size == 0) return nullptr;
     return (PIMAGE_TLS_DIRECTORY)((DWORD_PTR)Modulehandle + Directory.VirtualAddress);
 }
 
@@ -153,6 +154,9 @@ void __stdcall TLSCallback(PVOID a, DWORD b, PVOID c)
     Callbacks = (size_t*)Directory->AddressOfCallBacks;
     if (*Callbacks && GetModuleHandleExA(6, (LPCSTR)*Callbacks, &Valid))
         ((decltype(TLSCallback)*)*Callbacks)(a, b, c);
+
+    // If no-one have notified us about the game being initialized, we notify ourselves in 3 sec.
+    std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitialized(false); }).detach();
 }
 
 // Sometimes plugins want to name their threads, and not all games support that..
@@ -185,20 +189,32 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         Logging::Clearlog();
 
         // Save any existing callbacks.
-        const auto Directory = getTLSDirectory();
-        auto Callbacks = (size_t*)Directory->AddressOfCallBacks;
-        while (*Callbacks) { OriginalTLS.push_back(*(Callbacks++)); }
+        if (const auto Directory = getTLSDirectory())
+        {
+            auto Callbacks = (size_t *)Directory->AddressOfCallBacks;
+            while (*Callbacks) { OriginalTLS.push_back(*(Callbacks++)); }
 
-        // Overwrite with ours.
-        Callbacks = (size_t*)Directory->AddressOfCallBacks;
-        Writeptr(&Callbacks[0], TLSCallback);
-        Writeptr(&Callbacks[1], nullptr);
+            // Overwrite with ours.
+            Callbacks = (size_t *)Directory->AddressOfCallBacks;
+            Writeptr(&Callbacks[0], TLSCallback);
+            Writeptr(&Callbacks[1], nullptr);
+
+            // Opt out of further notifications.
+            DisableThreadLibraryCalls(hDllHandle);
+        }
 
         // Sometimes plugins want to name their threads, and not all games support that..
         SetUnhandledExceptionFilter(Threadname);
+    }
 
+    // Alternative for games without TLS.
+    if (nReason == DLL_THREAD_ATTACH)
+    {
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
+
+        // Load any plugins found in ./Ayria/
+        Loadallplugins();
 
         // If no-one have notified us about the game being initialized, we notify ourselves in 3 sec.
         std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitialized(false); }).detach();
