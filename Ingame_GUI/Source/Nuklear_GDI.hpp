@@ -6,96 +6,187 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_ZERO_COMMAND_MEMORY
+#pragma warning(push, 0)
 #include "nuklear.h"
+#pragma warning(pop)
 
+namespace NK_GDI
+{
+    struct Font_t
+    {
+        HDC Devicecontext;
+        HFONT Fonthandle;
+        LONG Fontheight;
+    };
+
+    // Uses Arial as default font.
+    nk_context *Initialize(HDC Windowdevice);
+
+    // Clear the buffer to white by default as we tend to chroma-key on it.
+    void onRender(struct nk_color Clearcolor = { 0xFF, 0xFF, 0xFF, 0xFF });
+
+    // Returns whether or not to sink the event.
+    bool onEvent(HWND, UINT, WPARAM, LPARAM);
+
+    namespace Fonts
+    {
+        struct nk_user_font Createfont(const char *Name, int32_t Fontsize);
+        struct nk_user_font Createfont(const char *Name, int32_t Fontsize, void *Fontdata, uint32_t Datasize);
+    }
+    namespace Images
+    {
+        template <bool isRGB = true> // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
+        std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, const struct nk_vec2i Size);
+        void Deleteimage(std::unique_ptr<struct nk_image> &&Image);
+    }
+    namespace Internal
+    {
+        // Callbacks for nk_command_type.
+        template <typename CMD> void RenderCMD(const CMD *Command);
+        constexpr COLORREF toColor(const struct nk_color &Color);
+    }
+}
+
+// Let's use Nuklears include style.
+#ifdef NK_IMPLEMENTATION
 namespace NK_GDI
 {
     constexpr size_t Bitsperpixel = 24;
     constexpr size_t Pixelsize = 3;
-
-    struct Font_t
-    {
-        nk_user_font NK;        // 12 Bytes
-        uint16_t Fontheight;
-        HFONT Fonthandle;       // 4 - move to NK.Userdata?
-        HDC Devicecontext;      // 4
-
-    };
     static struct
     {
         HDC Memorydevice;
         HDC Windowdevice;
         struct nk_vec2i Size;
         struct nk_context NK;
-    } Context;
+    } Context{};
 
-    template <bool useRGB = false> // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
-    inline std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, const struct nk_vec2i Size)
+    // Use UTF-8 for everything, just to be safe.
+    inline std::wstring getWidestring(const char *Input, const size_t Length)
     {
-        assert(Size.x); assert(Size.y); assert(Pixelbuffer);
-        auto Image = std::make_unique<struct nk_image>();
-        BITMAPINFO BMI{ sizeof(BITMAPINFOHEADER) };
-        uint8_t *DIBPixels{};
+        const auto Size = MultiByteToWideChar(CP_UTF8, 0, Input, Length, NULL, 0);
+        auto Buffer = (wchar_t *)alloca(Size * sizeof(wchar_t) + sizeof(wchar_t));
+        MultiByteToWideChar(CP_UTF8, 0, Input, Length, Buffer, Size);
+        return std::wstring(Buffer, Size);
+    }
+    inline std::wstring getWidestring(const std::string &Input)
+    {
+        return getWidestring(Input.c_str(), Input.size());
+    }
 
-        // Windows likes to draw bitmaps upside down, so negative height.
-        BMI.bmiHeader.biSizeImage = Size.y * Size.x * Pixelsize;
-        BMI.bmiHeader.biBitCount = Bitsperpixel;
-        BMI.bmiHeader.biHeight = (-1) * Size.y;
-        BMI.bmiHeader.biCompression = BI_RGB;
-        BMI.bmiHeader.biWidth = Size.x;
-        BMI.bmiHeader.biPlanes = 1;
-
-        // Region is a nk_recti {x0, y0, w, h }
-        Image->region[2] = Size.x;
-        Image->region[3] = Size.y;
-        Image->w = Size.x;
-        Image->h = Size.y;
-
-        // Allocate the bitmap in system-memory.
-        auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
-        std::memcpy(Bitmap, Pixelbuffer, Size.x * Size.y * Pixelsize);
-
-        // Swap R and B channels.
-        if constexpr (!useRGB)
+    namespace Fonts
+    {
+        inline float getTextwidth(nk_handle Handle, float, const char *Text, int Length)
         {
-            // TODO(tcn): Maybe some kind of SSE optimization here?
-            for (size_t i = 0; i < Size.x * Size.y; i += Pixelsize)
-            {
-                std::swap(DIBPixels + i, DIBPixels + i + 2);
-            }
+            assert(Handle.ptr); assert(Text);
+
+            SIZE Textsize;
+            const auto Font = (Font_t *)Handle.ptr;
+            const auto String = getWidestring(Text, Length);
+
+            if (GetTextExtentPoint32W(Font->Devicecontext, String.c_str(), String.size(), &Textsize))
+                return float(Textsize.cx);
+
+            return -1.0f;
         }
 
-        // Re-associate the memory with our bitmap.
-        SetDIBits(NULL, Bitmap, 0, Size.y, DIBPixels, &BMI, DIB_RGB_COLORS);
-        Image->handle.ptr = Bitmap;
-        return Image;
+        inline struct nk_user_font Createfont(const char *Name, int32_t Fontsize)
+        {
+            auto Font = new Font_t();
+            struct nk_user_font NK;
+            TEXTMETRICW Fontmetric;
+
+            Font->Devicecontext = CreateCompatibleDC(NULL);
+            Font->Fonthandle = CreateFontA(Fontsize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, Name);
+
+            SelectObject(Font->Devicecontext, Font->Fonthandle);
+            GetTextMetricsW(Font->Devicecontext, &Fontmetric);
+            Font->Fontheight = Fontmetric.tmHeight;
+            NK.height = float(Font->Fontheight);
+            NK.userdata = nk_handle_ptr(Font);
+            NK.width = getTextwidth;
+
+            return NK;
+        }
+        inline struct nk_user_font Createfont(const char *Name, int32_t Fontsize, void *Fontdata, uint32_t Datasize)
+        {
+            DWORD Installedfonts;
+            AddFontMemResourceEx(Fontdata, Datasize, NULL, &Installedfonts);
+            return Createfont(Name, Fontsize);
+        }
     }
-    inline void Deleteimage(std::unique_ptr<struct nk_image> &&Image)
+    namespace Images
     {
-        assert(Image->handle.id);
-        DeleteObject(Image->handle.ptr);
+        template <bool isRGB>   // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
+        std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, const struct nk_vec2i Size)
+        {
+            assert(Size.x); assert(Size.y); assert(Pixelbuffer);
+            auto Image = std::make_unique<struct nk_image>();
+            BITMAPINFO BMI{ sizeof(BITMAPINFOHEADER) };
+            uint8_t *DIBPixels{};
+
+            // Windows likes to draw bitmaps upside down, so negative height.
+            BMI.bmiHeader.biSizeImage = Size.y * Size.x * Pixelsize;
+            BMI.bmiHeader.biBitCount = Bitsperpixel;
+            BMI.bmiHeader.biHeight = (-1) * Size.y;
+            BMI.bmiHeader.biCompression = BI_RGB;
+            BMI.bmiHeader.biWidth = Size.x;
+            BMI.bmiHeader.biPlanes = 1;
+
+            // Region is a nk_recti {x0, y0, w, h }
+            Image->region[2] = Size.x;
+            Image->region[3] = Size.y;
+            Image->w = Size.x;
+            Image->h = Size.y;
+
+            // Allocate the bitmap in system-memory.
+            auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
+            std::memcpy(Bitmap, Pixelbuffer, Size.x * Size.y * Pixelsize);
+
+            // Swap R and B channels.
+            if constexpr (isRGB)
+            {
+                // TODO(tcn): Maybe some kind of SSE optimization here?
+                for (size_t i = 0; i < Size.x * Size.y; i += Pixelsize)
+                {
+                    std::swap(DIBPixels + i, DIBPixels + i + 2);
+                }
+            }
+
+            // Re-associate the memory with our bitmap.
+            SetDIBits(NULL, Bitmap, 0, Size.y, DIBPixels, &BMI, DIB_RGB_COLORS);
+            Image->handle.ptr = Bitmap;
+            return Image;
+        }
+        void Deleteimage(std::unique_ptr<struct nk_image> &&Image)
+        {
+            assert(Image->handle.ptr);
+            DeleteObject(Image->handle.ptr);
+        }
     }
-
-
     namespace Internal
     {
-        // Callbacks for nk_command_type.
-        template <typename CMD> void RenderCMD(const CMD *Command);
         constexpr COLORREF toColor(const struct nk_color &Color)
         {
             return Color.r | (Color.g << 8) | (Color.b << 16);
         }
+
         template </*NK_COMMAND_TEXT*/> void RenderCMD(const nk_command_text *Command)
         {
             assert(Context.Memorydevice); assert(Command);
             assert(Command->string); assert(Command->font);
 
-            const std::string Text(Command->string, Command->length);
-            SetBkColor(Context.Memorydevice, toColor(Command->background));
+            const auto Text = getWidestring(Command->string, Command->length);
             SetTextColor(Context.Memorydevice, toColor(Command->foreground));
+            SetBkColor(Context.Memorydevice, toColor(Command->background));
 
-            SelectObject(Context.Memorydevice, (HFONT)Command->font->userdata.ptr);
-            ExtTextOutA(Context.Memorydevice, Command->x, Command->y, ETO_OPAQUE, NULL, Text.c_str(), Text.size(), NULL);
+            SelectObject(Context.Memorydevice, ((Font_t *)Command->font->userdata.ptr)->Fonthandle);
+            ExtTextOutW(Context.Memorydevice, Command->x, Command->y, ETO_OPAQUE, NULL, Text.c_str(), Text.size(), NULL);
         }
         template </*NK_COMMAND_RECT*/> void RenderCMD(const nk_command_rect *Command)
         {
@@ -253,7 +344,7 @@ namespace NK_GDI
         {
             assert(Context.Memorydevice); assert(Command);
             POINT Points[4] = { {Command->a.x, Command->a.y}, {Command->b.x, Command->b.y},
-                                {Command->c.x, Command->c.y}, {Command->a.x, Command->a.y} };
+                               {Command->c.x, Command->c.y}, {Command->a.x, Command->a.y} };
             HPEN Pen{};
 
             // Create a custom pen if needed.
@@ -283,7 +374,7 @@ namespace NK_GDI
                 // TODO(tcn): Benchmark the different ways to paint the rect.
                 const RECT Area = { Command->x, Command->y, Command->x + Command->w, Command->y + Command->h };
                 SetBkColor(Context.Memorydevice, Internal::toColor(Command->color));
-                ExtTextOutA(Context.Memorydevice, 0, 0, ETO_OPAQUE, &Area, NULL, 0, NULL);
+                ExtTextOutW(Context.Memorydevice, 0, 0, ETO_OPAQUE, &Area, NULL, 0, NULL);
             }
             else
             {
@@ -363,20 +454,34 @@ namespace NK_GDI
             else
             {
                 /*
-                    TODO(tcn): Up vertices to a multiple of 4, do maths with GRADIENT_FILL_TRIANGLE..
+                TODO(tcn): Up vertices to a multiple of 4, do maths with GRADIENT_FILL_TRIANGLE..
                 */
             }
 
             // TODO(tcn): AlphaBlend?
         }
 
-
         /*
         template <> void RenderCMD(const nk_command_scissor *Command)
         {
-            assert(Context.Memorydevice); assert(Command);
+        assert(Context.Memorydevice); assert(Command);
         }
         */
+    }
+
+    // Uses Arial as default font.
+    inline nk_context *Initialize(HDC Windowdevice)
+    {
+        // Arial should be available on every system.
+        static auto Systemfont = Fonts::Createfont("Arial", 14);
+
+        auto Bitmap = CreateCompatibleBitmap(Windowdevice, 0, 0);
+        Context.Memorydevice = CreateCompatibleDC(Windowdevice);
+        SelectObject(Context.Memorydevice, Bitmap);
+
+        nk_init_default(&Context.NK, &Systemfont);
+        Context.Windowdevice = Windowdevice;
+        return &Context.NK;
     }
 
     // Returns whether or not to sink the event.
@@ -601,7 +706,7 @@ namespace NK_GDI
             // TODO(tcn): Benchmark the different ways to clear.
             const RECT Screen = { 0, 0, Context.Size.x, Context.Size.y };
             SetBkColor(Context.Memorydevice, Internal::toColor(Clearcolor));
-            ExtTextOutA(Context.Memorydevice, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
+            ExtTextOutW(Context.Memorydevice, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
         }
 
         // Iterate over the render commands.
@@ -631,7 +736,7 @@ namespace NK_GDI
                 // Case(NK_COMMAND_ARC, nk_command_arc);
                 case NK_COMMAND_NOP:
                 default: break;
-                #undef Case
+                    #undef Case
             }
 
             // TODO(tcn): Add a custom allocator to reduce the impact of this linked list.
@@ -645,3 +750,4 @@ namespace NK_GDI
         nk_clear(&Context.NK);
     }
 }
+#endif

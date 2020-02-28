@@ -5,19 +5,8 @@
 */
 
 #include "Stdinclude.hpp"
-#pragma warning(push, 0)
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
-#define NK_INCLUDE_STANDARD_VARARGS
-#define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_FIXED_TYPES
-#define NK_GDI_IMPLEMENTATION
 #define NK_IMPLEMENTATION
-#include "nuklear.h"
-#include "Nuklear_GDI.h"
-#pragma warning(pop)
-
-#pragma comment(lib, "gdi32.lib")
-#pragma comment(lib, "Msimg32.lib")
+#include "Nuklear_GDI.hpp"
 
 // Somewhat object-orientated.
 template<size_t Maxtabs = 6>
@@ -306,7 +295,7 @@ void *Createwindow()
     Windowclass.hInstance = (HINSTANCE)Global.Modulehandle;
     Windowclass.lpfnWndProc = [](HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT
     {
-        if (nk_gdi_handle_event(wnd, msg, wparam, lparam)) return 0;
+        if (NK_GDI::onEvent(wnd, msg, wparam, lparam)) return 0;
         return DefWindowProcW(wnd, msg, wparam, lparam);
     };
     if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
@@ -335,8 +324,7 @@ DWORD __stdcall Windowthread(void *)
     Console_t<7> Console{};
 
     // DEV
-    auto Defaultfont = nk_gdifont_create("Arial", 14);
-    auto Context = nk_gdi_init(Defaultfont, GetDC((HWND)Global.Windowhandle), 0, 0);
+    auto Context = NK_GDI::Initialize(GetDC((HWND)Global.Windowhandle));
 
     // Main loop.
     while (true)
@@ -364,7 +352,7 @@ DWORD __stdcall Windowthread(void *)
 
         // Check if we should toggle the console (tilde).
         {
-            const auto Keystate = GetAsyncKeyState(VK_F1);
+            const auto Keystate = GetAsyncKeyState(VK_OEM_5);
             const auto Keydown = Keystate & (1 << 31);
             const auto Newkey = Keystate & (1 << 0);
             if (Newkey && Keydown)
@@ -413,15 +401,14 @@ DWORD __stdcall Windowthread(void *)
             const auto Width = Gamewindow.right - Gamewindow.left;
             SetWindowPos((HWND)Global.Windowhandle, 0, Gamewindow.left, Gamewindow.top, Width, Height, NULL);
 
-            // Clear the frame-buffer to white (chroma-keyed to transparent).
+            // Set the default background to white (chroma-keyed to transparent).
             Context->style.window.fixed_background = nk_style_item_color(nk_rgb(0xFF, 0xFF, 0xFF));
             Console.onRender(Context, nk_vec2(Width, Height));
-            nk_gdi_render(nk_rgb(0xFF, 0xFF, 0xFF));
+            NK_GDI::Render();
 
             // Ensure that the window is marked as visible.
             ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
         }
-
     }
 
     return 0;
