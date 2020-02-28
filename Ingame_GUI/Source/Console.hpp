@@ -194,8 +194,8 @@ struct Console_t
 
                 const auto Y = std::max(0.0f, Scrolloffset - (Region.h * (isExtended ? 0.6f : 0.15f)) + 5);
                 nk_group_set_scroll(Context, "Console.Log", 0, uint32_t(std::round(Y)));
+                nk_group_end(Context);
             }
-            nk_group_end(Context);
         }
         nk_layout_row_end(Context);
 

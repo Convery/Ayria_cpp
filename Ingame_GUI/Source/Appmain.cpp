@@ -33,7 +33,6 @@ struct
     void *Windowhandle;
     void *Threadhandle;
     void *Modulehandle;
-    DWORD MainthreadID;
 
     bool isVisible;
 } Global{};
@@ -46,8 +45,8 @@ void *Createwindow()
     Windowclass.cbSize = sizeof(WNDCLASSEXA);
     Windowclass.lpszClassName = "Ingame_GUI";
     Windowclass.style = CS_VREDRAW | CS_OWNDC;
+    Windowclass.hInstance = GetModuleHandleA(NULL);
     Windowclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    Windowclass.hInstance = (HINSTANCE)Global.Modulehandle;
     Windowclass.lpfnWndProc = [](HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT
     {
         if (NK_GDI::onEvent(wnd, msg, wparam, lparam)) return 0;
@@ -122,19 +121,38 @@ DWORD __stdcall Windowthread(void *)
                     // The first time we display the log, capture the main handle.
                     if (!Global.Gamewindowhandle)
                     {
-                        GUITHREADINFO Info{ sizeof(GUITHREADINFO) };
-                        GetGUIThreadInfo(Global.MainthreadID, &Info);
-                        Global.Gamewindowhandle = Info.hwndActive;
+                        EnumWindows([](HWND Handle, LPARAM) -> BOOL
+                        {
+                            DWORD ProcessID;
+                            auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+
+                            if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
+                            {
+                                RECT Gamewindow{};
+                                if (GetWindowRect(Handle, &Gamewindow))
+                                {
+                                    if (Gamewindow.top >= 0 && Gamewindow.left >= 0)
+                                    {
+                                        Global.Gamewindowhandle = Handle;
+                                        return FALSE;
+                                    }
+                                }
+                            }
+
+                            return TRUE;
+                        }, NULL);
                     }
 
                     if (Global.isVisible)
                     {
                         ShowWindowAsync((HWND)Global.Windowhandle, SW_HIDE);
+                        SetForegroundWindow((HWND)Global.Gamewindowhandle);
                         EnableWindow((HWND)Global.Gamewindowhandle, TRUE);
                     }
                     else
                     {
                         EnableWindow((HWND)Global.Gamewindowhandle, FALSE);
+                        SetForegroundWindow((HWND)Global.Windowhandle);
                         SetActiveWindow((HWND)Global.Windowhandle);
                         SetFocus((HWND)Global.Windowhandle);
                     }
@@ -192,12 +210,6 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
-
-        // Save our info for later.
-        Global.Modulehandle = hDllHandle;
-        Global.MainthreadID = GetCurrentThreadId();
-
-
     }
 
     return TRUE;
