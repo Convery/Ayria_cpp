@@ -57,7 +57,8 @@ extern "C"
     }
     EXPORT_ATTR void __cdecl addConsolestring(const char *String, int Color)
     {
-        Global.Console.Rawdata.push_back({ String, nk_rgba_u32(Color) });
+        // NOTE(tcn): Race-condition with Global.Console.onRender
+        Global.Console.Messages.push_back({ String, nk_rgba_u32(Color) });
     }
 }
 
@@ -236,7 +237,6 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
-
     }
 
     return TRUE;

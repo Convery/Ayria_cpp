@@ -24,6 +24,7 @@ endif()
 # set(MODULE_LIBS ${MODULE_LIBS} ${MHOOK})
 find_path(NUK_INC "nuklear.h")
 include_directories("${NUK_INC}")
+find_package(ring-span-lite REQUIRED)
 
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")

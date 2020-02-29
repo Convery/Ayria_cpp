@@ -7,6 +7,7 @@
 #pragma once
 #include <Stdinclude.hpp>
 #include "Nuklear_GDI.hpp"
+#include <nonstd/ring_span.hpp>
 
 // Stolen from https://github.com/futurist/CommandLineToArgvA
 LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs);
@@ -25,7 +26,11 @@ struct Console_t
     std::array<std::string, Maxtabs> Titles{};
     std::array<std::string, Maxtabs> Filters{};
     std::array<uint32_t, Maxtabs> Unreadcounts{};
-    std::deque<std::pair<std::string, struct nk_color>> Rawdata{};
+
+    // Rawdata should not be directly modified.
+    std::array<std::pair<std::string, struct nk_color>, 256> Rawdata{};
+    nonstd::ring_span<std::pair<std::string, struct nk_color>> Messages
+    { Rawdata.data(), Rawdata.data() + Rawdata.size(), Rawdata.data(), Rawdata.size() };
 
     // Functionality.
     std::unordered_map<std::string, Consolecallback_t> Functions;
@@ -189,7 +194,7 @@ struct Console_t
             {
                 uint32_t Scrolloffset = 0;
                 nk_layout_row_dynamic(Context, 20, 1);
-                for (const auto &[String, Color] : Rawdata)
+                for (const auto &[String, Color] : Messages)
                 {
                     // No filtering for maxtabs.
                     if(Currenttab == Maxtabs || std::strstr(String.c_str(), Filters[Currenttab].c_str()))
@@ -233,7 +238,7 @@ struct Console_t
                     int Argc;
 
                     // Log the input before executing any functions.
-                    Rawdata.push_back({ "> "s + Inputstring.data(), nk_rgb(0xD6, 0xB7, 0x49) });
+                    Messages.push_back({ "> "s + Inputstring.data(), nk_rgb(0xD6, 0xB7, 0x49) });
 
                     // Parse the input using the same rules as command-lines.
                     if (const auto Argv = CommandLineToArgvA_wine(Inputstring.data(), &Argc))
