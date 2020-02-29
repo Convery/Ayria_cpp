@@ -12,7 +12,7 @@
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_ZERO_COMMAND_MEMORY
 #pragma warning(push, 0)
-#include "nuklear.h"
+#include <nuklear.h>
 #pragma warning(pop)
 
 namespace NK_GDI

@@ -49,17 +49,15 @@ extern "C"
         Global.Threadhandle = CreateThread(0, 0, Windowthread, 0, 0, 0);
     }
 
-    EXPORT_ATTR void __cdecl addFunction(const wchar_t *Name, const void *Callback)
+    EXPORT_ATTR void __cdecl addFunction(const char *Name, const void *Callback)
     {
-        Global.Console.Functions[Name] = (Consolecallback_t)Callback;
+        std::string Functionname = Name;
+        std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) {return (char)std::tolower(a); });
+        Global.Console.Functions[Functionname] = (Consolecallback_t)Callback;
     }
-    EXPORT_ATTR void __cdecl addConsolestring(const wchar_t *String, int Color)
+    EXPORT_ATTR void __cdecl addConsolestring(const char *String, int Color)
     {
-        auto Size = WideCharToMultiByte(CP_UTF8, NULL, String, std::wcslen(String), NULL, 0, NULL, NULL);
-        auto Buffer = (char *)alloca(Size);
-        WideCharToMultiByte(CP_UTF8, NULL, String, std::wcslen(String), Buffer, Size, NULL, NULL);
-
-        Global.Console.Rawdata.push_back({ std::string(Buffer, Size), nk_rgba_u32(Color) });
+        Global.Console.Rawdata.push_back({ String, nk_rgba_u32(Color) });
     }
 }
 
@@ -92,9 +90,10 @@ void *Createwindow()
     return nullptr;
 }
 
+// DEV
 void __cdecl Help_f(int Argc, const wchar_t **Argv)
 {
-    addConsolestring(L"Functions:", 0xFF00FF00);
+    addConsolestring("Functions:", 0xFF00FF00);
     for (const auto &[a, b] : Global.Console.Functions)
     {
         addConsolestring(a.c_str(), 0x00FFFF00);
@@ -111,13 +110,10 @@ DWORD __stdcall Windowthread(void *)
     // from this new thread to prevent issues. Took like 8 hours of hackery to find that..
     Global.Windowhandle = Createwindow();
 
-    addFunction(L"Help", Help_f);
-    addFunction(L"help", Help_f);
-    addFunction(L"?", Help_f);
-
-
     // DEV
     auto Context = NK_GDI::Initialize(GetDC((HWND)Global.Windowhandle));
+    addFunction("Help", Help_f);
+    addFunction("?", Help_f);
 
     // Main loop.
     while (true)
@@ -240,6 +236,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
+
     }
 
     return TRUE;
