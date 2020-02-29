@@ -7,6 +7,9 @@
 #pragma once
 #include <Stdinclude.hpp>
 #include "Nuklear_GDI.hpp"
+#include <shellapi.h>
+
+using Consolecallback_t = void (__cdecl *)(int Argc, const wchar_t **Argv);
 
 // Somewhat object-orientated.
 template<size_t Maxtabs = 6>
@@ -22,6 +25,9 @@ struct Console_t
     std::array<std::string, Maxtabs> Filters{};
     std::array<uint32_t, Maxtabs> Unreadcounts{};
     std::deque<std::pair<std::string, struct nk_color>> Rawdata{};
+
+    // Functionality.
+    std::unordered_map<std::wstring, Consolecallback_t> Functions;
 
     // Window properties.
     struct nk_rect Region { 20, 50 };
@@ -184,7 +190,7 @@ struct Console_t
                 nk_layout_row_dynamic(Context, 20, 1);
                 for (const auto &[String, Color] : Rawdata)
                 {
-                    // No filtering.
+                    // No filtering for maxtabs.
                     if(Currenttab == Maxtabs || std::strstr(String.c_str(), Filters[Currenttab].c_str()))
                     {
                         nk_label_colored(Context, String.c_str(), NK_TEXT_LEFT, Color);
@@ -222,8 +228,24 @@ struct Console_t
                 if (Inputlength)
                 {
                     Inputstring.data()[Inputlength] = 0;
-                    Rawdata.push_back({ va("> %s", Inputstring.data()), nk_rgb(0xD6, 0xB7, 0x49) });
                     Inputlength = 0;
+
+                    std::string ANSI(Inputstring.data());
+                    std::wstring Wide(ANSI.begin(), ANSI.end());
+                    Rawdata.push_back({ "> " + ANSI, nk_rgb(0xD6, 0xB7, 0x49) });
+
+                    int Argc{}; const auto Argv{ CommandLineToArgvW(Wide.c_str(), &Argc) };
+                    {
+                        if (Argc >= 1)
+                        {
+                            if (auto Callback = Functions.find(Argv[0]); Callback != Functions.end())
+                            {
+                                Callback->second(Argc, (const wchar_t **)Argv);
+                            }
+                        }
+                    }
+                    LocalFree(Argv);
+
 
                     // TODO(tcn): Do something fun with the input.
                 }

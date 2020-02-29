@@ -34,8 +34,34 @@ struct
     void *Threadhandle;
     void *Modulehandle;
 
+    Console_t<7> Console;
+
     bool isVisible;
 } Global{};
+
+DWORD __stdcall Windowthread(void *);
+
+// Optional callbacks when loaded as a plugin.
+extern "C"
+{
+    EXPORT_ATTR void __cdecl onInitialized(bool)
+    {
+        Global.Threadhandle = CreateThread(0, 0, Windowthread, 0, 0, 0);
+    }
+
+    EXPORT_ATTR void __cdecl addFunction(const wchar_t *Name, const void *Callback)
+    {
+        Global.Console.Functions[Name] = (Consolecallback_t)Callback;
+    }
+    EXPORT_ATTR void __cdecl addConsolestring(const wchar_t *String, int Color)
+    {
+        auto Size = WideCharToMultiByte(CP_UTF8, NULL, String, std::wcslen(String), NULL, 0, NULL, NULL);
+        auto Buffer = (char *)alloca(Size);
+        WideCharToMultiByte(CP_UTF8, NULL, String, std::wcslen(String), Buffer, Size, NULL, NULL);
+
+        Global.Console.Rawdata.push_back({ std::string(Buffer, Size), nk_rgba_u32(Color) });
+    }
+}
 
 // Create a centred window chroma-keyed on 0xFFFFFF.
 void *Createwindow()
@@ -54,7 +80,7 @@ void *Createwindow()
     };
     if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-    if (auto Windowhandle = CreateWindowExA(WS_EX_TOPMOST | WS_EX_LAYERED, "Ingame_GUI", NULL, WS_POPUP,
+    if (auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, "Ingame_GUI", NULL, WS_POPUP,
                                             NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
     {
         // Use a pixel-value of [0xFF, 0xFF, 0xFF] to mean transparent rather than Alpha.
@@ -66,6 +92,15 @@ void *Createwindow()
     return nullptr;
 }
 
+void __cdecl Help_f(int Argc, const wchar_t **Argv)
+{
+    addConsolestring(L"Functions:", 0xFF00FF00);
+    for (const auto &[a, b] : Global.Console.Functions)
+    {
+        addConsolestring(a.c_str(), 0x00FFFF00);
+    }
+}
+
 // Poll for new messages and repaint the main window in the background.
 DWORD __stdcall Windowthread(void *)
 {
@@ -75,7 +110,11 @@ DWORD __stdcall Windowthread(void *)
     // Windows tracks message-queues by thread ID, so we need to create the window
     // from this new thread to prevent issues. Took like 8 hours of hackery to find that..
     Global.Windowhandle = Createwindow();
-    Console_t<7> Console{};
+
+    addFunction(L"Help", Help_f);
+    addFunction(L"help", Help_f);
+    addFunction(L"?", Help_f);
+
 
     // DEV
     auto Context = NK_GDI::Initialize(GetDC((HWND)Global.Windowhandle));
@@ -114,7 +153,7 @@ DWORD __stdcall Windowthread(void *)
                 // Shift modifier extends the log.
                 if (GetAsyncKeyState(VK_SHIFT) & (1 << 31))
                 {
-                    Console.isExtended ^= true;
+                    Global.Console.isExtended ^= true;
                 }
                 else
                 {
@@ -174,7 +213,7 @@ DWORD __stdcall Windowthread(void *)
 
             // Set the default background to white (chroma-keyed to transparent).
             Context->style.window.fixed_background = nk_style_item_color(nk_rgb(0xFF, 0xFF, 0xFF));
-            Console.onRender(Context, nk_vec2(Width, Height));
+            Global.Console.onRender(Context, nk_vec2(Width, Height));
             NK_GDI::Render();
 
             // Ensure that the window is marked as visible.
@@ -183,15 +222,6 @@ DWORD __stdcall Windowthread(void *)
     }
 
     return 0;
-}
-
-// Optional callbacks when loaded as a plugin.
-extern "C"
-{
-    EXPORT_ATTR void __cdecl onInitialized(bool)
-    {
-        Global.Threadhandle = CreateThread(0, 0, Windowthread, 0, 0, 0);
-    }
 }
 
 // Entrypoint when loaded as a shared library.
