@@ -20,8 +20,7 @@ else()
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().
-# find_library(MHOOK "mhook.lib")
-# set(MODULE_LIBS ${MODULE_LIBS} ${MHOOK})
+# set(MODULE_LIBS ${MODULE_LIBS} mhook.lib)
 
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")

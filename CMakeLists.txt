@@ -6,7 +6,7 @@ project(AYRIA)
 set(CMAKE_CXX_STANDARD 20)
 enable_language(ASM_MASM)
 
-# Export to the a ignored directory.
+# Export to the a gitignored directory.
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/Bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/Bin)
 
@@ -43,9 +43,6 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     endif()
-
-    # Platform dependencies.
-    set(PLATFORM_LIBS ws2_32)
 else()
     # Assume GNU-GCC/CLANG.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
@@ -59,21 +56,23 @@ else()
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "-m64")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "-m64 -static-libgcc -static-libstdc++")
     endif()
-
-    # Platform dependencies.
-    set(PLATFORM_LIBS dl pthread)
 endif()
 
-# Search for CMAKE includes that are common.
-include_directories("${PROJECT_SOURCE_DIR}")
-find_path(MHOOK_INC mhook-lib/mhook.h)
-find_path(JSON_INC nlohmann/json.hpp)
-include_directories(${MHOOK_INC})
-include_directories(${JSON_INC})
+# If we have VCPKG installed, add the directories based on a common package.
+find_package(OPENSSL)
+if(OPENSSL_FOUND)
+    find_path(VCPKG_INC openssl/aes.h)
+    find_library(VCPKG_LIB_RAW libssl.lib)
+    get_filename_component(VCPKG_LIB ${VCPKG_LIB_RAW} DIRECTORY)
+
+    include_directories(${VCPKG_INC})
+    link_directories(${VCPKG_LIB})
+endif()
 
 # Global utilities.
-add_subdirectory(Utilities)
+include_directories("${PROJECT_SOURCE_DIR}")
 set(MODULE_LIBS ${MODULE_LIBS} Utilities)
+add_subdirectory(Utilities)
 
 # Add the sub-projects.
 add_subdirectory(Injector)
