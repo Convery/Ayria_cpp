@@ -135,7 +135,8 @@ namespace Winsock
             getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
 
             // Create a new socket for UDP over TCP.
-            auto &Entry = Datagramsockets[Localnetworking::Createsocket(Serveraddress, Result->second)];
+            Socket = Localnetworking::Createsocket(Serveraddress, Result->second);
+            auto &Entry = Datagramsockets[Socket];
             Entry.Client = { Client.sin_addr.s_addr, Client.sin_port };
             Entry.Server = Serveraddress;
 
@@ -147,7 +148,7 @@ namespace Winsock
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
     {
         FD_SET ReadFD{};
-        timeval Timeout{};
+        const timeval Timeout{ NULL, 1 };
         for (const auto &[Localsocket, _] : Datagramsockets) FD_SET(Localsocket, &ReadFD);
 
         // Check if there's any data on the internal sockets.

@@ -58,7 +58,6 @@ struct Bytebuffer
 
     // Utility functionality.
     [[nodiscard]] size_t Remaininglength() const;
-    [[nodiscard]] std::string to_string();
     [[nodiscard]] Blob asBlob() const;
     [[nodiscard]] uint8_t Peek();
     void Rewind();

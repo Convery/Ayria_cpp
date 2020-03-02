@@ -219,7 +219,7 @@ namespace Localnetworking
         Associations[{ IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port }, Serveraddress}] = \
         Datagramsockets[accept(Proxysocket, (SOCKADDR *)&Client, &Clientsize)] = Resolvedhosts[Hostname.data()];
 
-        Debugprint(va("Proxy socket: 0x%X", Socket));
+        Debugprint(va("Proxy socket: 0x%X for %s", Socket, Hostname.data()));
         return Socket;
     }
 
