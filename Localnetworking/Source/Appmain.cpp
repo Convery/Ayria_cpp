@@ -94,6 +94,10 @@ namespace Localnetworking
                         auto Entry = Proxyports.find(Client.sin_port);
                         if (Entry == Proxyports.end()) { closesocket(Socket); break; }
 
+                        // Never block or complain.
+                        unsigned long Argument = TRUE;
+                        ioctlsocket(Socket, FIONBIO, &Argument);
+
                         auto Server = Streamsockets.emplace(Socket, Resolvedhosts[Entry->second]);
                         if (Server.second) Server.first->second->onConnect();
                         else Debugprint("Failed to allocate stream-socket");
