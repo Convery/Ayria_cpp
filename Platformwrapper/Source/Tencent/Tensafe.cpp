@@ -115,23 +115,23 @@ template <typename T> bool PackIPC(IPCPacket_t *Packet, T Value)
 // NOTE(tcn): Very WIP.
 struct Tensafe
 {
-    uint32_t UserID;
-    uint32_t Interfaceversion;
-    uint32_t Gameversion;
-    void *Callback;
-    time_t Startuptime;
-    uint32_t Configneedsreload;
-    char Outgoingpacket[512];
-    char Incomingpacket[512];
-    uint32_t Unknown;
-    uint32_t SequenceID;
-    uint32_t Packetsrecieved;
-    uint32_t Unknown2;
-    uint32_t Encryptedpacketsrecieved;
-    uint32_t Unknown3;
-    uint32_t Clientsent;
-    uint32_t Clientrecvd;
-    char Config[1030];
+    uint32_t UserID{};
+    uint32_t Interfaceversion{};
+    uint32_t Gameversion{};
+    void *Callback{};
+    time_t Startuptime{};
+    uint32_t Configneedsreload{};
+    char Outgoingpacket[512]{};
+    char Incomingpacket[512]{};
+    uint32_t Unknown{};
+    uint32_t SequenceID{};
+    uint32_t Packetsrecieved{};
+    uint32_t Unknown2{};
+    uint32_t Encryptedpacketsrecieved{};
+    uint32_t Unknown3{};
+    uint32_t Clientsent{};
+    uint32_t Clientrecvd{};
+    char Config[1030]{};
 
     using Initinfo = struct { uint32_t Interfaceversion, Gameversion; void *Callback; };
     virtual int32_t Initialize(Initinfo *Info)

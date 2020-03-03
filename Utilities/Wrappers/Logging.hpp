@@ -23,26 +23,10 @@ namespace Logging
     // Compile-time evaluated path.
     constexpr auto Logfile = LOGPATH "/" MODULENAME ".log";
 
-    // NOTE(tcn): Not thread-safe but generally good enough.
-    inline void toFile(const std::string_view Message)
-    {
-        // Open the logfile on disk and push to it.
-        if (const auto Filehandle = std::fopen(Logfile, "a"))
-        {
-            std::fwrite(Message.data(), Message.size(), 1, Filehandle);
-            std::fclose(Filehandle);
-        }
-    }
-    inline void toStream(const std::string_view Message)
-    {
-        std::fwrite(Message.data(), Message.size(), 1, stderr);
-        std::fflush(stderr);
-
-        // Duplicate to NT.
-        #if defined(_WIN32) && !defined(NDEBUG)
-        OutputDebugStringA(Message.data());
-        #endif
-    }
+    // Logfile, stderr, and Ingame_GUI
+    void toFile(const std::string_view Message);
+    void toStream(const std::string_view Message);
+    void toConsole(const std::string_view Message);
 
     // Formatted standard printing.
     inline void Print(const char Prefix, const std::string_view Message)
@@ -51,10 +35,13 @@ namespace Logging
         char Buffer[80]{};
 
         std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));
-        toFile(va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data()));
+        const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data());
 
+        // Output.
+        toFile(Formatted);
         #if !defined(NDEBUG)
-        toStream(va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data()));
+        toStream(Formatted);
+        toConsole(Formatted);
         #endif
     }
 
