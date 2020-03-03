@@ -182,12 +182,12 @@ DWORD __stdcall Windowthread(void *)
                     if (Global.isVisible)
                     {
                         ShowWindowAsync((HWND)Global.Windowhandle, SW_HIDE);
-                        SetForegroundWindow((HWND)Global.Gamewindowhandle);
-                        EnableWindow((HWND)Global.Gamewindowhandle, TRUE);
+                        if (Global.Gamewindowhandle) SetForegroundWindow((HWND)Global.Gamewindowhandle);
+                        if (Global.Gamewindowhandle) EnableWindow((HWND)Global.Gamewindowhandle, TRUE);
                     }
                     else
                     {
-                        EnableWindow((HWND)Global.Gamewindowhandle, FALSE);
+                        if (Global.Gamewindowhandle) EnableWindow((HWND)Global.Gamewindowhandle, FALSE);
                         SetForegroundWindow((HWND)Global.Windowhandle);
                         SetActiveWindow((HWND)Global.Windowhandle);
                         SetFocus((HWND)Global.Windowhandle);

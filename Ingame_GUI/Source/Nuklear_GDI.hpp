@@ -115,7 +115,7 @@ namespace NK_GDI
         }
         inline struct nk_user_font Createfont(const char *Name, int32_t Fontsize, void *Fontdata, uint32_t Datasize)
         {
-            DWORD Installedfonts;
+            DWORD Installedfonts{};
             AddFontMemResourceEx(Fontdata, Datasize, NULL, &Installedfonts);
             return Createfont(Name, Fontsize);
         }
@@ -286,7 +286,7 @@ namespace NK_GDI
         }
         template </*NK_COMMAND_POLYGON*/> void RenderCMD(const nk_command_polygon *Command)
         {
-            assert(Context.Memorydevice); assert(Command);
+            assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
             auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
@@ -314,7 +314,7 @@ namespace NK_GDI
         }
         template </*NK_COMMAND_POLYLINE*/> void RenderCMD(const nk_command_polyline *Command)
         {
-            assert(Context.Memorydevice); assert(Command);
+            assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
             auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
@@ -393,7 +393,7 @@ namespace NK_GDI
         }
         template </*NK_COMMAND_POLYGON_FILLED*/> void RenderCMD(const nk_command_polygon_filled *Command)
         {
-            assert(Context.Memorydevice); assert(Command);
+            assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
             auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
