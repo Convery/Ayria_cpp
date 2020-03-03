@@ -14,7 +14,7 @@ namespace Logging
 
 struct Debugmutex
 {
-    std::thread::id Currentowner;
+    std::thread::id Currentowner{};
     std::timed_mutex Internal;
 
     Debugmutex() = default;
@@ -27,7 +27,7 @@ struct Debugmutex
         {
             Errorprint(va("Debugmutex: Recursive lock by thread %u!", Currentowner));
             volatile size_t Meep = 0;
-            *(size_t *)Meep = 0;
+            *(size_t *)Meep = 0xDEAD;
         }
 
         if (Internal.try_lock_for(std::chrono::seconds(10)))
@@ -38,11 +38,12 @@ struct Debugmutex
         {
             Errorprint(va("Debugmutex: Timeout, locked by %u!", Currentowner));
             volatile size_t Meep = 0;
-            *(size_t *)Meep = 0;
+            *(size_t *)Meep = 0xF00D;
         }
     }
     void unlock()
     {
         Internal.unlock();
+        Currentowner = {};
     }
 };
