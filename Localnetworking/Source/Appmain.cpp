@@ -174,11 +174,11 @@ namespace Localnetworking
                 if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
                 {
                     // Servers can have multiple associated sockets, so we duplicate.
-                    for (const auto &[Socket, Instance] : Serversockets)
+                    for (const auto &[Localsocket, Instance] : Serversockets)
                     {
                         if (Instance == Server)
                         {
-                            send(Socket, Buffer, Datasize, NULL);
+                            send(Localsocket, Buffer, Datasize, NULL);
                         }
                     }
                 }
