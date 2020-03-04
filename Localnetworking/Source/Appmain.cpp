@@ -7,16 +7,6 @@
 #include "Stdinclude.hpp"
 #include "Localnetworking.hpp"
 
-// Entrypoint when loaded as a plugin.
-extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
-{
-    // Initialize the background thread.
-    Localnetworking::Createbackend(4200);
-
-    // Hook the various frontends.
-    Localnetworking::Initializewinsock();
-}
-
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
 BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
@@ -52,179 +42,148 @@ __attribute__((constructor)) void __stdcall DllMain()
 
 namespace Localnetworking
 {
-    std::unordered_map<IServer::Endpoints_t, IServer *, decltype(FNV::Hash), decltype(FNV::Equal)> Associations;
-    std::unordered_map<size_t, IServer *> Streamsockets, Datagramsockets;
-    std::unordered_map<std::string, IServer *> Resolvedhosts;
-    std::unordered_map<uint16_t, std::string> Proxyports;
-    std::vector<size_t> Pluginhandles;
-    std::thread Pollthread;
-    std::mutex Bottleneck;
-    uint16_t Backendport;
-    size_t Listensocket;
-    size_t Proxysocket;
+    std::unordered_map<std::string, Proxyserver_t> Proxyservers{};
+    std::unordered_map<size_t, IServer *> Serversockets{};
+    std::vector<std::string> Hostblacklist{};
+    std::vector<size_t> Pluginhandles{};
+    std::mutex Bottleneck{};
+    uint16_t Backendport{};
+    size_t Listensocket{};
+    bool Shouldquit{};
 
-    // Poll all sockets in the background.
-    void Pollsockets()
+    // Resolve the hostname and return a unique address if proxied.
+    Proxyserver_t *getProxyserver(std::string_view Hostname)
     {
-        // ~100 FPS in-case someone proxies game-data.
-        timeval Timeout{ NULL, 10000 };
-        char Buffer[8192];
+        std::scoped_lock _(Bottleneck);
 
-        // Sleeps through select().
-        while (true)
-        {
-            FD_SET ReadFD{};
-            FD_SET(Listensocket, &ReadFD);
-            for (const auto &[Socket, _] : Streamsockets) FD_SET(Socket, &ReadFD);
-            for (const auto &[Socket, _] : Datagramsockets) FD_SET(Socket, &ReadFD);
-
-            /*
-                NOTE(tcn): Not portable!!one!
-                POSIX select timeout is not const and nfds should not be NULL.
-            */
-            if (select(NULL, &ReadFD, NULL, NULL, &Timeout))
-            {
-                // If there's data on the listen-socket, it's a new connection.
-                if (FD_ISSET(Listensocket, &ReadFD))
-                {
-                    SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
-                    if (const auto Socket = accept(Listensocket, (SOCKADDR *)&Client, &Clientsize); Socket != size_t(-1))
-                    {
-                        std::lock_guard _(Bottleneck);
-                        auto Entry = Proxyports.find(Client.sin_port);
-                        if (Entry == Proxyports.end()) { closesocket(Socket); break; }
-
-                        // Never block or complain.
-                        unsigned long Argument = TRUE;
-                        ioctlsocket(Socket, FIONBIO, &Argument);
-
-                        auto Server = Streamsockets.emplace(Socket, Resolvedhosts[Entry->second]);
-                        if (Server.second) Server.first->second->onConnect();
-                        else Debugprint("Failed to allocate stream-socket");
-                        Proxyports.erase(Entry);
-                    }
-                }
-
-                // If there's data on the sockets, we just forward it as is.
-                std::function<void(std::unordered_map<size_t, IServer *> &)> Lambda = [&](std::unordered_map<size_t, IServer *> &Sockets) -> void
-                {
-                    for (const auto &[Socket, Server] : Sockets)
-                    {
-                        if (!FD_ISSET(Socket, &ReadFD)) continue;
-                        const auto Size = recv(Socket, Buffer, 8192, 0);
-
-                        // Broken connection.
-                        if (Size <= 0)
-                        {
-
-                            // Winsock had some internal issue that we can't be arsed to recover from..
-                            if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
-                            if (Server) Server->onDisconnect();
-
-                            closesocket(Socket);
-                            Sockets.erase(Socket);
-                            return Lambda(Sockets);
-                        }
-
-                        // Client-server associations indicate a datagram socket.
-                        const auto Result = std::find_if(Associations.begin(), Associations.end(), [&Server](auto &a) { return a.second == Server; });
-                        if (Result == Associations.end()) Server->onStreamwrite(Buffer, Size);
-                        else Server->onPacketwrite(Buffer, Size, &Result->first);
-                    }
-                };
-                std::lock_guard _(Bottleneck);
-                Lambda(Datagramsockets);
-                Lambda(Streamsockets);
-            }
-
-            // We process datagrams the same way as regular streams.
-            for (const auto &[_, Server] : Datagramsockets)
-            {
-                uint32_t Datasize{ 8192 };
-                if (Server->onPacketread(Buffer, &Datasize))
-                {
-                    // Servers can have multiple associated sockets, so we duplicate.
-                    for (const auto &[Socket, Instance] : Datagramsockets)
-                        if (Instance == Server)
-                            send(Socket, Buffer, Datasize, 0);
-                }
-            }
-            for (const auto &[_, Server] : Streamsockets)
-            {
-                uint32_t Datasize{ 8192 };
-                if (Server->onStreamread(Buffer, &Datasize))
-                {
-                    for (const auto &[Socket, Instance] : Streamsockets)
-                        if (Instance == Server)
-                            send(Socket, Buffer, Datasize, 0);
-                }
-            }
-        }
-    }
-
-    // Whether or not a plugin claims ownership of this host.
-    std::vector<std::string> Blacklist{};
-    bool isProxiedhost(std::string_view Hostname)
-    {
         // Common case, already resolved the host through getHostbyname.
-        if (Resolvedhosts.find(Hostname.data()) != Resolvedhosts.end()) return true;
+        if (const auto Result = Proxyservers.find(Hostname.data()); Result != Proxyservers.end())
+            return &Result->second;
 
-        std::lock_guard _(Bottleneck); // Blacklist for uninteresting hostnames that no plugin wants to handle.
-        if (std::find(Blacklist.begin(), Blacklist.end(), Hostname.data()) != Blacklist.end()) return false;
+        // Blacklist for uninteresting hostnames.
+        if (Hostblacklist.end() != std::find(Hostblacklist.begin(), Hostblacklist.end(), Hostname.data()))
+            return nullptr;
 
-        // Request a server to associate with the hostname.
+        // Ask the plugins if any are interested in this hostname.
         for (const auto &Handle : Pluginhandles)
         {
             if (const auto Callback = GetProcAddress((HMODULE)Handle, "Createserver"))
             {
                 if (const auto Server = (reinterpret_cast<IServer * (__cdecl *)(const char *)>(Callback))(Hostname.data()))
                 {
-                    Resolvedhosts[Hostname.data()] = Server;
-                    return true;
+                    auto Entry = &Proxyservers[Hostname.data()];
+                    static uint16_t Proxycount{ 1 };
+
+                    Entry->Address.sin_addr.s_addr = 0xF0000000 | ++Proxycount;
+                    Entry->Hostname = Hostname.data();
+                    Entry->Instance = Server;
+                    return Entry;
                 }
             }
         }
 
-        // No servers can handle this host, blacklist.
-        Blacklist.push_back(Hostname.data());
-        return false;
+        // No servers wants to deal with this address =(
+        Hostblacklist.push_back(Hostname.data());
+        return nullptr;
+    }
+    Proxyserver_t *getProxyserver(sockaddr_in *Hostname)
+    {
+        std::scoped_lock _(Bottleneck);
+
+        for (const auto &Item : Proxyservers)
+        {
+            if (FNV::Equal(Item.second.Address.sin_addr, Hostname->sin_addr))
+            {
+                return &Proxyservers[Item.first];
+            }
+        }
+
+        return nullptr;
     }
 
-    // Notify the backend about a client-port that will connect to us.
-    void Associateport(std::string_view Hostname, uint16_t Port)
+    // Associate a socket with a server.
+    void Connectserver(size_t Clientsocket, IServer *Serverinstance)
     {
-        std::lock_guard _(Bottleneck);
-        Proxyports[Port] = Hostname;
+        assert(Serverinstance);
+
+        SOCKADDR_IN Server{ AF_INET, htons(Backendport), {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+        while (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+            if (WSAEWOULDBLOCK != WSAGetLastError()) break;
+
+        const auto Serversocket = accept(Listensocket, NULL, NULL);
+        if (Serversocket != INVALID_SOCKET)
+        {
+            Serversockets[Serversocket] = Serverinstance;
+        }
     }
 
-    // A datagram socket, which internally is sent over TCP.
-    size_t Createsocket(IServer::Address_t Serveraddress, std::string_view Hostname)
+    // Poll all sockets in the background.
+    void Pollsockets()
     {
-        SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        int Serversize{ sizeof(SOCKADDR_IN) };
-        int Clientsize{ sizeof(SOCKADDR_IN) };
+        // ~100 FPS in-case someone proxies game-data.
+        const timeval Timeout{ NULL, 10000 };
+        char Buffer[8192];
 
-        // Never block or complain.
-        unsigned long Argument = TRUE;
-        ioctlsocket(Socket, FIONBIO, &Argument);
+        // Sleeps through select().
+        while (!Shouldquit)
+        {
+            FD_SET ReadFD{};
+            FD_SET WriteFD{};
+            for (const auto &Item : Serversockets) FD_SET(Item.first, &ReadFD);
+            for (const auto &Item : Serversockets) FD_SET(Item.first, &WriteFD);
 
-        // Assign a random port to the client for identification..
-        bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
-        getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+            // NOTE(tcn): Set nfds and reset Timeout on POSIX.
+            if (!select(NULL, &ReadFD, &WriteFD, NULL, &Timeout)) continue;
 
-        // Find wherever the proxy is listening and connect to it..
-        getsockname(Proxysocket, (SOCKADDR *)&Server, &Serversize);
-        connect(Socket, (SOCKADDR *)&Server, Serversize);
+            // If there's data on the socket, forward to a server.
+            LOOP: for (const auto &[Socket, Server] : Serversockets)
+            {
+                if (!FD_ISSET(Socket, &ReadFD)) continue;
+                const auto Size = recv(Socket, Buffer, 8192, 0);
 
-        std::lock_guard _(Bottleneck);
-        // Accept and associate the address-pairs, looks messy but: [] = [] = IServer *
-        Associations[{ IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port }, Serveraddress}] = \
-        Datagramsockets[accept(Proxysocket, (SOCKADDR *)&Client, &Clientsize)] = Resolvedhosts[Hostname.data()];
+                // Broken connection.
+                if (Size <= 0)
+                {
+                    // Winsock had some internal issue that we can't be arsed to recover from..
+                    if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                    if (Server) Server->onDisconnect();
+                    Serversockets.erase(Socket);
+                    closesocket(Socket);
+                    goto LOOP;
+                }
 
-        Debugprint(va("Proxy socket: 0x%X for %s", Socket, Hostname.data()));
-        return Socket;
+                // We assume that the client properly inherits properly.
+                if (!Server->onStreamwrite(Buffer, Size))
+                {
+                    for (const auto &Item : Proxyservers)
+                    {
+                        if (Item.second.Instance == Server)
+                        {
+                            Server->onPacketwrite(Buffer, Size, &Item.second.Address);
+                        }
+                    }
+                }
+            }
+
+            // Poll the servers for data and send it to the sockets.
+            for (const auto &[Socket, Server] : Serversockets)
+            {
+                if (!FD_ISSET(Socket, &WriteFD)) continue;
+                uint32_t Datasize{ 8192 };
+
+                if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
+                {
+                    // Servers can have multiple associated sockets, so we duplicate.
+                    for (const auto &[Socket, Instance] : Serversockets)
+                    {
+                        if (Instance == Server)
+                        {
+                            send(Socket, Buffer, Datasize, NULL);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Initialize the server backend.
@@ -232,30 +191,28 @@ namespace Localnetworking
     {
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
-
-        // We really shouldn't block on these sockets, but it's not a problem for now.
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        Proxysocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
         // Find an available port to listen on, if we fail after 64 tries we have other issues.
         SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        bind(Proxysocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN));
         for (int i = 0; i < 64; ++i)
         {
             Backendport = Serverport++;
             Server.sin_port = htons(Backendport);
             if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             {
-                listen(Listensocket, 16);
-                listen(Proxysocket, 16);
+                listen(Listensocket, 32);
                 break;
             };
         }
 
-        // LEGACY(tcn): Load all plugins from disk.
-        constexpr const char *Pluignextension = sizeof(void *) == sizeof(uint32_t) ? ".Localnet32" : ".Localnet64";
-        auto Results = FS::Findfiles("./Ayria/Plugins", Pluignextension);
-        for (const auto &Item : Results)
+        // Notify the developer and spawn the server.
+        Debugprint(va("Spawning localnet backend on %u", Backendport));
+        std::atexit([]() { Shouldquit = true; });
+        std::thread(Pollsockets).detach();
+
+        // Load all plugins from disk.
+        for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))
         {
             if (const auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
@@ -263,13 +220,15 @@ namespace Localnetworking
                 Pluginhandles.push_back(size_t(Module));
             }
         }
-
-        // Notify the developer.
-        Debugprint(va("Spawning localnet backend on %u", Backendport));
-
-        // Keep the polling away from the main thread.
-        std::atexit([]() { TerminateThread(Pollthread.native_handle(), 0); });
-        Pollthread = std::thread(Pollsockets);
-        Pollthread.detach();
     }
+}
+
+// Entrypoint when loaded as a plugin.
+extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
+{
+    // Initialize the background thread.
+    Localnetworking::Createbackend(4200);
+
+    // Hook the various frontends.
+    Localnetworking::Initializewinsock();
 }
