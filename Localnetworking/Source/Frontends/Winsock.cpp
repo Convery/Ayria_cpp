@@ -10,163 +10,113 @@
 namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
-    std::unordered_map<size_t, IServer::Endpoints_t> Datagramsockets;
     std::unordered_map<std::string_view, void *> Originalfunctions;
-    std::unordered_map<std::string, std::string> Proxyaddresses;
-    std::unordered_map<size_t, IServer::Address_t> Bindings;
-    SOCKADDR_IN Localhost{};
+    std::unordered_map<size_t, sockaddr_in> Connections;
+    std::unordered_map<size_t, sockaddr_in> Bindings;
 
     // Utility functionality.
-    inline std::string getAddress(const sockaddr *Sockaddr)
+    inline std::string getAddress(const struct sockaddr *Sockaddr)
     {
-        const auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
-        if (Sockaddr->sa_family == AF_INET6) inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address.get(), INET6_ADDRSTRLEN);
-        else inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address.get(), INET6_ADDRSTRLEN);
-        return std::string(Address.get());
-    }
-    inline uint16_t getPort(const size_t Socket)
-    {
-        SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        int Clientsize{ sizeof(SOCKADDR_IN) };
+        char Address[INET6_ADDRSTRLEN]{};
 
-        // Assign a random port to the socket for identification..
-        bind(Socket, (SOCKADDR *)&Client, sizeof(SOCKADDR_IN));
-        getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
+        if (Sockaddr->sa_family == AF_INET6)
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)Sockaddr)->sin6_addr, Address, INET6_ADDRSTRLEN);
+        else
+            inet_ntop(AF_INET, &((struct sockaddr_in *)Sockaddr)->sin_addr, Address, INET6_ADDRSTRLEN);
 
-        return Client.sin_port;
+        return Address;
     }
 
-    // Streamed connections just proxies the port.
+    // Connects proxied sockets to the backend
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
     {
-        auto Readable = getAddress(Name);
-
-        // Replace proxy-hosts for Localnetworking's sake.
-        if (auto Result = Proxyaddresses.find(Readable); Result != Proxyaddresses.end())
-            Readable = Result->second;
-
-        // Fetch or create an associated server.
-        if (Localnetworking::isProxiedhost(Readable))
+        // If proxied, handle the connection internally. We assume the struct is always IPv4.
+        if (const auto Proxyserver = Localnetworking::getProxyserver((sockaddr_in *)Name))
         {
-            // Notify the backend about an incoming connection.
-            Localnetworking::Associateport(Readable, getPort(Socket));
-
-            // Replace the target with our IPv4 proxy.
-            Namelength = sizeof(Localhost);
-            Name = (sockaddr *)&Localhost;
+            Debugprint("Connecting to proxied server: "s + Proxyserver->Hostname);
+            Localnetworking::Connectserver(Socket, Proxyserver->Instance);
+            return 0;
         }
 
-        // Let Windows do the dirty work..
-        const auto Result = Calloriginal(connect)(Socket, Name, Namelength);
-        const auto Lasterror = WSAGetLastError(); // Debugprint may invalidate this.
-        Debugprint(va("Connecting (0x%X) to %s - %s", Socket, Readable.c_str(), Result ? "FAILED" : "SUCCESS"));
-
-        // Some silly firewalls delay the connection longer than the non-blocking timeout.
-        if (Result == -1 && Localnetworking::isProxiedhost(Readable)) return 0;
-
-        WSASetLastError(Lasterror);
-        return Result;
-    }
-
-    // We don't allow binding to internal IPs.
-    int __stdcall Bind(size_t Socket, struct sockaddr *Name, int Namelength)
-    {
-        static auto lClient = Localhost;
-        const auto Readable = getAddress(Name);
-
-        // Rather than tracking our internal address, just set it to loopback when binding.
-        if (std::strstr(Readable.c_str(), "192.168.") || std::strstr(Readable.c_str(), "10."))
+        // Let Windows do the heavy lifting instead.
+        if (const auto Result = Calloriginal(connect)(Socket, Name, Namelength))
         {
-            // Route to localhost with the clients port.
-            lClient.sin_port = ((SOCKADDR_IN *)Name)->sin_port;
-            Namelength = sizeof(lClient);
-            Name = (sockaddr *)&lClient;
+            // Debugprint may invalidate the last-error, so we had to save it.
+            const auto Lasterror = WSAGetLastError();
+
+            // Our own system connects to localhost a lot, so ignore that.
+            if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
+                Debugprint("Failed to connect to: "s + getAddress(Name));
+
+            WSASetLastError(Lasterror);
+            return Result;
         }
 
-        if (auto Result = Calloriginal(bind)(Socket, Name, Namelength); Result == 0)
-        {
-            // Add it to the list of known bound sockets.
-            SOCKADDR_IN Client{};
-            int Clientsize{ sizeof(SOCKADDR_IN) };
-            getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
-            auto Clientaddress = IServer::Address_t{ Client.sin_addr.S_un.S_addr, Client.sin_port };
+        // Our own system connects to localhost a lot, so ignore that.
+        if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
+            Debugprint("Connected to: "s + getAddress(Name));
 
-            // Verify that the socket isn't being reused.
-            for (auto &[Localsocket, Info] : Datagramsockets)
-            {
-                if (FNV::Equal(Clientaddress, Info.Client))
-                {
-                    //Datagramsockets.erase(Localsocket);
-                    break;
-                }
-            }
-
-            Bindings[Socket] = Clientaddress;
-        }
-        else return Result;
         return 0;
     }
 
-    // Datagram sockets get proxied as stream-sockets for simplicity.
-    int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, sockaddr *To, int Tolength)
+    // Internal addresses are abstracted to localhost for easier management.
+    int __stdcall Bind(size_t Socket, struct sockaddr *Name, int Namelength)
     {
-        // If we are proxying this address, we know it's going to be internal.
-        if (auto Result = Proxyaddresses.find(getAddress(To)); Result != Proxyaddresses.end())
+        const auto Readableaddress = getAddress(Name);
+
+        // We don't allow binding to internal addresses, just localhost.
+        if (0 == std::memcmp(Readableaddress.c_str(), "192.168.", 8) || 0 == std::memcmp(Readableaddress.c_str(), "10.", 3))
         {
-            IServer::Address_t Serveraddress = { ((sockaddr_in *)To)->sin_addr.S_un.S_addr, ((sockaddr_in *)To)->sin_port };
+            if(Name->sa_family == AF_INET) ((sockaddr_in *)Name)->sin_addr.s_addr = INADDR_LOOPBACK;
+        }
 
-            // Find the proxy-socket if already created.
-            for (auto &[Localsocket, Info] : Datagramsockets)
+        const auto Result = Calloriginal(bind)(Socket, Name, Namelength);
+        Bindings[Socket] = *(sockaddr_in *)Name;
+        return Result;
+    }
+
+    // Datagram sockets are abstracted to stream-sockets so we can provide a unified interface.
+    int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, struct sockaddr *To, int Tolength)
+    {
+        if (const auto Proxyserver = Localnetworking::getProxyserver((sockaddr_in *)To))
+        {
+            // See if we already have an established connection.
+            for (const auto &Item : Connections)
             {
-                if (FNV::Equal(Serveraddress, Info.Server))
+                if (FNV::Equal(Item.second.sin_addr, ((sockaddr_in *)To)->sin_addr))
                 {
-                    // Update the binding if needed..
-                    SOCKADDR_IN Client{};
-                    int Clientsize{ sizeof(SOCKADDR_IN) };
-                    getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
-                    Info.Client = { Client.sin_addr.s_addr, Client.sin_port };
-
-                    return send(Localsocket, Buffer, Length, 0);
+                    return send(Item.first, Buffer, Length, NULL);
                 }
             }
 
-            // Find where the socket is bound.
-            SOCKADDR_IN Client{}; int Clientsize{ sizeof(SOCKADDR_IN) };
-            getsockname(Socket, (SOCKADDR *)&Client, &Clientsize);
-
-            // Create a new socket for UDP over TCP.
-            Socket = Localnetworking::Createsocket(Serveraddress, Result->second);
-            auto &Entry = Datagramsockets[Socket];
-            Entry.Client = { Client.sin_addr.s_addr, Client.sin_port };
-            Entry.Server = Serveraddress;
-
-            return send(Socket, Buffer, Length, 0);
+            // Create a new one if needed and send to the socket.
+            const auto Localsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            Localnetworking::Connectserver(Localsocket, Proxyserver->Instance);
+            Connections[Localsocket] = *(sockaddr_in *)To;
+            return send(Localsocket, Buffer, Length, NULL);
         }
 
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
     }
-    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, sockaddr *From, int *Fromlength)
+    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
         FD_SET ReadFD{};
         const timeval Timeout{ NULL, 1 };
-        for (const auto &[Localsocket, _] : Datagramsockets) FD_SET(Localsocket, &ReadFD);
+        for (const auto &Item : Connections) FD_SET(Item.first, &ReadFD);
 
         // Check if there's any data on the internal sockets.
-        if (ReadFD.fd_count && select(NULL, &ReadFD, NULL, NULL, &Timeout))
+        if (select(NULL, &ReadFD, NULL, NULL, &Timeout))
         {
-            for (const auto &[Localsocket, Info] : Datagramsockets)
+            for (const auto &Item : Connections)
             {
-                // We assume that the socket is bound, because it should be.
-                if (!FD_ISSET(Localsocket, &ReadFD)) continue;
-                auto Binding = Bindings[Socket];
-
                 // IPv4 of NULL means any address.
-                if (Binding.Port != Info.Client.Port) continue;
-                if (Binding.IPv4 && Binding.IPv4 != Info.Client.IPv4) continue;
+                if (!FD_ISSET(Item.first, &ReadFD)) continue;
+                //if (Bindings[Socket].sin_port != Item.second.sin_port) continue;
+                if (Bindings[Socket].sin_addr.s_addr && !FNV::Equal(Bindings[Socket].sin_addr, Item.second.sin_addr)) continue;
 
-                // We know there's data on the socket, so just return the length and server-address.
-                *((SOCKADDR_IN *)From) = { AF_INET, Info.Server.Port, {{.S_addr = Info.Server.IPv4}} };
-                return recv(Localsocket, Buffer, Length, 0);
+                *Fromlength = sizeof(SOCKADDR_IN);
+                *((sockaddr_in *)From) = Item.second;
+                return recv(Item.first, Buffer, Length, 0);
             }
         }
 
@@ -176,8 +126,11 @@ namespace Winsock
     // Create a proxy-address for the host if it's proxied.
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
+        const auto Proxyserver = Localnetworking::getProxyserver(Hostname);
         Debugprint(va("Performing hostname lookup for \"%s\"", Hostname));
-        if (!Localnetworking::isProxiedhost(Hostname)) return Calloriginal(gethostbyname)(Hostname);
+
+        // Not our problem =)
+        if (!Proxyserver) return Calloriginal(gethostbyname)(Hostname);
 
         // Resolve to a known host and replace the address.
         auto Result = Calloriginal(gethostbyname)("localhost");
@@ -187,25 +140,23 @@ namespace Winsock
         *Result->h_aliases = nullptr;
         Result->h_length = 4;
 
-        SOCKADDR_IN Client{ AF_INET, 0, {{.S_addr = htonl(240 << 24 | Hash::FNV1a_32(Hostname) >> 8)} } };
-        ((in_addr *)Result->h_addr_list[0])->s_addr = Client.sin_addr.S_un.S_addr;
-        Proxyaddresses[getAddress((sockaddr *)&Client)] = Hostname;
-
+        ((in_addr *)Result->h_addr_list[0])->s_addr = Proxyserver->Address.sin_addr.s_addr;
         return Result;
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
+        const auto Proxyserver = Localnetworking::getProxyserver(Nodename);
         Debugprint(va("Performing hostname lookup for \"%s\"", Nodename));
-        if (!Localnetworking::isProxiedhost(Nodename)) return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
+
+        // Not our problem =)
+        if (!Proxyserver) return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
 
         // Resolve to a known host and replace the address.
         auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
 
         // Possibly leak some memory if the setup is silly.
-        ((sockaddr_in *)(*Result)->ai_addr)->sin_addr.S_un.S_addr = htonl(240 << 24 | Hash::FNV1a_32(Nodename) >> 8);
+        ((sockaddr_in *)(*Result)->ai_addr)->sin_addr.s_addr = Proxyserver->Address.sin_addr.s_addr;
         (*Result)->ai_next = NULL;
-
-        Proxyaddresses[getAddress(((sockaddr *)(*Result)->ai_addr))] = Nodename;
         return lResult;
     }
 
@@ -276,8 +227,5 @@ namespace Localnetworking
         #if !defined(NDEBUG)
         Hook("socket", Winsock::Createsocket);
         #endif
-
-        // Delayed initialization as a global will have Localnetworking::Backendport set to NULL.
-        Winsock::Localhost = { AF_INET, htons(Localnetworking::Backendport), {{.S_addr = htonl(INADDR_LOOPBACK)}} };
     }
 }
