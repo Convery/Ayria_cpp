@@ -10,12 +10,12 @@ namespace Logging
 {
     std::mutex Threadguard;
 
-    void toFile(const std::string_view Message)
+    void toFile(std::string_view Filename, const std::string_view Message)
     {
         std::lock_guard _(Threadguard);
 
         // Open the logfile on disk and push to it.
-        if (const auto Filehandle = std::fopen(Logfile, "a"))
+        if (const auto Filehandle = std::fopen(Filename.data(), "a"))
         {
             std::fwrite(Message.data(), Message.size(), 1, Filehandle);
             std::fclose(Filehandle);

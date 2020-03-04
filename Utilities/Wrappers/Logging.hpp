@@ -24,9 +24,9 @@ namespace Logging
     constexpr auto Logfile = LOGPATH "/" MODULENAME ".log";
 
     // Logfile, stderr, and Ingame_GUI
-    void toFile(const std::string_view Message);
     void toStream(const std::string_view Message);
     void toConsole(const std::string_view Message);
+    void toFile(std::string_view Filename, const std::string_view Message);
 
     // Formatted standard printing.
     inline void Print(const char Prefix, const std::string_view Message)
@@ -38,7 +38,7 @@ namespace Logging
         const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data());
 
         // Output.
-        toFile(Formatted);
+        toFile(Logfile, Formatted);
         #if !defined(NDEBUG)
         toStream(Formatted);
         toConsole(Formatted);
