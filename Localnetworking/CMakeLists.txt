@@ -19,9 +19,6 @@ else()
     set(PLATFORM_LIBS ws2_32)
 endif()
 
-# Third-party libraries, prefer find_library() and find_path().
-set(MODULE_LIBS ${MODULE_LIBS} mhook.lib)
-
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES "Source/*.cpp")
 file(GLOB_RECURSE ASSEMBLY "Source/*.asm")

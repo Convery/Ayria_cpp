@@ -54,6 +54,7 @@
 #include <nlohmann/json.hpp>
 #endif
 #if __has_include(<mhook-lib/mhook.h>)
+#pragma comment(lib, "mhook.lib")
 #include <mhook-lib/mhook.h>
 #endif
 
