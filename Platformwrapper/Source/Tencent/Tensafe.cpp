@@ -139,7 +139,7 @@ struct Tensafe
         this->Callback = Info->Callback;
         this->Gameversion = Info->Gameversion;
         this->Interfaceversion = Info->Interfaceversion;
-        Debugprint(va("%s: In: %u Gameversion: %u, Callback: %p", Interfaceversion, Gameversion, Callback));
+        Debugprint(va("%s: In: %u Gameversion: %u, Callback: %p", __FUNCTION__, Interfaceversion, Gameversion, Callback));
 
         // C-style bool.
         return 1;
