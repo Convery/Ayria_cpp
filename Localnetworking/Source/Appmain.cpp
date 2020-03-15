@@ -159,7 +159,8 @@ namespace Localnetworking
                     {
                         if (Item.second.Instance == Server)
                         {
-                            Server->onPacketwrite(Buffer, Size, &Item.second.Address);
+                            IServer::Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr),  ntohs(Item.second.Address.sin_port) };
+                            Server->onPacketwrite(Buffer, Size, &Universalformat);
                         }
                     }
                 }

@@ -76,7 +76,6 @@ namespace Build
 struct IServer
 {
     struct Address_t { unsigned int IPv4; unsigned short Port; };
-    struct Endpoints_t { Address_t Client, Server; };
 
     // Utility functionality.
     virtual void onConnect() {};
@@ -88,13 +87,13 @@ struct IServer
 
     // Packet-based IO for protocols such as UDP and ICMP.
     virtual bool onPacketread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onPacketwrite(const void *Databuffer, const unsigned int Datasize, const struct sockaddr_in *Endpoint) = 0;
+    virtual bool onPacketwrite(const void *Databuffer, const unsigned int Datasize, const Address_t *Endpoint) = 0;
 };
 struct IStreamserver : IServer
 {
     // Nullsub packet-based IO.
     virtual bool onPacketread(void *, unsigned int *) { return false; }
-    virtual bool onPacketwrite(const void *, const unsigned int, const struct sockaddr_in *) { return false; }
+    virtual bool onPacketwrite(const void *, const unsigned int, const Address_t *) { return false; }
 };
 struct IDatagramserver : IServer
 {
