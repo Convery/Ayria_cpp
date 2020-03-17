@@ -106,7 +106,7 @@ namespace Localnetworking
     {
         assert(Serverinstance);
 
-        SOCKADDR_IN Server{ AF_INET, htons(Backendport), {{.S_addr = htonl(INADDR_LOOPBACK)}} };
+        SOCKADDR_IN Server{ AF_INET, Backendport, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
         while (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             if (WSAEWOULDBLOCK != WSAGetLastError()) break;
 
@@ -198,8 +198,9 @@ namespace Localnetworking
         SOCKADDR_IN Server{ AF_INET, 0, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
         for (int i = 0; i < 64; ++i)
         {
-            Backendport = Serverport++;
-            Server.sin_port = htons(Backendport);
+            Backendport = htons(Serverport++);
+            Server.sin_port = Backendport;
+
             if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             {
                 listen(Listensocket, 32);
@@ -208,7 +209,7 @@ namespace Localnetworking
         }
 
         // Notify the developer and spawn the server.
-        Debugprint(va("Spawning localnet backend on %u", Backendport));
+        Debugprint(va("Spawning localnet backend on %u", ntohs(Backendport)));
         std::atexit([]() { Shouldquit = true; });
         std::thread(Pollsockets).detach();
 
