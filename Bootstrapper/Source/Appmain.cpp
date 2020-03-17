@@ -159,10 +159,10 @@ void __stdcall TLSCallback(PVOID a, DWORD b, PVOID c)
     std::thread([]() { std::this_thread::sleep_for(std::chrono::seconds(3)); onInitialized(false); }).detach();
 }
 
-// Sometimes plugins want to name their threads, and not all games support that..
-LONG __stdcall Threadname(PEXCEPTION_POINTERS Info)
+// Some games use do not handle exceptions well, so we'll have to catch them.
+LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)
 {
-    // Via a MSVC exception, not sure about the official name.
+    // MSVC thread naming exception for debuggers.
     if (Info->ExceptionRecord->ExceptionCode == 0x406D1388)
     {
         // Double-check, and allow any debugger to handle it if available.
@@ -170,6 +170,12 @@ LONG __stdcall Threadname(PEXCEPTION_POINTERS Info)
         {
             return EXCEPTION_CONTINUE_EXECUTION;
         }
+    }
+
+    // OpenSSLs RAND_poll() causes Windows to throw if RPC services are down.
+    if (Info->ExceptionRecord->ExceptionCode == RPC_S_SERVER_UNAVAILABLE)
+    {
+        return EXCEPTION_CONTINUE_EXECUTION;
     }
 
     return EXCEPTION_CONTINUE_SEARCH;
@@ -203,11 +209,11 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
             DisableThreadLibraryCalls(hDllHandle);
         }
 
-        // Sometimes plugins want to name their threads, and not all games support that..
-        SetUnhandledExceptionFilter(Threadname);
+        // Sometimes plugins want to name their threads, someone have to catch that.
+        SetUnhandledExceptionFilter(onUnhandledexception);
     }
 
-    // Alternative for games without TLS.
+    // Alternative for games without TLS support.
     if (nReason == DLL_THREAD_ATTACH)
     {
         // Opt out of further notifications.
