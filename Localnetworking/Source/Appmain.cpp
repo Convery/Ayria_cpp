@@ -159,7 +159,7 @@ namespace Localnetworking
                     {
                         if (Item.second.Instance == Server)
                         {
-                            IServer::Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr),  ntohs(Item.second.Address.sin_port) };
+                            IServer::Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr), ntohs(Item.second.Address.sin_port) };
                             Server->onPacketwrite(Buffer, Size, &Universalformat);
                         }
                     }
@@ -217,8 +217,8 @@ namespace Localnetworking
         {
             if (const auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
-                Infoprint(va("Loaded localnet plugin \"%s\"", Item.c_str()));
-                Pluginhandles.push_back(size_t(Module));
+                if (!GetProcAddress(Module, "Createserver")) FreeLibrary(Module);
+                else Pluginhandles.push_back(size_t(Module));
             }
         }
     }
