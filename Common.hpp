@@ -77,9 +77,12 @@ struct IServer
 {
     struct Address_t { unsigned int IPv4; unsigned short Port; };
 
+    // No complaints.
+    virtual ~IServer();
+
     // Utility functionality.
-    virtual void onConnect() {};
-    virtual void onDisconnect() {};
+    virtual void onConnect() {}
+    virtual void onDisconnect() {}
 
     // Stream-based IO for protocols such as TCP.
     virtual bool onStreamread(void *Databuffer, unsigned int *Datasize) = 0;
