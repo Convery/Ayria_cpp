@@ -13,10 +13,10 @@ if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 endif()
 
 # Platform libraries to be linked.
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-    set(PLATFORM_LIBS dl pthread)
+if(WIN32)
+    set(PLATFORM_LIBS ws2_32 Crypt32)
 else()
-    set(PLATFORM_LIBS)
+    set(PLATFORM_LIBS dl pthread)
 endif()
 
 # Third-party libraries, prefer find_library() and find_path().

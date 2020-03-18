@@ -13,10 +13,10 @@ if(${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 endif()
 
 # Platform libraries to be linked.
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-    set(PLATFORM_LIBS dl pthread)
-else()
+if(WIN32)
     set(PLATFORM_LIBS ws2_32)
+else()
+    set(PLATFORM_LIBS dl pthread)
 endif()
 
 # Just pull all the files from /Source
