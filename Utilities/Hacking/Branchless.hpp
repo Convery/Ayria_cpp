@@ -12,29 +12,29 @@
 namespace Branchless
 {
     template<typename T> concept Integral = std::is_integral<T>::value;
-    template<Integral T> constexpr T min(const T A, const T B)
+    template<typename T> requires Integral<T> constexpr T min(const T A, const T B)
     {
         return B ^ ((A ^ B) & -(A < B));
     }
-    template<Integral T> constexpr T max(const T A, const T B)
+    template<typename T> requires Integral<T> constexpr T max(const T A, const T B)
     {
         return A ^ ((A ^ B) & -(A < B));
     }
-    template<Integral T> constexpr bool even(const T Value)
+    template<typename T> requires Integral<T> constexpr bool even(const T Value)
     {
         return Value && !(Value & (Value - 1));
     }
-    template<Integral T> constexpr bool odd(const T Value)
+    template<typename T> requires Integral<T> constexpr bool odd(const T Value)
     {
         return !even(Value);
     }
-    template<Integral T> constexpr T abs(const T Value)
+    template<typename T> requires Integral<T> constexpr T abs(const T Value)
     {
         const auto Mask = Value >> (sizeof(Value) * 8 - 1);
         return (Value + Mask) ^ Mask;
     }
 
-    template<Integral T> constexpr T clamp(const T Value, const T Min, const T Max)
+    template<typename T> requires Integral<T> constexpr T clamp(const T Value, const T Min, const T Max)
     {
         return max(Min, min(Value, Max));
     }
@@ -50,6 +50,4 @@ namespace Branchless
     static_assert(clamp(42, 3, 40) == 40, "Branchless::clamp");
     static_assert(clamp(23, 3, 40) == 23, "Branchless::clamp");
     static_assert(clamp(2, 3, 40) == 3, "Branchless::clamp");
-
-    constexpr auto k = clamp(42, 3, 40);
 }
