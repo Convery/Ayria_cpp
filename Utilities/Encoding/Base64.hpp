@@ -108,7 +108,7 @@ namespace Base64
             if (Item == '/') Item = '_';
         }
 
-        return Input;
+        return std::move(Input);
     }
     [[nodiscard]] inline std::string fromURL(std::string &&Input)
     {
@@ -125,6 +125,6 @@ namespace Base64
             default: ;
         }
 
-        return Input;
+        return std::move(Input);
     }
 }

@@ -44,7 +44,7 @@ namespace Hash
         for (size_t i = 0; i < Length; ++i)
         {
             Hash *= Internal::FNV1_Prime_32;
-            Hash ^= ((char *)Input)[i];
+            Hash ^= ((const char *)Input)[i];
         }
 
         return Hash;
@@ -56,7 +56,7 @@ namespace Hash
         for (size_t i = 0; i < Length; ++i)
         {
             Hash *= Internal::FNV1_Prime_64;
-            Hash ^= ((char *)Input)[i];
+            Hash ^= ((const char *)Input)[i];
         }
 
         return Hash;
@@ -67,7 +67,7 @@ namespace Hash
 
         for (size_t i = 0; i < Length; ++i)
         {
-            Hash ^= ((char *)Input)[i];
+            Hash ^= ((const char *)Input)[i];
             Hash *= Internal::FNV1_Prime_32;
         }
 
@@ -79,7 +79,7 @@ namespace Hash
 
         for (size_t i = 0; i < Length; ++i)
         {
-            Hash ^= ((char *)Input)[i];
+            Hash ^= ((const char *)Input)[i];
             Hash *= Internal::FNV1_Prime_64;
         }
 

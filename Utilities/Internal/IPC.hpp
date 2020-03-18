@@ -23,7 +23,7 @@ namespace IPC
     {
         assert(Mapsize > 8);
 
-        if (auto Mapping = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, Mapsize, Name.data()))
+        if (auto Mapping = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, Mapsize, Name.data()))
         {
             if (auto Buffer = (Filemap_t *)MapViewOfFile(Mapping, FILE_MAP_ALL_ACCESS, 0, 0, Mapsize))
             {

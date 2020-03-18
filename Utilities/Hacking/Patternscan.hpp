@@ -100,7 +100,7 @@ namespace Patternscan
         if(Textsegment != Datasegment && !Force) return { Textsegment, Datasegment };
 
         #if defined(_WIN32)
-            HMODULE Module = GetModuleHandleA(NULL);
+            HMODULE Module = GetModuleHandleA(nullptr);
             if(!Module) return { Textsegment, Datasegment };
 
             SYSTEM_INFO SI;

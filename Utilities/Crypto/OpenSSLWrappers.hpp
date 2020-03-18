@@ -146,13 +146,13 @@ namespace PK_RSA
         EVP_PKEY_assign_RSA(Privatekey, Key);
 
         EVP_PKEY_CTX *pkeyCtx;
-        EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), NULL, Privatekey);
+        EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Privatekey);
         EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
         EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
         EVP_DigestSignUpdate(Context, Input.data(), Input.size());
 
         size_t Signaturelength{};
-        EVP_DigestSignFinal(Context, NULL, &Signaturelength);
+        EVP_DigestSignFinal(Context, nullptr, &Signaturelength);
         std::string Signature{}; Signature.resize(Signaturelength);
         EVP_DigestSignFinal(Context, (unsigned char *)Signature.data(), &Signaturelength);
         EVP_MD_CTX_destroy(Context);

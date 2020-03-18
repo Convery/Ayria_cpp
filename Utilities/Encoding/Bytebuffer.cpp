@@ -237,6 +237,13 @@ template <typename Type> void Bytebuffer::Write(const Type Value, bool Typecheck
         return;
     }
 
+    // Special case of using a bytebuffer as blob.
+    if constexpr (std::is_same<Type, Bytebuffer>::value)
+    {
+        Rawwrite(Value.Internalsize, Value.Internalbuffer.get());
+        return;
+    }
+
     // POD.
     Rawwrite(sizeof(Type), &Value);
 }

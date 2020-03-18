@@ -62,7 +62,7 @@ namespace Hash
 
             for (uint8_t b = 0; b < 8; ++b)
             {
-                if (!(Block & (1L << 31))) Block <<= 1;
+                if (!(Block & (1UL << 31))) Block <<= 1;
                 else Block = (Block << 1) ^ Polynomial;
             }
         }
