@@ -78,7 +78,7 @@ struct IServer
     struct Address_t { unsigned int IPv4; unsigned short Port; };
 
     // No complaints.
-    virtual ~IServer();
+    virtual ~IServer() {}
 
     // Utility functionality.
     virtual void onConnect() {}
