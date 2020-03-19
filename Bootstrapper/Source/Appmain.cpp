@@ -9,7 +9,7 @@
 #define Writeptr(where, what) { const auto Lock = Memprotect::Makewriteable(where, sizeof(size_t)); *(size_t *)where = (size_t)what; }
 
 // The type of plugins to support.
-constexpr const char *Pluginextension = Build::is64bit ? ".Ayria64" : ".Ayria32";
+constexpr const char *Pluginextension = Build::is64bit ? "64" : "32";
 
 // Saved directory and all plugins.
 std::vector<size_t> OriginalTLS{};
