@@ -48,6 +48,9 @@ template <typename Type> constexpr uint8_t toID()
     // If it's derived from vector, we need to get the internal type.
     if constexpr (isDerived<Type, std::vector>{}) return BB_ARRAY + toID<typename Type::value_type>();
 
+    // If it's an enumeration, get the base type.
+    if constexpr (std::is_enum<Type>::value) return toID<typename std::underlying_type<Type>::type>();
+
     // Special containers.
     if constexpr (std::is_same<Type, Blob>::value)                          return BB_BLOB;
     if constexpr (std::is_same<Type, std::basic_string<char>>::value)       return BB_ASCIISTRING;
