@@ -135,6 +135,25 @@ namespace Localnetworking
             // NOTE(tcn): Set nfds and reset Timeout on POSIX.
             if (!select(NULL, &ReadFD, &WriteFD, NULL, &Timeout)) continue;
 
+            // Poll the servers for data and send it to the sockets.
+            for (const auto &[Socket, Server] : Serversockets)
+            {
+                if (!FD_ISSET(Socket, &WriteFD)) continue;
+                uint32_t Datasize{ 8192 };
+
+                if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
+                {
+                    // Servers can have multiple associated sockets, so we duplicate.
+                    for (const auto &[Localsocket, Instance] : Serversockets)
+                    {
+                        if (Instance == Server)
+                        {
+                            send(Localsocket, Buffer, Datasize, NULL);
+                        }
+                    }
+                }
+            }
+
             // If there's data on the socket, forward to a server.
             LOOP: for (const auto &[Socket, Server] : Serversockets)
             {
@@ -161,25 +180,6 @@ namespace Localnetworking
                         {
                             IServer::Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr), ntohs(Item.second.Address.sin_port) };
                             Server->onPacketwrite(Buffer, Size, &Universalformat);
-                        }
-                    }
-                }
-            }
-
-            // Poll the servers for data and send it to the sockets.
-            for (const auto &[Socket, Server] : Serversockets)
-            {
-                if (!FD_ISSET(Socket, &WriteFD)) continue;
-                uint32_t Datasize{ 8192 };
-
-                if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
-                {
-                    // Servers can have multiple associated sockets, so we duplicate.
-                    for (const auto &[Localsocket, Instance] : Serversockets)
-                    {
-                        if (Instance == Server)
-                        {
-                            send(Localsocket, Buffer, Datasize, NULL);
                         }
                     }
                 }
