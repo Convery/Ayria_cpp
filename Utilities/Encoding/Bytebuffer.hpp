@@ -311,6 +311,10 @@ struct Bytebuffer
     {
         return Internalsize - Internaliterator;
     }
+    [[nodiscard]] std::basic_string_view<uint8_t> asView()
+    {
+        return { Internalbuffer.get(), Internalsize };
+    }
 
     // Supported operators, acts on the internal state.
     bool operator == (const Bytebuffer &Right) noexcept

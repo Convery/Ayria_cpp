@@ -262,6 +262,10 @@ struct Bitbuffer
     {
         return Internalsize * 8 - Internaliterator;
     }
+    [[nodiscard]] std::basic_string_view<uint8_t> asView()
+    {
+        return { Internalbuffer.get(), Internalsize };
+    }
 
     // Supported operators, acts on the internal state.
     bool operator == (const Bitbuffer &Right) noexcept
