@@ -158,6 +158,13 @@ struct Bytebuffer
     {
         constexpr auto TypeID = Internal::toID<Type>();
 
+        // Special case of using a bytebuffer as blob.
+        if constexpr (std::is_same<Type, Bytebuffer>::value)
+        {
+            Rawwrite(Value.Internalsize, Value.Internalbuffer.get());
+            return;
+        }
+
         // A byte prefix for the type.
         if (Typechecked || TypeID > BB_ARRAY)
             Rawwrite(sizeof(TypeID), &TypeID);
@@ -185,13 +192,6 @@ struct Bytebuffer
                 Rawwrite((Value.size() + 1) * sizeof(typename Type::value_type), Value.c_str());
             }
 
-            return;
-        }
-
-        // Special case of using a bytebuffer as blob.
-        if constexpr (std::is_same<Type, Bytebuffer>::value)
-        {
-            Rawwrite(Value.Internalsize, Value.Internalbuffer.get());
             return;
         }
 
