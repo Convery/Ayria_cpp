@@ -5,8 +5,10 @@
 */
 
 #pragma once
+#pragma warning(push)
 #include <Stdinclude.hpp>
 #include "Bytebuffer.hpp"
+#pragma warning(disable: 4702)
 
 struct Bitbuffer
 {
@@ -308,3 +310,5 @@ struct Bitbuffer
         return *this;
     }
 };
+
+#pragma warning(pop)
