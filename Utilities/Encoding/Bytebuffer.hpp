@@ -385,11 +385,15 @@ template<typename Type> struct bbValue : ISerializable
     Type Value;
     bool Checked;
 
+    bbValue &operator=(Type &Right) noexcept { Value = Right; return *this; }
+    bbValue &operator=(Type &&Right) noexcept { Value = Right; return *this; }
+
     void Serialize(Bytebuffer &Buffer) override { Buffer.Write(Value, Checked); }
     void Deserialize(Bytebuffer &Buffer) override { Buffer.Read(Value, Checked); }
 
-    explicit bbValue(Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
-    explicit bbValue(Type &&Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
+    bbValue() = default;
+    bbValue(Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
+    bbValue(Type &&Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
 };
 #pragma endregion
 #pragma warning(pop)
