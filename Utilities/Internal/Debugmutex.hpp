@@ -26,8 +26,7 @@ struct Debugmutex
         if (Currentowner == std::this_thread::get_id())
         {
             Errorprint(va("Debugmutex: Recursive lock by thread %u!", Currentowner));
-            volatile size_t Meep = 0;
-            *(size_t *)Meep = 0xDEAD;
+            volatile size_t Meep = 0; *(size_t *)Meep = 0xDEAD;
         }
 
         if (Internal.try_lock_for(std::chrono::seconds(10)))
@@ -37,8 +36,7 @@ struct Debugmutex
         else
         {
             Errorprint(va("Debugmutex: Timeout, locked by %u!", Currentowner));
-            volatile size_t Meep = 0;
-            *(size_t *)Meep = 0xF00D;
+            volatile size_t Meep = 0; *(size_t *)Meep = 0xF00D;
         }
     }
     void unlock()
