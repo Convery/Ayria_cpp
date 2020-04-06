@@ -47,6 +47,7 @@ namespace Localnetworking
     std::vector<std::string> Hostblacklist{};
     std::vector<size_t> Pluginhandles{};
     std::mutex Bottleneck{};
+    FD_SET Activesockets{};
     uint16_t Backendport{};
     size_t Listensocket{};
     bool Shouldquit{};
@@ -114,6 +115,8 @@ namespace Localnetworking
         if (Serversocket != INVALID_SOCKET)
         {
             Serversockets[Serversocket] = Serverinstance;
+            assert(Activesockets.fd_count < FD_SETSIZE);
+            FD_SET(Serversocket, &Activesockets);
         }
     }
 
@@ -121,19 +124,18 @@ namespace Localnetworking
     void Pollsockets()
     {
         // ~100 FPS in-case someone proxies game-data.
-        const timeval Timeout{ NULL, 10000 };
+        constexpr timeval Defaulttimeout{ NULL, 10000 };
         char Buffer[8192];
 
         // Sleeps through select().
         while (!Shouldquit)
         {
-            FD_SET ReadFD{};
-            FD_SET WriteFD{};
-            for (const auto &Item : Serversockets) FD_SET(Item.first, &ReadFD);
-            for (const auto &Item : Serversockets) FD_SET(Item.first, &WriteFD);
+            FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
+            const auto Count{ Activesockets.fd_count };
+            auto Timeout{ Defaulttimeout };
 
-            // NOTE(tcn): Set nfds and reset Timeout on POSIX.
-            if (!select(NULL, &ReadFD, &WriteFD, NULL, &Timeout)) continue;
+            // Now POSIX compatible.
+            if (!select(Count, &ReadFD, &WriteFD, NULL, &Timeout)) continue;
 
             // Poll the servers for data and send it to the sockets.
             for (const auto &[Socket, Server] : Serversockets)
@@ -166,6 +168,8 @@ namespace Localnetworking
                     // Winsock had some internal issue that we can't be arsed to recover from..
                     if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
                     if (Server) Server->onDisconnect();
+                    assert(Activesockets.fd_count);
+                    FD_CLR(Socket, &Activesockets);
                     Serversockets.erase(Socket);
                     closesocket(Socket);
                     goto LOOP;
