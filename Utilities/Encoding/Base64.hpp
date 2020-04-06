@@ -7,6 +7,8 @@
 #pragma once
 #include <cstdint>
 #include <string_view>
+using Blob = std::basic_string<uint8_t>;
+using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base64
 {
@@ -83,6 +85,69 @@ namespace Base64
         return Result;
     }
     [[nodiscard]] constexpr inline bool isValid(const std::string_view Input)
+    {
+        for (const auto &Item : Input)
+        {
+            if (Item >= 'A' && Item <= 'Z') continue;
+            if (Item >= 'a' && Item <= 'z') continue;
+            if (Item >= '/' && Item <= '9') continue;
+            if (Item == '=' || Item == '+') continue;
+            return false;
+        }
+
+        return !Input.empty();
+    }
+
+    [[nodiscard]] inline Blob Encode(const Blob_view Input)
+    {
+        Blob Result((((Input.size() + 2) / 3) * 4), '=');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = Table[(Accumulator >> Bits) & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition] = Table[Accumulator & 0x3F];
+        }
+
+        return Result;
+    }
+    [[nodiscard]] inline Blob Decode(const Blob_view Input)
+    {
+        Blob Result(((Input.size() / 4) * 3), '\0');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            if (Item == '=') continue;
+
+            Accumulator = (Accumulator << 6) | Reversetable[uint8_t(Item)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = char((Accumulator >> Bits) & 0xFF);
+            }
+        }
+
+        return Result;
+    }
+    [[nodiscard]] constexpr inline bool isValid(const Blob_view Input)
     {
         for (const auto &Item : Input)
         {
