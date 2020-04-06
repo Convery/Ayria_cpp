@@ -46,7 +46,6 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Start tracking availability.
         Ayria::Global.Startuptimestamp = time(NULL);
-        Ayria::Global.Filemapping = IPC::Createmap("Platformwrapper", 512);
 
         // If there's a local bootstrap module, we'll load it and trigger TLS.
         if(LoadLibraryA("./Ayria/Bootstrapper64d.dll") || LoadLibraryA("./Ayria/Bootstrapper32d.dll"))

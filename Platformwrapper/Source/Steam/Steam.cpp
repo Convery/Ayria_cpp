@@ -187,12 +187,25 @@ extern "C"
         }
         #endif
 
-        // Share our current state..
-        auto Object = nlohmann::json::object();
-        Object["Ayria.UserID"] = Ayria::Global.UserID;
-        Object["Ayria.Username"] = Ayria::Global.Username;
-        Object["Steam.ApplicationID"] = Steam::Global.ApplicationID;
-        IPC::Updatemapping("Platformwrapper", Base64::Encode(Object.dump()));
+        // Share our current state with the plugins.
+        try
+        {
+            const auto Steamshare = Filesharing::Read("STEAM");
+            if (Steamshare.empty())
+            {
+                auto Object = nlohmann::json::object();
+                Object["ApplicationID"] = Steam::Global.ApplicationID;
+                Filesharing::Write("STEAM", Base64::Encode(Object.dump()));
+            }
+            else
+            {
+                auto Object = nlohmann::json::parse(Base64::Decode(Steamshare).c_str());
+                Object["ApplicationID"] = Steam::Global.ApplicationID;
+                Filesharing::Write("STEAM", Base64::Encode(Object.dump()));
+            }
+
+        }
+        catch (...) {}
 
         return true;
     }

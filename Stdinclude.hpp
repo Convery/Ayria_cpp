@@ -62,6 +62,7 @@
 #pragma warning(pop)
 
 // Global utilities.
+#include <Utilities/Communication/Filesharing.hpp>
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
@@ -77,8 +78,8 @@
 #include <Utilities/Wrappers/Filesystem.hpp>
 
 // Temporary includes.
-#include <Utilities/Internal/IPC.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
+#include <Utilities/Internal/Singleinstance.hpp>
 
 // Extensions to the language.
 using namespace std::string_literals;
