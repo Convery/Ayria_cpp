@@ -387,8 +387,6 @@ template<typename Type> struct bbValue : ISerializable
 
     bbValue &operator=(Type &Right) noexcept { Value = Right; return *this; }
     bbValue &operator=(Type &&Right) noexcept { Value = Right; return *this; }
-
-    void Serialize(Bytebuffer &Buffer) override { Buffer.Write(Value, Checked); }
     void Deserialize(Bytebuffer &Buffer) override { Buffer.Read(Value, Checked); }
 
     bbValue() = default;

@@ -203,7 +203,6 @@ extern "C"
                 Object["ApplicationID"] = Steam::Global.ApplicationID;
                 Filesharing::Write("STEAM", Base64::Encode(Object.dump()));
             }
-
         }
         catch (...) {}
 
