@@ -127,7 +127,7 @@ namespace Steam
     {
         const auto Filebuffer = FS::Readfile(Filename);
         if(Filebuffer.empty()) return false;
-        std::vector<std::string> Foundnames;
+        size_t Foundnames{};
 
         // Scan through the binary for interface-names.
         Patternscan::Range_t Range = { size_t(Filebuffer.data()), size_t(Filebuffer.data()) + Filebuffer.size() };
@@ -139,14 +139,14 @@ namespace Steam
                 if(std::strstr((char *)Address, Scanstring.c_str()))
                 {
                     // Load the interface to mark it as active.
-                    Foundnames.push_back(Scanstring);
                     Fetchinterface(Name);
+                    Foundnames++;
                 }
             }
         }
 
         // Did we find any results?
-        return !!Foundnames.size();
+        return !!Foundnames;
     }
     const std::vector<std::pair<std::string, std::string>> Scanstrings
     {
