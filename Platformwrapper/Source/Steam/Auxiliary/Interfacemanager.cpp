@@ -8,7 +8,7 @@
 
 namespace Steam
 {
-    std::vector<std::pair<Interfacetype_t, Interface_t *>> *Interfacestore;
+    std::deque<std::pair<Interfacetype_t, Interface_t *>> *Interfacestore;
     std::unordered_map<Interfacetype_t, Interface_t *> Currentinterfaces;
     std::unordered_map<std::string_view, Interface_t *> *Interfacenames;
 
@@ -47,7 +47,7 @@ namespace Steam
         if (!Interfacestore) Interfacestore = new std::remove_pointer_t<decltype(Interfacestore)>;
         if (!Interfacenames) Interfacenames = new std::remove_pointer_t<decltype(Interfacenames)>;
 
-        Interfacestore->push_back(std::make_pair(Type, Interface));
+        Interfacestore->push_front(std::make_pair(Type, Interface));
         Interfacenames->emplace(Name, Interface);
     }
     Interface_t **Fetchinterface(std::string_view Name)
@@ -82,6 +82,17 @@ namespace Steam
         {
             //Debugprint(va("Fetching interface %i", Type));
             return &Result->second;
+        }
+
+        // Return the latest interface as a hail-Mary.
+        for (const auto &[lType, Ptr] : *Interfacestore)
+        {
+            if (Type == lType)
+            {
+                Errorprint(va("Interface missing for interface-type %i, substituting", Type));
+                Currentinterfaces.emplace(lType, Ptr);
+                return &Currentinterfaces[lType];
+            }
         }
 
         // Return the dummy interface for debugging.
@@ -128,10 +139,8 @@ namespace Steam
                 if(std::strstr((char *)Address, Scanstring.c_str()))
                 {
                     // Load the interface to mark it as active.
-                    Debugprint(va("Loading interface %s", Name.c_str()));
                     Foundnames.push_back(Scanstring);
                     Fetchinterface(Name);
-                    break;
                 }
             }
         }
