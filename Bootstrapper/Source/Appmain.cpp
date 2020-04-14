@@ -182,6 +182,7 @@ LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)
 }
 
 // Entrypoint when loaded as a shared library.
+bool useFallback = false;
 BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 {
     if (nReason == DLL_PROCESS_ATTACH)
@@ -208,14 +209,20 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
             // Opt out of further notifications.
             DisableThreadLibraryCalls(hDllHandle);
         }
+        else
+        {
+            useFallback = true;
+        }
 
         // Sometimes plugins want to name their threads, someone have to catch that.
         SetUnhandledExceptionFilter(onUnhandledexception);
     }
 
     // Alternative for games without TLS support.
-    if (nReason == DLL_THREAD_ATTACH)
+    if (useFallback && nReason == DLL_THREAD_ATTACH)
     {
+        useFallback = false;
+
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
 
