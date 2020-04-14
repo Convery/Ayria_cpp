@@ -232,6 +232,11 @@ namespace Localnetworking
 // Entrypoint when loaded as a plugin.
 extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
 {
+    // Don't trust the bootstrapper to manage this.
+    static bool Initialized = false;
+    if (Initialized) return;
+    Initialized = true;
+
     // Initialize the background thread.
     Localnetworking::Createbackend(4200);
 
