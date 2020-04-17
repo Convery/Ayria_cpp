@@ -2,84 +2,27 @@
     Initial author: Convery (tcn@ayria.se)
     Started: 2019-03-14
     License: MIT
+
+    An alternative until <format> is supported.
 */
 
 #pragma once
 #include <memory>
-#include <cassert>
-#include <cstdarg>
 #include <string_view>
 
-namespace Internal
+template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, Args ...args)
 {
-    // Truncate the string if needed.
-    #if defined(VA_SIZE)
-    constexpr int32_t Defaultsize = VA_SIZE;
-    #else
-    constexpr int32_t Defaultsize = 512;
-    #endif
+    const auto Size = std::snprintf(nullptr, 0, Format.data(), args ...);
+    auto Buffer = std::make_unique<char[]>(Size + 1);
 
-    [[nodiscard]] inline int32_t va(char *Buffer, const int32_t Size, const std::string_view Format, const std::va_list Varlist)
-    {
-        return std::vsnprintf(Buffer, Size, Format.data(), Varlist);
-    }
+    std::snprintf(Buffer.get(), Size, Format.data(), args ...);
+    return Buffer.get();
 }
-
-[[nodiscard]] inline std::string va(const std::string_view Format, ...)
+template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Args ...args)
 {
-    auto Buffer{ std::make_unique<char[]>(Internal::Defaultsize) };
-    std::va_list Varlist;
-    int32_t Size;
+    const auto Size = std::snprintf(nullptr, 0, Format, args ...);
+    auto Buffer = std::make_unique<char[]>(Size + 1);
 
-    // Parse the argument-list.
-    va_start(Varlist, Format);
-    {
-        // Try using the default size as it should work 99% of the time.
-        Size = Internal::va(Buffer.get(), Internal::Defaultsize, Format, Varlist);
-
-        // If the size is larger, we need to allocate again =(
-        if (Size > Internal::Defaultsize)
-        {
-            Size += 1;  // Returned length + null.
-            Buffer = std::make_unique<char[]>(Size);
-            Size = Internal::va(Buffer.get(), Size, Format, Varlist);
-        }
-    }
-    va_end(Varlist);
-
-    // Negative result on error.
-    if (Size < 0) { assert(false); return {}; }
-    assert(Size);
-
-    // Take the memory with us.
-    return { Buffer.get(), static_cast<size_t>(Size) };
-}
-[[nodiscard]] inline std::string va(const char *Format, ...)
-{
-    auto Buffer{ std::make_unique<char[]>(Internal::Defaultsize) };
-    std::va_list Varlist;
-    int32_t Size;
-
-    // Parse the argument-list.
-    va_start(Varlist, Format);
-    {
-        // Try using the default size as it should work 99% of the time.
-        Size = Internal::va(Buffer.get(), Internal::Defaultsize, Format, Varlist);
-
-        // If the size is larger, we need to allocate again =(
-        if (Size > Internal::Defaultsize)
-        {
-            Size += 1;  // Returned length + null.
-            Buffer = std::make_unique<char[]>(Size);
-            Size = Internal::va(Buffer.get(), Size, Format, Varlist);
-        }
-    }
-    va_end(Varlist);
-
-    // Negative result on error.
-    if (Size < 0) { assert(false); return {}; }
-    assert(Size);
-
-    // Take the memory with us.
-    return { Buffer.get(), static_cast<size_t>(Size) };
+    std::snprintf(Buffer.get(), Size, Format, args ...);
+    return Buffer.get();
 }
