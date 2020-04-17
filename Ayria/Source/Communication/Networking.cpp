@@ -193,8 +193,9 @@ namespace Networking
                 break;
 
             // Assigns a random port to the listen-socket while binding.
+            const sockaddr_in lBroadcast{ AF_INET, htons(Broadcastport) };
             const sockaddr_in Localhost{ AF_INET, 0, {{.S_addr = INADDR_ANY}} };
-            if (SOCKET_ERROR == bind(Broadcastsocket, (const sockaddr *)&Broadcast, sizeof(Broadcast))) break;
+            if (SOCKET_ERROR == bind(Broadcastsocket, (const sockaddr *)&lBroadcast, sizeof(lBroadcast))) break;
             if (SOCKET_ERROR == bind(Listensocket, (const sockaddr *)&Localhost, sizeof(Localhost))) break;
             if (SOCKET_ERROR == listen(Listensocket, 32)) break;
 

@@ -14,7 +14,7 @@ endif()
 
 # Platform libraries to be linked.
 if(WIN32)
-    set(PLATFORM_LIBS ws2_32)
+    set(PLATFORM_LIBS ws2_32 gdi32 Msimg32)
 else()
     set(PLATFORM_LIBS dl pthread)
 endif()

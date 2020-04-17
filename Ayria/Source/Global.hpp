@@ -43,6 +43,11 @@ namespace Networking
     void onFrame();
 }
 
+namespace Console
+{
+    void onFrame();
+}
+
 namespace Loaders
 {
     void Loadplugins();

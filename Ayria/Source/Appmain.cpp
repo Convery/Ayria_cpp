@@ -84,7 +84,7 @@ void Ayriastartup()
         while(true)
         {
             Networking::onFrame();
-
+            Console::onFrame();
         }
     }).detach();
 }
