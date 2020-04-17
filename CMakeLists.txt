@@ -78,8 +78,8 @@ add_subdirectory(Utilities)
 add_subdirectory(Ayria)
 #add_subdirectory(Injector)
 #add_subdirectory(Bootstrapper)
-#add_subdirectory(Localnetworking)
-#add_subdirectory(Platformwrapper)
+add_subdirectory(Localnetworking)
+add_subdirectory(Platformwrapper)
 
 # Examples.
 #add_subdirectory(Plugintemplate)

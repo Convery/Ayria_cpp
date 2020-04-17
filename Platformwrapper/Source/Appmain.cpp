@@ -48,7 +48,8 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         Ayria::Global.Startuptimestamp = time(NULL);
 
         // If there's a local bootstrap module, we'll load it and trigger TLS.
-        if(LoadLibraryA("./Ayria/Bootstrapper64d.dll") || LoadLibraryA("./Ayria/Bootstrapper32d.dll"))
+        constexpr auto Modulename = Build::is64bit ? "Ayria64.dll" : "Ayria32.dll";
+        if(LoadLibraryA(("./"s + Modulename).c_str()) || LoadLibraryA(("./Ayria/"s + Modulename).c_str()))
             std::thread([]() { volatile bool NOP{}; (void)NOP; }).detach();
     }
 

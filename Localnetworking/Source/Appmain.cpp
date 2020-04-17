@@ -130,6 +130,13 @@ namespace Localnetworking
         // Sleeps through select().
         while (!Shouldquit)
         {
+            // Let's not poll when we don't have any sockets.
+            if (Activesockets.fd_count == 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+
             FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
             const auto Count{ Activesockets.fd_count };
             auto Timeout{ Defaulttimeout };
