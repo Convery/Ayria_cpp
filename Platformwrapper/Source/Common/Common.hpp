@@ -26,7 +26,7 @@ namespace Communication
     void addEventhandler(const std::string &Event, Eventcallback_t Callback);
 
     // Push a message to all LAN clients.
-    void Broadcast(const std::string Eventname, std::string &&Payload);
+    void Broadcast(std::string Eventname, std::string &&Payload);
 
     // Spawn a thread that polls for packets in the background.
     void Initialize(const uint16_t Port);

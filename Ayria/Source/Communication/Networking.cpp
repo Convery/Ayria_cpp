@@ -79,7 +79,7 @@ namespace Networking
 
         timeval Selecttimeout{ NULL, 100 };
         FD_SET ListenFD{}; FD_SET(Listensocket, &ListenFD);
-        if (select(1, &ListenFD, NULL, NULL, &Selecttimeout))
+        if (select(1, &ListenFD, nullptr, nullptr, &Selecttimeout))
         {
             // Drop any errors on the floor.
             sockaddr_in Sender{ AF_INET }; int Size{ sizeof(Sender) };
@@ -99,7 +99,7 @@ namespace Networking
         timeval Selecttimeout{ NULL, 100 };
 
         // If sockets are ready for IO, no need to count, just do for_each.
-        if (select(Count, &ReadFD, &WriteFD, NULL, &Selecttimeout))
+        if (select(Count, &ReadFD, &WriteFD, nullptr, &Selecttimeout))
         {
             // Simply forward to the node, no processing needed.
             for (auto &[NodeID, Node] : Nodes)
@@ -227,7 +227,7 @@ namespace Networking
     {
         return addBroadcast(Message.Subject, Message.Content);
     }
-    void addHandler(std::string_view Subject, Callback_t Callback)
+    void addHandler(std::string_view Subject, const Callback_t &Callback)
     {
         if (!Handlers) Handlers = new std::remove_pointer_t<decltype(Handlers)>;
         Handlers->emplace(Subject, Callback);

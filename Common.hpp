@@ -78,7 +78,7 @@ struct IServer
     struct Address_t { unsigned int IPv4; unsigned short Port; };
 
     // No complaints.
-    virtual ~IServer() {}
+    virtual ~IServer() = default;
 
     // Utility functionality.
     virtual void onConnect() {}
@@ -86,21 +86,21 @@ struct IServer
 
     // Stream-based IO for protocols such as TCP.
     virtual bool onStreamread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onStreamwrite(const void *Databuffer, const unsigned int Datasize) = 0;
+    virtual bool onStreamwrite(const void *Databuffer, unsigned int Datasize) = 0;
 
     // Packet-based IO for protocols such as UDP and ICMP.
     virtual bool onPacketread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onPacketwrite(const void *Databuffer, const unsigned int Datasize, const Address_t *Endpoint) = 0;
+    virtual bool onPacketwrite(const void *Databuffer, unsigned int Datasize, const Address_t *Endpoint) = 0;
 };
 struct IStreamserver : IServer
 {
     // Nullsub packet-based IO.
-    virtual bool onPacketread(void *, unsigned int *) { return false; }
-    virtual bool onPacketwrite(const void *, const unsigned int, const Address_t *) { return false; }
+    bool onPacketread(void *, unsigned int *) override { return false; }
+    bool onPacketwrite(const void *, unsigned int, const Address_t *) override { return false; }
 };
 struct IDatagramserver : IServer
 {
     // Nullsub stream-based IO.
-    virtual bool onStreamread(void *, unsigned int *) { return false; }
-    virtual bool onStreamwrite(const void *, const unsigned int) { return false; }
+    bool onStreamread(void *, unsigned int *) override { return false; }
+    bool onStreamwrite(const void *, unsigned int) override { return false; }
 };

@@ -116,7 +116,7 @@ namespace NK_GDI
         inline struct nk_user_font Createfont(const char *Name, int32_t Fontsize, void *Fontdata, uint32_t Datasize)
         {
             DWORD Installedfonts{};
-            AddFontMemResourceEx(Fontdata, Datasize, NULL, &Installedfonts);
+            (void)AddFontMemResourceEx(Fontdata, Datasize, NULL, &Installedfonts);
             return Createfont(Name, Fontsize);
         }
     }

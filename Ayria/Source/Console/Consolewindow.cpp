@@ -4,7 +4,6 @@
     License: MIT
 */
 
-
 #include "../Global.hpp"
 #define NK_IMPLEMENTATION
 #include "Nuklear_GDI.hpp"
@@ -64,8 +63,8 @@ namespace Console
         };
         if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-        if (auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, "Ayria Console", NULL, WS_POPUP,
-            NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
+        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, "Ayria Console", NULL, WS_POPUP,
+                                                      NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
         {
             // Use a pixel-value of [0xFF, 0xFF, 0xFF] to mean transparent rather than Alpha.
             // Because using Alpha is slow and we should not use pure white anyway.
@@ -276,8 +275,8 @@ namespace Console
             // Auto-focus.
             static int Inputlength;
             nk_edit_focus(Context, 0);
-            auto Active = nk_edit_string(Context, NK_EDIT_SELECTABLE | NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_GOTO_END_ON_ACTIVATE,
-                Inputstring.data(), &Inputlength, Inputstring.size(), nk_filter_default);
+            const auto Active = nk_edit_string(Context, NK_EDIT_SELECTABLE | NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_GOTO_END_ON_ACTIVATE,
+                                               Inputstring.data(), &Inputlength, Inputstring.size(), nk_filter_default);
 
             // On enter pressed.
             if (Active & NK_EDIT_COMMITED)
@@ -296,15 +295,13 @@ namespace Console
                     {
                         std::string Functionname = Argv[0];
                         std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) { return (char)std::tolower(a); });
-                        if (auto Callback = Functions.find(Functionname); Callback != Functions.end())
+                        if (const auto Callback = Functions.find(Functionname); Callback != Functions.end())
                         {
                             Callback->second(Argc, (const char **)Argv);
                         }
 
                         LocalFree(Argv);
                     }
-
-                    // TODO(tcn): Do something fun with the input.
                 }
             }
         }
@@ -380,7 +377,7 @@ namespace Console
                         EnumWindows([](HWND Handle, LPARAM) -> BOOL
                         {
                             DWORD ProcessID;
-                            auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+                            const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
 
                             if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
                             {

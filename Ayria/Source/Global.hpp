@@ -38,7 +38,7 @@ namespace Networking
     using Callback_t = std::function<void(const Request_t &Request, std::string &Response)>;
 
     void addBroadcast(std::string_view Subject, std::string_view Content);
-    void addHandler(std::string_view Subject, Callback_t Callback);
+    void addHandler(std::string_view Subject, const Callback_t &Callback);
     void addBroadcast(Request_t &&Message);
     void onFrame();
 }

@@ -6,8 +6,9 @@
 
 #include "Global.hpp"
 
-using Loaderflags_t = union { struct { uint8_t TLS : 1, EP : 1; }; uint8_t Raw; };
-Loaderflags_t Loaderflags{};
+// Although no compiler cares, anon unions should be static in global scope.
+typedef union { struct { uint8_t TLS : 1, EP : 1; }; uint8_t Raw; } Loaderflags_t;
+static Loaderflags_t Loaderflags{};
 
 // Some games use do not handle exceptions well, so we'll have to catch them.
 LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)

@@ -86,7 +86,7 @@ namespace Steam
         bool FilePersisted(const char *pchFile)
         {
             Traceprint();
-            return 0;
+            return false;
         }
         int64_t GetFileTimestamp(const char *pchFile)
         {
@@ -120,7 +120,7 @@ namespace Steam
         bool GetUGCDetails(uint32_t hContent, uint32_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, CSteamID *pSteamIDOwner)
         {
             Traceprint();
-            return 0;
+            return false;
         }
         int32_t UGCRead0(uint32_t hContent, void *pvData, int32_t cubDataToRead)
         {
@@ -155,7 +155,7 @@ namespace Steam
         {
             Traceprint();
 
-            return 1;
+            return true;
         }
         void SetCloudEnabledForApp(bool bEnabled)
         {
@@ -241,37 +241,37 @@ namespace Steam
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         bool UpdatePublishedFilePreviewFile(uint64_t hUpdateRequest, const char *pchPreviewFile)
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         bool UpdatePublishedFileTitle(uint64_t hUpdateRequest, const char *pchTitle)
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         bool UpdatePublishedFileDescription(uint64_t hUpdateRequest, const char *pchDescription)
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         bool UpdatePublishedFileVisibility(uint64_t hUpdateRequest, uint32_t eVisibility)
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         bool UpdatePublishedFileTags(uint64_t hUpdateRequest, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         uint64_t CommitPublishedFileUpdate(uint64_t hUpdateRequest)
         {
@@ -283,7 +283,7 @@ namespace Steam
         {
             Traceprint();
 
-            return 0;
+            return false;
         }
         uint64_t GetPublishedItemVoteDetails(uint32_t unPublishedFileId)
         {
