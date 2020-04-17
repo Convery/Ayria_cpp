@@ -7,74 +7,6 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-/*
-    Purpose:
-    Matchmaking
-    Social
-
-
-
-
-    Build a table of LAN nodes, IPC nodes.
-    Duplicate all messages to each, unified interface.
-
-
-
-    export bool __cdecl onRequest(char *Request, char **Response);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    Key-val lookup, matchmake, c
-
-
-
-
-    Inter-module = DllExports
-    Inter-network = UDP broadcast
-    Inter-process = Piped
-
-    IPC - Named pipe interface for remote tools.
-    DLL -
-
-
-
-    Have a request-wrapper to do JSON IPC
-
-
-    export request();
-    export
-
-
-    void getProperty(char *Key,
-
-
-
-    #define doAPICall(x, y) getproc(Ayria.dll, "onMessage")(x, y)
-*/
-
-
-//
-//namespace Networking
-//{
-//    using NodeID = uint64_t;
-//    std::vector<NodeID> getNodes();
-//
-//}
-//
-//
-//
 //namespace IPC
 //{
 //    constexpr size_t Instancecount = 12;
@@ -97,6 +29,9 @@
 //}
 
 
+// Initialize the subsystems.
+void Ayriastartup();
+
 namespace Networking
 {
     using Request_t = struct { std::string Subject, Content; };
@@ -108,8 +43,13 @@ namespace Networking
     void onFrame();
 }
 
-//namespace Console
-//{
-//
-//}
-//
+namespace Loaders
+{
+    void Loadplugins();
+
+    bool InstallTLSCallback();
+    void RestoreTLSCallback();
+
+    bool InstallEPCallback();
+    void RestoreEPCallback();
+}
