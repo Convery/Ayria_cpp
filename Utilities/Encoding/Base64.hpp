@@ -84,7 +84,7 @@ namespace Base64
 
         return Result;
     }
-    [[nodiscard]] constexpr inline bool isValid(const std::string_view Input)
+    [[nodiscard]] constexpr bool isValid(const std::string_view Input)
     {
         for (const auto &Item : Input)
         {
@@ -147,7 +147,7 @@ namespace Base64
 
         return Result;
     }
-    [[nodiscard]] constexpr inline bool isValid(const Blob_view Input)
+    [[nodiscard]] constexpr bool isValid(const Blob_view Input)
     {
         for (const auto &Item : Input)
         {

@@ -87,7 +87,7 @@ struct Callbackinterface000
 {
     virtual int onPacket(IPCPacket_t *Packet);
 };
-void Sendtoserver(const Packettypes_t Packettype, Blob &&Data, struct Tensafe *Interface);
+void Sendtoserver(Packettypes_t Packettype, Blob &&Data, struct Tensafe *Interface);
 template <typename T> bool PackIPC(IPCPacket_t *Packet, T Value)
 {
     if (Packet->Maxsize - Packet->Dataused < sizeof(T))

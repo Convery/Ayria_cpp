@@ -29,7 +29,7 @@ namespace Communication
     void Broadcast(std::string Eventname, std::string &&Payload);
 
     // Spawn a thread that polls for packets in the background.
-    void Initialize(const uint16_t Port);
+    void Initialize(uint16_t Port);
 }
 
 // Extend the communication-core.

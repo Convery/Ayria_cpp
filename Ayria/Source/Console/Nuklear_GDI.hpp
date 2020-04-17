@@ -41,7 +41,7 @@ namespace NK_GDI
     namespace Images
     {
         template <bool isRGB = true> // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
-        std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, const struct nk_vec2i Size);
+        std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, struct nk_vec2i Size);
         void Deleteimage(std::unique_ptr<struct nk_image> &&Image);
     }
     namespace Internal

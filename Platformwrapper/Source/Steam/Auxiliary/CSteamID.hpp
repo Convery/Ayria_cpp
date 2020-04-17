@@ -547,10 +547,10 @@ class CSteamID
     void SetFromString(const char *pchSteamID, uint32_t eDefaultUniverse);
     bool SetFromSteam2String(const char *pchSteam2ID, uint32_t eUniverse);
 
-    inline bool operator==(const CSteamID &val) const { return m_steamid.m_unAll64Bits == val.m_steamid.m_unAll64Bits; }
-    inline bool operator!=(const CSteamID &val) const { return !operator==(val); }
-    inline bool operator<(const CSteamID &val) const { return m_steamid.m_unAll64Bits < val.m_steamid.m_unAll64Bits; }
-    inline bool operator>(const CSteamID &val) const { return m_steamid.m_unAll64Bits > val.m_steamid.m_unAll64Bits; }
+    bool operator==(const CSteamID &val) const { return m_steamid.m_unAll64Bits == val.m_steamid.m_unAll64Bits; }
+    bool operator!=(const CSteamID &val) const { return !operator==(val); }
+    bool operator<(const CSteamID &val) const { return m_steamid.m_unAll64Bits < val.m_steamid.m_unAll64Bits; }
+    bool operator>(const CSteamID &val) const { return m_steamid.m_unAll64Bits > val.m_steamid.m_unAll64Bits; }
 
     // DEBUG function
     bool BValidExternalSteamID() const;
