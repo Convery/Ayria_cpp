@@ -223,8 +223,7 @@ struct Bytebuffer
             Buffer.reserve(Read<uint32_t>(true));
             auto Count = Read<uint32_t>(false);
 
-            while (Count--)
-                Buffer.push_back(Read<typename Type::value_type>(false));
+            while (Count--) Buffer.emplace_back(Read<typename Type::value_type>(false));
             return !Buffer.empty();
         }
 
@@ -293,7 +292,7 @@ struct Bytebuffer
     }
 
     // Utility functionality.
-    [[nodiscard]] Blob asBlob()
+    [[nodiscard]] Blob asBlob() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
@@ -307,17 +306,17 @@ struct Bytebuffer
         if (Byte != BB_NONE) Internaliterator--;
         return Byte;
     }
-    [[nodiscard]] size_t Remaininglength()
+    [[nodiscard]] size_t Remaininglength() const
     {
         return Internalsize - Internaliterator;
     }
-    [[nodiscard]] std::basic_string_view<uint8_t> asView()
+    [[nodiscard]] std::basic_string_view<uint8_t> asView() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
 
     // Supported operators, acts on the internal state.
-    bool operator == (const Bytebuffer &Right) noexcept
+    bool operator == (const Bytebuffer &Right) const noexcept
     {
         if (Internalsize != Right.Internalsize) return false;
         return 0 == std::memcmp(Internalbuffer.get(), Right.Internalbuffer.get(), Internalsize);
@@ -373,7 +372,7 @@ struct bbObject : ISerializable
     std::vector<ISerializable *> Values;
 
     ~bbObject() override { for (auto Item : Values) delete Item; }
-    explicit bbObject(std::vector<ISerializable *> Input) : Values(Input) {}
+    explicit bbObject(std::vector<ISerializable *> Input) : Values(std::move(Input)) {}
 
     void Serialize(Bytebuffer &Buffer) override { for (const auto &Item : Values) Item->Serialize(Buffer); }
     void Deserialize(Bytebuffer &Buffer) override { for (const auto &Item : Values) Item->Deserialize(Buffer); }

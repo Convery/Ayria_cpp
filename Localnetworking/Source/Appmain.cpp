@@ -84,7 +84,7 @@ namespace Localnetworking
         }
 
         // No servers wants to deal with this address =(
-        Hostblacklist.push_back(Hostname.data());
+        Hostblacklist.emplace_back(Hostname.data());
         return nullptr;
     }
     Proxyserver_t *getProxyserver(sockaddr_in *Hostname)

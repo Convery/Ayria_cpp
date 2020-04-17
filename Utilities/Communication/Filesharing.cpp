@@ -24,22 +24,22 @@ namespace Filesharing
     bool Write(std::string_view Sharename, Blob &&Data)
     {
         const auto Interfacename = va("%u_Filesharing", GetCurrentProcessId());
-        auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
+        const auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
         return !!Interface->Write(Sharename.data(), Data.data(), Data.size());
     }
     Blob Read(std::string_view Sharename, uint32_t Maxsize)
     {
         const auto Interfacename = va("%u_Filesharing", GetCurrentProcessId());
-        auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
+        const auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
 
-        auto Buffer = std::make_unique<uint8_t[]>(Maxsize);
-        auto Count = Interface->Read(Sharename.data(), Buffer.get(), Maxsize);
+        const auto Buffer = std::make_unique<uint8_t[]>(Maxsize);
+        const auto Count = Interface->Read(Sharename.data(), Buffer.get(), Maxsize);
         return Blob(Buffer.get(), Count);
     }
     bool Write(std::string_view Sharename, std::string &&Data)
     {
         const auto Interfacename = va("%u_Filesharing", GetCurrentProcessId());
-        auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
+        const auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
         return !!Interface->Write(Sharename.data(), Data.data(), Data.size());
     }
 }

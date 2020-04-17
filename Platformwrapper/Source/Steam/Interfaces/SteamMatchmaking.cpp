@@ -88,7 +88,7 @@ namespace Steam
             Traceprint();
             return "";
         }
-        void SetLobbyData0(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
+        void SetLobbyData0(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
             Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
         }
@@ -97,7 +97,7 @@ namespace Steam
             Traceprint();
             return "";
         }
-        void SetLobbyMemberData(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
+        void SetLobbyMemberData(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
             Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
         }
@@ -143,7 +143,7 @@ namespace Steam
         {
             Traceprint();
         }
-        void SetLobbyGameServer(CSteamID steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, CSteamID steamIDGameServer)
+        void SetLobbyGameServer(CSteamID steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, CSteamID steamIDGameServer) const
         {
             Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
                          ((uint8_t *)&unGameServerIP)[3], ((uint8_t *)&unGameServerIP)[2], ((uint8_t *)&unGameServerIP)[1], ((uint8_t *)&unGameServerIP)[0],
@@ -170,7 +170,7 @@ namespace Steam
         {
             Traceprint();
         }
-        bool SetLobbyData1(CSteamID steamIDLobby, const char *pchKey, const char *pchValue)
+        bool SetLobbyData1(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
             Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
             return true;
@@ -208,7 +208,7 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        uint64_t JoinLobby1(CSteamID steamIDLobby)
+        uint64_t JoinLobby1(CSteamID steamIDLobby) const
         {
             Infoprint(va("Joining lobby 0x%llX.", steamIDLobby.ConvertToUint64()));
 
@@ -240,11 +240,11 @@ namespace Steam
         {
             Traceprint();
         }
-        uint64_t CreateLobby3(uint32_t eLobbyType, int cMaxMembers)
+        uint64_t CreateLobby3(uint32_t eLobbyType, int cMaxMembers) const
         {
-            auto LobbyID = CSteamID(1337, 0x40000, 1, k_EAccountTypeChat);
+            const auto LobbyID = CSteamID(1337, 0x40000, 1, k_EAccountTypeChat);
             auto Response = new Callbacks::LobbyCreated_t();
-            auto RequestID = Callbacks::Createrequest();
+            const auto RequestID = Callbacks::Createrequest();
 
             Response->m_eResult = EResult::k_EResultOK;
             Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();

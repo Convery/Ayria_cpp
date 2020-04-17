@@ -10,7 +10,7 @@ namespace Logging
 {
     std::mutex Threadguard;
 
-    void toFile(std::string_view Filename, const std::string_view Message)
+    void toFile(std::string_view Filename, std::string_view Message)
     {
         std::lock_guard _(Threadguard);
 
@@ -21,7 +21,7 @@ namespace Logging
             std::fclose(Filehandle);
         }
     }
-    void toStream(const std::string_view Message)
+    void toStream(std::string_view Message)
     {
         std::lock_guard _(Threadguard);
 
@@ -33,7 +33,7 @@ namespace Logging
         OutputDebugStringA(Message.data());
         #endif
     }
-    void toConsole(const std::string_view Message)
+    void toConsole(std::string_view Message)
     {
         std::lock_guard _(Threadguard);
 

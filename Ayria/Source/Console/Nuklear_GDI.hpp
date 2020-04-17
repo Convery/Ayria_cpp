@@ -70,7 +70,7 @@ namespace NK_GDI
     inline std::wstring getWidestring(const char *Input, const size_t Length)
     {
         const auto Size = MultiByteToWideChar(CP_UTF8, 0, Input, Length, NULL, 0);
-        auto Buffer = (wchar_t *)alloca(Size * sizeof(wchar_t) + sizeof(wchar_t));
+        const auto Buffer = (wchar_t *)alloca(Size * sizeof(wchar_t) + sizeof(wchar_t));
         MultiByteToWideChar(CP_UTF8, 0, Input, Length, Buffer, Size);
         return std::wstring(Buffer, Size);
     }
@@ -97,7 +97,7 @@ namespace NK_GDI
 
         inline struct nk_user_font Createfont(const char *Name, int32_t Fontsize)
         {
-            auto Font = new Font_t();
+            const auto Font = new Font_t();
             struct nk_user_font NK;
             TEXTMETRICW Fontmetric;
 
@@ -145,7 +145,7 @@ namespace NK_GDI
             Image->h = Size.y;
 
             // Allocate the bitmap in system-memory.
-            auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
+            const auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
             std::memcpy(Bitmap, Pixelbuffer, Size.x * Size.y * Pixelsize);
 
             // Swap R and B channels.
@@ -154,7 +154,7 @@ namespace NK_GDI
                 // TODO(tcn): Maybe some kind of SSE optimization here?
                 for (size_t i = 0; i < Size.x * Size.y; i += Pixelsize)
                 {
-                    std::swap(DIBPixels + i, DIBPixels + i + 2);
+                    std::swap(DIBPixels[i], DIBPixels[i + 2]);
                 }
             }
 
@@ -202,7 +202,7 @@ namespace NK_GDI
             else SetDCPenColor(Context.Memorydevice, toColor(Command->color));
 
             // No fill.
-            auto Brush = SelectObject(Context.Memorydevice, GetStockObject(NULL_BRUSH));
+            const auto Brush = SelectObject(Context.Memorydevice, GetStockObject(NULL_BRUSH));
             if (Command->rounding == 0)
                 Rectangle(Context.Memorydevice, Command->x, Command->y, Command->x + Command->w, Command->y + Command->h);
             else
@@ -245,7 +245,7 @@ namespace NK_GDI
             assert(Context.Memorydevice); assert(Command);
 
             BITMAP Bitmap{};
-            auto Device = CreateCompatibleDC(Context.Memorydevice);
+            const auto Device = CreateCompatibleDC(Context.Memorydevice);
             GetObjectA(Command->img.handle.ptr, sizeof(BITMAP), &Bitmap);
 
             SelectObject(Context.Memorydevice, Command->img.handle.ptr);
@@ -288,7 +288,7 @@ namespace NK_GDI
         {
             assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
-            auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
+            const auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
             {
                 Points[i] = { Command->points[i].x, Command->points[i].y };
@@ -316,7 +316,7 @@ namespace NK_GDI
         {
             assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
-            auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
+            const auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
             {
                 Points[i] = { Command->points[i].x, Command->points[i].y };
@@ -395,7 +395,7 @@ namespace NK_GDI
         {
             assert(Context.Memorydevice); assert(Command); assert(Command->point_count);
 
-            auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
+            const auto Points = (POINT *)alloca(Command->point_count * sizeof(POINT));
             for (int i = 0; i < Command->point_count; ++i)
             {
                 Points[i] = { Command->points[i].x, Command->points[i].y };
@@ -474,7 +474,7 @@ namespace NK_GDI
         // Arial should be available on every system.
         static auto Systemfont = Fonts::Createfont("Arial", 14);
 
-        auto Bitmap = CreateCompatibleBitmap(Windowdevice, 0, 0);
+        const auto Bitmap = CreateCompatibleBitmap(Windowdevice, 0, 0);
         Context.Memorydevice = CreateCompatibleDC(Windowdevice);
         SelectObject(Context.Memorydevice, Bitmap);
 
@@ -496,8 +496,8 @@ namespace NK_GDI
 
                 if (Context.Size.x != Width || Context.Size.y != Height)
                 {
-                    auto Bitmap = CreateCompatibleBitmap(Context.Windowdevice, Width, Height);
-                    auto Old = SelectObject(Context.Memorydevice, Bitmap);
+                    const auto Bitmap = CreateCompatibleBitmap(Context.Windowdevice, Width, Height);
+                    const auto Old = SelectObject(Context.Memorydevice, Bitmap);
                     Context.Size.y = Height;
                     Context.Size.x = Width;
                     DeleteObject(Old);
@@ -509,7 +509,7 @@ namespace NK_GDI
             {
                 PAINTSTRUCT Updateinformation{};
 
-                auto Devicecontext = BeginPaint((HWND)Windowhandle, &Updateinformation);
+                const auto Devicecontext = BeginPaint((HWND)Windowhandle, &Updateinformation);
                 BitBlt(Devicecontext, 0, 0, Context.Size.x, Context.Size.y, Context.Memorydevice, 0, 0, SRCCOPY);
                 EndPaint((HWND)Windowhandle, &Updateinformation);
 

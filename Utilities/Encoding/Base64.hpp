@@ -78,7 +78,7 @@ namespace Base64
             if (Bits >= 8)
             {
                 Bits -= 8;
-                Result[Outputposition++] = char((Accumulator >> Bits) & 0xFF);
+                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
             }
         }
 
@@ -141,7 +141,7 @@ namespace Base64
             if (Bits >= 8)
             {
                 Bits -= 8;
-                Result[Outputposition++] = char((Accumulator >> Bits) & 0xFF);
+                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
             }
         }
 

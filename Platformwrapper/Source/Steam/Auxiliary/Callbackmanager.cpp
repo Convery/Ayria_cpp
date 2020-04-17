@@ -61,7 +61,7 @@ namespace Steam
                 // Prefer the longer method as most implementations just discard the extra data.
                 if(Callback != Callbacks.end()) Callback->second->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
 
-                // Let's not leak.
+                // Let's not leak (although technically UB).
                 delete Entry.second.Databuffer;
             }
         }

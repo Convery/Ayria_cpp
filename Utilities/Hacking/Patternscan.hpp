@@ -30,9 +30,9 @@ namespace Patternscan
         assert(Range.first != 0);
         assert(Mask[0] != 0); // The first byte can't be a wildcard.
 
-        size_t Count = Range.second - Range.first - Pattern.size();
-        auto Base = (const uint8_t *)Range.first;
-        uint8_t Firstbyte = Pattern[0];
+        const size_t Count = Range.second - Range.first - Pattern.size();
+        const auto Base = (const uint8_t *)Range.first;
+        const uint8_t Firstbyte = Pattern[0];
 
         // Inline compare.
         const auto Compare = [&](const uint8_t *Address) -> bool
@@ -106,8 +106,8 @@ namespace Patternscan
             SYSTEM_INFO SI;
             GetNativeSystemInfo(&SI);
 
-            PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
-            PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
+        const PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
+        const PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
 
             Textsegment.first = size_t(Module) + NTHeader->OptionalHeader.BaseOfCode;
             Textsegment.second = Textsegment.first + NTHeader->OptionalHeader.SizeOfCode;

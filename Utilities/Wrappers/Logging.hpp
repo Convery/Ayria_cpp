@@ -24,9 +24,9 @@ namespace Logging
     constexpr auto Logfile = LOGPATH "/" MODULENAME ".log";
 
     // Logfile, stderr, and Ingame_GUI
-    void toStream(const std::string_view Message);
-    void toConsole(const std::string_view Message);
-    void toFile(std::string_view Filename, const std::string_view Message);
+    void toStream(std::string_view Message);
+    void toConsole(std::string_view Message);
+    void toFile(std::string_view Filename, std::string_view Message);
 
     // Formatted standard printing.
     inline void Print(const char Prefix, const std::string_view Message)

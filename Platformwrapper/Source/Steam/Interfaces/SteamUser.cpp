@@ -295,7 +295,7 @@ namespace Steam
             Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
             return Request->m_hAuthTicket;
         }
-        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
+        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID) const
         {
             Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
             const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
@@ -338,7 +338,7 @@ namespace Steam
         {
             Traceprint();
         }
-        uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude)
+        uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude) const
         {
             // Fill the buffer with useful information.
             ((Steamappticket *)Ticketdata)->Reserved = 0;
@@ -358,7 +358,7 @@ namespace Steam
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
             return RequestID;
         }
-        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t *pcbTicket)
+        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t *pcbTicket) const
         {
             memcpy(pTicket, Ticketdata, std::min(cbMaxTicket, (unsigned int)sizeof(Ticketdata)));
             *pcbTicket = sizeof(Ticketdata);

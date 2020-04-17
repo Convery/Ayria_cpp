@@ -283,7 +283,7 @@ namespace Console
             {
                 if (Inputlength)
                 {
-                    Inputstring.data()[Inputlength] = 0;
+                    Inputstring[Inputlength] = 0;
                     Inputlength = 0;
                     int Argc;
 

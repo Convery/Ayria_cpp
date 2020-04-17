@@ -241,7 +241,7 @@ namespace Steam
             Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
             return Request->m_hAuthTicket;
         }
-        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
+        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID) const
         {
             Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
             const auto Request = new Callbacks::ValidateAuthTicketResponse_t();

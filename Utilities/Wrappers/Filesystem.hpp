@@ -115,7 +115,7 @@ namespace FS
         if (Searchpath.back() != '/') Searchpath.append("/");
 
         // Initial query, fails if the search-path is broken.
-        HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
+        const HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
         if (Filehandle == INVALID_HANDLE_VALUE) { FindClose(Filehandle); return Results; }
 
         do
@@ -128,7 +128,7 @@ namespace FS
 
             // Only add the file to the list if matching the criteria.
             if (std::strstr(Filedata.cFileName, Criteria.data()))
-                Results.push_back(Filedata.cFileName);
+                Results.emplace_back(Filedata.cFileName);
 
         } while (FindNextFileA(Filehandle, &Filedata));
 
@@ -144,7 +144,7 @@ namespace FS
         if (Searchpath.back() != '/') Searchpath.append("/");
 
         // Initial query, fails if the search-path is broken.
-        HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
+        const HANDLE Filehandle = FindFirstFileA((Searchpath + "*").c_str(), &Filedata);
         if (Filehandle == INVALID_HANDLE_VALUE) { FindClose(Filehandle); return Results; }
 
         do

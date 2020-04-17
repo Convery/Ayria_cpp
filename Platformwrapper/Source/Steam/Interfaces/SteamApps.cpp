@@ -72,11 +72,11 @@ namespace Steam
             Traceprint();
             return false;
         }
-        void InstallDLC(uint32_t nAppID)
+        void InstallDLC(uint32_t nAppID) const
         {
             Infoprint(va("Installing DLC %u..", nAppID));
         }
-        void UninstallDLC(uint32_t nAppID)
+        void UninstallDLC(uint32_t nAppID) const
         {
             Infoprint(va("Uninstalling DLC %u..", nAppID));
         }

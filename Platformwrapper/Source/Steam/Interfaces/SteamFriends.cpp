@@ -67,8 +67,8 @@ namespace Steam
             {
                 if (steamIDFriend.ConvertToUint64() == Friend->Get("UserID", uint64_t()))
                 {
-                    auto Name = Friend->Get("Username", std::string());
-                    auto Leak = new char[Name.size() + 1]();
+                    const auto Name = Friend->Get("Username", std::string());
+                    const auto Leak = new char[Name.size() + 1]();
                     std::memcpy(Leak, Name.c_str(), Name.size());
                     return Leak;
                 }

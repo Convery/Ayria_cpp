@@ -47,10 +47,10 @@ namespace Steam
         SemaphoreAttributes.bInheritHandle = FALSE;
         SemaphoreAttributes.lpSecurityDescriptor = &pSecurityDescriptor;
 
-        auto Consumesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 0, 512, "STEAM_DIPC_CONSUME");
-        auto Producesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 1, 512, "SREAM_DIPC_PRODUCE");    // Intentional typo.
-        auto Sharedfilehandle = CreateFileMappingA(INVALID_HANDLE_VALUE, &SemaphoreAttributes, 4u, 0, 0x1000u, "STEAM_DRM_IPC");
-        auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
+        const auto Consumesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 0, 512, "STEAM_DIPC_CONSUME");
+        const auto Producesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 1, 512, "SREAM_DIPC_PRODUCE");    // Intentional typo.
+        const auto Sharedfilehandle = CreateFileMappingA(INVALID_HANDLE_VALUE, &SemaphoreAttributes, 4u, 0, 0x1000u, "STEAM_DRM_IPC");
+        const auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
 
         // Wait for the game to initialize or timeout if unused.
         if (WaitForSingleObject(Consumesemaphore, 20000)) return;
@@ -65,13 +65,13 @@ namespace Steam
         Infoprint(va("Terminationevent: \"%s\"", Buffer));
 
         // Parse the startup module.
-        if (auto Filehandle = std::fopen(Startupmodule, "rb"))
+        if (const auto Filehandle = std::fopen(Startupmodule, "rb"))
         {
             std::fseek(Filehandle, SEEK_SET, SEEK_END);
             const auto Size = std::ftell(Filehandle);
             std::rewind(Filehandle);
 
-            auto Filebuffer = std::make_unique<char[]>(Size);
+            const auto Filebuffer = std::make_unique<char[]>(Size);
             std::fread(Filebuffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
@@ -88,7 +88,7 @@ namespace Steam
         }
 
         // Acknowledge that the game has started.
-        auto Event = OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, Startevent);
+        const auto Event = OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, Startevent);
         SetEvent(Event); CloseHandle(Event);
 
         // Notify the game that we are done.

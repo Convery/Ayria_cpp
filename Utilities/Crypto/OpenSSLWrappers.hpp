@@ -132,8 +132,8 @@ namespace PK_RSA
 {
     inline RSA *Createkeypair(int Size = 2048)
     {
-        auto Key = RSA_new();
-        auto Exponent = BN_new();
+        const auto Key = RSA_new();
+        const auto Exponent = BN_new();
         BN_set_word(Exponent, 65537);
         RSA_generate_key_ex(Key, Size, Exponent, nullptr);
         BN_free(Exponent);
@@ -161,10 +161,10 @@ namespace PK_RSA
     }
     inline std::string getPublickey(RSA *Key)
     {
-        auto Bio = BIO_new(BIO_s_mem());
+        const auto Bio = BIO_new(BIO_s_mem());
         i2d_RSA_PUBKEY_bio(Bio, Key);
 
-        auto Length = BIO_pending(Bio);
+        const auto Length = BIO_pending(Bio);
         std::string Result; Result.resize(Length);
         BIO_read(Bio, Result.data(), Length);
 
@@ -175,7 +175,7 @@ namespace PK_RSA
     {
         std::string Opensslkey;
         {
-            std::string Algorithmpart((char *)"\x30\x0D\x06\x09\x2A\x86\x48\x86\xF7\x0D\x01\x01\x01\x05\x00", 15);
+            const std::string Algorithmpart((char *)"\x30\x0D\x06\x09\x2A\x86\x48\x86\xF7\x0D\x01\x01\x01\x05\x00", 15);
             std::string Publickeypart((char *)"\x03\x81\x8D\x00", 4);
             Publickeypart.append(Key);
 

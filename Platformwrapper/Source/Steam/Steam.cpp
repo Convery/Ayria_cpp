@@ -45,12 +45,12 @@ extern "C"
         if (Steam::Global.ApplicationID == 0)
         {
             // Check for configuration files.
-            if (auto Filehandle = std::fopen("steam_appid.txt", "r"))
+            if (const auto Filehandle = std::fopen("steam_appid.txt", "r"))
             {
                 std::fscanf(Filehandle, "%u", &Steam::Global.ApplicationID);
                 std::fclose(Filehandle);
             }
-            if (auto Filehandle = std::fopen("ayria_appid.txt", "r"))
+            if (const auto Filehandle = std::fopen("ayria_appid.txt", "r"))
             {
                 std::fscanf(Filehandle, "%u", &Steam::Global.ApplicationID);
                 std::fclose(Filehandle);
@@ -94,7 +94,7 @@ extern "C"
             #if defined(_WIN32)
             if (std::strstr(GetCommandLineA(), "-UID"))
             {
-                Ayria::Global.UserID = 0x110000100000000 | time(NULL) & 0xFFFFFF;
+                Ayria::Global.UserID = 0x110000100000000 | (time(NULL) & 0xFFFFFF);
             }
             #endif
         }
@@ -127,8 +127,8 @@ extern "C"
                 DWORD UserID = Ayria::Global.UserID & 0xFFFFFFFF;
 
                 // Legacy wants the dlls loaded.
-                std::string Clientpath32 = va("%s\\steamclient.dll", Steam::Global.Path.c_str());
-                std::string Clientpath64 = va("%s\\steamclient64.dll", Steam::Global.Path.c_str());
+                const std::string Clientpath32 = va("%s\\steamclient.dll", Steam::Global.Path.c_str());
+                const std::string Clientpath64 = va("%s\\steamclient64.dll", Steam::Global.Path.c_str());
                 LoadLibraryExA(Clientpath32.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
                 LoadLibraryExA(Clientpath64.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 
@@ -182,7 +182,7 @@ extern "C"
         if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
         if (Bootstrapper)
         {
-            auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
+            const auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
             if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
         }
         #endif

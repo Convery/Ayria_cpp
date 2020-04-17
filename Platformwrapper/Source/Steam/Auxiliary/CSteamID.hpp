@@ -23,12 +23,12 @@
 #ifdef _S4N_
 #define sprintf(...)
 #else
-#include <stdio.h>
+#include <cstdio>
 #ifndef NO_CSTEAMID_STL
 #include <iostream>
 #endif //NO_CSTEAMID_STL
 #endif
-#include <stdint.h>
+#include <cstdint>
 
 enum EResult
 {

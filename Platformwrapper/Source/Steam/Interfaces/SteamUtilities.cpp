@@ -11,12 +11,12 @@ namespace Steam
 {
     struct SteamUtils
     {
-        uint32_t GetSecondsSinceAppActive()
+        uint32_t GetSecondsSinceAppActive() const
         {
             Traceprint();
             return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() - Ayria::Global.Startuptimestamp);
         }
-        uint32_t GetSecondsSinceComputerActive()
+        uint32_t GetSecondsSinceComputerActive() const
         {
             Traceprint();
             return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -28,7 +28,7 @@ namespace Steam
             // k_EUniversePublic
             return 1;
         }
-        uint32_t GetServerRealTime()
+        uint32_t GetServerRealTime() const
         {
             Traceprint();
             return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());

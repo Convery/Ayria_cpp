@@ -92,7 +92,7 @@ namespace Steam
         void RequestSpectatorServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
 
         Callbacks::gameserveritem_t *GetServerDetails1(uint32_t eType, int iServer) { Traceprint(); return {}; };
-        Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer)
+        Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer) const
         {
             auto Serialized = new Callbacks::gameserveritem_t();
             const auto Servers = Matchmaking::Externalservers();

@@ -21,7 +21,7 @@ namespace Steam
 
     struct SteamRemotestorage
     {
-        bool FileRead0(const char *filename, void *buffer, int size)
+        bool FileRead0(const char *filename, void *buffer, int size) const
         {
             if(const auto Filebuffer = FS::Readfile(Filepath() + filename); !Filebuffer.empty())
             {
@@ -34,7 +34,7 @@ namespace Steam
         {
             return FS::Fileexists(Filepath() + filename);
         }
-        bool FileDelete(const char *filename)
+        bool FileDelete(const char *filename) const
         {
             return std::remove((Filepath() + filename).c_str());
         }
@@ -49,7 +49,7 @@ namespace Steam
             // Leaky leaky..
             *size = FS::Filesize(Filelist[index]);
             auto Leak = Filelist[index].substr(Filelist[index].find_last_of('/') + 1);
-            auto pLeak = new char[Leak.size() + 1]();
+            const auto pLeak = new char[Leak.size() + 1]();
             std::memcpy(pLeak, Leak.data(), Leak.size());
             return pLeak;
         }

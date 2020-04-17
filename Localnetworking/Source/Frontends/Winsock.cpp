@@ -133,7 +133,7 @@ namespace Winsock
         if (!Proxyserver) return Calloriginal(gethostbyname)(Hostname);
 
         // Resolve to a known host and replace the address.
-        auto Result = Calloriginal(gethostbyname)("localhost");
+        const auto Result = Calloriginal(gethostbyname)("localhost");
         Result->h_name = const_cast<char *>(Hostname);
         Result->h_addr_list[1] = nullptr;
         Result->h_addrtype = AF_INET;
@@ -152,7 +152,7 @@ namespace Winsock
         if (!Proxyserver) return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
 
         // Resolve to a known host and replace the address.
-        auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
+        const auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
 
         // Possibly leak some memory if the setup is silly.
         ((sockaddr_in *)(*Result)->ai_addr)->sin_addr.s_addr = Proxyserver->Address.sin_addr.s_addr;

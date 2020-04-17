@@ -174,7 +174,7 @@ struct Tensafe
         Buffer = va("Encrypt Command %u, Enclen %u, Gamelen %u\n", Packet->Command, Packet->Encryptedlength, Packet->Gamelength);
         Debugprint(Buffer);
 
-        auto Ptr = Packet->Gamepackage;
+        const auto Ptr = Packet->Gamepackage;
         for (size_t i = 0; i < Packet->Gamelength; ++i)
         {
             if (i % 16 == 0) Buffer += "\n\t\t";
@@ -227,8 +227,8 @@ void Sendtoserver(const Packettypes_t Packettype, Blob &&Data, struct Tensafe *I
     Traceprint();
 
     // Network format of the packet.
-    auto Packetbuffer = std::make_unique<uint8_t[]>(Headersize + Data.size());
-    Packet_t *Packet = (Packet_t *)Packetbuffer.get();
+    const auto Packetbuffer = std::make_unique<uint8_t[]>(Headersize + Data.size());
+    auto Packet = (Packet_t *)Packetbuffer.get();
     Packet->Totalsize = Headersize + Data.size();
     Packet->SequenceID = ++Interface->SequenceID;
     Packet->Packettype = (uint8_t)Packettype;

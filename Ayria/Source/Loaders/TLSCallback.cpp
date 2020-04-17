@@ -21,8 +21,8 @@ namespace Loaders
         if (!Modulehandle) std::abort();
 
         // Traverse the PE header.
-        const PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
-        const PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
+        const auto *DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
+        const auto *NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
         const IMAGE_DATA_DIRECTORY Directory = NTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
 
         if (Directory.Size == 0) return nullptr;
@@ -73,6 +73,10 @@ namespace Loaders
         // Restore the callback directory.
         const auto Directory = getTLSDirectory();
         auto Callbacks = (size_t *)Directory->AddressOfCallBacks;
-        for (const auto &Address : OriginalTLS) Writeptr(Callbacks++, Address);
+        for (const auto &Address : OriginalTLS)
+        {
+            Writeptr(Callbacks, Address);
+            Callbacks++;
+        }
     }
 }
