@@ -177,13 +177,10 @@ extern "C"
 
         // Notify the plugins that we are initialized.
         #if defined(_WIN32)
-        auto Bootstrapper = GetModuleHandleA("Localbootstrap.dll");
-        if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%d.dll", Build::is64bit ? 64 : 32).c_str());
-        if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
-        if (Bootstrapper)
+        if (const auto Bootstrapper = GetModuleHandleA(va("Ayria%d.dll", Build::is64bit ? 64 : 32).c_str()))
         {
             const auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
-            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
+            if (Callback) (reinterpret_cast<void (*)()>(Callback))();
         }
         #endif
 

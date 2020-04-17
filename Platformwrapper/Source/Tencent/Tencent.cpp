@@ -123,7 +123,7 @@ namespace Tencent
             if(Buffer) std::memcpy(Buffer, Result->second.c_str(), std::min(size_t(*Size), Result->second.size()));
 
             // Always set the total size.
-            *Size = Result->second.size();
+            *Size = uint32_t(Result->second.size());
 
             // Notify listeners.
             Sendmessage(1 | (Tag << 0x10), ServerID != 0);
@@ -140,7 +140,7 @@ namespace Tencent
             if(Buffer) std::wmemcpy(Buffer, Result->second.c_str(), std::min(size_t(*Size >> 1), Result->second.size()));
 
             // Always set the total size.
-            *Size = Result->second.size() * sizeof(wchar_t);
+            *Size = uint32_t(Result->second.size()) * sizeof(wchar_t);
 
             // Notify listeners.
             Sendmessage(1 | (Tag << 0x10), ServerID != 0);
@@ -172,12 +172,9 @@ extern "C" EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
 
     // Notify the plugins that we are initialized.
     #if defined(_WIN32)
-    auto Bootstrapper = GetModuleHandleA("Localbootstrap.dll");
-    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%d.dll", Build::is64bit ? 64 : 32).c_str());
-    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
-    if (Bootstrapper)
+    if (const auto Bootstrapper = GetModuleHandleA(va("Ayria%d.dll", Build::is64bit ? 64 : 32).c_str()))
     {
-        const auto Callback = GetProcAddress(Bootstrapper, "onInitializationdone");
+        const auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
         if (Callback) (reinterpret_cast<void (*)()>(Callback))();
     }
     #endif

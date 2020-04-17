@@ -141,7 +141,7 @@ namespace Steam
         {
             // Complete the listing as we did it in the background.
             const auto Servers = Matchmaking::Externalservers();
-            for(size_t i = 0; i < Servers.size(); ++i)
+            for(int i = 0; i < int(Servers.size()); ++i)
             {
                 if (Responsecallback1) Responsecallback1->ServerResponded(i);
                 if (Responsecallback2) Responsecallback2->ServerResponded(this, i);
@@ -150,7 +150,7 @@ namespace Steam
             if (Responsecallback2) Responsecallback2->RefreshComplete(this, 0);
             if (Responsecallback1) Responsecallback1->RefreshComplete(0);
 
-            return Servers.size();
+            return int(Servers.size());
         }
         void RefreshServer(uint32_t eType, int iServer) { Traceprint(); };
         int PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse)

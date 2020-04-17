@@ -25,7 +25,7 @@ namespace Filesharing
     {
         const auto Interfacename = va("%u_Filesharing", GetCurrentProcessId());
         const auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
-        return !!Interface->Write(Sharename.data(), Data.data(), Data.size());
+        return !!Interface->Write(Sharename.data(), Data.data(), uint32_t(Data.size()));
     }
     Blob Read(std::string_view Sharename, uint32_t Maxsize)
     {
@@ -40,7 +40,7 @@ namespace Filesharing
     {
         const auto Interfacename = va("%u_Filesharing", GetCurrentProcessId());
         const auto Interface = (Implementation_t *)Singleinstance::Create(Interfacename, &This);
-        return !!Interface->Write(Sharename.data(), Data.data(), Data.size());
+        return !!Interface->Write(Sharename.data(), Data.data(), uint32_t(Data.size()));
     }
 }
 

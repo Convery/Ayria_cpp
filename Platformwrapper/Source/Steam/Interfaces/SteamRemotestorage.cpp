@@ -47,7 +47,7 @@ namespace Steam
             }
 
             // Leaky leaky..
-            *size = FS::Filesize(Filelist[index]);
+            *size = uint32_t(FS::Filesize(Filelist[index]));
             auto Leak = Filelist[index].substr(Filelist[index].find_last_of('/') + 1);
             const auto pLeak = new char[Leak.size() + 1]();
             std::memcpy(pLeak, Leak.data(), Leak.size());

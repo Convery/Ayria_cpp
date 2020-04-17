@@ -17,7 +17,7 @@ namespace Singleinstance
 
         if (const auto Mapping = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(long long), Name.c_str()))
         {
-            if (auto Buffer = (long long *)MapViewOfFile(Mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(long long)))
+            if (const auto Buffer = (long long *)MapViewOfFile(Mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(long long)))
             {
                 const auto Original = (void *)InterlockedCompareExchange64(Buffer, (long long)Instance, {});
                 UnmapViewOfFile(Buffer);

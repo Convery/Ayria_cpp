@@ -63,8 +63,8 @@ namespace Console
         };
         if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, "Ayria Console", NULL, WS_POPUP,
-                                                      NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
+        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, "Ayria Console",
+            NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
         {
             // Use a pixel-value of [0xFF, 0xFF, 0xFF] to mean transparent rather than Alpha.
             // Because using Alpha is slow and we should not use pure white anyway.
@@ -441,12 +441,8 @@ namespace Console
     // Stolen from https://github.com/futurist/CommandLineToArgvA
     LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs)
     {
-        DWORD argc;
-        LPSTR *argv;
-        LPSTR s;
         LPSTR d;
-        LPSTR cmdline;
-        int qcount, bcount;
+        int bcount;
 
         if (!numargs || *lpCmdline == 0)
         {
@@ -455,8 +451,8 @@ namespace Console
         }
 
         /* --- First count the arguments */
-        argc = 1;
-        s = lpCmdline;
+        DWORD argc = 1;
+        LPSTR s = lpCmdline;
         /* The first argument, the executable path, follows special rules */
         if (*s == '"')
         {
@@ -479,7 +475,7 @@ namespace Console
             argc++;
 
         /* Analyze the remaining arguments */
-        qcount = bcount = 0;
+        int qcount = bcount = 0;
         while (*s)
         {
             if ((*s == ' ' || *s == '\t') && qcount == 0)
@@ -526,10 +522,10 @@ namespace Console
         * with it. This way the caller can make a single LocalFree() call to free
         * both, as per MSDN.
         */
-        argv = (LPSTR *)LocalAlloc(LMEM_FIXED, (argc + 1) * sizeof(LPSTR) + (strlen(lpCmdline) + 1) * sizeof(char));
+        LPSTR* argv = (LPSTR*)LocalAlloc(LMEM_FIXED, (argc + 1) * sizeof(LPSTR) + (strlen(lpCmdline) + 1) * sizeof(char));
         if (!argv)
             return NULL;
-        cmdline = (LPSTR)(argv + argc + 1);
+        LPSTR cmdline = (LPSTR)(argv + argc + 1);
         strcpy(cmdline, lpCmdline);
 
         /* --- Then split and copy the arguments */
