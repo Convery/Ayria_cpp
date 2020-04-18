@@ -276,7 +276,7 @@ namespace Console
             static int Inputlength;
             nk_edit_focus(Context, 0);
             const auto Active = nk_edit_string(Context, NK_EDIT_SELECTABLE | NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_GOTO_END_ON_ACTIVATE,
-                                               Inputstring.data(), &Inputlength, Inputstring.size(), nk_filter_default);
+                                               Inputstring.data(), &Inputlength, (int)Inputstring.size(), nk_filter_default);
 
             // On enter pressed.
             if (Active & NK_EDIT_COMMITED)

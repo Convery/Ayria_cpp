@@ -67,7 +67,7 @@ namespace NK_GDI
     } Context{};
 
     // Use UTF-8 for everything, just to be safe.
-    inline std::wstring getWidestring(const char *Input, const size_t Length)
+    inline std::wstring getWidestring(const char *Input, const int Length)
     {
         const auto Size = MultiByteToWideChar(CP_UTF8, 0, Input, Length, NULL, 0);
         const auto Buffer = (wchar_t *)alloca(Size * sizeof(wchar_t) + sizeof(wchar_t));
@@ -76,7 +76,7 @@ namespace NK_GDI
     }
     inline std::wstring getWidestring(const std::string &Input)
     {
-        return getWidestring(Input.c_str(), Input.size());
+        return getWidestring(Input.c_str(), int(Input.size()));
     }
 
     namespace Fonts
@@ -89,7 +89,7 @@ namespace NK_GDI
             const auto Font = (Font_t *)Handle.ptr;
             const auto String = getWidestring(Text, Length);
 
-            if (GetTextExtentPoint32W(Font->Devicecontext, String.c_str(), String.size(), &Textsize))
+            if (GetTextExtentPoint32W(Font->Devicecontext, String.c_str(), int(String.size()), &Textsize))
                 return float(Textsize.cx);
 
             return -1.0f;
@@ -176,6 +176,36 @@ namespace NK_GDI
             return Color.r | (Color.g << 8) | (Color.b << 16);
         }
 
+        template </*NK_COMMAND_ARC*/> void RenderCMD(const nk_command_arc *Command)
+        {
+            assert(Context.Memorydevice); assert(Command);
+            HPEN Pen{};
+
+            // Create a custom pen if needed.
+            if (Command->line_thickness != 1)
+            {
+                Pen = CreatePen(PS_SOLID, Command->line_thickness, toColor(Command->color));
+                SelectObject(Context.Memorydevice, Pen);
+            }
+            else SetDCPenColor(Context.Memorydevice, toColor(Command->color));
+
+            const float X0 = Command->cx + Command->r * std::cosf((Command->a[0] + Command->a[1]) * NK_PI / 180.0f);
+            const float Y0 = Command->cy + Command->r * std::sinf((Command->a[0] + Command->a[1]) * NK_PI / 180.0f);
+            const float X1 = Command->cx + Command->r * std::cosf(Command->a[0] * NK_PI / 180.0f);
+            const float Y1 = Command->cy + Command->r * std::sinf(Command->a[0] * NK_PI / 180.0f);
+
+            SetArcDirection(Context.Memorydevice, AD_COUNTERCLOCKWISE);
+            Arc(Context.Memorydevice, Command->cx - Command->r, Command->cy - Command->r,
+                                      Command->cx + Command->r, Command->cy + Command->r,
+                                      (int)X0, (int)Y0, (int)X1, (int)Y1);
+
+            // Restore.
+            if (Pen)
+            {
+                SelectObject(Context.Memorydevice, GetStockObject(DC_PEN));
+                DeleteObject(Pen);
+            }
+        }
         template </*NK_COMMAND_TEXT*/> void RenderCMD(const nk_command_text *Command)
         {
             assert(Context.Memorydevice); assert(Command);
@@ -186,7 +216,7 @@ namespace NK_GDI
             SetBkColor(Context.Memorydevice, toColor(Command->background));
 
             SelectObject(Context.Memorydevice, ((Font_t *)Command->font->userdata.ptr)->Fonthandle);
-            ExtTextOutW(Context.Memorydevice, Command->x, Command->y, ETO_OPAQUE, NULL, Text.c_str(), Text.size(), NULL);
+            ExtTextOutW(Context.Memorydevice, Command->x, Command->y, ETO_OPAQUE, NULL, Text.c_str(), (UINT)Text.size(), NULL);
         }
         template </*NK_COMMAND_RECT*/> void RenderCMD(const nk_command_rect *Command)
         {
@@ -232,6 +262,36 @@ namespace NK_GDI
             // Draw the line.
             MoveToEx(Context.Memorydevice, Command->begin.x, Command->begin.y, NULL);
             LineTo(Context.Memorydevice, Command->end.x, Command->end.y);
+
+            // Restore.
+            if (Pen)
+            {
+                SelectObject(Context.Memorydevice, GetStockObject(DC_PEN));
+                DeleteObject(Pen);
+            }
+        }
+        template </*NK_COMMAND_CURVE*/> void RenderCMD(const nk_command_curve *Command)
+        {
+            assert(Context.Memorydevice); assert(Command);
+            POINT Points[4] =
+            {
+                {Command->begin.x, Command->begin.y},
+                {Command->ctrl[0].x, Command->ctrl[0].y},
+                {Command->ctrl[1].x, Command->ctrl[1].y},
+                {Command->end.x, Command->end.y}
+            };
+            HPEN Pen{};
+
+            // Create a custom pen if needed.
+            if (Command->line_thickness != 1)
+            {
+                Pen = CreatePen(PS_SOLID, Command->line_thickness, toColor(Command->color));
+                SelectObject(Context.Memorydevice, Pen);
+            }
+            else SetDCPenColor(Context.Memorydevice, toColor(Command->color));
+
+            SetDCBrushColor(Context.Memorydevice, OPAQUE);
+            PolyBezier(Context.Memorydevice, Points, 4);
 
             // Restore.
             if (Pen)
@@ -364,6 +424,22 @@ namespace NK_GDI
                 DeleteObject(Pen);
             }
         }
+        template </*NK_COMMAND_ARC_FILLED*/> void RenderCMD(const nk_command_arc_filled *Command)
+        {
+            assert(Context.Memorydevice); assert(Command);
+
+            SetDCPenColor(Context.Memorydevice, toColor(Command->color));
+            SetDCBrushColor(Context.Memorydevice, toColor(Command->color));
+
+            const float X0 = Command->cx + Command->r * std::cosf((Command->a[0] + Command->a[1]) * NK_PI / 180.0f);
+            const float Y0 = Command->cy + Command->r * std::sinf((Command->a[0] + Command->a[1]) * NK_PI / 180.0f);
+            const float X1 = Command->cx + Command->r * std::cosf(Command->a[0] * NK_PI / 180.0f);
+            const float Y1 = Command->cy + Command->r * std::sinf(Command->a[0] * NK_PI / 180.0f);
+
+            Pie(Context.Memorydevice, Command->cx - Command->r, Command->cy - Command->r,
+                                      Command->cx + Command->r, Command->cy + Command->r,
+                                      (int)X0, (int)Y0, (int)X1, (int)Y1);
+        }
         template </*NK_COMMAND_RECT_FILLED*/> void RenderCMD(const nk_command_rect_filled *Command)
         {
             assert(Context.Memorydevice); assert(Command);
@@ -461,7 +537,7 @@ namespace NK_GDI
         }
 
         /*
-        template <> void RenderCMD(const nk_command_scissor *Command)
+        template <> void RenderCMD(const nk_command_arc_filled *Command)
         {
             assert(Context.Memorydevice); assert(Command);
         }
@@ -720,19 +796,19 @@ namespace NK_GDI
                 Case(NK_COMMAND_POLYGON_FILLED, nk_command_polygon_filled);
                 Case(NK_COMMAND_CIRCLE_FILLED, nk_command_circle_filled);
                 Case(NK_COMMAND_RECT_FILLED, nk_command_rect_filled);
-                // Case(NK_COMMAND_ARC_FILLED, nk_command_arc_filled);
+                Case(NK_COMMAND_ARC_FILLED, nk_command_arc_filled);
                 Case(NK_COMMAND_POLYLINE, nk_command_polyline);
                 Case(NK_COMMAND_TRIANGLE, nk_command_triangle);
                 Case(NK_COMMAND_POLYGON, nk_command_polygon);
                 Case(NK_COMMAND_SCISSOR, nk_command_scissor);
                 Case(NK_COMMAND_CIRCLE, nk_command_circle);
                 // Case(NK_COMMAND_CUSTOM, nk_command_custom);
-                // Case(NK_COMMAND_CURVE, nk_command_curve);
+                Case(NK_COMMAND_CURVE, nk_command_curve);
                 Case(NK_COMMAND_IMAGE, nk_command_image);
                 Case(NK_COMMAND_TEXT, nk_command_text);
                 Case(NK_COMMAND_RECT, nk_command_rect);
                 Case(NK_COMMAND_LINE, nk_command_line);
-                // Case(NK_COMMAND_ARC, nk_command_arc);
+                Case(NK_COMMAND_ARC, nk_command_arc);
                 case NK_COMMAND_NOP:
                 default: break;
                     #undef Case
