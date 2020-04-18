@@ -32,9 +32,9 @@ namespace Logging
     inline void Print(const char Prefix, const std::string_view Message)
     {
         const auto Now{ std::time(nullptr) };
-        char Buffer[80]{};
+        char Buffer[16]{};
 
-        std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));
+        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
         const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data());
 
         // Output.

@@ -37,12 +37,12 @@ namespace Logging
     {
         std::lock_guard _(Threadguard);
 
-        constexpr auto Consolename = Build::is64bit ? "Ingame_GUI64" : "Ingame_GUI32";
-        if (const auto Handle = GetModuleHandleA(Consolename))
+        constexpr auto Modulename = Build::is64bit ? "Ayria64.dll" : "Ayria32.dll";
+        if (const auto Handle = GetModuleHandleA(Modulename))
         {
             if (const auto Address = GetProcAddress(Handle, "addConsolestring"))
             {
-                reinterpret_cast<void (*__cdecl)(const char *, int)>(Address)(Message.data(), 0x121212);
+                reinterpret_cast<void (*__cdecl)(const char *, int)>(Address)(Message.data(), 0xD6B749);
             }
         }
     }
