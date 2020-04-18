@@ -399,8 +399,13 @@ namespace Console
                 }
                 else
                 {
-                    // The first time we display the console, capture the game-handle.
-                    if (!Global.Gamewindowhandle)
+                    if (Global.isVisible)
+                    {
+                        ShowWindowAsync((HWND)Global.Windowhandle, SW_HIDE);
+                        if (Global.Gamewindowhandle) SetForegroundWindow((HWND)Global.Gamewindowhandle);
+                        if (Global.Gamewindowhandle) EnableWindow((HWND)Global.Gamewindowhandle, TRUE);
+                    }
+                    else
                     {
                         EnumWindows([](HWND Handle, LPARAM) -> BOOL
                         {
@@ -422,16 +427,7 @@ namespace Console
 
                             return TRUE;
                         }, NULL);
-                    }
 
-                    if (Global.isVisible)
-                    {
-                        ShowWindowAsync((HWND)Global.Windowhandle, SW_HIDE);
-                        if (Global.Gamewindowhandle) SetForegroundWindow((HWND)Global.Gamewindowhandle);
-                        if (Global.Gamewindowhandle) EnableWindow((HWND)Global.Gamewindowhandle, TRUE);
-                    }
-                    else
-                    {
                         if (Global.Gamewindowhandle) EnableWindow((HWND)Global.Gamewindowhandle, FALSE);
                         SetForegroundWindow((HWND)Global.Windowhandle);
                         SetActiveWindow((HWND)Global.Windowhandle);

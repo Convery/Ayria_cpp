@@ -33,14 +33,17 @@ namespace Logging
         OutputDebugStringA(Message.data());
         #endif
     }
+
+    static HMODULE Console = nullptr;
     void toConsole(std::string_view Message)
     {
         std::lock_guard _(Threadguard);
+        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
 
-        constexpr auto Modulename = Build::is64bit ? "Ayria64.dll" : "Ayria32.dll";
-        if (const auto Handle = GetModuleHandleA(Modulename))
+        if (Console)
         {
-            if (const auto Address = GetProcAddress(Handle, "addConsolestring"))
+            if (const auto Address = GetProcAddress(Console, "addConsolestring"))
             {
                 reinterpret_cast<void (*__cdecl)(const char *, int)>(Address)(Message.data(), 0xD6B749);
             }
