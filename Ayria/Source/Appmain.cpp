@@ -6,9 +6,9 @@
 
 #include "Global.hpp"
 
-// Although no compiler cares, anon unions should be static in global scope.
-typedef union { struct { uint8_t TLS : 1, EP : 1; }; uint8_t Raw; } Loaderflags_t;
-static Loaderflags_t Loaderflags{};
+
+// Track if we need to use fallback methods.
+static bool TLSFallback = false;
 
 // Some games use do not handle exceptions well, so we'll have to catch them.
 LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)
@@ -53,7 +53,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         {
             // Opt out of further notifications.
             DisableThreadLibraryCalls(hDllHandle);
-            Loaderflags.TLS = true;
+            TLSFallback = true;
             return TRUE;
         }
 
@@ -61,11 +61,11 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     }
 
     // Alternative for games without TLS support.
-    if (nReason == DLL_THREAD_ATTACH && !Loaderflags.TLS)
+    if (nReason == DLL_THREAD_ATTACH && TLSFallback)
     {
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
-        Loaderflags.TLS = true; // Disable.
+        TLSFallback = false; // Disable.
         Loaders::Loadplugins();
     }
 
