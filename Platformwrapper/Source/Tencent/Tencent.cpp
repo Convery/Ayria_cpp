@@ -172,7 +172,9 @@ extern "C" EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
 
     // Notify the plugins that we are initialized.
     #if defined(_WIN32)
-    if (const auto Bootstrapper = GetModuleHandleA(va("Ayria%d.dll", Build::is64bit ? 64 : 32).c_str()))
+    HMODULE Bootstrapper = GetModuleHandleA(Build::is64bit ? "Ayria64.dll" : "./Ayria/Ayria32.dll");
+    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+    if (Bootstrapper)
     {
         const auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
         if (Callback) (reinterpret_cast<void (*)()>(Callback))();
