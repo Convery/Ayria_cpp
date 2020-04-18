@@ -44,6 +44,7 @@ namespace Console
         void *Windowhandle;
         bool isExtended;
         bool isVisible;
+        bool isDirty;
     } Global{};
 
     // Create a centred window chroma-keyed on 0xFFFFFF.
@@ -75,6 +76,31 @@ namespace Console
         return nullptr;
     }
 
+    extern "C"
+    {
+        EXPORT_ATTR void __cdecl addFunction(const char *Name, const void *Callback)
+        {
+            std::string Functionname = Name;
+            std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) {return (char)std::tolower(a); });
+            Functions[Functionname] = (Consolecallback_t)Callback;
+        }
+        EXPORT_ATTR void __cdecl addConsolestring(const char *String, int Color)
+        {
+            // NOTE(tcn): Race-condition with Global.Console.onRender
+            Messages.push_back({ String, nk_rgba_u32(Color) });
+            Global.isDirty = true;
+        }
+    }
+
+    void __cdecl Help_f(int, const wchar_t **)
+    {
+        addConsolestring("Functions:", 0xFF00FF00);
+        for (const auto &[a, b] : Functions)
+        {
+            addConsolestring(a.c_str(), 0x00FFFF00);
+        }
+    }
+
     // Setup the system.
     static void Initialize()
     {
@@ -84,8 +110,11 @@ namespace Console
         // Windows tracks message-queues by thread ID, so we need to create the window
         // from this new thread to prevent issues. Took like 8 hours of hackery to find that..
         Global.Windowhandle = Createwindow();
-
         Global.Context = NK_GDI::Initialize(GetDC((HWND)Global.Windowhandle));
+        Global.isDirty = true;
+
+        addFunction("Help", Help_f);
+        addFunction("?", Help_f);
 
         // TODO(tcn): More init!
     }
@@ -328,7 +357,6 @@ namespace Console
     }
 
     static bool Initialized = false;
-    static bool Dirtyframe = true;
     void onFrame()
     {
         if (!Initialized) Initialize();
@@ -351,7 +379,7 @@ namespace Console
             {
                 TranslateMessage(&Message);
                 DispatchMessageW(&Message);
-                Dirtyframe = true;
+                Global.isDirty = true;
             }
         }
         nk_input_end(Global.Context);
@@ -367,7 +395,7 @@ namespace Console
                 if (GetAsyncKeyState(VK_SHIFT) & (1 << 31))
                 {
                     Global.isExtended ^= true;
-                    Dirtyframe = true;
+                    Global.isDirty = true;
                 }
                 else
                 {
@@ -411,16 +439,16 @@ namespace Console
                     }
 
                     Global.isVisible ^= true;
-                    Dirtyframe = true;
+                    Global.isDirty = true;
                 }
             }
         }
 
         // Only redraw when dirty.
-        if (Dirtyframe)
+        if (Global.isDirty)
         {
             RECT Gamewindow{};
-            Dirtyframe = false;
+            Global.isDirty = false;
 
             // Follow the main window.
             GetWindowRect((HWND)Global.Gamewindowhandle, &Gamewindow);
@@ -437,6 +465,8 @@ namespace Console
             ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
         }
     }
+
+
 
     // Stolen from https://github.com/futurist/CommandLineToArgvA
     LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs)
