@@ -6,10 +6,11 @@
 
 #include <Stdinclude.hpp>
 #include "../Global.hpp"
+#include <unordered_set>
 
 namespace Loaders
 {
-    std::vector<size_t> Pluginhandles{};
+    std::unordered_set<size_t> Pluginhandles{};
 
     extern "C"
     {
@@ -40,7 +41,7 @@ namespace Loaders
         {
             if (const auto Module = LoadLibraryA(va("./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
-                Pluginhandles.push_back(size_t(Module));
+                Pluginhandles.insert(size_t(Module));
             }
         }
 

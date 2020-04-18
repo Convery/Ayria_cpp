@@ -53,10 +53,10 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         {
             // Opt out of further notifications.
             DisableThreadLibraryCalls(hDllHandle);
-            TLSFallback = true;
             return TRUE;
         }
 
+        TLSFallback = true;
         // TODO EP-hook
     }
 
