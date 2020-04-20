@@ -78,6 +78,7 @@
 #include <Utilities/Wrappers/Filesystem.hpp>
 
 // Temporary includes.
+#include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
 #include <Utilities/Internal/Singleinstance.hpp>
 

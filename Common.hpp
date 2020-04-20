@@ -65,6 +65,13 @@ namespace Build
 // Helper to support designated initializers until c++ 20 is mainstream.
 #define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
 
+// Helper to switch between debug and release mutex's.
+#if !defined(NDEBUG)
+#define Defaultmutex Spinlock
+#else
+#define Defaultmutex Debugmutex
+#endif
+
 // Ignore ANSI compatibility for structs.
 #pragma warning(disable: 4201)
 
