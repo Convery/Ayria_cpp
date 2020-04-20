@@ -64,6 +64,13 @@ namespace Winsock
     {
         const auto Readableaddress = getAddress(Name);
 
+        // Windows IPv6 sockets should be in dual-stack mode before binding.
+        if(Name->sa_family == AF_INET6)
+        {
+            const DWORD Argument{};
+            setsockopt(Socket, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&Argument, sizeof(Argument));
+        }
+
         // We don't allow binding to internal addresses, just localhost.
         if (0 == std::memcmp(Readableaddress.c_str(), "192.168.", 8) || 0 == std::memcmp(Readableaddress.c_str(), "10.", 3))
         {
