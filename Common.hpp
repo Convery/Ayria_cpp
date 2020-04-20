@@ -66,7 +66,7 @@ namespace Build
 #define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
 
 // Helper to switch between debug and release mutex's.
-#if !defined(NDEBUG)
+#if defined(NDEBUG)
 #define Defaultmutex Spinlock
 #else
 #define Defaultmutex Debugmutex

@@ -46,7 +46,7 @@ namespace Localnetworking
     std::unordered_map<size_t, IServer *> Serversockets{};
     std::vector<std::string> Hostblacklist{};
     std::vector<size_t> Pluginhandles{};
-    std::mutex Bottleneck{};
+    Defaultmutex Bottleneck{};
     FD_SET Activesockets{};
     uint16_t Backendport{};
     size_t Listensocket{};

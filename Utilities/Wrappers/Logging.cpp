@@ -8,7 +8,7 @@
 
 namespace Logging
 {
-    std::mutex Threadguard;
+    Defaultmutex Threadguard;
 
     void toFile(std::string_view Filename, std::string_view Message)
     {
