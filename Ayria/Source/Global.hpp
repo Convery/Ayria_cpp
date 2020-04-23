@@ -34,12 +34,10 @@ void Ayriastartup();
 
 namespace Networking
 {
-    using Request_t = struct { std::string Subject, Content; };
-    using Callback_t = std::function<void(const Request_t &Request, std::string &Response)>;
+    using Callback_t = std::function<void(const char *Content)>;
 
     void addBroadcast(std::string_view Subject, std::string_view Content);
     void addHandler(std::string_view Subject, const Callback_t &Callback);
-    void addBroadcast(Request_t &&Message);
     void onFrame();
 }
 

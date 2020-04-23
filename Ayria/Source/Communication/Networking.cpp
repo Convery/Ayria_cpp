@@ -147,14 +147,7 @@ namespace Networking
                         // We just drop packets without a handler.
                         if (Callback != Handlers->end())
                         {
-                            std::string Response{};
-                            const Request_t Request{ Subject, Content };
-                            Callback->second(Request, Response);
-
-                            if (!Response.empty())
-                            {
-                                Node.Messagequeue.push(std::move(Response));
-                            }
+                            Callback->second(Content.c_str());
                         }
                     }
                     catch (...) {};
@@ -223,10 +216,6 @@ namespace Networking
         doListen();
         doPump();
     }
-    void addBroadcast(Request_t &&Message)
-    {
-        return addBroadcast(Message.Subject, Message.Content);
-    }
     void addHandler(std::string_view Subject, const Callback_t &Callback)
     {
         if (!Handlers) Handlers = new std::remove_pointer_t<decltype(Handlers)>;
@@ -244,13 +233,7 @@ namespace Networking
     extern "C" EXPORT_ATTR unsigned short __cdecl getNetworkport() { return Listenport; }
     extern "C" EXPORT_ATTR void __cdecl addNetworklistener(const char *Subject, void *Callback)
     {
-        // Assume callback is int (char *content, char *output, int size);
-        addHandler(Subject, [=](const Request_t &Request, std::string &Response)
-        {
-            auto Buffer = std::make_unique<char[]>(4096);
-            auto Size = (static_cast<int(__cdecl *)(const char *, const char *, int)>(Callback))(Request.Content.c_str(), Buffer.get(), 4096);
-            Response = std::string(Buffer.get(), Size);
-        });
+        addHandler(Subject, static_cast<void(__cdecl *)(const char *)>(Callback));
     }
     extern "C" EXPORT_ATTR void __cdecl addNetworkbroadcast(const char *Subject, const char *Message)
     {
