@@ -242,4 +242,18 @@ namespace Networking
         for (auto &[_, Node] : Nodes) Node.Messagequeue.push(Output);
     }
     extern "C" EXPORT_ATTR unsigned short __cdecl getNetworkport() { return Listenport; }
+    extern "C" EXPORT_ATTR void __cdecl addNetworklistener(const char *Subject, void *Callback)
+    {
+        // Assume callback is int (char *content, char *output, int size);
+        addHandler(Subject, [=](const Request_t &Request, std::string &Response)
+        {
+            auto Buffer = std::make_unique<char[]>(4096);
+            auto Size = (static_cast<int(__cdecl *)(const char *, const char *, int)>(Callback))(Request.Content.c_str(), Buffer.get(), 4096);
+            Response = std::string(Buffer.get(), Size);
+        });
+    }
+    extern "C" EXPORT_ATTR void __cdecl addNetworkbroadcast(const char *Subject, const char *Message)
+    {
+        addBroadcast(Subject, Message);
+    }
 }
