@@ -11,9 +11,14 @@
 
 namespace Console
 {
+    struct Functioncallback_t
+    {
+        std::string Friendlyname;
+        void(__cdecl *Callback)(int Argc, const char **Argv);
+    };
+
     // Stolen from https://github.com/futurist/CommandLineToArgvA
     LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs);
-    using Consolecallback_t = void(__cdecl *)(int Argc, const char **Argv);
     constexpr size_t Maxtabs = 6;
 
     // Global input.
@@ -32,7 +37,7 @@ namespace Console
     { Rawdata.data(), Rawdata.data() + Rawdata.size(), Rawdata.data(), Rawdata.size() };
 
     // Functionality.
-    std::unordered_map<std::string, Consolecallback_t> Functions;
+    std::unordered_map<std::string, Functioncallback_t> Functions;
 
     // Window properties.
     struct nk_rect Region { 20, 50 };
@@ -82,7 +87,8 @@ namespace Console
         {
             std::string Functionname = Name;
             std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) {return (char)std::tolower(a); });
-            Functions[Functionname] = (Consolecallback_t)Callback;
+            Functions[Functionname].Callback = (decltype(Functioncallback_t::Callback))Callback;
+            Functions[Functionname].Friendlyname = Name;
         }
         EXPORT_ATTR void __cdecl addConsolestring(const char *String, int Color)
         {
@@ -97,7 +103,7 @@ namespace Console
         addConsolestring("Functions:", 0xFF00FF00);
         for (const auto &[a, b] : Functions)
         {
-            addConsolestring(a.c_str(), 0x00FFFF00);
+            addConsolestring(b.Friendlyname.c_str(), 0x00FFFF00);
         }
     }
 
@@ -333,7 +339,7 @@ namespace Console
                         std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) { return (char)std::tolower(a); });
                         if (const auto Callback = Functions.find(Functionname); Callback != Functions.end())
                         {
-                            Callback->second(Argc, (const char **)Argv);
+                            Callback->second.Callback(Argc, (const char **)Argv);
                         }
 
                         LocalFree(Argv);
@@ -468,8 +474,6 @@ namespace Console
             ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
         }
     }
-
-
 
     // Stolen from https://github.com/futurist/CommandLineToArgvA
     LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs)
