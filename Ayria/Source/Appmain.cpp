@@ -84,8 +84,12 @@ void Ayriastartup()
     {
         while(true)
         {
-            Networking::onFrame();
             Console::onFrame();
+            Networking::onFrame();
+
+            // Depending on system resources, this
+            // may still result in 100% utilisation.
+            std::this_thread::yield();
         }
     }).detach();
 }

@@ -209,8 +209,8 @@ namespace Networking
         }
         while (false);
 
-        const auto Errorcode = WSAGetLastError();
-        DebugBreak();
+        Errorprint(va("Initialization of Ayria::Networking failed with %d", WSAGetLastError()));
+        assert(false);
         return false;
     }
 
