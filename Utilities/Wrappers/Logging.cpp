@@ -45,7 +45,7 @@ namespace Logging
         {
             if (const auto Address = GetProcAddress(Console, "addConsolestring"))
             {
-                reinterpret_cast<void (*__cdecl)(const char *, int)>(Address)(Message.data(), 0xD6B749);
+                reinterpret_cast<void (__cdecl *)(const char *, int)>(Address)(Message.data(), 0xD6B749);
             }
         }
     }

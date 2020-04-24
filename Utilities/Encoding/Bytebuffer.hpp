@@ -11,9 +11,10 @@
 #pragma warning(push)
 #include <Stdinclude.hpp>
 #pragma warning(disable: 4702)
+using Blob = std::basic_string<uint8_t>;
+using Blob_view = std::basic_string_view<uint8_t>;
 
 // The types of data that can be handled.
-using Blob = std::basic_string<uint8_t>;
 enum Bytebuffertype : uint8_t
 {
     BB_NONE = 0,
@@ -57,7 +58,7 @@ namespace Internal
         if constexpr (std::is_enum<Type>::value) return toID<typename std::underlying_type<Type>::type>();
 
         // Special containers.
-        if constexpr (std::is_same<Type, Blob>::value)                          return BB_BLOB;
+        if constexpr (std::is_same<Type, std::basic_string<uint8_t>>::value)    return BB_BLOB;
         if constexpr (std::is_same<Type, std::basic_string<char>>::value)       return BB_ASCIISTRING;
         if constexpr (std::is_same<Type, std::basic_string<wchar_t>>::value)    return BB_UNICODESTRING;
 
@@ -310,7 +311,7 @@ struct Bytebuffer
     {
         return Internalsize - Internaliterator;
     }
-    [[nodiscard]] std::basic_string_view<uint8_t> asView() const
+    [[nodiscard]] Blob_view asView() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
