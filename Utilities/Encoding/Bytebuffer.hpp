@@ -393,5 +393,20 @@ template<typename Type> struct bbValue : ISerializable
     bbValue(Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
     bbValue(Type &&Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
 };
+
+// Helper to bypass formatting.
+inline Blob bbSerialize(ISerializable &Object)
+{
+    Bytebuffer Tempbuffer;
+    Object.Serialize(Tempbuffer);
+    return Tempbuffer.asBlob();
+}
+inline Blob bbSerialize(ISerializable &&Object)
+{
+    Bytebuffer Tempbuffer;
+    Object.Serialize(Tempbuffer);
+    return Tempbuffer.asBlob();
+}
+
 #pragma endregion
 #pragma warning(pop)
