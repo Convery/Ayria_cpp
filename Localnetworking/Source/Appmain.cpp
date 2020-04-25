@@ -222,7 +222,23 @@ namespace Localnetworking
         // Notify the developer and spawn the server.
         Debugprint(va("Spawning localnet backend on %u", ntohs(Backendport)));
         std::atexit([]() { Shouldquit = true; });
-        std::thread(Pollsockets).detach();
+        std::thread([]()
+        {
+            // Name the thread for easier debugging.
+            {
+                #pragma pack(push, 8)
+                using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+                #pragma pack(pop)
+
+                __try
+                {
+                    THREADNAME_INFO Info{ 0x1000, "Localnetworking_Mainthread", 0xFFFFFFFF };
+                    RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+                } __except (EXCEPTION_EXECUTE_HANDLER) {}
+            }
+
+            Pollsockets();
+        }).detach();
 
         // Load all plugins from disk.
         for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))

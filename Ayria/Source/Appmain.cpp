@@ -82,6 +82,19 @@ void Ayriastartup()
     // Main loop.
     std::thread([]() -> void
     {
+        // Name the thread for easier debugging.
+        {
+            #pragma pack(push, 8)
+            using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+            #pragma pack(pop)
+
+            __try
+            {
+                THREADNAME_INFO Info{ 0x1000, "Ayria_Mainthread", 0xFFFFFFFF };
+                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+
         while(true)
         {
             Console::onFrame();
