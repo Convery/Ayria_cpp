@@ -37,12 +37,12 @@ namespace Steam
         const char *GetCurrentGameLanguage()
         {
             Traceprint();
-            return Steam::Global.Language.c_str();
+            return Global.Language.c_str();
         }
         const char *GetAvailableGameLanguages()
         {
             Traceprint();
-            return Steam::Global.Language.c_str();
+            return Global.Language.c_str();
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {
@@ -55,7 +55,7 @@ namespace Steam
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)
         {
             Traceprint();
-            return uint32_t(Ayria::Global.Startuptimestamp - 600);
+            return uint32_t(Global.Startuptimestamp - 600);
         }
         bool BIsSubscribedFromFreeWeekend()
         {
@@ -118,7 +118,7 @@ namespace Steam
         CSteamID GetAppOwner()
         {
             Traceprint();
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Global.UserID);
         }
         const char *GetLaunchQueryParam(const char *pchKey)
         {

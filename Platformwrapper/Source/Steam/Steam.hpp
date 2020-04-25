@@ -6,23 +6,14 @@
 
 #pragma once
 #include "Stdinclude.hpp"
-#include "../Common/Common.hpp"
+#include "../Common.hpp"
 #include "Auxiliary/CSteamID.hpp"
 
 namespace Steam
 {
-    // Keep the global state together.
-    struct Globalstate_t
-    {
-        std::string Path;
-        std::string Language;
-        uint32_t ApplicationID;
-    };
-    extern Globalstate_t Global;
-
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
-    using Interface_t = Ayria::Fakeclass_t;
+    using Interface_t = Fakeclass_t;
 
     // The types of interfaces provided as of writing.
     enum class Interfacetype_t

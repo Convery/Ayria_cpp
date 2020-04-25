@@ -56,7 +56,7 @@ namespace Steam
         CSteamID GetLobbyByIndex(int iLobby)
         {
             Traceprint();
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Global.UserID);
         }
         void CreateLobby0(uint64_t ulGameID, bool bPrivate)
         {
@@ -81,7 +81,7 @@ namespace Steam
         }
         CSteamID GetLobbyMemberByIndex(CSteamID steamIDLobby, int iMember)
         {
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Global.UserID);
         }
         const char *GetLobbyData(CSteamID SteamIDLobby, const char *pchKey)
         {
@@ -221,7 +221,7 @@ namespace Steam
         }
         CSteamID GetLobbyOwner(CSteamID steamIDLobby)
         {
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Global.UserID);
         }
         double GetLobbyDistance(CSteamID steamIDLobby)
         {

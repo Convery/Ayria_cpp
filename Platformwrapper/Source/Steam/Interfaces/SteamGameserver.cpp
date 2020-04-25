@@ -90,7 +90,7 @@ namespace Steam
         }
         CSteamID GetSteamID()
         {
-            auto ID = CSteamID(Ayria::Global.UserID);
+            auto ID = CSteamID(Global.UserID);
             ID.Set(ID.GetAccountID(), ID.GetEUniverse(), k_EAccountTypeGameServer);
             return ID;
         }
@@ -152,7 +152,7 @@ namespace Steam
         CSteamID CreateUnauthenticatedUserConnection()
         {
             Traceprint();
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Global.UserID);
         }
         void SendUserDisconnect1(CSteamID steamIDUser)
         {

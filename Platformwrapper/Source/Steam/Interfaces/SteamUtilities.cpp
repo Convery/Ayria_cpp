@@ -14,7 +14,7 @@ namespace Steam
         uint32_t GetSecondsSinceAppActive() const
         {
             Traceprint();
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() - Ayria::Global.Startuptimestamp);
+            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() - Global.Startuptimestamp);
         }
         uint32_t GetSecondsSinceComputerActive() const
         {
