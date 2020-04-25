@@ -4,11 +4,11 @@
     License: MIT
 */
 
-#include "Common/Common.hpp"
 #include "Stdinclude.hpp"
+#include "Common.hpp"
 
 // Keep the global state together.
-namespace Ayria { Globalstate_t Global{}; }
+Globalstate_t Global{};
 
 // Exported from the various platforms.
 extern void Arclight_init();
@@ -45,7 +45,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         }
 
         // Start tracking availability.
-        Ayria::Global.Startuptimestamp = time(NULL);
+        Global.Startuptimestamp = time(NULL);
 
         // If there's a local bootstrap module, we'll load it and trigger TLS.
         constexpr auto Modulename = Build::is64bit ? "Ayria64.dll" : "Ayria32.dll";
@@ -68,10 +68,68 @@ __attribute__((constructor)) void __stdcall DllMain()
 }
 #endif
 
-//Callback when loaded as a plugin.
+// Callback when loaded as a plugin.
 extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
 {
     // Initialize the various platforms.
     Tencent_init();
     Steam_init();
+
+    constexpr auto Modulename = Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll";
+    if(const auto Handle = GetModuleHandleA(Modulename))
+    {
+        #define Import(x) Global.Ayria. x = (decltype(Global.Ayria. x))GetProcAddress(Handle, #x);
+        Global.Ayria.Modulehandle = Handle;
+        Import(addNetworkbroadcast);
+        Import(addNetworklistener);
+        Import(addConsolestring);
+        Import(getNetworkport);
+        Import(addFunction);
+        #undef Import
+
+        // Global event-listener.
+        Global.Ayria.addNetworklistener("Platformwrapper", Communication::Messagehandler);
+    }
+}
+
+// Broadcast events over Ayrias communications layer.
+namespace Communication
+{
+    std::unordered_map<std::string, Eventcallback_t> *Messagecallbacks{};
+    void addMessagecallback(std::string_view Eventtype, Eventcallback_t Callback)
+    {
+        if (!Messagecallbacks) Messagecallbacks = new std::remove_pointer_t<decltype(Messagecallbacks)>();
+        Messagecallbacks->emplace(Eventtype, Callback);
+    }
+    void Broadcastmessage(std::string_view Eventtype, uint64_t TargetID, Bytebuffer &&Data)
+    {
+        if (const auto Callback = Global.Ayria.addNetworkbroadcast)
+        {
+            auto Object = nlohmann::json::object();
+            Object["Sendername"] = Global.Username;
+            Object["Eventdata"] = Data.asView();
+            Object["SenderID"] = Global.UserID;
+            Object["Eventtype"] = Eventtype;
+            Object["TargetID"] = TargetID;
+
+            Callback("Platformwrapper", Object.dump().c_str());
+        }
+    }
+    void __cdecl Messagehandler(const char *Request)
+    {
+        try
+        {
+            const auto Object = nlohmann::json::parse(Request);
+            const auto SenderID = Object.value("SenderID", uint64_t());
+            const auto TargetID = Object.value("TargetID", uint64_t());
+            const auto Sendername = Object.value("Sendername", std::string());
+            const auto Eventtype = Object.value("Eventtype", std::string());
+            const auto Eventdata = Object.value("Eventdata", Blob());
+
+            if (Messagecallbacks->contains(Eventtype))
+            {
+                Messagecallbacks->at(Eventtype)(TargetID, SenderID, Sendername, Bytebuffer(Eventdata));
+            }
+        } catch (...) {}
+    }
 }

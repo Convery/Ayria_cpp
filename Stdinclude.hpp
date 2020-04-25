@@ -14,6 +14,7 @@
 
 // Standard-library includes for all projects in this repository.
 #include <unordered_map>
+#include <unordered_set>
 #include <string_view>
 #include <filesystem>
 #include <functional>
