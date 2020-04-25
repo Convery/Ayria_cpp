@@ -38,6 +38,10 @@ namespace Steam
     // Block and wait for Steams IPC initialization event as some games need it.
     void InitializeIPC()
     {
+        static bool Initialized = false;
+        if (Initialized) return;
+        Initialized = true;
+
         SECURITY_DESCRIPTOR pSecurityDescriptor;
         InitializeSecurityDescriptor(&pSecurityDescriptor, 1);
         SetSecurityDescriptorDacl(&pSecurityDescriptor, 1, 0, 0);
@@ -53,7 +57,15 @@ namespace Steam
         const auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
 
         // Wait for the game to initialize or timeout if unused.
-        if (WaitForSingleObject(Consumesemaphore, 20000)) return;
+        if (NULL != WaitForSingleObject(Consumesemaphore, 20000))
+        {
+            ReleaseSemaphore(Producesemaphore, 1, NULL);
+            UnmapViewOfFile(Sharedfilemapping);
+            CloseHandle(Sharedfilehandle);
+            CloseHandle(Consumesemaphore);
+            CloseHandle(Producesemaphore);
+            return;
+        }
 
         // Parse the shared buffer to get the process information.
         const char *Buffer = (char *)Sharedfilemapping;
