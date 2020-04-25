@@ -45,7 +45,7 @@ namespace Steam
             Localserver->Set("Server.isDedicated", bDedicatedServer);
             Localserver->Set("Steam.Productdescription", pGameDescription);
             Localserver->Set("Security.Passwordprotected", bPasswordProtected);
-            Matchmaking::Broadcast();
+            Matchmaking::Announceupdate();
         }
         void ClearAllKeyValues()
         {

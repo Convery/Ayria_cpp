@@ -95,12 +95,12 @@ namespace Steam
         Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer) const
         {
             auto Serialized = new Callbacks::gameserveritem_t();
-            const auto Servers = Matchmaking::Externalservers();
-            if (Servers.size() <= iServer) return 0;
-            auto Server = Servers[iServer];
+            auto Servers = Matchmaking::getServers();
+            if (Servers.size() <= size_t(iServer)) return 0;
+            auto Server = &Servers[iServer];
 
             // Address in host-order.
-            Serialized->m_NetAdr.m_unIP = ntohl(Server->Core->Address);
+            Serialized->m_NetAdr.m_unIP = ntohl(Server->Address);
             Serialized->m_NetAdr.m_usQueryPort = Server->Get("Network.Queryport", uint16_t());
             Serialized->m_NetAdr.m_usConnectionPort = Server->Get("Network.Gameport", uint16_t());
 
@@ -140,7 +140,7 @@ namespace Steam
         int GetServerCount(uint32_t eType)
         {
             // Complete the listing as we did it in the background.
-            const auto Servers = Matchmaking::Externalservers();
+            const auto Servers = Matchmaking::getServers();
             for(int i = 0; i < int(Servers.size()); ++i)
             {
                 if (Responsecallback1) Responsecallback1->ServerResponded(i);

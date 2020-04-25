@@ -223,7 +223,7 @@ namespace Steam
         void SetGameTags(const char *pchGameTags)
         {
             Matchmaking::Localserver()->Set("Session.Gametags", pchGameTags);
-            Matchmaking::Broadcast();
+            Matchmaking::Announceupdate();
         }
         uint64_t GetServerReputation()
         {

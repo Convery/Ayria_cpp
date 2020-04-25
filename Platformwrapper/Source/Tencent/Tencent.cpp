@@ -6,7 +6,7 @@
 
 #include <winternl.h>
 #include <Stdinclude.hpp>
-#include "../Common/Common.hpp"
+#include "../Common.hpp"
 #pragma warning(disable : 4100)
 
 namespace Tencent

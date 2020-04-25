@@ -164,10 +164,6 @@ extern "C"
         }
         #endif
 
-        // Enable LAN-communication for this title.
-        Communication::Initialize(0x4321);
-        Communication::Broadcast("Social::Startup", "");
-
         // Notify the game that it's properly connected.
         const auto RequestID = Callbacks::Createrequest();
         Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
@@ -231,7 +227,7 @@ extern "C"
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser() { Traceprint(); return { }; }
     EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
     EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
-    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Matchmaking::Localserver()->Core->SessionID = 0; }
+    EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); Matchmaking::Announcequit(); }
     EXPORT_ATTR void SteamGameServer_RunCallbacks() { Steam::Callbacks::Runcallbacks(); }
     EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Global.UserID; }
     EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
@@ -269,7 +265,7 @@ extern "C"
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
                 Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
-                Matchmaking::Broadcast();
+                Matchmaking::Announceupdate();
             }
             if(Version == 11 || Version == 12)
             {
@@ -291,7 +287,7 @@ extern "C"
                 uint32_t a{}, b{}, c{}, d{};
                 std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
                 Localserver->Set("Server.Version", (d + c * 10 + b * 100 + a * 1000));
-                Matchmaking::Broadcast();
+                Matchmaking::Announceupdate();
             }
 
             va_end(Args);

@@ -61,6 +61,8 @@ namespace Social
 {
     struct Friend_t : ISerializable
     {
+        uint32_t Lastmodified{};
+
         Blob Avatar;
         uint64_t UserID;
         std::string Username;
@@ -84,4 +86,56 @@ namespace Social
 
     std::vector<Friend_t> getFriends();
     void Announceupdate(Friend_t Delta);
+    void Announcequit();
+}
+
+// Basic matchmaking.
+namespace Matchmaking
+{
+    struct Server_t : ISerializable
+    {
+        uint32_t Lastmodified{};
+
+        uint16_t Port;
+        uint32_t Address;
+        uint64_t ServerID;
+        uint32_t Maxplayers;
+        std::string Gametags;
+        std::vector<uint64_t> Players;
+
+        nlohmann::json Session{ nlohmann::json::object() };
+        template<typename T> void Set(std::string &&Property, T Value) { Session[Property] = Value; }
+        template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Session.value(Property, Defaultvalue); }
+
+        void Serialize(Bytebuffer &Buffer) override
+        {
+            Buffer.Write(Port);
+            Buffer.Write(Address);
+            Buffer.Write(ServerID);
+            Buffer.Write(Maxplayers);
+            Buffer.Write(Players);
+            Buffer.Write(Gametags);
+            Buffer.Write(Base64::Encode(Session.dump()));
+        }
+        void Deserialize(Bytebuffer &Buffer) override
+        {
+            Buffer.Read(Port);
+            Buffer.Read(Address);
+            Buffer.Read(ServerID);
+            Buffer.Read(Maxplayers);
+            Buffer.Read(Players);
+            Buffer.Read(Gametags);
+
+            try
+            {
+                const auto Sessioninfo = Base64::Decode(Buffer.Read<std::string>());
+                Session = nlohmann::json::parse(Sessioninfo.c_str());
+            } catch(...){}
+        }
+    };
+
+    void Announceupdate(Server_t Delta = {});
+    std::vector<Server_t> getServers();
+    Server_t *Localserver();
+    void Announcequit();
 }
