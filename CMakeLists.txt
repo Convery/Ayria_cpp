@@ -81,4 +81,4 @@ add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
 
 # Examples.
-add_subdirectory(Plugintemplate)
+#add_subdirectory(Plugintemplate)
