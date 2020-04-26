@@ -7,9 +7,8 @@ set(MODULENAME ${Directory})
 set(CMAKE_DEBUG_POSTFIX "")
 
 # Just pull all the files from /Source
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE ASSEMBLY "*.asm")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS *.cpp *.c *.asm)
+add_library(${MODULENAME} STATIC ${SOURCES})
 add_definitions(-DMODULENAME="${MODULENAME}")
-add_library(${MODULENAME} STATIC ${SOURCES} ${ASSEMBLY})
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")

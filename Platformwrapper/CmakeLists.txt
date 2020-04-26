@@ -20,10 +20,10 @@ else()
 endif()
 
 # Just pull all the files from /Source
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/*.cpp")
-file(GLOB_RECURSE ASSEMBLY CONFIGURE_DEPENDS "Source/*.asm")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS Source/*.cpp Source/*.c Source/*.asm)
+add_library(${MODULENAME} SHARED ${SOURCES})
 add_definitions(-DMODULENAME="${MODULENAME}")
-add_library(${MODULENAME} SHARED ${SOURCES} ${ASSEMBLY})
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
 target_link_libraries(${MODULENAME} ${PLATFORM_LIBS} ${MODULE_LIBS})
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
+
