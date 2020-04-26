@@ -6,7 +6,6 @@
 
 #include "Global.hpp"
 
-
 // Track if we need to use fallback methods.
 static bool TLSFallback = false;
 

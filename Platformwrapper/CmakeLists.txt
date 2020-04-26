@@ -14,14 +14,17 @@ endif()
 
 # Platform libraries to be linked.
 if(WIN32)
-    set(PLATFORM_LIBS ws2_32)
+    set(PLATFORM_LIBS ws2_32 Crypt32)
 else()
     set(PLATFORM_LIBS dl pthread)
 endif()
 
+# Third-party libraries, prefer find_library() and find_path().
+# set(MODULE_LIBS ${MODULE_LIBS} mhook.lib)
+
 # Just pull all the files from /Source
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/*.cpp")
-file(GLOB_RECURSE ASSEMBLY CONFIGURE_DEPENDS "Source/*.asm")
+file(GLOB_RECURSE SOURCES "Source/*.cpp")
+file(GLOB_RECURSE ASSEMBLY "Source/*.asm")
 add_definitions(-DMODULENAME="${MODULENAME}")
 add_library(${MODULENAME} SHARED ${SOURCES} ${ASSEMBLY})
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
