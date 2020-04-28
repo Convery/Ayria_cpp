@@ -213,13 +213,15 @@ namespace Localnetworking
 
             if (Address1)
             {
-                Mhook_SetHook((void **)&Address1, Target);
-                Winsock::Originalfunctions[Name] = (void *)Address1;
+                const auto Trampoline = Hooking::Stomphook(Address1, Target);
+                Winsock::Originalfunctions[Name] = Trampoline;
+                assert(Trampoline);
             }
             if (Address2)
             {
-                Mhook_SetHook((void **)&Address2, Target);
-                Winsock::Originalfunctions[Name] = (void *)Address2;
+                const auto Trampoline = Hooking::Stomphook(Address2, Target);
+                Winsock::Originalfunctions[Name] = Trampoline;
+                assert(Trampoline);
             }
         };
 

@@ -349,7 +349,7 @@ void Steam_init()
             // If a developer has loaded the plugin as a DLL, ignore it.
             if (Address == Target) return 0;
 
-            return !!Mhook_SetHook((void **)&Address, Target);
+            return !!Hooking::Stomphook(Address, Target);
         }
 
         return 0;

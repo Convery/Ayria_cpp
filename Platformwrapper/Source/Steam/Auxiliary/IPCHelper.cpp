@@ -31,8 +31,9 @@ namespace Steam
     }
     void Redirectmodulehandle()
     {
-        Originalfunction = GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA");
-        Mhook_SetHook(&Originalfunction, Callback);
+        const auto Address = GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA");
+        Originalfunction = Hooking::Stomphook(Address, Callback);
+        assert(Originalfunction);
     }
 
     // Block and wait for Steams IPC initialization event as some games need it.

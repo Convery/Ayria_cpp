@@ -54,10 +54,6 @@
 #if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
 #endif
-#if __has_include(<mhook-lib/mhook.h>)
-#pragma comment(lib, "mhook.lib")
-#include <mhook-lib/mhook.h>
-#endif
 
 // Restore warnings.
 #pragma warning(pop)
@@ -77,6 +73,7 @@
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
+#include <Utilities/Hacking/Hooking.hpp>
 
 // Temporary includes.
 #include <Utilities/Internal/Spinlock.hpp>

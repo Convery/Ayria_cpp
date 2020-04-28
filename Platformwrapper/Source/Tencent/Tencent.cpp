@@ -196,7 +196,7 @@ extern "C" EXPORT_ATTR int InitCrossContextByOpenID(void *)
 void Tencent_init()
 {
     #define Hook(x, y, z) { void *Address = GetProcAddress(LoadLibraryA(x), y); \
-    if(Address && Address != z && !Mhook_SetHook((void **)&Address, z)) assert(false);  }
+    if(Address && Address != z && !Hooking::Stomphook(Address, z)) assert(false);  }
 
     // Override the original interface generation.
     Hook("TenProxy.dll", "Invoke", Invoke);
