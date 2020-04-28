@@ -32,6 +32,9 @@
 // Where to keep the log.
 #define LOGPATH "./Ayria/Logs"
 
+// Produce a smaller build by not including third-party detours.
+// #define NO_HOOKLIB
+
 // Build information helpers to avoid the preprocessor.
 namespace Build
 {
