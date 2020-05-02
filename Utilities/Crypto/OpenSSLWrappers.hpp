@@ -1,16 +1,21 @@
 /*
-    Initial author: Convery (tcn@ayria.se)
-    Started: 2020-02-10
-    License: MIT
+Initial author: Convery (tcn@ayria.se)
+Started: 2020-02-10
+License: MIT
 */
 
 #pragma once
 #if __has_include(<openssl/ssl.h>)
+#pragma comment(lib, "libcrypto.lib")
+#pragma comment(lib, "libssl.lib")
 #include <Stdinclude.hpp>
+#include <openssl/ecdsa.h>
+#include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/ssl.h>
 
 namespace AES
 {
@@ -134,8 +139,12 @@ namespace PK_RSA
     {
         const auto Key = RSA_new();
         const auto Exponent = BN_new();
-        BN_set_word(Exponent, 65537);
-        RSA_generate_key_ex(Key, Size, Exponent, nullptr);
+        do
+        {
+            if (1 != BN_set_word(Exponent, 65537)) break;
+            if (1 != RSA_generate_key_ex(Key, Size, Exponent, nullptr)) break;
+        } while (false);
+
         BN_free(Exponent);
         return Key;
     }
@@ -159,6 +168,26 @@ namespace PK_RSA
 
         return Signature;
     }
+    inline bool Verifysignature(std::string_view Input, std::string_view Signature, RSA *Key)
+    {
+        EVP_MD_CTX *Context = EVP_MD_CTX_create();
+        EVP_PKEY *Publickey = EVP_PKEY_new();
+        EVP_PKEY_assign_RSA(Publickey, Key);
+
+        EVP_PKEY_CTX *pkeyCtx;
+        EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+        EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
+        EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
+
+        EVP_DigestVerifyInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+        EVP_DigestVerifyUpdate(Context, Input.data(), Input.size());
+
+        const auto Result = 1 == EVP_DigestVerifyFinal(Context, (uint8_t *)Signature.data(), Signature.size());
+
+        EVP_MD_CTX_destroy(Context);
+        return Result;
+    }
+
     inline std::string getPublickey(RSA *Key)
     {
         const auto Bio = BIO_new(BIO_s_mem());
@@ -191,6 +220,61 @@ namespace PK_RSA
     {
         Key.remove_prefix(15 + 4 + 3);
         return std::string(Key.data(), Key.size());
+    }
+}
+
+namespace PK_ECC
+{
+    inline EC_KEY *Createkeypair(int Curve = NID_secp521r1)
+    {
+        const auto Key = EC_KEY_new_by_curve_name(Curve);
+        if (1 != EC_KEY_generate_key(Key)) return nullptr;
+        if (1 != EC_KEY_check_key(Key)) return nullptr;
+        return Key;
+    }
+    inline std::string Signmessage(std::string_view Input, EC_KEY *Key)
+    {
+        EVP_MD_CTX *Context = EVP_MD_CTX_create();
+        EVP_PKEY *Privatekey = EVP_PKEY_new();
+        EVP_PKEY_assign_EC_KEY(Privatekey, Key);
+
+        EVP_DigestSignInit(Context, nullptr, EVP_sha256(), nullptr, Privatekey);
+        EVP_DigestSignUpdate(Context, Input.data(), Input.size());
+
+        size_t Signaturelength{};
+        EVP_DigestSignFinal(Context, nullptr, &Signaturelength);
+        std::string Signature{}; Signature.resize(Signaturelength);
+        EVP_DigestSignFinal(Context, (uint8_t *)Signature.data(), &Signaturelength);
+        EVP_MD_CTX_destroy(Context);
+
+        return Signature;
+    }
+    inline bool Verifysignature(std::string_view Input, std::string_view Signature, EC_KEY *Key)
+    {
+        EVP_MD_CTX *Context = EVP_MD_CTX_create();
+        EVP_PKEY *Publickey = EVP_PKEY_new();
+        EVP_PKEY_assign_EC_KEY(Publickey, Key);
+
+        EVP_DigestVerifyInit(Context, nullptr, EVP_sha256(), nullptr, Publickey);
+        EVP_DigestVerifyUpdate(Context, Input.data(), Input.size());
+
+        const auto Result = 1 == EVP_DigestVerifyFinal(Context, (uint8_t *)Signature.data(), Signature.size());
+
+        EVP_MD_CTX_destroy(Context);
+        return Result;
+    }
+
+    inline std::string getPublickey(EC_KEY *Key)
+    {
+        const auto Bio = BIO_new(BIO_s_mem());
+        i2d_EC_PUBKEY_bio(Bio, Key);
+
+        const auto Length = BIO_pending(Bio);
+        std::string Result; Result.resize(Length);
+        BIO_read(Bio, Result.data(), Length);
+
+        BIO_free_all(Bio);
+        return Result;
     }
 }
 
