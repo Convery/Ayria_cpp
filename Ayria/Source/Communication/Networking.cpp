@@ -108,7 +108,7 @@ namespace Networking
                 if (!FD_ISSET(Node.Socket, &WriteFD)) continue;
 
                 // We do not process partial sends, so we assume that all data was sent.
-                const auto Status = send(Node.Socket, Node.Messagequeue.front().data(), Node.Messagequeue.front().size(), NULL);
+                const auto Status = send(Node.Socket, Node.Messagequeue.front().data(), int(Node.Messagequeue.front().size()), NULL);
                 if (Status == SOCKET_ERROR && WSAEWOULDBLOCK == WSAGetLastError()) continue;
                 if (Status > 0) { Node.Messagequeue.pop(); continue; }
 

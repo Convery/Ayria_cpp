@@ -61,8 +61,8 @@ namespace Build
 #define Debugprint(string) Logging::Print('D', string)
 #define Traceprint() Logging::Print('>', __FUNCTION__)
 #else
-#define Debugprint(string)
-#define Traceprint()
+#define Debugprint(string) ((void)0)
+#define Traceprint() ((void)0)
 #endif
 
 // Helper to support designated initializers until c++ 20 is mainstream.

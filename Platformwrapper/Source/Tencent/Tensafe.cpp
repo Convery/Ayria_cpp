@@ -230,8 +230,8 @@ void Sendtoserver(const Packettypes_t Packettype, Blob &&Data, struct Tensafe *I
     const auto Packetbuffer = std::make_unique<uint8_t[]>(Headersize + Data.size());
     auto Packet = (Packet_t *)Packetbuffer.get();
     Packet->SequenceID = uint32_t(++Interface->SequenceID);
+    Packet->Totalsize = uint32_t(Headersize + Data.size());
     Packet->Payloadlength = uint32_t(Data.size());
-    Packet->Totalsize = Headersize + Data.size();
     Packet->Packettype = (uint8_t)Packettype;
     Packet->CRC32Checksum = 0;
 

@@ -257,9 +257,9 @@ namespace Hooking
             else
             {
                 // JMP short | E9 ... | OP IMM32
-                *(uint32_t *)(Address + Oldcode.size() + 1) = Target + Jumpsize - Address - Oldcode.size() - 5;
+                *(size_t *)(Address + Oldcode.size() + 1) = Target + Jumpsize - Address - Oldcode.size() - 5;
                 *(uint8_t *)(Address + Oldcode.size() + 0) = 0xE9;
-                *(uint32_t *)(Target + 1) = Replacement - Target - 5;
+                *(size_t *)(Target + 1) = Replacement - Target - 5;
                 *(uint8_t *)(Target + 0) = 0xE9;
             }
 

@@ -19,26 +19,22 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
     if(CMAKE_BUILD_TYPE MATCHES Release)
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /Gw /GR- /GL /Os /Oy /Ob3 /O2 /GF /Brepro")
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /W4 /Gy /Gw /GR- /GL /Os /Oy /Ob3 /O2 /GF /Brepro")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy") # /d2cgsummary
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:fastlink /cgthreads:8")
     endif()
 
-    # Force static runtime.
+    # Force static runtime, warnings, and override default flags.
     foreach(Flag
             CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
             CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE)
+        string(REGEX REPLACE "/W[0-4]" "/W4" ${Flag} "${${Flag}}")
+        string(REPLACE "/GR " "/GR- " ${Flag} "${${Flag}}")
+        string(REPLACE "/Ob2" "/Ob3" ${Flag} "${${Flag}}")
         string(REPLACE "/MD" "/MT" ${Flag} "${${Flag}}")
     endforeach()
-
-    # Force warnings to level 4.
-    if (CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-    endif()
 else()
     # Assume GNU-GCC/CLANG.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
