@@ -69,11 +69,11 @@
 #include <Utilities/Encoding/Bytebuffer.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 #include <Utilities/Hacking/Branchless.hpp>
+#include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
-#include <Utilities/Hacking/Hooking.hpp>
 
 // Temporary includes.
 #include <Utilities/Internal/Spinlock.hpp>
