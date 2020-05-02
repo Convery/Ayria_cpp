@@ -22,6 +22,7 @@ namespace Networking
     std::unordered_map<std::string, Callback_t> *Handlers;
     std::unordered_map<uint32_t, Node_t> Nodes;
     size_t Listensocket, Broadcastsocket;
+    std::vector<std::string> Greetings{};
     sockaddr_in Clientaddress{};
     FD_SET Activesockets{};
     uint16_t Listenport{};
@@ -69,6 +70,9 @@ namespace Networking
                 {
                     Nodes[getID(Sender)] = { Socket, Sender };
                     FD_SET(Socket, &Activesockets);
+
+                    for(const auto &Item : Greetings)
+                        Nodes[getID(Sender)].Messagequeue.push(Item);
                 }
             }
         }
@@ -87,6 +91,9 @@ namespace Networking
             {
                 Nodes[getID(Sender)] = { Socket, Sender };
                 FD_SET(Socket, &Activesockets);
+
+                for(const auto &Item : Greetings)
+                    Nodes[getID(Sender)].Messagequeue.push(Item);
             }
         }
     }
@@ -215,6 +222,14 @@ namespace Networking
         doDiscovery();
         doListen();
         doPump();
+    }
+    void addGreeting(std::string_view Subject, std::string_view Content)
+    {
+        auto Object = nlohmann::json::object();
+        Object["Subject"] = Subject;
+        Object["Content"] = Content;
+
+        Greetings.push_back(Base64::Encode(Object.dump()));
     }
     void addHandler(std::string_view Subject, const Callback_t &Callback)
     {

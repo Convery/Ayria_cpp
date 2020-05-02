@@ -67,33 +67,16 @@ extern "C"
         // Ensure that we have folders for this game.
         std::filesystem::create_directories("./Ayria/Assets/Platformwrapper");
 
-        /*
-            TODO(tcn): We should query the Ayria client, probably through
-            a pipe or shared page, for account information. For now, we'll
-            do some dev-hackery.
-        */
+        // Ask Ayria nicely for data on the client.
         {
             Global.Username = "Ayria";
             Global.Language = "english";
             Global.UserID = 0x1100001DEADC0DE;
 
-            // DEV(tcn): Load the clients name and ID from disk to override the defaults.
-            if (const auto Filebuffer = FS::Readfile("./Ayria/Assets/Platformwrapper" + "/Username.txt"s); !Filebuffer.empty())
-            {
-                Global.Username = { Filebuffer.begin(), Filebuffer.end() };
-            }
-            if (const auto Filebuffer = FS::Readfile("./Ayria/Assets/Platformwrapper" + "/UserID.txt"s); !Filebuffer.empty())
-            {
-                Global.UserID = 0x110000100000000 | std::strtoull((char *)Filebuffer.c_str(), nullptr, 16);
-            }
-
-            // Legacy.
-            #if defined(_WIN32)
-            if (std::strstr(GetCommandLineA(), "-UID"))
-            {
-                Global.UserID = 0x110000100000000 | (time(NULL) & 0xFFFFFF);
-            }
-            #endif
+            if (const auto Callback = Global.Ayria.getClientID)
+                Global.UserID = 0x0110000100000000 | Callback();
+            if (const auto Callback = Global.Ayria.getClientname)
+                Global.Username = Callback();
         }
 
         // Query the Steam platform for installation-location.

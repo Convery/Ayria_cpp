@@ -94,6 +94,9 @@ void Ayriastartup()
             } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
+        // Initialize the client.
+        Client::onStartup();
+
         while(true)
         {
             Console::onFrame();

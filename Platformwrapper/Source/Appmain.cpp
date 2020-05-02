@@ -83,7 +83,10 @@ extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
         Import(addNetworkbroadcast);
         Import(addNetworklistener);
         Import(addConsolestring);
+        Import(getClientticket);
         Import(getNetworkport);
+        Import(getClientname);
+        Import(getClientID);
         Import(addFunction);
         #undef Import
 

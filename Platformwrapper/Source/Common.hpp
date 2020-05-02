@@ -17,6 +17,11 @@ struct Ayriamodule_t
 {
     void *Modulehandle;
 
+    // Client information.
+    unsigned long(__cdecl *getClientID)();
+    const char *(__cdecl *getClientname)();
+    short(__cdecl *getClientticket)(unsigned short Bufferlength, unsigned char *Buffer);
+
     // Console exports.
     void(__cdecl *addConsolestring)(const char *String, int Color);
     void(__cdecl *addFunction)(const char *Name, const void *Callback);

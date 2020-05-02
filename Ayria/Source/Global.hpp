@@ -32,12 +32,25 @@
 // Initialize the subsystems.
 void Ayriastartup();
 
+namespace Client
+{
+    struct Client_t
+    {
+        std::string Clientname{};
+        std::string Publickey{};
+        uint32_t ClientID{};
+    };
+    bool onStartup();
+    std::vector<Client_t> getClients();
+}
+
 namespace Networking
 {
     using Callback_t = std::function<void(const char *Content)>;
 
     void addBroadcast(std::string_view Subject, std::string_view Content);
     void addHandler(std::string_view Subject, const Callback_t &Callback);
+    void addGreeting(std::string_view Subject, std::string_view Content);
     void onFrame();
 }
 
@@ -61,6 +74,11 @@ namespace Loaders
 struct Ayriamodule_t
 {
     void *Modulehandle;
+
+    // Client information.
+    unsigned long(__cdecl *getClientID)();
+    const char *(__cdecl *getClientname)();
+    short(__cdecl *getClientticket)(unsigned short Bufferlength, unsigned char *Buffer);
 
     // Console exports.
     void(__cdecl *addConsolestring)(const char *String, int Color);
