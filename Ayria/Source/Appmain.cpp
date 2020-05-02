@@ -72,7 +72,6 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 }
 
 // Initialize our subsystems.
-bool Shouldquit{};
 void onStartup()
 {
     Network::onStartup();
@@ -94,9 +93,8 @@ void onStartup()
             } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
-        // Depending on system resources, this
-        // may still result in 100% utilisation.
-        std::atexit([]() { Shouldquit = true; });
+        // Depending on system resources, this may still result in 100% utilisation.
+        static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
         while (!Shouldquit) { onFrame(); std::this_thread::yield(); }
 
     }).detach();
