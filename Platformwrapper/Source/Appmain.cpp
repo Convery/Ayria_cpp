@@ -82,12 +82,11 @@ extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
         Global.Ayria.Modulehandle = Handle;
         Import(addNetworkbroadcast);
         Import(addNetworklistener);
-        Import(addConsolestring);
+        Import(addConsolefunction);
+        Import(addConsolemessage);
         Import(getClientticket);
-        Import(getNetworkport);
         Import(getClientname);
         Import(getClientID);
-        Import(addFunction);
         #undef Import
 
         // Global event-listener.

@@ -48,7 +48,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         SetUnhandledExceptionFilter(onUnhandledexception);
 
         // Prefer TLS over EP-hooking.
-        if (Loaders::InstallTLSCallback())
+        if (Pluginloader::InstallTLSCallback())
         {
             // Opt out of further notifications.
             DisableThreadLibraryCalls(hDllHandle);
@@ -65,20 +65,20 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
         TLSFallback = false; // Disable.
-        Loaders::Loadplugins();
+        Pluginloader::Loadplugins();
     }
 
     return TRUE;
 }
 
 // Initialize our subsystems.
-static bool Initialized = false;
-void Ayriastartup()
+bool Shouldquit{};
+void onStartup()
 {
-    if (Initialized) return;
-    Initialized = true;
+    Network::onStartup();
+    Console::onStartup();
+    Client::onStartup();
 
-    // Main loop.
     std::thread([]() -> void
     {
         // Name the thread for easier debugging.
@@ -94,17 +94,15 @@ void Ayriastartup()
             } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
-        // Initialize the client.
-        Client::onStartup();
+        // Depending on system resources, this
+        // may still result in 100% utilisation.
+        std::atexit([]() { Shouldquit = true; });
+        while (!Shouldquit) { onFrame(); std::this_thread::yield(); }
 
-        while(true)
-        {
-            Console::onFrame();
-            Networking::onFrame();
-
-            // Depending on system resources, this
-            // may still result in 100% utilisation.
-            std::this_thread::yield();
-        }
     }).detach();
+}
+void onFrame()
+{
+    Network::onFrame();
+    Console::onFrame();
 }

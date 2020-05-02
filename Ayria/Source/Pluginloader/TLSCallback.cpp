@@ -7,7 +7,7 @@
 #include <Stdinclude.hpp>
 #include "../Global.hpp"
 
-namespace Loaders
+namespace Pluginloader
 {
     #define Writeptr(where, what) { \
     const auto Lock = Memprotect::Makewriteable(where, sizeof(size_t)); \

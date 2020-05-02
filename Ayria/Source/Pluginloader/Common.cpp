@@ -8,7 +8,7 @@
 #include "../Global.hpp"
 #include <unordered_set>
 
-namespace Loaders
+namespace Pluginloader
 {
     std::unordered_set<size_t> Pluginhandles{};
 
@@ -33,8 +33,8 @@ namespace Loaders
 
     void Loadplugins()
     {
-        // Hackery, ensure we are initialized.
-        Ayriastartup();
+        // Initialize our subsystems.
+        onStartup();
 
         // Load all plugins from disk.
         for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))

@@ -74,9 +74,15 @@ extern "C"
             Global.UserID = 0x1100001DEADC0DE;
 
             if (const auto Callback = Global.Ayria.getClientID)
-                Global.UserID = 0x0110000100000000 | Callback();
+            {
+                uint32_t AyriaID{}; Callback(&AyriaID);
+                if (AyriaID) Global.UserID = 0x0110000100000000 | AyriaID;
+            }
             if (const auto Callback = Global.Ayria.getClientname)
-                Global.Username = Callback();
+            {
+                const char *Ayrianame{}; Callback(&Ayrianame);
+                if (Ayrianame)Global.Username = Ayrianame;
+            }
         }
 
         // Query the Steam platform for installation-location.

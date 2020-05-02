@@ -18,19 +18,19 @@ struct Ayriamodule_t
     void *Modulehandle;
 
     // Client information.
-    unsigned long(__cdecl *getClientID)();
-    const char *(__cdecl *getClientname)();
-    short(__cdecl *getClientticket)(unsigned short Bufferlength, unsigned char *Buffer);
+    void(__cdecl *getClientID)(unsigned int *ClientID);
+    void(__cdecl *getClientname)(const char **Clientname);
+    void(__cdecl *getClientticket)(const char **Clientticket);
 
-    // Console exports.
-    void(__cdecl *addConsolestring)(const char *String, int Color);
-    void(__cdecl *addFunction)(const char *Name, const void *Callback);
+    // Console interaction, callback = void f(int argc, const char **argv);
+    void(__cdecl *addConsolemessage)(const char *String, unsigned int Colour);
+    void(__cdecl *addConsolefunction)(const char *Name, void *Callback);
 
-    // Network exports.
-    unsigned short(__cdecl *getNetworkport)();
+    // Network interaction, callback = void f(const char *Content);
     void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
     void(__cdecl *addNetworkbroadcast)(const char *Subject, const char *Message);
 };
+
 
 // Keep the global state together.
 #pragma pack(push, 1)
