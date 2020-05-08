@@ -291,22 +291,18 @@ namespace Console
                             static_cast<long>(Gamewindow.right - Gamewindow.left - 40),
                             static_cast<long>(1440));
 
-
-
         // We only need part of the window, so crop if large to save resources.
-        Gamearea = nk_rect(Offsetx + (Gamewindow.right - Gamewindow.left) / 2 - Width / 2,
+        Gamearea = nk_recti(Offsetx + (Gamewindow.right - Gamewindow.left) / 2 - Width / 2,
             Offsety + 50, Width, Height);
 
-        if(Width == 1440)
+        // Only impose limits when maxed out.
+        if(Width != 1440)
+            Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right, Gamewindow.bottom);
+        else
         {
             Graphics::include( Gamewindow.left + Width / 2, Gamewindow.top, Gamewindow.right - Width / 2,
                 Height <= 1024 ? Gamewindow.bottom : Gamewindow.top + Height * (isExtended ? 0.7f : 0.25f));
         }
-        else
-        {
-            Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right, Gamewindow.bottom);
-        }
-
 
         // Bound to the game-window.
         if (nk_begin(Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
