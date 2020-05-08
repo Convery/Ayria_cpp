@@ -221,6 +221,8 @@ namespace Console
     {
         // Save the context properties.
         nk_style_push_style_item(Context, &Context->style.window.fixed_background, nk_style_item_color(nk_rgb(0x29, 0x26, 0x29)));
+        nk_style_push_color(Context, &Context->style.edit.border_color, nk_rgb(0x32, 0x3A, 0x45));
+        nk_style_push_float(Context, &Context->style.edit.border, 3);
 
         nk_layout_row_begin(Context, NK_STATIC, 25, 1);
         {
@@ -265,6 +267,8 @@ namespace Console
         nk_layout_row_end(Context);
 
         // Restore the context.
+        nk_style_pop_float(Context);
+        nk_style_pop_color(Context);
         nk_style_pop_style_item(Context);
     }
 
@@ -280,13 +284,29 @@ namespace Console
         // Follow the main window.
         GetWindowRect((HWND)Gamewindowhandle, &Gamewindow);
         GetWindowRect((HWND)Overlaywindowhandle, &Overlaywindow);
-        const auto Width = Gamewindow.right - Gamewindow.left;
+        const auto Offsetx = Gamewindow.left - Overlaywindow.left;
+        const auto Offsety = Gamewindow.top - Overlaywindow.top;
         const auto Height = Gamewindow.bottom - Gamewindow.top;
-        Gamearea = nk_rect(Gamewindow.left - Overlaywindow.left + 20, Gamewindow.top - Overlaywindow.top + 50, Width, Height);
+        const auto Width = Branchless::min(
+                            static_cast<long>(Gamewindow.right - Gamewindow.left - 40),
+                            static_cast<long>(1440));
 
-        // We only need part of the window, so crop if large to save respurces.
-        Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right,
-            Height <= 1024 ? Gamewindow.bottom : Gamewindow.top + Height * (isExtended ? 0.7f : 0.25f));
+
+
+        // We only need part of the window, so crop if large to save resources.
+        Gamearea = nk_rect(Offsetx + (Gamewindow.right - Gamewindow.left) / 2 - Width / 2,
+            Offsety + 50, Width, Height);
+
+        if(Width == 1440)
+        {
+            Graphics::include( Gamewindow.left + Width / 2, Gamewindow.top, Gamewindow.right - Width / 2,
+                Height <= 1024 ? Gamewindow.bottom : Gamewindow.top + Height * (isExtended ? 0.7f : 0.25f));
+        }
+        else
+        {
+            Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right, Gamewindow.bottom);
+        }
+
 
         // Bound to the game-window.
         if (nk_begin(Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
