@@ -376,10 +376,8 @@ namespace Console
                             return TRUE;
                         }, NULL);
 
-                        if (Overlaywindowhandle) SetFocus((HWND)Overlaywindowhandle);
                         if (Gamewindowhandle) EnableWindow((HWND)Gamewindowhandle, FALSE);
-                        if (Overlaywindowhandle) SetActiveWindow((HWND)Overlaywindowhandle);
-                        if (Overlaywindowhandle) SetForegroundWindow((HWND)Overlaywindowhandle);
+                        if (Overlaywindowhandle) SetFocus((HWND)Overlaywindowhandle);
                     }
 
                     isVisible ^= true;

@@ -524,20 +524,20 @@ namespace Graphics
 
                 return false;
             }
-            case WM_PAINT:
-            {
-                PAINTSTRUCT Updateinformation{};
+            //case WM_PAINT:
+            //{
+            //    PAINTSTRUCT Updateinformation{};
 
-                const auto Devicecontext = BeginPaint((HWND)Windowhandle, &Updateinformation);
-                BitBlt(Devicecontext,
-                    Updateinformation.rcPaint.right, Updateinformation.rcPaint.top,
-                    Updateinformation.rcPaint.left - Updateinformation.rcPaint.right,
-                    Updateinformation.rcPaint.bottom - Updateinformation.rcPaint.top,
-                    Global.Memorydevice, 0, 0, SRCCOPY);
-                EndPaint((HWND)Windowhandle, &Updateinformation);
+            //    const auto Devicecontext = BeginPaint((HWND)Windowhandle, &Updateinformation);
+            //    BitBlt(Devicecontext,
+            //        Updateinformation.rcPaint.right, Updateinformation.rcPaint.top,
+            //        Updateinformation.rcPaint.left - Updateinformation.rcPaint.right,
+            //        Updateinformation.rcPaint.bottom - Updateinformation.rcPaint.top,
+            //        Global.Memorydevice, 0, 0, SRCCOPY);
+            //    EndPaint((HWND)Windowhandle, &Updateinformation);
 
-                return true;
-            }
+            //    return true;
+            //}
 
             // Special keys.
             case WM_KEYDOWN:
@@ -722,10 +722,11 @@ namespace Graphics
         // Register the window.
         WNDCLASSEXA Windowclass{};
         Windowclass.cbSize = sizeof(WNDCLASSEXA);
-        Windowclass.style = CS_VREDRAW | CS_OWNDC;
         Windowclass.lpszClassName = "Ayria_overlay";
         Windowclass.hInstance = GetModuleHandleA(NULL);
         Windowclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+        Windowclass.hbrBackground = CreateSolidBrush(0x00FFFFFF);
+        Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT |CS_OWNDC;
         Windowclass.lpfnWndProc = [](HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT
         {
             if (onEvent(wnd, msg, wparam, lparam)) return 0;
@@ -733,12 +734,12 @@ namespace Graphics
         };
         if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED,
-            Windowclass.lpszClassName, NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
+        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, Windowclass.lpszClassName,
+            NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
         {
             // Use a pixel-value of [0xFF, 0xFF, 0xFF] to mean transparent rather than Alpha.
             // Because using Alpha is slow and we should not use pure white anyway.
-            SetLayeredWindowAttributes(Windowhandle, 0xFFFFFF, 0, LWA_COLORKEY);
+            SetLayeredWindowAttributes(Windowhandle, 0x00FFFFFF, 0, LWA_COLORKEY);
             return Windowhandle;
         }
 
@@ -813,7 +814,8 @@ namespace Graphics
             if (0 != (Global.Drawarea.x + Global.Drawarea.y + Global.Drawarea.z + Global.Drawarea.w))
             {
                 SetWindowPos((HWND)Global.Windowhandle, NULL, Global.Drawarea.x, Global.Drawarea.y,
-                    Global.Drawarea.z - Global.Drawarea.x, Global.Drawarea.w - Global.Drawarea.y, NULL);
+                    Global.Drawarea.z - Global.Drawarea.x, Global.Drawarea.w - Global.Drawarea.y,
+                    SWP_NOREDRAW | SWP_DEFERERASE | SWP_NOSENDCHANGING);
 
                 Global.isDirty = true;
             }
@@ -874,7 +876,11 @@ namespace Graphics
             }
 
             // Ensure that the window is marked as visible.
-            ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
+            if (0 != (Global.Drawarea.x + Global.Drawarea.y + Global.Drawarea.z + Global.Drawarea.w))
+            {
+                ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
+                SetForegroundWindow((HWND)Global.Windowhandle);
+            }
         }
     }
 
