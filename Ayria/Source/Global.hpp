@@ -5,6 +5,7 @@
 */
 
 #pragma once
+#define NK_INCLUDE_COMMAND_USERDATA
 #include <Stdinclude.hpp>
 #pragma warning(push, 0)
 #include <nuklear.h>
@@ -35,6 +36,7 @@ namespace Console
     void addMessage(std::string_view Message, uint32_t Colour = 0xD6B749);
 
     void onStartup();
+    void onFrame();
 }
 
 namespace Network
@@ -63,9 +65,12 @@ namespace Client
 namespace Graphics
 {
     void Registerwindow(std::function<void(struct nk_context *)> Callback);
-    RECT Getgamewindow();
     void onStartup();
     void onFrame();
+
+    // Include an area of the screen in the renderer and spoil it.
+    void include(int x0, int y0, int x1, int y1);
+    void spoil();
 
     // Helpers for Nuklear.
     struct Font_t

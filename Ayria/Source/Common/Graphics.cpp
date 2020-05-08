@@ -14,16 +14,20 @@
 
 namespace Graphics
 {
+    using vec2i = struct { int x, y; };
+    using vec4i = struct { int x, y, z, w; };
+
     #pragma pack(push, 1)
     struct
     {
-        void *Gamewindowhandle;
-        struct nk_vec2i Size;
         nk_context Context;
         void *Windowhandle;
         HDC Memorydevice;
         HDC Windowdevice;
+        vec4i Drawarea;
         bool isDirty;
+        vec2i Size;
+
     } Global{};
     #pragma pack(pop)
 
@@ -511,8 +515,8 @@ namespace Graphics
 
                 if (Global.Size.x != Width || Global.Size.y != Height)
                 {
-                    const auto Bitmap = CreateCompatibleBitmap(Global.Windowdevice, Width, Height);
-                    const auto Old = SelectObject(Global.Memorydevice, Bitmap);
+                    auto Bitmap = CreateCompatibleBitmap(Global.Windowdevice, Width, Height);
+                    auto Old = SelectObject(Global.Memorydevice, Bitmap);
                     Global.Size.y = Height;
                     Global.Size.x = Width;
                     DeleteObject(Old);
@@ -525,34 +529,14 @@ namespace Graphics
                 PAINTSTRUCT Updateinformation{};
 
                 const auto Devicecontext = BeginPaint((HWND)Windowhandle, &Updateinformation);
-                BitBlt(Devicecontext, 0, 0, Global.Size.x, Global.Size.y, Global.Memorydevice, 0, 0, SRCCOPY);
+                BitBlt(Devicecontext,
+                    Updateinformation.rcPaint.right, Updateinformation.rcPaint.top,
+                    Updateinformation.rcPaint.left - Updateinformation.rcPaint.right,
+                    Updateinformation.rcPaint.bottom - Updateinformation.rcPaint.top,
+                    Global.Memorydevice, 0, 0, SRCCOPY);
                 EndPaint((HWND)Windowhandle, &Updateinformation);
 
                 return true;
-            }
-
-            case WM_ACTIVATE:
-            {
-                EnumWindows([](HWND Handle, LPARAM) -> BOOL
-                {
-                    DWORD ProcessID;
-                    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
-
-                    if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
-                    {
-                        RECT Gamewindow{};
-                        if (GetWindowRect(Handle, &Gamewindow))
-                        {
-                            if (Gamewindow.top >= 0 && Gamewindow.left >= 0)
-                            {
-                                Global.Gamewindowhandle = Handle;
-                                return FALSE;
-                            }
-                        }
-                    }
-
-                    return TRUE;
-                }, NULL);
             }
 
             // Special keys.
@@ -749,8 +733,8 @@ namespace Graphics
         };
         if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED, Windowclass.lpszClassName,
-            NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
+        if (const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED,
+            Windowclass.lpszClassName, NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL))
         {
             // Use a pixel-value of [0xFF, 0xFF, 0xFF] to mean transparent rather than Alpha.
             // Because using Alpha is slow and we should not use pure white anyway.
@@ -761,19 +745,11 @@ namespace Graphics
         return nullptr;
     }
 
-    // Generally return the top-most window.
-    RECT Getgamewindow()
-    {
-        RECT Gamewindow{};
-        GetWindowRect((HWND)Global.Gamewindowhandle, &Gamewindow);
-        return Gamewindow;
-    }
-
-    std::vector<std::function<void(struct nk_context *)>> *Callbacks;
+    std::unordered_set<std::function<void(struct nk_context *)>, decltype(FNV::Hash), decltype(FNV::Equal)> *Callbacks;
     void Registerwindow(std::function<void (struct nk_context *)> Callback)
     {
         if (!Callbacks) Callbacks = new std::remove_pointer_t<decltype(Callbacks)>;
-        Callbacks->push_back(Callback);
+        Callbacks->insert(Callback);
     }
 
     void onStartup()
@@ -782,24 +758,20 @@ namespace Graphics
         // from this new thread to prevent issues. Took like 8 hours of hackery to find that..
         Global.Windowhandle = Createwindow();
         Global.Windowdevice = GetDC((HWND)Global.Windowhandle);
+        Global.Drawarea = {};
         Global.isDirty = true;
+        Global.Size = {};
 
         // Arial should be available on every system.
-        static auto Systemfont = Fonts::Createfont("Arial", 14);
+        static auto Systemfont = Fonts::Createfont("Arial", 16);
         nk_init_default(&Global.Context, &Systemfont);
 
-        const auto Bitmap = CreateCompatibleBitmap(Global.Windowdevice , 0, 0);
+        // Make the window-handle available to other systems.
+        Global.Context.userdata = { Global.Windowhandle };
+
+        const auto Bitmap = CreateCompatibleBitmap(Global.Windowdevice, 0, 0);
         Global.Memorydevice = CreateCompatibleDC(Global.Windowdevice);
         SelectObject(Global.Memorydevice, Bitmap);
-
-        // Fill the screen.
-        RECT Desktoparea;
-        SystemParametersInfoA(SPI_GETWORKAREA, NULL, &Desktoparea, NULL);
-        SetWindowPos((HWND)Global.Windowhandle, HWND_TOP, Desktoparea.left, Desktoparea.top,
-            Desktoparea.right - Desktoparea.left, Desktoparea.bottom - Desktoparea.top, NULL);
-
-        // Initialize components.
-        Console::onStartup();
 
         // TODO(tcn): More init!
     }
@@ -831,10 +803,20 @@ namespace Graphics
         if (Global.isDirty)
         {
             Global.isDirty = false;
+            Global.Drawarea = {};
 
             // Set the default background to white (chroma-keyed to transparent).
             Global.Context.style.window.fixed_background = nk_style_item_color(Clearcolor);
             for (const auto &Item : *Callbacks) Item(&Global.Context);
+
+            // If the draw-area changed between calls, update the windowpos for next frame.
+            if (0 != (Global.Drawarea.x + Global.Drawarea.y + Global.Drawarea.z + Global.Drawarea.w))
+            {
+                SetWindowPos((HWND)Global.Windowhandle, NULL, Global.Drawarea.x, Global.Drawarea.y,
+                    Global.Drawarea.z - Global.Drawarea.x, Global.Drawarea.w - Global.Drawarea.y, NULL);
+
+                Global.isDirty = true;
+            }
 
             // Process the rendering calls.
             {
@@ -893,6 +875,25 @@ namespace Graphics
 
             // Ensure that the window is marked as visible.
             ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
+        }
+    }
+
+    void spoil() { Global.isDirty = true; }
+    void include(int x0, int y0, int x1, int y1)
+    {
+        if(0 == (Global.Drawarea.x + Global.Drawarea.y + Global.Drawarea.z + Global.Drawarea.w))
+        {
+            Global.Drawarea.x = x0; Global.Drawarea.y = y0;
+            Global.Drawarea.z = x1; Global.Drawarea.w = y1;
+            return;
+        }
+
+        if(x0 < Global.Drawarea.x || y0 < Global.Drawarea.y || x1 > (Global.Drawarea.z) || y1 > (Global.Drawarea.w))
+        {
+            Global.Drawarea.x = Branchless::min(Global.Drawarea.x, x0);
+            Global.Drawarea.y = Branchless::min(Global.Drawarea.y, y0);
+            Global.Drawarea.z = Branchless::max(Global.Drawarea.z, x1);
+            Global.Drawarea.w = Branchless::max(Global.Drawarea.w, y1);
         }
     }
 }

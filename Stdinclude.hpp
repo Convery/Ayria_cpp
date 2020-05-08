@@ -54,6 +54,9 @@
 #if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
 #endif
+#if __has_include(<nonstd/ring_span.hpp>)
+#include <nonstd/ring_span.hpp>
+#endif
 
 // Restore warnings.
 #pragma warning(pop)
