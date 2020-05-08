@@ -68,6 +68,7 @@
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
+#include <Utilities/Encoding/Widestring.hpp>
 #include <Utilities/Hacking/Branchless.hpp>
 #include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
