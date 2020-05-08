@@ -6,6 +6,9 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#pragma warning(push, 0)
+#include <nuklear.h>
+#pragma warning(pop)
 
 // API exports.
 struct Ayriamodule_t
@@ -32,7 +35,6 @@ namespace Console
     void addMessage(std::string_view Message, uint32_t Colour = 0xD6B749);
 
     void onStartup();
-    void onFrame();
 }
 
 namespace Network
@@ -56,6 +58,14 @@ namespace Client
 
     std::vector<Client_t> getClients();
     void onStartup();
+}
+
+namespace Graphics
+{
+    void Registerwindow(std::function<void(struct nk_context *)> Callback);
+    RECT Getgamewindow();
+    void onStartup();
+    void onFrame();
 }
 
 namespace Pluginloader
