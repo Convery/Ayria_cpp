@@ -25,19 +25,13 @@ namespace Graphics
         HDC Windowdevice;
         bool isDirty;
     } Global{};
-    struct Font_t
-    {
-        HDC Devicecontext;
-        HFONT Fonthandle;
-        LONG Fontheight;
-    };
     #pragma pack(pop)
 
     constexpr nk_color Clearcolor = { 0xFF, 0xFF, 0xFF, 0xFF };
     constexpr size_t Bitsperpixel = 24;
     constexpr size_t Pixelsize = 3;
 
-    // Helpers.
+    // Helpers for Nuklear.
     namespace Fonts
     {
         inline float getTextwidth(nk_handle Handle, float, const char *Text, int Length)

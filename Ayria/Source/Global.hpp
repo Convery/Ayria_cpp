@@ -66,6 +66,25 @@ namespace Graphics
     RECT Getgamewindow();
     void onStartup();
     void onFrame();
+
+    // Helpers for Nuklear.
+    struct Font_t
+    {
+        HDC Devicecontext;
+        HFONT Fonthandle;
+        LONG Fontheight;
+    };
+    namespace Fonts
+    {
+        struct nk_user_font Createfont(const char *Name, int32_t Fontsize);
+        struct nk_user_font Createfont(const char *Name, int32_t Fontsize, void *Fontdata, uint32_t Datasize);
+    }
+    namespace Images
+    {
+        template <bool isRGB = true> // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
+        std::unique_ptr<struct nk_image> Createimage(const uint8_t *Pixelbuffer, struct nk_vec2i Size);
+        void Deleteimage(std::unique_ptr<struct nk_image> &&Image);
+    }
 }
 
 namespace Pluginloader
