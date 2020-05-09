@@ -168,25 +168,6 @@ extern "C"
         }
         #endif
 
-        // Share our current state with the plugins.
-        try
-        {
-            const auto Steamshare = Filesharing::Read("STEAM");
-            if (Steamshare.empty())
-            {
-                auto Object = nlohmann::json::object();
-                Object["ApplicationID"] = Global.ApplicationID;
-                Filesharing::Write("STEAM", Base64::Encode(Object.dump()));
-            }
-            else
-            {
-                auto Object = nlohmann::json::parse(Base64::Decode(Steamshare).c_str());
-                Object["ApplicationID"] = Global.ApplicationID;
-                Filesharing::Write("STEAM", Base64::Encode(Object.dump()));
-            }
-        }
-        catch (...) {}
-
         return true;
     }
     EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }

@@ -62,7 +62,6 @@
 #pragma warning(pop)
 
 // Global utilities.
-#include <Utilities/Communication/Filesharing.hpp>
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>

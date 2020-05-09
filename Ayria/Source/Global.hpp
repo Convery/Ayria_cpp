@@ -32,7 +32,7 @@ struct Ayriamodule_t
 
 namespace Console
 {
-    void addFunction(std::string_view Name, std::function<void(int, char **)> Callback);
+    void addFunction(std::string_view Name, std::function<void(int, const char **)> Callback);
     void addMessage(std::string_view Message, uint32_t Colour = 0xD6B749);
 
     void onStartup();
