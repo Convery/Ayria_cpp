@@ -75,7 +75,7 @@ namespace Localnetworking
                     auto Entry = &Proxyservers[Hostname.data()];
                     static uint16_t Proxycount{ 1 };
 
-                    Entry->Address.sin_addr.s_addr = 0xF0000000 | ++Proxycount;
+                    Entry->Address.sin_addr.s_addr = htonl(0xF0000000 | ++Proxycount);
                     Entry->Hostname = Hostname.data();
                     Entry->Instance = Server;
                     return Entry;

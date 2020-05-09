@@ -284,23 +284,25 @@ namespace Console
         // Follow the main window.
         GetWindowRect((HWND)Gamewindowhandle, &Gamewindow);
         GetWindowRect((HWND)Overlaywindowhandle, &Overlaywindow);
+
+        // Coordinate offset as we draw from (0, 0).
         const auto Offsetx = Gamewindow.left - Overlaywindow.left;
         const auto Offsety = Gamewindow.top - Overlaywindow.top;
+
+        // Gamewindow properties.
+        const auto Width = Gamewindow.right - Gamewindow.left;
         const auto Height = Gamewindow.bottom - Gamewindow.top;
-        const auto Width = Branchless::min(
-                            static_cast<long>(Gamewindow.right - Gamewindow.left - 40),
-                            static_cast<long>(1440));
 
-        // We only need part of the window, so crop if large to save resources.
-        Gamearea = nk_recti(Offsetx + (Gamewindow.right - Gamewindow.left) / 2 - Width / 2,
-            Offsety + 50, Width, Height);
-
-        // Only impose limits when maxed out.
-        if(Width != 1440)
+        // We only need part of the window, so we crop it to save resources.
+        if(Width <= 1440)
+        {
+            Gamearea = nk_recti(Offsetx + 20, Offsety + 50, Width - 20, Height);
             Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right, Gamewindow.bottom);
+        }
         else
         {
-            Graphics::include( Gamewindow.left + Width / 2, Gamewindow.top, Gamewindow.right - Width / 2,
+            Gamearea = nk_recti(Offsetx + (Width - 1440) / 2, Offsety + 50, Width, Height);
+            Graphics::include(Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Gamewindow.right - (Width - 1440) / 2,
                 Height <= 1024 ? Gamewindow.bottom : Gamewindow.top + Height * (isExtended ? 0.7f : 0.25f));
         }
 
