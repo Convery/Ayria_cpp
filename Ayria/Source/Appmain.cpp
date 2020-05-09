@@ -74,6 +74,9 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 // Initialize our subsystems.
 void onStartup()
 {
+    // Needs to be ready before everything else.
+    Client::onStartup();
+
     std::thread([]() -> void
     {
         // Name the thread for easier debugging.
@@ -96,7 +99,6 @@ void onStartup()
         Graphics::onStartup();
         Network::onStartup();
         Console::onStartup();
-        Client::onStartup();
 
         // Depending on system resources, this may still result in 100% utilisation.
         static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
