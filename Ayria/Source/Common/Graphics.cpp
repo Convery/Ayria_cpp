@@ -1,7 +1,14 @@
 /*
-    Initial author: Convery (tcn@ayria.se)
-    Started: 2020-05-07
-    License: MIT
+Initial author: Convery (tcn@ayria.se)
+Started: 2020-05-07
+License: MIT
+
+Quick benchmark for painting a rect (100,000 iterations)
+ExtTextOutW: 765 us
+FillRect: 826 us
+FillRgn: 989 us
+Polygon: 1022 us
+Rectangle: 1028 us
 */
 
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
@@ -130,6 +137,7 @@ namespace Graphics
     {
         constexpr COLORREF toColor(const struct nk_color &Color)
         {
+
             return Color.r | (Color.g << 8) | (Color.b << 16);
         }
 
@@ -405,7 +413,7 @@ namespace Graphics
             // Common case.
             if (Command->rounding == 0)
             {
-                // TODO(tcn): Benchmark the different ways to paint the rect.
+                // NOTE(tcn): Looks odd but this seems to be the fastest way to clear.
                 const RECT Area = { Command->x, Command->y, Command->x + Command->w, Command->y + Command->h };
                 SetBkColor(Global.Memorydevice, Internal::toColor(Command->color));
                 ExtTextOutW(Global.Memorydevice, 0, 0, ETO_OPAQUE, &Area, NULL, 0, NULL);
@@ -828,7 +836,7 @@ namespace Graphics
 
                 // Clear the device.
                 {
-                    // TODO(tcn): Benchmark the different ways to clear.
+                    // NOTE(tcn): Looks odd but this seems to be the fastest way to clear.
                     const RECT Screen = { 0, 0, Global.Size.x, Global.Size.y };
                     SetBkColor(Global.Memorydevice, Internal::toColor(Clearcolor));
                     ExtTextOutW(Global.Memorydevice, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
@@ -882,19 +890,19 @@ namespace Graphics
 
                 // TODO(tcn): Refactor this.
                 EnumWindows([](HWND Handle, LPARAM) -> BOOL
-                {
-                    DWORD ProcessID;
-                    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
-
-                    if (ProcessID == GetCurrentProcessId() && Handle == GetForegroundWindow())
                     {
-                        SetForegroundWindow((HWND)Global.Windowhandle);
-                        SetFocus((HWND)Global.Windowhandle);
-                        return FALSE;
-                    }
+                        DWORD ProcessID;
+                        const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
 
-                    return TRUE;
-                }, NULL);
+                        if (ProcessID == GetCurrentProcessId() && Handle == GetForegroundWindow())
+                        {
+                            SetForegroundWindow((HWND)Global.Windowhandle);
+                            SetFocus((HWND)Global.Windowhandle);
+                            return FALSE;
+                        }
+
+                        return TRUE;
+                    }, NULL);
             }
         }
     }
