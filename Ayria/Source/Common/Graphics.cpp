@@ -879,7 +879,22 @@ namespace Graphics
             if (0 != (Global.Drawarea.x + Global.Drawarea.y + Global.Drawarea.z + Global.Drawarea.w))
             {
                 ShowWindow((HWND)Global.Windowhandle, SW_SHOWNORMAL);
-                SetForegroundWindow((HWND)Global.Windowhandle);
+
+                // TODO(tcn): Refactor this.
+                EnumWindows([](HWND Handle, LPARAM) -> BOOL
+                {
+                    DWORD ProcessID;
+                    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+
+                    if (ProcessID == GetCurrentProcessId() && Handle == GetForegroundWindow())
+                    {
+                        SetForegroundWindow((HWND)Global.Windowhandle);
+                        SetFocus((HWND)Global.Windowhandle);
+                        return FALSE;
+                    }
+
+                    return TRUE;
+                }, NULL);
             }
         }
     }

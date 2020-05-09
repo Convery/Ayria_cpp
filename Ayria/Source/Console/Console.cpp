@@ -320,9 +320,6 @@ namespace Console
             // TODO(tcn): Suggestion area?
         }
         nk_end(Context);
-
-        // We always spoil.
-        Graphics::spoil();
     }
 
     // Internal callbacks.
@@ -350,8 +347,12 @@ namespace Console
                 {
                     if (isVisible)
                     {
-                        if (Gamewindowhandle) SetForegroundWindow((HWND)Gamewindowhandle);
-                        if (Gamewindowhandle) EnableWindow((HWND)Gamewindowhandle, TRUE);
+                        if (Gamewindowhandle)
+                        {
+                            if(Overlaywindowhandle == GetForegroundWindow())
+                                SetForegroundWindow((HWND)Gamewindowhandle);
+                            EnableWindow((HWND)Gamewindowhandle, TRUE);
+                        }
                     }
                     else
                     {
@@ -377,7 +378,6 @@ namespace Console
                         }, NULL);
 
                         if (Gamewindowhandle) EnableWindow((HWND)Gamewindowhandle, FALSE);
-                        if (Overlaywindowhandle) SetFocus((HWND)Overlaywindowhandle);
                     }
 
                     isVisible ^= true;
