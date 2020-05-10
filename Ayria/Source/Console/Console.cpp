@@ -283,16 +283,17 @@ namespace Console
 
         // Get the main window.
         GetWindowRect((HWND)Gamewindowhandle, &Gamewindow);
-        const auto Width = Branchless::min(1440L, Gamewindow.right - Gamewindow.left);
+        const auto Width = Gamewindow.right - Gamewindow.left;
+        const auto Widthcropped = Branchless::min(1440L, Width);
         const auto Height = (Gamewindow.bottom - Gamewindow.top) * (isExtended ? 0.7 : 0.3);
 
         // Limit the size to save resources (as we draw on the CPU).
         if (Width < 1440) SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left, Gamewindow.top, Width, Height, 0);
-        else SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Width, Height, 0);
+        else SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Widthcropped, Height, 0);
 
         // Map to our surface.
         GetWindowRect((HWND)Surfacehandle, &Surfacewindow);
-        Gamearea = nk_recti(20, 50, Width - 40, Height - 50);
+        Gamearea = nk_recti(20, 50, Widthcropped - 40, Height - 50);
 
         // Bound to the game-window.
         if (nk_begin(Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
