@@ -64,13 +64,9 @@ namespace Client
 
 namespace Graphics
 {
-    void Registerwindow(std::function<void(struct nk_context *)> Callback);
-    void onStartup();
+    bool Createsurface(std::string_view Classname, std::function<bool(struct nk_context *)> onRender);
+    void setVisibility(std::string_view Classname, bool Visible);
     void onFrame();
-
-    // Include an area of the screen in the renderer and spoil it.
-    void include(int x0, int y0, int x1, int y1);
-    void spoil();
 
     // Helpers for Nuklear.
     struct Font_t

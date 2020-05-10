@@ -17,9 +17,9 @@ struct Functioncallback_t
 
 namespace Console
 {
-    void *Overlaywindowhandle;
     struct nk_rect Gamearea;
     void *Gamewindowhandle;
+    void *Surfacehandle;
     bool isExtended;
     bool isVisible;
 
@@ -55,7 +55,7 @@ namespace Console
             nk_style_push_vec2(Context, &Context->style.window.spacing, nk_vec2(0, 5));
             if (nk_popup_begin(Context, NK_POPUP_DYNAMIC, "Add a new tab",
                 NK_WINDOW_BORDER | NK_WINDOW_CLOSABLE | NK_WINDOW_TITLE,
-                nk_rect(Gamearea.w / 2 - 150, Gamearea.h * (isExtended ? 0.6f : 0.15f) * 0.5, 300, 300)))
+                nk_rect(Gamearea.w / 2 - 150, Gamearea.h / 2 - 75, 300, 150)))
             {
                 // Two widgets per row.
                 nk_layout_row_template_begin(Context, 25);
@@ -189,9 +189,9 @@ namespace Console
         nk_style_push_style_item(Context, &Context->style.window.fixed_background, nk_style_item_color(nk_rgb(0x29, 0x26, 0x29)));
 
         // Sized between 15% and 60% of the window.
-        nk_layout_row_begin(Context, NK_STATIC, Gamearea.h * (isExtended ? 0.6f : 0.15f), 1);
+        nk_layout_row_begin(Context, NK_STATIC, Gamearea.h - 60, 1);
         {
-            nk_layout_row_push(Context, Gamearea.w - 40);
+            nk_layout_row_push(Context, Gamearea.w);
             if (nk_group_begin(Context, "Console.Log", NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER))
             {
                 uint32_t Scrolloffset = 0;
@@ -206,7 +206,7 @@ namespace Console
                     }
                 }
 
-                const auto Y = std::max(0.0f, Scrolloffset - (Gamearea.h * (isExtended ? 0.6f : 0.15f)) + 5);
+                const auto Y = std::max(0.0f, Scrolloffset - Gamearea.h + 65);
                 nk_group_set_scroll(Context, "Console.Log", 0, uint32_t(std::round(Y)));
                 nk_group_end(Context);
             }
@@ -226,7 +226,7 @@ namespace Console
 
         nk_layout_row_begin(Context, NK_STATIC, 25, 1);
         {
-            nk_layout_row_push(Context, Gamearea.w - 40);
+            nk_layout_row_push(Context, Gamearea.w);
 
             // Auto-focus.
             static int Inputlength;
@@ -273,38 +273,26 @@ namespace Console
     }
 
     // Immediate mode, so do everything.
-    void Consolewindow(nk_context *Context)
+    bool Consolewindow(nk_context *Context)
     {
-        if (!isVisible) [[likely]] return;
-        RECT Gamewindow, Overlaywindow;
+        if (!isVisible) [[likely]] return false;
+        RECT Gamewindow, Surfacewindow;
 
-        // Save the context-handle.
-        if (!Overlaywindowhandle) Overlaywindowhandle = Context->userdata.ptr;
+        if (!Surfacehandle) [[unlikely]] Surfacehandle = Context->userdata.ptr;
+        assert(Surfacehandle); // WTF?
 
-        // Follow the main window.
+        // Get the main window.
         GetWindowRect((HWND)Gamewindowhandle, &Gamewindow);
-        GetWindowRect((HWND)Overlaywindowhandle, &Overlaywindow);
+        const auto Width = Branchless::min(1440L, Gamewindow.right - Gamewindow.left);
+        const auto Height = (Gamewindow.bottom - Gamewindow.top) * (isExtended ? 0.7 : 0.3);
 
-        // Coordinate offset as we draw from (0, 0).
-        const auto Offsetx = Gamewindow.left - Overlaywindow.left;
-        const auto Offsety = Gamewindow.top - Overlaywindow.top;
+        // Limit the size to save resources (as we draw on the CPU).
+        if (Width < 1440) SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left, Gamewindow.top, Width, Height, 0);
+        else SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Width, Height, 0);
 
-        // Gamewindow properties.
-        const auto Width = Gamewindow.right - Gamewindow.left;
-        const auto Height = Gamewindow.bottom - Gamewindow.top;
-
-        // We only need part of the window, so we crop it to save resources.
-        if(Width <= 1440)
-        {
-            Gamearea = nk_recti(Offsetx + 20, Offsety + 50, Width - 20, Height);
-            Graphics::include(Gamewindow.left, Gamewindow.top, Gamewindow.right, Gamewindow.bottom);
-        }
-        else
-        {
-            Gamearea = nk_recti(Offsetx + (Width - 1440) / 2, Offsety + 50, Width, Height);
-            Graphics::include(Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Gamewindow.right - (Width - 1440) / 2,
-                Height <= 1024 ? Gamewindow.bottom : Gamewindow.top + Height * (isExtended ? 0.7f : 0.25f));
-        }
+        // Map to our surface.
+        GetWindowRect((HWND)Surfacehandle, &Surfacewindow);
+        Gamearea = nk_recti(20, 50, Width - 40, Height - 50);
 
         // Bound to the game-window.
         if (nk_begin(Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
@@ -322,13 +310,16 @@ namespace Console
             // TODO(tcn): Suggestion area?
         }
         nk_end(Context);
+
+        // Always spoil as we have external triggers.
+        return true;
     }
 
     // Internal callbacks.
     void onStartup()
     {
         isExtended = isVisible = false;
-        Graphics::Registerwindow(Consolewindow);
+        Graphics::Createsurface("Ayria_console", Consolewindow);
     }
     void onFrame()
     {
@@ -343,7 +334,6 @@ namespace Console
                 if (GetAsyncKeyState(VK_SHIFT) & (1 << 31))
                 {
                     isExtended ^= true;
-                    Graphics::spoil();
                 }
                 else
                 {
@@ -351,8 +341,7 @@ namespace Console
                     {
                         if (Gamewindowhandle)
                         {
-                            if(Overlaywindowhandle == GetForegroundWindow())
-                                SetForegroundWindow((HWND)Gamewindowhandle);
+                            if (Surfacehandle == GetForegroundWindow()) SetForegroundWindow((HWND)Gamewindowhandle);
                             EnableWindow((HWND)Gamewindowhandle, TRUE);
                         }
                     }
@@ -383,9 +372,10 @@ namespace Console
                     }
 
                     isVisible ^= true;
-                    Graphics::spoil();
                 }
             }
+
+            Graphics::setVisibility("Ayria_console", isVisible);
         }
     }
 }

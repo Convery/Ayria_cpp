@@ -96,7 +96,6 @@ void onStartup()
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
         // Initialize the subsystems.
-        Graphics::onStartup();
         Network::onStartup();
         Console::onStartup();
 
