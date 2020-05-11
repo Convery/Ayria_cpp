@@ -113,6 +113,11 @@ struct Bytebuffer
         Internalbuffer.swap(Right.Internalbuffer);
         Internalsize = Right.Internalsize;
     }
+    Bytebuffer(size_t Size)
+    {
+        Internalbuffer = std::make_unique<uint8_t[]>(Size);
+        Internalsize = Size;
+    }
     Bytebuffer() = default;
 
     // Basic IO.
