@@ -52,7 +52,7 @@ namespace Graphics
     constexpr nk_color Clearcolor = { 0xFF, 0xFF, 0xFF, 0xFF };
     const HBRUSH Clearbrush = CreateSolidBrush(toColor(Clearcolor));
 
-        // Internal rendering defs.
+    // Internal rendering defs.
     namespace Internal
     {
         template </*NK_COMMAND_ARC*/> void RenderCMD(const Surface_t *This, const nk_command_arc *Command)
@@ -701,7 +701,7 @@ namespace Graphics
                             Case(NK_COMMAND_ARC, nk_command_arc);
                             case NK_COMMAND_NOP:
                             default: break;
-                                #undef Case
+                            #undef Case
                         }
 
                         // TODO(tcn): Add a custom allocator to reduce the impact of this linked list.
@@ -755,8 +755,8 @@ namespace Graphics
         };
         if (NULL == RegisterClassExA(&Windowclass)) return false;
 
-        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST, Windowclass.lpszClassName,
-            NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
+        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            Windowclass.lpszClassName, NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
         if (!Windowhandle) return false;
 
         // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
