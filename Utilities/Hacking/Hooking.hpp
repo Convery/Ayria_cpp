@@ -238,7 +238,7 @@ namespace Hooking
             const auto Address = (std::uintptr_t)VirtualAlloc(NULL, Oldcode.size() + Jumpsize,
                                                               MEM_COMMIT | MEM_RESERVE,
                                                               PAGE_EXECUTE_READWRITE);
-            if (!Address)return 0;
+            if (!Address) return 0;
 
             // Add the prologue.
             std::memcpy((void *)Address, Oldcode.data(), Oldcode.size());

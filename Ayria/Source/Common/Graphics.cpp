@@ -1,14 +1,14 @@
 /*
-Initial author: Convery (tcn@ayria.se)
-Started: 2020-05-07
-License: MIT
+    Initial author: Convery (tcn@ayria.se)
+    Started: 2020-05-07
+    License: MIT
 
-Quick benchmark for painting a rect (100,000 iterations)
-ExtTextOutW: 765 us
-FillRect: 826 us
-FillRgn: 989 us
-Polygon: 1022 us
-Rectangle: 1028 us
+    Quick benchmark for painting a rect (100,000 iterations)
+    ExtTextOutW: 765 us
+    FillRect: 826 us
+    FillRgn: 989 us
+    Polygon: 1022 us
+    Rectangle: 1028 us
 */
 
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
