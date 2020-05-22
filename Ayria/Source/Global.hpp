@@ -28,6 +28,10 @@ struct Ayriamodule_t
     // Network interaction, callback = void f(const char *Content);
     void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
     void(__cdecl *addNetworkbroadcast)(const char *Subject, const char *Message);
+
+    // Social interactions, returns JSON.
+    void(__cdecl *getFriends)(const char **Friendslist);
+    void(__cdecl *getPlayers)(const char **Playerlist);
 };
 
 namespace Console
@@ -59,6 +63,22 @@ namespace Client
     };
 
     std::vector<Client_t> getClients();
+    void onStartup();
+}
+
+namespace Social
+{
+    struct Friend_t
+    {
+        uint64_t UserID;
+        std::string Username;
+        enum : uint8_t { Unknown = 0, Online = 1, Offline = 2, Busy = 3 } Status;
+
+        // Max 256x256
+        Blob Avatar;
+    };
+
+    void onNewclient(Client::Client_t &New);
     void onStartup();
 }
 

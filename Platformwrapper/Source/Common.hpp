@@ -29,6 +29,10 @@ struct Ayriamodule_t
     // Network interaction, callback = void f(const char *Content);
     void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
     void(__cdecl *addNetworkbroadcast)(const char *Subject, const char *Message);
+
+    // Social interactions, returns JSON.
+    void(__cdecl *getFriends)(const char **Friendslist);
+    void(__cdecl *getPlayers)(const char **Playerlist);
 };
 
 

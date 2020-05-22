@@ -10,9 +10,6 @@ constexpr uint16_t Packetmagic = Hash::FNV1_32("Ayria") >> 16;      // 41700
 constexpr uint16_t Broadcastport = Hash::FNV1_32("Ayria") & 0xFFFF; // 14985
 const sockaddr_in Broadcast{ AF_INET, htons(Broadcastport), {{.S_addr = INADDR_BROADCAST}} };
 
-// Only tracks the info needed to keep a connection.
-using Node_t = struct { size_t Socket; bool Connected; sockaddr_in Address; std::queue<std::string> Messagequeue; };
-
 // Base message format, other modules handle the content.
 inline std::string Encode(std::string_view Subject, std::string_view Content)
 {
@@ -42,8 +39,10 @@ using Header_t = struct { uint16_t Magic, Random; };
 
 namespace Network
 {
+    std::unordered_map<sockaddr_in, std::queue<std::string>,
+                      decltype(FNV::Hash), decltype(FNV::Equal)> Outgoingmessages{};
     std::unordered_map<std::string, std::function<void(const char *)>> *Handlers;
-    std::queue<std::string> Outgoingmessages{};
+    std::queue<std::string> Outgoingbroadcasts{};
     std::unordered_set<uint16_t> Greeted{};
     std::vector<std::string> Greetings{};
     size_t Broadcastsocket{};
@@ -76,11 +75,8 @@ namespace Network
             if (!Greeted.contains(Packetheader->Random)) [[unlikely]]
             {
                 Greeted.insert(Packetheader->Random);
-                for (const auto &Item : Greetings)
-                {
-                    // Drop the packets on error, no greeting for them.
-                    sendto(Broadcastsocket, Item.data(), Item.size(), 0, (sockaddr *)&Sender, Size);
-                }
+                Sender.sin_port = htons(Broadcastport);
+                for (const auto &Item : Greetings) Outgoingmessages[Sender].push(Item);
             }
 
             // Verify, silently discard.
@@ -92,21 +88,45 @@ namespace Network
             }
         }
 
-        // Process outgoing messages.
+        // Process outgoing broadcasts.
         while (true)
         {
-            if (Outgoingmessages.empty()) [[likely]] break;
+            if (Outgoingbroadcasts.empty()) [[likely]] break;
 
             // Increase recv-buffer later if needed.
-            const auto &Message = Outgoingmessages.front();
+            const auto &Message = Outgoingbroadcasts.front();
             assert(Message.size() < 4096);
 
             // Broadcast as much as possible, stop on error.
             if (int(Message.size()) != sendto(Broadcastsocket, Message.data(), Message.size(), 0,
                                              (sockaddr *)&Broadcast, sizeof(Broadcast))) break;
 
-            Outgoingmessages.pop();
+            Outgoingbroadcasts.pop();
         }
+
+        // Process outgoing messages.
+        while (true)
+        {
+            if (Outgoingmessages.empty()) [[likely]] break;
+
+            for (auto &[Target, Queue] : Outgoingmessages)
+            {
+                if (Queue.empty()) continue;
+
+                // Increase recv-buffer later if needed.
+                const auto &Message = Queue.front();
+                assert(Message.size() < 4096);
+
+                // Send as much as possible, stop on error.
+                if (int(Message.size()) != sendto(Broadcastsocket, Message.data(), Message.size(), 0,
+                                                 (sockaddr *)&Target, sizeof(Target))) break;
+
+                Queue.pop();
+            }
+        }
+
+        // Post-frame cleanup.
+        std::erase_if(Outgoingmessages, [](const auto &Item) { return Item.second.empty(); });
     }
     void onStartup()
     {
@@ -133,9 +153,6 @@ namespace Network
             // We only have 16 bits of randomness, so can't do much better than this.
             Selfrandom = std::chrono::high_resolution_clock::now().time_since_epoch().count() & 0xFFFF;
 
-            // Announce that we are alive.
-            addBroadcast("", "");
-
             return;
         }
         while (false);
@@ -157,7 +174,7 @@ namespace Network
         Header_t Packetheader{ Packetmagic, Selfrandom };
         Message.insert(0, (const char *)&Packetheader, sizeof(Packetheader));
 
-        Outgoingmessages.push(Message);
+        Outgoingbroadcasts.push(Message);
     }
     void addGreeting(std::string_view Subject, std::string_view Content)
     {

@@ -13,6 +13,30 @@ namespace Social
 
     std::vector<Friend_t> getFriends()
     {
+        // DEV: Ask Ayria for all known clients.
+        if (const auto Callback = Global.Ayria.getPlayers)
+        {
+            const char *JSONString;
+            Callback(&JSONString);
+
+            try
+            {
+                for (const auto &Object : nlohmann::json::parse(JSONString))
+                {
+                    Friend_t Newfriend;
+                    Newfriend.Status = Friend_t::Online;
+                    Newfriend.Lastmodified = uint32_t(time(NULL));
+                    Newfriend.Avatar = Object.value("Avatar", Blob());
+                    Newfriend.UserID = Object.value("UserID", uint64_t());
+                    Newfriend.Username = Object.value("Username", std::string());
+
+                    if (!Friendslist.contains(Newfriend.UserID))
+                        Friendslist[Newfriend.UserID] = Newfriend;
+                }
+
+            } catch (...) {}
+        }
+
         std::vector<Friend_t> Friends;
         Friends.reserve(Friendslist.size());
         for (const auto &[ID, Item] : Friendslist)

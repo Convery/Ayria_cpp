@@ -8,10 +8,41 @@
 
 namespace Client
 {
+    std::vector<Client_t> Knownclients;
     std::string Clientticket{};
     std::string Clientname{};
     uint32_t ClientID{};
     RSA *Clientkey{};
+
+    std::vector<Client_t> getClients()
+    {
+        return Knownclients;
+    }
+    void Clienthandler(const char *Content)
+    {
+        try
+        {
+            Traceprint();
+
+            Client_t Newclient;
+
+            const auto Object = nlohmann::json::parse(Content);
+            Newclient.ClientID = Object.value("ClientID", uint32_t());
+            Newclient.Publickey = Object.value("Publickey", std::string());
+            Newclient.Clientname = Object.value("Clientname", std::string());
+            if (Newclient.ClientID == 0 || Newclient.Clientname.empty()) return;
+
+            const auto Inputhash = Hash::FNV1a_64(&Newclient, sizeof(Newclient));
+            std::erase_if(Knownclients, [=](const auto &Item)
+            {
+                return Hash::FNV1a_64(&Item, sizeof(Item)) == Inputhash;
+            });
+
+            Social::onNewclient(Newclient);
+            Knownclients.emplace_back(Newclient);
+
+        } catch (...) {}
+    }
 
     void onStartup()
     {
@@ -42,7 +73,10 @@ namespace Client
         Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(Clientkey));
         Object["Clientname"] = Clientname;
         Object["ClientID"] = ClientID;
-        Network::addGreeting("Ayria", Object.dump());
+
+        Network::addHandler("Client", Clienthandler);
+        Network::addGreeting("Client", Object.dump());
+        Network::addBroadcast("Client", Object.dump());
     }
 }
 

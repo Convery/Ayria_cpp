@@ -99,6 +99,9 @@ namespace Winsock
             // Create a new one if needed and send to the socket.
             const auto Localsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             Localnetworking::Connectserver(Localsocket, Proxyserver->Instance);
+
+            unsigned long Argument{ 1 };
+            ioctlsocket(Localsocket, FIONBIO, &Argument);
             Connections[Localsocket] = *(sockaddr_in *)To;
             return send(Localsocket, Buffer, Length, NULL);
         }

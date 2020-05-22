@@ -733,6 +733,8 @@ namespace Graphics
                         SetFocus((HWND)Surface);
                         return FALSE;
                     }
+
+                    return TRUE;
                 }, (LPARAM)Surface.Nativehandle);
             }
         }

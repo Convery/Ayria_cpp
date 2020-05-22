@@ -87,6 +87,8 @@ extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
         Import(getClientticket);
         Import(getClientname);
         Import(getClientID);
+        Import(getFriends);
+        Import(getPlayers);
         #undef Import
 
         // Global event-listener.

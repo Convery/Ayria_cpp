@@ -74,7 +74,9 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 // Initialize our subsystems.
 void onStartup()
 {
-    // Needs to be ready before everything else.
+    // Initialize the subsystems.
+    Network::onStartup();
+    Console::onStartup();
     Client::onStartup();
 
     std::thread([]() -> void
@@ -94,10 +96,6 @@ void onStartup()
 
         // As we are single-threaded (in release), boost our priority.
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-
-        // Initialize the subsystems.
-        Network::onStartup();
-        Console::onStartup();
 
         // Depending on system resources, this may still result in 100% utilisation.
         static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
