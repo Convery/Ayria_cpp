@@ -14,34 +14,60 @@ namespace Client
     uint32_t ClientID{};
     RSA *Clientkey{};
 
+    namespace Callbacks
+    {
+        std::unordered_set<sockaddr_in, decltype(FNV::Hash), decltype(FNV::Equal)> Greetednodes;
+        void onClientinfo(sockaddr_in Client, const char *Content)
+        {
+            try
+            {
+                Client_t Newclient;
+
+                const auto Object = nlohmann::json::parse(Content);
+                Newclient.ClientID = Object.value("ClientID", uint32_t());
+                Newclient.Publickey = Object.value("Publickey", std::string());
+                Newclient.Clientname = Object.value("Clientname", std::string());
+                if (Newclient.ClientID == 0 || Newclient.Clientname.empty()) return;
+
+                const auto Inputhash = Hash::FNV1a_64(&Newclient, sizeof(Newclient));
+                std::erase_if(Knownclients, [=](const auto &Item)
+                {
+                    return Hash::FNV1a_64(&Item, sizeof(Item)) == Inputhash;
+                });
+
+                Social::onNewclient(Newclient);
+                Knownclients.emplace_back(Newclient);
+
+            } catch (...) {}
+
+            // Greet the node if we haven't.
+            if(!Greetednodes.contains(Client))
+            {
+                Greetednodes.insert(Client);
+
+                auto Object = nlohmann::json::object();
+                Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(Clientkey));
+                Object["Clientname"] = Clientname;
+                Object["ClientID"] = ClientID;
+
+                Networking::Core::Sendmessage("Ayria_Clientinfo", Object.dump());
+            }
+        }
+        void onStartup()
+        {
+            // Greet the other nodes when found.
+            auto Object = nlohmann::json::object();
+            Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(Clientkey));
+            Object["Clientname"] = Clientname;
+            Object["ClientID"] = ClientID;
+
+            Networking::Core::Sendmessage("Ayria_Clientinfo", Object.dump());
+        }
+    }
+
     std::vector<Client_t> getClients()
     {
         return Knownclients;
-    }
-    void Clienthandler(const char *Content)
-    {
-        try
-        {
-            Traceprint();
-
-            Client_t Newclient;
-
-            const auto Object = nlohmann::json::parse(Content);
-            Newclient.ClientID = Object.value("ClientID", uint32_t());
-            Newclient.Publickey = Object.value("Publickey", std::string());
-            Newclient.Clientname = Object.value("Clientname", std::string());
-            if (Newclient.ClientID == 0 || Newclient.Clientname.empty()) return;
-
-            const auto Inputhash = Hash::FNV1a_64(&Newclient, sizeof(Newclient));
-            std::erase_if(Knownclients, [=](const auto &Item)
-            {
-                return Hash::FNV1a_64(&Item, sizeof(Item)) == Inputhash;
-            });
-
-            Social::onNewclient(Newclient);
-            Knownclients.emplace_back(Newclient);
-
-        } catch (...) {}
     }
 
     void onStartup()
@@ -68,15 +94,8 @@ namespace Client
             // TODO(tcn): This.
         }
 
-        // Greet the other nodes when found.
-        auto Object = nlohmann::json::object();
-        Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(Clientkey));
-        Object["Clientname"] = Clientname;
-        Object["ClientID"] = ClientID;
-
-        Network::addHandler("Client", Clienthandler);
-        Network::addGreeting("Client", Object.dump());
-        Network::addBroadcast("Client", Object.dump());
+        Networking::Core::Registerhandler("Ayria_Clientinfo", Callbacks::onClientinfo);
+        Callbacks::onStartup();
     }
 }
 

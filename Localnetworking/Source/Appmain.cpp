@@ -138,7 +138,7 @@ namespace Localnetworking
             }
 
             FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
-            const auto Count{ Activesockets.fd_count };
+            const auto Count{ Activesockets.fd_count + 1 };
             auto Timeout{ Defaulttimeout };
 
             // Now POSIX compatible.

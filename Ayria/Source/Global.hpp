@@ -43,14 +43,19 @@ namespace Console
     void onFrame();
 }
 
-namespace Network
+namespace Networking
 {
-    void addHandler(std::string_view Subject, std::function<void(const char *)> Callback);
-    void addBroadcast(std::string_view Subject, std::string_view Content);
-    void addGreeting(std::string_view Subject, std::string_view Content);
+    namespace Core
+    {
+        void onFrame();
+        void onStartup();
 
-    void onStartup();
-    void onFrame();
+        void Sendmessage(uint32_t Type, std::string_view Input);
+        void Sendmessage(std::string_view Type, std::string_view Input);
+
+        void Registerhandler(uint32_t Type, std::function<void(sockaddr_in, const char *)> Callback);
+        void Registerhandler(std::string_view Type, std::function<void(sockaddr_in, const char *)> Callback);
+    }
 }
 
 namespace Client
