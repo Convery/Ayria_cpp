@@ -14,7 +14,7 @@ namespace Social
     std::vector<Friend_t> getFriends()
     {
         // DEV: Ask Ayria for all known clients.
-        if (const auto Callback = Global.Ayria.getPlayers)
+        if (const auto Callback = Global.Ayria.getLocalplayers)
         {
             const char *JSONString;
             Callback(&JSONString);
@@ -27,8 +27,8 @@ namespace Social
                     Newfriend.Status = Friend_t::Online;
                     Newfriend.Lastmodified = uint32_t(time(NULL));
                     Newfriend.Avatar = Object.value("Avatar", Blob());
-                    Newfriend.UserID = Object.value("UserID", uint64_t());
-                    Newfriend.Username = Object.value("Username", std::string());
+                    Newfriend.Username = Object.value("Clientname", std::string());
+                    Newfriend.UserID = 0x110000100000000 | Object.value("ClientID", uint32_t());
 
                     if (!Friendslist.contains(Newfriend.UserID))
                         Friendslist[Newfriend.UserID] = Newfriend;

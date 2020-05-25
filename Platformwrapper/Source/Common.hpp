@@ -31,8 +31,7 @@ struct Ayriamodule_t
     void(__cdecl *addNetworkbroadcast)(const char *Subject, const char *Message);
 
     // Social interactions, returns JSON.
-    void(__cdecl *getFriends)(const char **Friendslist);
-    void(__cdecl *getPlayers)(const char **Playerlist);
+    void(__cdecl *getLocalplayers)(const char **Playerlist);
 };
 
 
