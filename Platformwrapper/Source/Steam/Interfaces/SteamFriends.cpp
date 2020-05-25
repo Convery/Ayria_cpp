@@ -375,7 +375,7 @@ namespace Steam
         }
         bool InviteUserToGame(CSteamID steamIDFriend, const char *pchConnectString)
         {
-            Traceprint();
+            Debugprint(va("Invite user: %s", pchConnectString));
             return false;
         }
         int GetCoplayFriendCount()

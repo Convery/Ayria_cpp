@@ -26,7 +26,7 @@ namespace Social
                     Friend_t Newfriend;
                     Newfriend.Status = Friend_t::Online;
                     Newfriend.Lastmodified = uint32_t(time(NULL));
-                    Newfriend.Avatar = Object.value("Avatar", Blob());
+                    Newfriend.Avatar = Object.value("Avatar", std::string());
                     Newfriend.Username = Object.value("Clientname", std::string());
                     Newfriend.UserID = 0x110000100000000 | Object.value("ClientID", uint32_t());
 

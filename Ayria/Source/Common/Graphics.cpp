@@ -37,7 +37,7 @@ namespace Graphics
             uint8_t
                 isDirty : 1,
                 isVisible : 1,
-                keepDirty : 1;
+                needsRefresh : 1;
         } Flags;
     };
 
@@ -637,7 +637,7 @@ namespace Graphics
             nk_input_begin(&Surface.Context);
             {
                 MSG Message;
-                Surface.Flags.isDirty = Surface.Flags.keepDirty;
+                Surface.Flags.isDirty = false;
 
                 while (PeekMessageW(&Message, Surface.Nativehandle, 0, 0, PM_REMOVE))
                 {
@@ -649,11 +649,11 @@ namespace Graphics
             nk_input_end(&Surface.Context);
 
             // Only update the context when processed new messages.
-            if (Surface.Flags.isDirty && Surface.onRender)
+            if ((Surface.Flags.isDirty || Surface.Flags.needsRefresh) && Surface.onRender)
             {
                 // Set the default background to white (chroma-keyed to transparent).
                 Surface.Context.style.window.fixed_background = nk_style_item_color(Clearcolor);
-                Surface.Flags.keepDirty = Surface.onRender(&Surface.Context);
+                Surface.onRender(&Surface.Context);
             }
         }
     }
@@ -661,7 +661,7 @@ namespace Graphics
     {
         for (auto &[Name, Surface] : Surfaces)
         {
-            if (Surface.Flags.isDirty)
+            if (Surface.Flags.isDirty || Surface.Flags.needsRefresh)
             {
                 if (Surface.Flags.isVisible)
                 {
@@ -714,10 +714,11 @@ namespace Graphics
 
                 // Cleanup.
                 nk_clear(&Surface.Context);
+                Surface.Flags.needsRefresh = false;
             }
 
             // Ensure that the window-state matches ours.
-            ShowWindow(Surface.Nativehandle, Surface.Flags.isVisible ? SW_SHOWNORMAL : SW_HIDE);
+            ShowWindowAsync(Surface.Nativehandle, Surface.Flags.isVisible ? SW_SHOWNORMAL : SW_HIDE);
 
             // Verify that the window is focused.
             if (Surface.Flags.isVisible)
@@ -770,7 +771,7 @@ namespace Graphics
         Surface.onRender = onRender;
         Surface.Flags.isDirty = true;
         Surface.Flags.isVisible = false;
-        Surface.Flags.keepDirty = false;
+        Surface.Flags.needsRefresh = false;
         Surface.Nativehandle = Windowhandle;
         Surface.Windowdevice = GetDC(Windowhandle);
 
@@ -792,12 +793,13 @@ namespace Graphics
     {
         assert(Surfaces.contains(Classname.data()));
         Surfaces[Classname.data()].Flags.isVisible = Visible;
+        Surfaces[Classname.data()].Flags.needsRefresh = true;
     }
     void onFrame()
     {
         // Track the frame-time, should be less than 33ms.
-        const auto Thisframe{ std::chrono::high_resolution_clock::now() };
         static auto Lastframe{ std::chrono::high_resolution_clock::now() };
+        const auto Thisframe{ std::chrono::high_resolution_clock::now() };
         const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
 
         Lastframe = Thisframe;

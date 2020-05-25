@@ -66,8 +66,8 @@ namespace Client
     {
         Localclient.Avatar = {};
         Localclient.ClientID = 0;
-        Localclient.Clientname = "Ayria_offline";
         Localkeypair = PK_RSA::Createkeypair(512);
+        Localclient.Clientname = va("Ayria_%d", GetCurrentProcessId());
         Localclient.ClientID = Hash::FNV1_32(PK_RSA::getPublickey(Localkeypair));
 
         // DEV(tcn): Load the clients name and ID from disk to override the defaults.

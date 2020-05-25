@@ -338,17 +338,12 @@ namespace Console
                 }
                 else
                 {
+                    isVisible ^= true;
+
                     if (isVisible)
                     {
-                        if (Gamewindowhandle)
-                        {
-                            if (Surfacehandle == GetForegroundWindow()) SetForegroundWindow((HWND)Gamewindowhandle);
-                            EnableWindow((HWND)Gamewindowhandle, TRUE);
-                        }
-                    }
-                    else
-                    {
-                        EnumWindows([](HWND Handle, LPARAM) -> BOOL
+                        RECT Gamewindow{};
+                        EnumWindows([](HWND Handle, LPARAM Previouswindow) -> BOOL
                         {
                             DWORD ProcessID;
                             const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
@@ -358,21 +353,29 @@ namespace Console
                                 RECT Gamewindow{};
                                 if (GetWindowRect(Handle, &Gamewindow))
                                 {
-                                    if (Gamewindow.top != 0 || Gamewindow.left != 0)
+                                    auto Previous = (RECT *)Previouswindow;
+                                    if(Gamewindow.right - Gamewindow.left > Previous->right - Previous->left ||
+                                        Gamewindow.bottom - Gamewindow.top > Previous->bottom - Previous->top)
                                     {
                                         Gamewindowhandle = Handle;
-                                        return FALSE;
+                                        *Previous = Gamewindow;
                                     }
                                 }
                             }
 
                             return TRUE;
-                        }, NULL);
+                        }, (LPARAM)&Gamewindow);
 
                         if (Gamewindowhandle) EnableWindow((HWND)Gamewindowhandle, FALSE);
                     }
-
-                    isVisible ^= true;
+                    else
+                    {
+                        if (Gamewindowhandle)
+                        {
+                            EnableWindow((HWND)Gamewindowhandle, TRUE);
+                            SetForegroundWindow((HWND)Gamewindowhandle);
+                        }
+                    }
                 }
             }
 

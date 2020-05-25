@@ -71,7 +71,7 @@ namespace Social
     {
         uint32_t Lastmodified{};
 
-        Blob Avatar;
+        std::string Avatar;
         uint64_t UserID;
         std::string Username;
         enum : uint8_t { Online = 1, Offline = 2, Busy = 3, } Status;
