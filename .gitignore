@@ -67,3 +67,4 @@ Bin
 *.log
 *.db
 out
+/Ayria/TODO.txt

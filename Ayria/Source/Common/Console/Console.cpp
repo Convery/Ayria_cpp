@@ -4,7 +4,7 @@
     License: MIT
 */
 
-#include "../Global.hpp"
+#include <Global.hpp>
 
 // Stolen from https://github.com/futurist/CommandLineToArgvA
 LPSTR *WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int *numargs);

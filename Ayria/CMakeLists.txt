@@ -19,6 +19,9 @@ else()
     set(PLATFORM_LIBS dl pthread)
 endif()
 
+# Easier access to top-level files.
+include_directories("${CMAKE_CURRENT_LIST_DIR}/Source")
+
 # Just pull all the files from /Source
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS Source/*.cpp Source/*.c Source/*.asm)
 add_library(${MODULENAME} SHARED ${SOURCES})
