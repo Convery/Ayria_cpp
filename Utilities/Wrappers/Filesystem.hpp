@@ -11,9 +11,18 @@
 #include <memory>
 #include <string>
 
+using Blob = std::basic_string<uint8_t>;
+using Blob_view = std::basic_string_view<uint8_t>;
+
+// Helpers to convert the blobs.
+inline Blob S2B(const std::string &Input) { return Blob(Input.begin(), Input.end()); }
+inline Blob S2B(const std::string &&Input) { return Blob(Input.begin(), Input.end()); }
+inline std::string B2S(const Blob &Input) { return std::string(Input.begin(), Input.end()); }
+inline std::string B2S(const Blob &&Input) { return std::string(Input.begin(), Input.end()); }
+
 namespace FS
 {
-    [[nodiscard]] inline std::basic_string<uint8_t> Readfile(const std::string_view Path)
+    [[nodiscard]] inline Blob Readfile(const std::string_view Path)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "rb");
         if (!Filehandle) return {};
@@ -26,9 +35,9 @@ namespace FS
         std::fread(Buffer.get(), Length, 1, Filehandle);
         std::fclose(Filehandle);
 
-        return std::basic_string<uint8_t>(Buffer.get(), Length);
+        return Blob(Buffer.get(), Length);
     }
-    inline bool Writefile(const std::string_view Path, const std::basic_string<uint8_t> &Buffer)
+    inline bool Writefile(const std::string_view Path, const Blob &Buffer)
     {
         std::FILE *Filehandle = std::fopen(Path.data(), "wb");
         if (!Filehandle) return false;
