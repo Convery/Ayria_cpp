@@ -5,24 +5,34 @@
 */
 
 #pragma once
-#include <string>
+#include <string_view>
+#include <codecvt>
+#include <locale>
 
-// NOTE(tcn): Slow Windows implementation, update in the future.
-#if defined (_WIN32)
-#include <Windows.h>
+/*
+    NOTE(tcn):
+    Windows's MultiByteToWideChar occasionally breaks their compiler in MSVC 16.6.
+    Reported the issue but it's not like they care about non-enterprise customers
+    feedback; so unlikely to be solved anytime soon.
+    Fallback to deprecated codecvt.
+*/
+
+[[nodiscard]] inline std::string toNarrow(const std::wstring &Input)
+{
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(Input);
+}
+[[nodiscard]] inline std::wstring toWide(const std::string &Input)
+{
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(Input);
+}
+
 [[nodiscard]] inline std::string toNarrow(const std::wstring_view Input)
 {
-    const auto Size = WideCharToMultiByte(CP_UTF8, 0, Input.data(), (int)Input.size(), NULL, 0, NULL, FALSE);
-    const auto Buffer = (char *)alloca(Size * sizeof(char) + sizeof(char));
-    WideCharToMultiByte(CP_UTF8, 0, Input.data(), (int)Input.size(), Buffer, Size, NULL, FALSE);
-    return std::string(Buffer, Size);
+    return toNarrow(std::wstring(Input));
 }
 [[nodiscard]] inline std::wstring toWide(const std::string_view Input)
 {
-    const auto Size = MultiByteToWideChar(CP_UTF8, 0, Input.data(), (int)Input.size(), NULL, 0);
-    const auto Buffer = (wchar_t *)alloca(Size * sizeof(wchar_t) + sizeof(wchar_t));
-    MultiByteToWideChar(CP_UTF8, 0, Input.data(), (int)Input.size(), Buffer, Size);
-    return std::wstring(Buffer, Size);
+    return toWide(std::string(Input));
 }
 
 [[nodiscard]] inline std::string toNarrow(const wchar_t *Input, size_t Length)
@@ -33,4 +43,3 @@
 {
     return toWide(std::string_view(Input, Length));
 }
-#endif
