@@ -25,6 +25,7 @@ struct Ayriamodule_t
     // Console interaction, callback = void f(int argc, const char **argv);
     void(__cdecl *addConsolemessage)(const char *String, unsigned int Colour);
     void(__cdecl *addConsolefunction)(const char *Name, void *Callback);
+    void(__cdecl *execConsolestring)(const char *Commandline);
 
     // Network interaction, callback = void f(const char *Content);
     void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
@@ -32,6 +33,8 @@ struct Ayriamodule_t
 
     // Social interactions, returns JSON.
     void(__cdecl *getLocalplayers)(const char **Playerlist);
+    void(__cdecl *getFriends)(const char **Friendslist);
+    void(__cdecl *setFriends)(const char *Friendslist);
 };
 
 
