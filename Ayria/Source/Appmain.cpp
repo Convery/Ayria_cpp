@@ -74,7 +74,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 // Initialize our subsystems.
 void onStartup()
 {
-    Client::onStartup();
+    Clients::onStartup();
 
     std::thread([]() -> void
     {

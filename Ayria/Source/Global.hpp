@@ -24,6 +24,7 @@ struct Ayriamodule_t
     // Console interaction, callback = void f(int argc, const char **argv);
     void(__cdecl *addConsolemessage)(const char *String, unsigned int Colour);
     void(__cdecl *addConsolefunction)(const char *Name, void *Callback);
+    void(__cdecl *execConsolestring)(const char *Commandline);
 
     // Network interaction, callback = void f(const char *Content);
     void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
@@ -31,17 +32,22 @@ struct Ayriamodule_t
 
     // Social interactions, returns JSON.
     void(__cdecl *getLocalplayers)(const char **Playerlist);
+    void(__cdecl *getFriends)(const char **Friendslist);
+    void(__cdecl *setFriends)(const char *Friendslist);
 };
 
+// Ingame-console, mainly for developers.
 namespace Console
 {
     void addFunction(std::string_view Name, std::function<void(int, const char **)> Callback);
     void addMessage(std::string_view Message, uint32_t Colour = 0xD6B749);
+    void execString(std::string_view Commandline);
 
     void onStartup();
     void onFrame();
 }
 
+// Broadcast-based networking.
 namespace Networking
 {
     namespace Core
@@ -55,19 +61,60 @@ namespace Networking
         void Registerhandler(uint32_t Type, std::function<void(sockaddr_in, const char *)> Callback);
         void Registerhandler(std::string_view Type, std::function<void(sockaddr_in, const char *)> Callback);
     }
+
+    namespace Node
+    {
+
+    }
 }
 
-namespace Client
+// Social interactions, chatting and friends.
+namespace Social
 {
-    struct Clientinfo_t
+    #pragma pack(push, 1)
+    enum class Userstate_t : uint8_t
     {
-        enum : uint8_t { Unknown = 0, Online = 1, Offline = 2, Busy = 3 } Status;
-        std::string Clientticket{};
+        Offline = 0,
+        Online = 1,
+        Busy = 2,
+    };
+    struct Friend_t
+    {
+        uint32_t UserID;        // AyriaID
+        uint32_t GameID;        // User defined.
+        Userstate_t State;
+        char Username[20];      // 19 chars + null.
+        std::string b64Avatar;  // 256x256 PNG
+        std::unordered_map<std::string, std::string> Presence;
+    };
+    #pragma pack(pop)
+
+    namespace Friendslist
+    {
+        std::vector<Friend_t> *getFriends();
+    }
+
+    namespace Chatroom
+    {
+
+    }
+}
+
+// Client information, remote.
+namespace Clients
+{
+    // Core information.
+    struct Client_t
+    {
         std::string Clientname{};
         std::string Publickey{};
-        std::string Avatar{};
         uint32_t ClientID{};
     };
+
+    void onClientinfo(sockaddr_in Client, const char *Content);
+    std::vector<Client_t> *getLocalclients();
+    void Sendclientinfo();
+    Client_t getSelf();
 
     void onStartup();
 }
