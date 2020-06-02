@@ -37,7 +37,6 @@ struct Ayriamodule_t
     void(__cdecl *setFriends)(const char *Friendslist);
 };
 
-
 // Keep the global state together.
 #pragma pack(push, 1)
 struct Globalstate_t

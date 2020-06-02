@@ -324,7 +324,7 @@ namespace Console
     }
     void onFrame()
     {
-        // Check if we should toggle the console (tilde).
+        // Check if we should toggle the console (tilde).§
         {
             const auto Keystate = GetAsyncKeyState(VK_OEM_5);
             const auto Keydown = Keystate & (1 << 31);
@@ -366,7 +366,12 @@ namespace Console
                             return TRUE;
                         }, (LPARAM)&Gamewindow);
 
-                        if (Gamewindowhandle) EnableWindow((HWND)Gamewindowhandle, FALSE);
+                        // Let's not activate the console if the game isn't active.
+                        if (GetForegroundWindow() == (HWND)Gamewindowhandle)
+                        {
+                            EnableWindow((HWND)Gamewindowhandle, FALSE);
+                        }
+                        else isVisible = false;
                     }
                     else
                     {
@@ -395,16 +400,14 @@ namespace API
             {
                 do
                 {
+                    // Common keywords.
+                    if (std::strstr(String, "[E]") || std::strstr(String, "rror")) { Colour = 0xBE282A; break; }
+                    if (std::strstr(String, "[W]") || std::strstr(String, "arning")) { Colour = 0xBEC02A; break; }
+
                     // Ayria default.
-                    if (std::strstr(String, "[E]")) { Colour = 0xBE282A; break; }
-                    if (std::strstr(String, "[W]")) { Colour = 0xBEC02A; break; }
                     if (std::strstr(String, "[I]")) { Colour = 0x218FBD; break; }
                     if (std::strstr(String, "[D]")) { Colour = 0x7F963E; break; }
                     if (std::strstr(String, "[>]")) { Colour = 0x7F963E; break; }
-
-                    // Take a stab in the dark.
-                    if (std::strstr(String, "rror")) { Colour = 0xBE282A; break; }
-                    if (std::strstr(String, "arning")) { Colour = 0xBEC02A; break; }
 
                     // Default.
                     Colour = 0x315571;
