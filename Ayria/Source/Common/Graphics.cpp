@@ -779,6 +779,27 @@ namespace Graphics
         static auto Systemfont = Fonts::Createfont("Arial", 16);
         nk_init_default(&Surface.Context, &Systemfont);
         Surface.Context.userdata = { Windowhandle };
+        Surface.Context.clip.paste = [](nk_handle, struct nk_text_edit *Edit)
+        {
+            if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(NULL))
+            {
+                if (const auto Memory = GetClipboardData(CF_UNICODETEXT))
+                {
+                    if (const auto Size = GlobalSize(Memory) - 1)
+                    {
+                        if(const auto String = (LPCWSTR)GlobalLock(Memory))
+                        {
+                            const auto Narrow = toNarrow(String, Size / sizeof(wchar_t));
+                            nk_textedit_paste(Edit, Narrow.c_str(), Narrow.size());
+                        }
+                    }
+
+                    GlobalUnlock(Memory);
+                }
+
+                CloseClipboard();
+            }
+        };
 
         // Register the surface with windows.
         const auto Bitmap = CreateCompatibleBitmap(Surface.Windowdevice, 0, 0);
