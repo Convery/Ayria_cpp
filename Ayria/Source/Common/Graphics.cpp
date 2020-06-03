@@ -775,8 +775,8 @@ namespace Graphics
         Surface.Nativehandle = Windowhandle;
         Surface.Windowdevice = GetDC(Windowhandle);
 
-        // Arial should be available on every system.
-        static auto Systemfont = Fonts::Createfont("Arial", 16);
+        // Consolas should be available on every windows system (Vista+).
+        static auto Systemfont = Fonts::Createfont("Consolas", 16);
         nk_init_default(&Surface.Context, &Systemfont);
         Surface.Context.userdata = { Windowhandle };
         Surface.Context.clip.paste = [](nk_handle, struct nk_text_edit *Edit)
