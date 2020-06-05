@@ -173,7 +173,7 @@ namespace Localnetworking
                 if (Size <= 0)
                 {
                     // Winsock had some internal issue that we can't be arsed to recover from..
-                    if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                    if (Size == -1) Infoprint(va("Error on socket %u - %u", Socket, WSAGetLastError()));
                     if (Server) Server->onDisconnect();
                     assert(Activesockets.fd_count);
                     FD_CLR(Socket, &Activesockets);

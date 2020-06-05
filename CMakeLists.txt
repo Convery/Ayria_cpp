@@ -23,7 +23,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
         set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy") # /d2cgsummary
-        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:fastlink /cgthreads:8")
+        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:full /cgthreads:8")
     endif()
 
     # Force static runtime, warnings, and override default flags.
