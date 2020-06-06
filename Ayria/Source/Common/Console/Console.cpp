@@ -31,8 +31,7 @@ namespace Console
     std::array<uint32_t, Maxtabs> Unreadcounts{};
     std::unordered_map<std::string, Functioncallback_t> Functions;
 
-    // User input.
-    std::array<char, 512> Inputstring;
+
 
     // Rawdata should not be directly modified.
     std::array<std::pair<std::string, struct nk_color>, 256> Rawdata{};
@@ -206,7 +205,7 @@ namespace Console
                     }
                 }
 
-                const auto Y = std::max(0.0f, Scrolloffset - Gamearea.h + 65);
+                const auto Y = std::max(0.0f, Scrolloffset - Gamearea.h + 70);
                 nk_group_set_scroll(Context, "Console.Log", 0, uint32_t(std::round(Y)));
                 nk_group_end(Context);
             }
@@ -228,39 +227,60 @@ namespace Console
         {
             nk_layout_row_push(Context, Gamearea.w);
 
-            // Auto-focus.
-            static int Inputlength;
-            nk_edit_focus(Context, 0);
-            const auto Active = nk_edit_string(Context, NK_EDIT_SELECTABLE | NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_GOTO_END_ON_ACTIVATE,
-                Inputstring.data(), &Inputlength, (int)Inputstring.size(), [](const struct nk_text_edit *, nk_rune unicode) -> int
+            // Reset focus on every frame.
+            const auto Flags = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_GOTO_END_ON_ACTIVATE;
+            nk_edit_focus(Context, Flags);
+
+            static std::string Lastcommand;
+            static std::array<char, 512> Inputstring;
+            const auto State = nk_edit_string_zero_terminated(Context, Flags, Inputstring.data(), Inputstring.size(),
+                [](const struct nk_text_edit *, nk_rune Unicode) -> int
                 {
-                    return unicode != L'§' && unicode != L'½' && unicode != L'~';
+                    // Drop non-asci.
+                    if (Unicode > 126) return false;
+
+                    // Drop toggle-chars.
+                    return Unicode != L'§' && Unicode != L'½' && Unicode != L'~' && Unicode != L'`';
                 });
 
             // On enter pressed.
-            if (Active & NK_EDIT_COMMITED)
+            if (State & NK_EDIT_COMMITED && !Inputstring.empty())
             {
-                if (Inputlength)
+                int Argc;
+
+                // Log the input before executing any functions.
+                Messages.push_back({ "> "s + Inputstring.data(), nk_rgb(0xD6, 0xB7, 0x49) });
+
+                // Parse the input using the same rules as command-lines.
+                if (const auto Argv = CommandLineToArgvA_wine(Inputstring.data(), &Argc))
                 {
-                    Inputstring[Inputlength] = 0;
-                    Inputlength = 0;
-                    int Argc;
-
-                    // Log the input before executing any functions.
-                    Messages.push_back({ "> "s + Inputstring.data(), nk_rgb(0xD6, 0xB7, 0x49) });
-
-                    // Parse the input using the same rules as command-lines.
-                    if (const auto Argv = CommandLineToArgvA_wine(Inputstring.data(), &Argc))
+                    std::string Functionname = Argv[0];
+                    std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) { return (char)std::tolower(a); });
+                    if (const auto Callback = Functions.find(Functionname); Callback != Functions.end())
                     {
-                        std::string Functionname = Argv[0];
-                        std::transform(Functionname.begin(), Functionname.end(), Functionname.begin(), [](auto a) { return (char)std::tolower(a); });
-                        if (const auto Callback = Functions.find(Functionname); Callback != Functions.end())
-                        {
-                            Callback->second.Callback(Argc, (const char **)Argv);
-                        }
-
-                        LocalFree(Argv);
+                        Callback->second.Callback(Argc, (const char **)Argv);
                     }
+
+                    LocalFree(Argv);
+                }
+
+                // Save the buffer for later.
+                Lastcommand = Inputstring.data();
+                std::memset(Inputstring.data(), '\0', Inputstring.size());
+            }
+            else
+            {
+                if (nk_input_is_key_pressed(&Context->input, NK_KEY_UP))
+                {
+                    std::memset(Inputstring.data(), '\0', Inputstring.size());
+                    std::memcpy(Inputstring.data(), Lastcommand.c_str(), Lastcommand.size());
+
+                    // Hackery to ensure that the cursor gets moved to the end of the input.
+                    PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
+                }
+                else if (nk_input_is_key_pressed(&Context->input, NK_KEY_DOWN))
+                {
+                    std::memset(Inputstring.data(), '\0', Inputstring.size());
                 }
             }
         }

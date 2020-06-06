@@ -491,6 +491,14 @@ namespace Graphics
                         else nk_input_key(&Surface.Context, NK_KEY_TEXT_WORD_RIGHT, Down);
                         return true;
 
+                    case VK_UP:
+                        nk_input_key(&Surface.Context, NK_KEY_UP, Down);
+                        return true;
+
+                    case VK_DOWN:
+                        nk_input_key(&Surface.Context, NK_KEY_DOWN, Down);
+                        return true;
+
                     case VK_BACK:
                         nk_input_key(&Surface.Context, NK_KEY_BACKSPACE, Down);
                         return true;
@@ -542,14 +550,6 @@ namespace Graphics
                         {
                             if (Shift) nk_input_key(&Surface.Context, NK_KEY_TEXT_REDO, Down);
                             else nk_input_key(&Surface.Context, NK_KEY_TEXT_UNDO, Down);
-                            return true;
-                        }
-                        break;
-
-                    case 'R':
-                        if (Ctrl)
-                        {
-                            nk_input_key(&Surface.Context, NK_KEY_TEXT_REDO, Down);
                             return true;
                         }
                         break;
