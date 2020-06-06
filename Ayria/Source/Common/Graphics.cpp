@@ -758,7 +758,7 @@ namespace Graphics
         };
         if (NULL == RegisterClassExA(&Windowclass)) return false;
 
-        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOOLWINDOW,
             Windowclass.lpszClassName, NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
         if (!Windowhandle) return false;
 
