@@ -86,6 +86,8 @@ namespace Base64
     }
     [[nodiscard]] constexpr bool isValid(const std::string_view Input)
     {
+        if (Input.size() % 4 != 0) return false;
+
         for (const auto &Item : Input)
         {
             if (Item >= 'A' && Item <= 'Z') continue;
@@ -149,6 +151,8 @@ namespace Base64
     }
     [[nodiscard]] constexpr bool isValid(const Blob_view Input)
     {
+        if (Input.size() % 4 != 0) return false;
+
         for (const auto &Item : Input)
         {
             if (Item >= 'A' && Item <= 'Z') continue;
