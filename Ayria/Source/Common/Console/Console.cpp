@@ -268,20 +268,19 @@ namespace Console
                 Lastcommand = Inputstring.data();
                 std::memset(Inputstring.data(), '\0', Inputstring.size());
             }
-            else
-            {
-                if (nk_input_is_key_pressed(&Context->input, NK_KEY_UP))
-                {
-                    std::memset(Inputstring.data(), '\0', Inputstring.size());
-                    std::memcpy(Inputstring.data(), Lastcommand.c_str(), Lastcommand.size());
 
-                    // Hackery to ensure that the cursor gets moved to the end of the input.
-                    PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
-                }
-                else if (nk_input_is_key_pressed(&Context->input, NK_KEY_DOWN))
-                {
-                    std::memset(Inputstring.data(), '\0', Inputstring.size());
-                }
+            // Visit previous command.
+            if (nk_input_is_key_pressed(&Context->input, NK_KEY_UP))
+            {
+                std::memset(Inputstring.data(), '\0', Inputstring.size());
+                std::memcpy(Inputstring.data(), Lastcommand.c_str(), Lastcommand.size());
+
+                // Hackery to ensure that the cursor gets moved to the end of the input.
+                PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
+            }
+            else if (nk_input_is_key_pressed(&Context->input, NK_KEY_DOWN))
+            {
+                std::memset(Inputstring.data(), '\0', Inputstring.size());
             }
         }
         nk_layout_row_end(Context);
@@ -392,6 +391,9 @@ namespace Console
                             EnableWindow((HWND)Gamewindowhandle, FALSE);
                         }
                         else isVisible = false;
+
+                        // Hackery to ensure that the cursor gets moved to the end of the input.
+                        if (isVisible) PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
                     }
                     else
                     {
