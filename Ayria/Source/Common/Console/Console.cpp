@@ -31,8 +31,6 @@ namespace Console
     std::array<uint32_t, Maxtabs> Unreadcounts{};
     std::unordered_map<std::string, Functioncallback_t> Functions;
 
-
-
     // Rawdata should not be directly modified.
     std::array<std::pair<std::string, struct nk_color>, 256> Rawdata{};
     nonstd::ring_span<std::pair<std::string, struct nk_color>> Messages
