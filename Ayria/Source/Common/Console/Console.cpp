@@ -224,7 +224,7 @@ namespace Console
         nk_style_push_color(Context, &Context->style.edit.border_color, nk_rgb(0x32, 0x3A, 0x45));
         nk_style_push_float(Context, &Context->style.edit.border, 3);
 
-        nk_layout_row_begin(Context, NK_STATIC, 25, 1);
+        nk_layout_row_begin(Context, NK_STATIC, 30, 1);
         {
             nk_layout_row_push(Context, Gamearea.w);
 
@@ -414,11 +414,26 @@ namespace API
                 } while (false);
             }
 
-            Console::Messages.push_back({ String, nk_rgb(
-                Colour >> 16 & 0xFF,
-                Colour >> 8 & 0xFF,
-                Colour >> 0 & 0xFF
-                )});
+            // Split messages containing newlines.
+            std::string_view Input(String);
+            while (Input.size())
+            {
+                if (const auto Pos = Input.find('\n'); Pos != Input.npos)
+                {
+                    if (Pos != 0)
+                    {
+                        Console::Messages.push_back({ {Input.data(), Pos},
+                            nk_rgb(Colour >> 16 & 0xFF, Colour >> 8 & 0xFF, Colour >> 0 & 0xFF) });
+                    }
+                    Input.remove_prefix(Pos + 1);
+                }
+                else
+                {
+                    Console::Messages.push_back({ {Input.data(), Input.size()},
+                        nk_rgb(Colour >> 16 & 0xFF, Colour >> 8 & 0xFF, Colour >> 0 & 0xFF) });
+                    break;
+                }
+            }
         }
         EXPORT_ATTR void __cdecl addConsolefunction(const char *Name, void *Callback)
         {
