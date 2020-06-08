@@ -28,6 +28,12 @@ LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)
         return EXCEPTION_CONTINUE_EXECUTION;
     }
 
+    // DirectSound does not like it if the Audio services are down.
+    if (Info->ExceptionRecord->ExceptionCode == RPC_S_UNKNOWN_IF)
+    {
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
