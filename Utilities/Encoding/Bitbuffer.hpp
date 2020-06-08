@@ -262,7 +262,7 @@ struct Bitbuffer
     }
     [[nodiscard]] size_t Remaininglength() const
     {
-        return Internalsize * 8 - Internaliterator;
+        return (Internalsize * 8 - Internaliterator) / 8;
     }
     [[nodiscard]] std::basic_string_view<uint8_t> asView() const
     {
