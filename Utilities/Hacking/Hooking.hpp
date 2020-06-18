@@ -14,12 +14,10 @@
 #include <cstdint>
 #include <cassert>
 #include "Memprotect.hpp"
+#include <Stdinclude.hpp>
 
 #if !defined(NO_HOOKLIB)
-#if __has_include(<mhook-lib/mhook.h>)
-#pragma comment(lib, "mhook.lib")
-#include <mhook-lib/mhook.h>
-#define FOUND_MHOOK
+#if defined(HAS_MHOOK)
 
 namespace Hooking
 {
@@ -36,14 +34,8 @@ namespace Hooking
 }
 #endif
 
-#if __has_include(<polyhook2/IHook.hpp>) && __has_include(<capstone/capstone.h>)
+#if defined(HAS_POLYHOOK) && defined(HAS_CAPSTONE)
 #include <polyhook2/CapstoneDisassembler.hpp>
-#include <polyhook2/Detour/x86Detour.hpp>
-#include <polyhook2/Detour/x64Detour.hpp>
-#include <capstone/capstone.h>
-#pragma comment(lib, "PolyHook_2.lib")
-#pragma comment(lib, "capstone.lib")
-#define FOUND_POLYHOOK
 
 namespace Hooking
 {
@@ -273,14 +265,14 @@ namespace Hooking
     // Stomp-hooking inserts a jump at the target address.
     inline std::uintptr_t Stomphook(std::uintptr_t Target, std::uintptr_t Replacement)
     {
-        #if defined (FOUND_POLYHOOK)
+        #if defined (HAS_POLYHOOK)
         {
             const auto Result = Polyhook::Stomphook(Target, Replacement);
             if (Result) return Result;
         }
         #endif
 
-        #if defined (FOUND_MHOOK)
+        #if defined (HAS_MHOOK)
         {
             const auto Result = MHook::Stomphook(Target, Replacement);
             if (Result) return Result;

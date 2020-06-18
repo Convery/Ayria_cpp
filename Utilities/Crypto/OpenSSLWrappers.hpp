@@ -5,9 +5,7 @@ License: MIT
 */
 
 #pragma once
-#if __has_include(<openssl/ssl.h>)
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "libssl.lib")
+#if defined (HAS_OPENSSL)
 #include <Stdinclude.hpp>
 #include <openssl/ecdsa.h>
 #include <openssl/rand.h>

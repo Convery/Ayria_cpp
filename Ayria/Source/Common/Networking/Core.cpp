@@ -2,18 +2,11 @@
     Initial author: Convery (tcn@ayria.se)
     Started: 2020-05-25
     License: MIT
+
+    TODO(tcn): Pre-generate a LZ4 dictionary for Base64.
 */
 
 #include "../../Global.hpp"
-#if __has_include(<lz4.h>)
-#if defined(NDEBUG)
-#pragma comment (lib, "lz4.lib")
-#else
-#pragma comment (lib, "lz4d.lib")
-#endif
-#include <lz4.h>
-#define HAS_LZ4
-#endif
 
 namespace Networking::Core
 {
