@@ -5,26 +5,15 @@
 */
 
 #include "../../Global.hpp"
-
-enum Packetflags_t : uint8_t
-{
-    Ephemeral = 1,  // Do not track this packet.
-    Encrypted = 2,  // RSA encrypted.
-    Compressed = 4, // ZSTD compressed (-15)
-    RESERVED = 8    // TBD
-};
-struct Packetheader_t
-{
-    union
-    {
-        uint64_t Raw;
-        uint64_t
-            Magic : 16,         // Static.
-            Packetflags : 4,    // 16 states.
-            Packetlength : 12,  // Max 4095 bytes.
-            Clientrandom : 32;  // Unique on startup.
-    };
-};
+#if __has_include(<lz4.h>)
+#if defined(NDEBUG)
+#pragma comment (lib, "lz4.lib")
+#else
+#pragma comment (lib, "lz4d.lib")
+#endif
+#include <lz4.h>
+#define HAS_LZ4
+#endif
 
 namespace Networking::Core
 {
@@ -62,6 +51,21 @@ namespace Networking::Core
         const auto Callback = Messagehandlers.find(Type);
         if (Callback == Messagehandlers.end()) [[unlikely]] return;
 
+        // Try to decompress.
+        #if defined(HAS_LZ4)
+        char *Decompressed;
+        std::unique_ptr<char[]> Heapbuffer;
+        if (Input.size() >= 1 << 10)
+        {
+            Heapbuffer = std::make_unique<char[]>(Input.size() * 3);
+            Decompressed = Heapbuffer.get();
+        }
+        else Decompressed = (char *)alloca(Input.size() * 3);
+
+        const auto Size = LZ4_decompress_safe(Input.data(), Decompressed, Input.size(), Input.size() * 3);
+        if (Size > 0) Input = std::string_view(Decompressed, Size);
+        #endif
+
         // We only send messages in base64, so we can use it as integrity verification.
         if (!Base64::isValid(Input)) [[unlikely]] return;
 
@@ -70,8 +74,24 @@ namespace Networking::Core
     }
     void Sendmessage(uint32_t Type, std::string_view Input)
     {
-        // Windows does not like partial messages, so prefex the buffer.
         auto Message = Base64::Encode(Input);
+
+        // Try to compress.
+        #if defined(HAS_LZ4)
+        char *Compressed;
+        std::unique_ptr<char[]> Heapbuffer;
+        if (Message.size() >= 1 << 10)
+        {
+            Heapbuffer = std::make_unique<char[]>(Message.size());
+            Compressed = Heapbuffer.get();
+        }
+        else Compressed = (char *)alloca(Message.size());
+
+        const auto Size = LZ4_compress_default(Message.data(), Compressed, Message.size(), Message.size());
+        if(Size > 0) Message = std::string(Compressed, Size);
+        #endif
+
+        // Windows does not like partial messages, so prefex the buffer.
         Message.insert(0, (char *)&Type, sizeof(Type));
 
         // Enqueue for later.
