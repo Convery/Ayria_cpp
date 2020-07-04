@@ -21,28 +21,6 @@
 
 namespace Graphics
 {
-    using vec2i = struct { int x, y; };
-    struct Surface_t
-    {
-        // Returns if the state is spoiled.
-        std::function<bool(struct nk_context *)> onRender;
-        vec2i Position, Size;
-        nk_context Context;
-        HWND Nativehandle;
-        HDC Windowdevice;
-        HDC Memorydevice;
-
-        struct
-        {
-            uint8_t
-                isDirty : 1,
-                isVisible : 1,
-                needsRefresh : 1;
-        } Flags;
-    };
-
-    // Forward declaration for the renderer.
-    namespace Internal { template <typename CMD> void RenderCMD(const Surface_t *This, const CMD *Command); }
     constexpr COLORREF toColor(const struct nk_color &Color)
     {
         return Color.r | (Color.g << 8) | (Color.b << 16);
@@ -52,10 +30,12 @@ namespace Graphics
     constexpr nk_color Clearcolor = { 0xFF, 0xFF, 0xFF, 0xFF };
     const HBRUSH Clearbrush = CreateSolidBrush(toColor(Clearcolor));
 
-    // Internal rendering defs.
+    // Declarations for the renderer.
     namespace Internal
     {
-        template </*NK_COMMAND_ARC*/> void RenderCMD(const Surface_t *This, const nk_command_arc *Command)
+        template <typename CMD> inline void RenderCMD(const Surface_t *This, const CMD *Command);
+
+        template </*NK_COMMAND_ARC*/> inline void RenderCMD(const Surface_t *This, const nk_command_arc *Command)
         {
             assert(This->Memorydevice); assert(Command);
             HPEN Pen{};
@@ -85,7 +65,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_TEXT*/> void RenderCMD(const Surface_t *This, const nk_command_text *Command)
+        template </*NK_COMMAND_TEXT*/> inline void RenderCMD(const Surface_t *This, const nk_command_text *Command)
         {
             assert(This->Memorydevice); assert(Command);
             assert(Command->string); assert(Command->font);
@@ -97,7 +77,7 @@ namespace Graphics
             SelectObject(This->Memorydevice, ((Font_t *)Command->font->userdata.ptr)->Fonthandle);
             ExtTextOutW(This->Memorydevice, Command->x, Command->y, ETO_OPAQUE, NULL, Text.c_str(), (UINT)Text.size(), NULL);
         }
-        template </*NK_COMMAND_RECT*/> void RenderCMD(const Surface_t *This, const nk_command_rect *Command)
+        template </*NK_COMMAND_RECT*/> inline void RenderCMD(const Surface_t *This, const nk_command_rect *Command)
         {
             assert(This->Memorydevice); assert(Command);
             HPEN Pen{};
@@ -125,7 +105,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_LINE*/> void RenderCMD(const Surface_t *This, const nk_command_line *Command)
+        template </*NK_COMMAND_LINE*/> inline void RenderCMD(const Surface_t *This, const nk_command_line *Command)
         {
             assert(This->Memorydevice); assert(Command);
             HPEN Pen{};
@@ -149,7 +129,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_CURVE*/> void RenderCMD(const Surface_t *This, const nk_command_curve *Command)
+        template </*NK_COMMAND_CURVE*/> inline void RenderCMD(const Surface_t *This, const nk_command_curve *Command)
         {
             assert(This->Memorydevice); assert(Command);
             POINT Points[4] =
@@ -179,7 +159,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_IMAGE*/> void RenderCMD(const Surface_t *This, const nk_command_image *Command)
+        template </*NK_COMMAND_IMAGE*/> inline void RenderCMD(const Surface_t *This, const nk_command_image *Command)
         {
             assert(This->Memorydevice); assert(Command);
 
@@ -192,7 +172,7 @@ namespace Graphics
                 Device, 0, 0, Bitmap.bmWidth, Bitmap.bmHeight, SRCCOPY);
             DeleteDC(Device);
         }
-        template </*NK_COMMAND_CIRCLE*/> void RenderCMD(const Surface_t *This, const nk_command_circle *Command)
+        template </*NK_COMMAND_CIRCLE*/> inline void RenderCMD(const Surface_t *This, const nk_command_circle *Command)
         {
             assert(This->Memorydevice); assert(Command);
             HPEN Pen{};
@@ -215,7 +195,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_SCISSOR*/> void RenderCMD(const Surface_t *This, const nk_command_scissor *Command)
+        template </*NK_COMMAND_SCISSOR*/> inline void RenderCMD(const Surface_t *This, const nk_command_scissor *Command)
         {
             assert(This->Memorydevice); assert(Command);
 
@@ -223,7 +203,7 @@ namespace Graphics
             IntersectClipRect(This->Memorydevice, Command->x, Command->y,
                 Command->x + Command->w + 1, Command->y + Command->h + 1);
         }
-        template </*NK_COMMAND_POLYGON*/> void RenderCMD(const Surface_t *This, const nk_command_polygon *Command)
+        template </*NK_COMMAND_POLYGON*/> inline void RenderCMD(const Surface_t *This, const nk_command_polygon *Command)
         {
             assert(This->Memorydevice); assert(Command); assert(Command->point_count);
 
@@ -251,7 +231,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_POLYLINE*/> void RenderCMD(const Surface_t *This, const nk_command_polyline *Command)
+        template </*NK_COMMAND_POLYLINE*/> inline void RenderCMD(const Surface_t *This, const nk_command_polyline *Command)
         {
             assert(This->Memorydevice); assert(Command); assert(Command->point_count);
 
@@ -279,7 +259,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_TRIANGLE*/> void RenderCMD(const Surface_t *This, const nk_command_triangle *Command)
+        template </*NK_COMMAND_TRIANGLE*/> inline void RenderCMD(const Surface_t *This, const nk_command_triangle *Command)
         {
             assert(This->Memorydevice); assert(Command);
             POINT Points[4] = { {Command->a.x, Command->a.y}, {Command->b.x, Command->b.y},
@@ -303,7 +283,7 @@ namespace Graphics
                 DeleteObject(Pen);
             }
         }
-        template </*NK_COMMAND_ARC_FILLED*/> void RenderCMD(const Surface_t *This, const nk_command_arc_filled *Command)
+        template </*NK_COMMAND_ARC_FILLED*/> inline void RenderCMD(const Surface_t *This, const nk_command_arc_filled *Command)
         {
             assert(This->Memorydevice); assert(Command);
 
@@ -319,7 +299,7 @@ namespace Graphics
                 Command->cx + Command->r, Command->cy + Command->r,
                 (int)X0, (int)Y0, (int)X1, (int)Y1);
         }
-        template </*NK_COMMAND_RECT_FILLED*/> void RenderCMD(const Surface_t *This, const nk_command_rect_filled *Command)
+        template </*NK_COMMAND_RECT_FILLED*/> inline void RenderCMD(const Surface_t *This, const nk_command_rect_filled *Command)
         {
             assert(This->Memorydevice); assert(Command);
 
@@ -339,14 +319,14 @@ namespace Graphics
                     Command->y + Command->h, Command->rounding, Command->rounding);
             }
         }
-        template </*NK_COMMAND_CIRCLE_FILLED*/> void RenderCMD(const Surface_t *This, const nk_command_circle_filled *Command)
+        template </*NK_COMMAND_CIRCLE_FILLED*/> inline void RenderCMD(const Surface_t *This, const nk_command_circle_filled *Command)
         {
             assert(This->Memorydevice); assert(Command);
             SetDCPenColor(This->Memorydevice, toColor(Command->color));
             SetDCBrushColor(This->Memorydevice, toColor(Command->color));
             Ellipse(This->Memorydevice, Command->x, Command->y, Command->x + Command->w, Command->y + Command->h);
         }
-        template </*NK_COMMAND_POLYGON_FILLED*/> void RenderCMD(const Surface_t *This, const nk_command_polygon_filled *Command)
+        template </*NK_COMMAND_POLYGON_FILLED*/> inline void RenderCMD(const Surface_t *This, const nk_command_polygon_filled *Command)
         {
             assert(This->Memorydevice); assert(Command); assert(Command->point_count);
 
@@ -360,7 +340,7 @@ namespace Graphics
             SetDCPenColor(This->Memorydevice, toColor(Command->color));
             Polygon(This->Memorydevice, Points, Command->point_count);
         }
-        template </*NK_COMMAND_TRIANGLE_FILLED*/> void RenderCMD(const Surface_t *This, const nk_command_triangle_filled *Command)
+        template </*NK_COMMAND_TRIANGLE_FILLED*/> inline void RenderCMD(const Surface_t *This, const nk_command_triangle_filled *Command)
         {
             assert(This->Memorydevice); assert(Command);
 
@@ -369,7 +349,7 @@ namespace Graphics
             SetDCBrushColor(This->Memorydevice, toColor(Command->color));
             Polygon(This->Memorydevice, Points, 3);
         }
-        template </*NK_COMMAND_RECT_MULTI_COLOR*/> void RenderCMD(const Surface_t *This, const nk_command_rect_multi_color *Command)
+        template </*NK_COMMAND_RECT_MULTI_COLOR*/> inline void RenderCMD(const Surface_t *This, const nk_command_rect_multi_color *Command)
         {
             assert(This->Memorydevice); assert(Command);
             auto addColor = [](TRIVERTEX &Vertex, const struct nk_color &Color)
@@ -416,17 +396,107 @@ namespace Graphics
         }
 
         /*
-        template <> void RenderCMD(const Surface_t *This, const nk_command_arc_filled *Command)
+        template <> inline void RenderCMD(const Surface_t *This, const nk_command_arc_filled *Command)
         {
             assert(This->Memorydevice); assert(Command);
         }
         */
     }
 
-    // Returns if the event was handled.
+    // Internal separation of stages.
+    inline void onTick(float Deltatime)
+    {
+        // Process input.
+        for (auto &[Name, Surface] : Surfaces)
+        {
+            // Update the context for smooth scrolling.
+            Surface.Context.delta_time_seconds = Deltatime;
+
+            // Process window-messages.
+            nk_input_begin(&Surface.Context);
+            {
+                MSG Message;
+                Surface.isDirty = false;
+
+                while (PeekMessageW(&Message, Surface.Windowhandle, 0, 0, PM_REMOVE))
+                {
+                    TranslateMessage(&Message);
+                    DispatchMessageW(&Message);
+                    Surface.isDirty = true;
+                }
+            }
+            nk_input_end(&Surface.Context);
+
+            // Allow the surface to do its own processing.
+            Surface.isDirty |= Surface.onFrame(&Surface);
+        }
+    }
+    inline void onPaint()
+    {
+        for (auto &[Name, Surface] : Surfaces)
+        {
+            // Only update the surface if dirty.
+            if (Surface.onRender(&Surface) || Surface.isDirty)
+            {
+                // Clean the context.
+                SelectObject(Surface.Memorydevice, GetStockObject(DC_PEN));
+                SelectObject(Surface.Memorydevice, GetStockObject(DC_BRUSH));
+
+                // NOTE(tcn): This seems to be the fastest way to clear.
+                const RECT Screen = { 0, 0, Surface.Size.x, Surface.Size.y };
+                SetBkColor(Surface.Memorydevice, toColor(Clearcolor));
+                ExtTextOutW(Surface.Memorydevice, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
+
+                // Iterate over the render commands.
+                auto Command = nk__begin(&Surface.Context);
+                while (Command)
+                {
+                    switch (Command->type)
+                    {
+                        #define Case(x, y) case x: Internal::RenderCMD(&Surface, (y *)Command); break;
+                        Case(NK_COMMAND_RECT_MULTI_COLOR, nk_command_rect_multi_color);
+                        Case(NK_COMMAND_TRIANGLE_FILLED, nk_command_triangle_filled);
+                        Case(NK_COMMAND_POLYGON_FILLED, nk_command_polygon_filled);
+                        Case(NK_COMMAND_CIRCLE_FILLED, nk_command_circle_filled);
+                        Case(NK_COMMAND_RECT_FILLED, nk_command_rect_filled);
+                        Case(NK_COMMAND_ARC_FILLED, nk_command_arc_filled);
+                        Case(NK_COMMAND_POLYLINE, nk_command_polyline);
+                        Case(NK_COMMAND_TRIANGLE, nk_command_triangle);
+                        Case(NK_COMMAND_POLYGON, nk_command_polygon);
+                        Case(NK_COMMAND_SCISSOR, nk_command_scissor);
+                        Case(NK_COMMAND_CIRCLE, nk_command_circle);
+                        // Case(NK_COMMAND_CUSTOM, nk_command_custom);
+                        Case(NK_COMMAND_CURVE, nk_command_curve);
+                        Case(NK_COMMAND_IMAGE, nk_command_image);
+                        Case(NK_COMMAND_TEXT, nk_command_text);
+                        Case(NK_COMMAND_RECT, nk_command_rect);
+                        Case(NK_COMMAND_LINE, nk_command_line);
+                        Case(NK_COMMAND_ARC, nk_command_arc);
+                        case NK_COMMAND_NOP:
+                        default: break;
+                        #undef Case
+                    }
+
+                    // TODO(tcn): Add a custom allocator to reduce the impact of this linked list.
+                    Command = nk__next(&Surface.Context, Command);
+                }
+
+                // Copy to the screen buffer.
+                BitBlt(Surface.Windowdevice, 0, 0, Surface.Size.x, Surface.Size.y, Surface.Memorydevice, 0, 0, SRCCOPY);
+
+                // Ensure that the surface is visible.
+                ShowWindowAsync(Surface.Windowhandle, SW_SHOWNORMAL);
+            }
+
+            // Cleanup for IMM mode.
+            nk_clear(&Surface.Context);
+        }
+    }
+
+    // Windows requires event-handles to have a specific signature (i.e. no lambdas).
     inline bool onEvent(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
-        const auto Result = std::find_if(Surfaces.begin(), Surfaces.end(), [&](const auto &Item) { return Item.second.Nativehandle == Windowhandle; });
+        const auto Result = std::find_if(Surfaces.begin(), Surfaces.end(), [=](const auto &Item) { return Item.second.Windowhandle == Windowhandle; });
         if (Result == Surfaces.end()) return false;
         auto &Surface = Result->second;
 
@@ -626,129 +696,28 @@ namespace Graphics
 
         return false;
     }
-    inline void onTick(float Deltatime)
+
+    // Callback from Ayria-core.
+    void onFrame()
     {
-        for(auto &[Name, Surface] : Surfaces)
-        {
-            // Update the context for smooth scrolling.
-            Surface.Context.delta_time_seconds = Deltatime;
+        // Track the frame-time, should be less than 33ms.
+        const auto Thisframe{ std::chrono::high_resolution_clock::now() };
+        static auto Lastframe{ std::chrono::high_resolution_clock::now() };
+        const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
 
-            // Process window-messages.
-            nk_input_begin(&Surface.Context);
-            {
-                MSG Message;
-                Surface.Flags.isDirty = false;
-
-                while (PeekMessageW(&Message, Surface.Nativehandle, 0, 0, PM_REMOVE))
-                {
-                    TranslateMessage(&Message);
-                    DispatchMessageW(&Message);
-                    Surface.Flags.isDirty = true;
-                }
-            }
-            nk_input_end(&Surface.Context);
-
-            // Only update the context when processed new messages.
-            if ((Surface.Flags.isDirty || Surface.Flags.needsRefresh) && Surface.onRender)
-            {
-                // Set the default background to white (chroma-keyed to transparent).
-                Surface.Context.style.window.fixed_background = nk_style_item_color(Clearcolor);
-                Surface.onRender(&Surface.Context);
-            }
-        }
-    }
-    inline void onPaint()
-    {
-        for (auto &[Name, Surface] : Surfaces)
-        {
-            if (Surface.Flags.isDirty || Surface.Flags.needsRefresh)
-            {
-                if (Surface.Flags.isVisible)
-                {
-                    // Ensure that the context is clean.
-                    SelectObject(Surface.Memorydevice, GetStockObject(DC_PEN));
-                    SelectObject(Surface.Memorydevice, GetStockObject(DC_BRUSH));
-
-                    // NOTE(tcn): This seems to be the fastest way to clear.
-                    const RECT Screen = { 0, 0, Surface.Size.x, Surface.Size.y };
-                    SetBkColor(Surface.Memorydevice, toColor(Clearcolor));
-                    ExtTextOutW(Surface.Memorydevice, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
-
-                    // Iterate over the render commands.
-                    auto Command = nk__begin(&Surface.Context);
-                    while (Command)
-                    {
-                        switch (Command->type)
-                        {
-                            #define Case(x, y) case x: Internal::RenderCMD(&Surface, (y *)Command); break;
-                            Case(NK_COMMAND_RECT_MULTI_COLOR, nk_command_rect_multi_color);
-                            Case(NK_COMMAND_TRIANGLE_FILLED, nk_command_triangle_filled);
-                            Case(NK_COMMAND_POLYGON_FILLED, nk_command_polygon_filled);
-                            Case(NK_COMMAND_CIRCLE_FILLED, nk_command_circle_filled);
-                            Case(NK_COMMAND_RECT_FILLED, nk_command_rect_filled);
-                            Case(NK_COMMAND_ARC_FILLED, nk_command_arc_filled);
-                            Case(NK_COMMAND_POLYLINE, nk_command_polyline);
-                            Case(NK_COMMAND_TRIANGLE, nk_command_triangle);
-                            Case(NK_COMMAND_POLYGON, nk_command_polygon);
-                            Case(NK_COMMAND_SCISSOR, nk_command_scissor);
-                            Case(NK_COMMAND_CIRCLE, nk_command_circle);
-                            // Case(NK_COMMAND_CUSTOM, nk_command_custom);
-                            Case(NK_COMMAND_CURVE, nk_command_curve);
-                            Case(NK_COMMAND_IMAGE, nk_command_image);
-                            Case(NK_COMMAND_TEXT, nk_command_text);
-                            Case(NK_COMMAND_RECT, nk_command_rect);
-                            Case(NK_COMMAND_LINE, nk_command_line);
-                            Case(NK_COMMAND_ARC, nk_command_arc);
-                            case NK_COMMAND_NOP:
-                            default: break;
-                            #undef Case
-                        }
-
-                        // TODO(tcn): Add a custom allocator to reduce the impact of this linked list.
-                        Command = nk__next(&Surface.Context, Command);
-                    }
-
-                    // Copy to the screen buffer.
-                    BitBlt(Surface.Windowdevice, 0, 0, Surface.Size.x, Surface.Size.y, Surface.Memorydevice, 0, 0, SRCCOPY);
-                }
-
-                // Cleanup.
-                nk_clear(&Surface.Context);
-                Surface.Flags.needsRefresh = false;
-            }
-
-            // Ensure that the window-state matches ours.
-            ShowWindowAsync(Surface.Nativehandle, Surface.Flags.isVisible ? SW_SHOWNORMAL : SW_HIDE);
-
-            // Verify that the window is focused.
-            if (Surface.Flags.isVisible)
-            {
-                EnumWindows([](HWND Handle, LPARAM Surface) -> BOOL
-                {
-                    DWORD ProcessID;
-                    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
-
-                    if (ProcessID == GetCurrentProcessId() && Handle == GetForegroundWindow())
-                    {
-                        SetForegroundWindow((HWND)Surface);
-                        SetFocus((HWND)Surface);
-                        return FALSE;
-                    }
-
-                    return TRUE;
-                }, (LPARAM)Surface.Nativehandle);
-            }
-        }
+        Lastframe = Thisframe;
+        onTick(Deltatime);
+        onPaint();
     }
 
-    // Exported functionality.
-    bool Createsurface(std::string_view Classname, std::function<bool(struct nk_context *)> onRender)
+    // Callback from external code.
+    Surface_t *Createsurface(std::string_view Identifier, std::function<bool(Surface_t *)> FrameCB, std::function<bool(Surface_t *)> RenderCB)
     {
         // Register the window.
         WNDCLASSEXA Windowclass{};
         Windowclass.hbrBackground = Clearbrush;
         Windowclass.cbSize = sizeof(WNDCLASSEXA);
-        Windowclass.lpszClassName = Classname.data();
+        Windowclass.lpszClassName = Identifier.data();
         Windowclass.hInstance = GetModuleHandleA(NULL);
         Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT | CS_OWNDC;
         Windowclass.lpfnWndProc = [](HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT
@@ -756,29 +725,26 @@ namespace Graphics
             if (onEvent(wnd, msg, wparam, lparam)) return 0;
             return DefWindowProcW(wnd, msg, wparam, lparam);
         };
-        if (NULL == RegisterClassExA(&Windowclass)) return false;
+        if (NULL == RegisterClassExA(&Windowclass)) return nullptr;
 
-        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOOLWINDOW,
+        // Topmost, optionally transparent, no icon on the taskbar.
+        const auto Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             Windowclass.lpszClassName, NULL, WS_POPUP, NULL, NULL, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
-        if (!Windowhandle) return false;
+        if (!Windowhandle) return nullptr;
 
         // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
-        SetLayeredWindowAttributes(Windowhandle, 0x00FFFFFF, 0, LWA_COLORKEY);
+        SetLayeredWindowAttributes(Windowhandle, toColor(Clearcolor), 0, LWA_COLORKEY);
 
-        Surface_t Surface;
-        Surface.Size = {};
-        Surface.Position = {};
-        Surface.onRender = onRender;
-        Surface.Flags.isDirty = true;
-        Surface.Flags.isVisible = false;
-        Surface.Flags.needsRefresh = false;
-        Surface.Nativehandle = Windowhandle;
+        Surface_t Surface{};
+        Surface.isDirty = true;
+        Surface.onFrame = FrameCB;
+        Surface.onRender = RenderCB;
+        Surface.Windowhandle = Windowhandle;
         Surface.Windowdevice = GetDC(Windowhandle);
 
         // Consolas should be available on every windows system (Vista+).
         static auto Systemfont = Fonts::Createfont("Consolas", 16);
         nk_init_default(&Surface.Context, &Systemfont);
-        Surface.Context.userdata = { Windowhandle };
         Surface.Context.clip.paste = [](nk_handle, struct nk_text_edit *Edit)
         {
             if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(NULL))
@@ -807,25 +773,9 @@ namespace Graphics
         DeleteObject(SelectObject(Surface.Memorydevice, Bitmap));
 
         // Only insert when ready.
-        Surfaces[Classname.data()] = Surface;
-        return true;
-    }
-    void setVisibility(std::string_view Classname, bool Visible)
-    {
-        assert(Surfaces.contains(Classname.data()));
-        Surfaces[Classname.data()].Flags.isVisible = Visible;
-        Surfaces[Classname.data()].Flags.needsRefresh = true;
-    }
-    void onFrame()
-    {
-        // Track the frame-time, should be less than 33ms.
-        static auto Lastframe{ std::chrono::high_resolution_clock::now() };
-        const auto Thisframe{ std::chrono::high_resolution_clock::now() };
-        const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
-
-        Lastframe = Thisframe;
-        onTick(Deltatime);
-        onPaint();
+        auto Entry = &Surfaces[Identifier.data()];
+        *Entry = std::move(Surface);
+        return Entry;
     }
 
     // Helpers for Nuklear.

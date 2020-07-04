@@ -19,9 +19,10 @@ namespace Console
 {
     struct nk_rect Gamearea;
     void *Gamewindowhandle;
-    void *Surfacehandle;
     bool isExtended;
     bool isVisible;
+
+    Spinlock Writelock;
 
     uint32_t Tabcount{};
     constexpr size_t Maxtabs = 7;
@@ -32,9 +33,12 @@ namespace Console
     std::unordered_map<std::string, Functioncallback_t> Functions;
 
     // Rawdata should not be directly modified.
-    std::array<std::pair<std::string, struct nk_color>, 256> Rawdata{};
-    nonstd::ring_span<std::pair<std::string, struct nk_color>> Messages
+    std::array<std::pair<std::shared_ptr<std::string>, struct nk_color>, 64> Rawdata{};
+    nonstd::ring_span<std::pair<std::shared_ptr<std::string>, struct nk_color>> Messages
     { Rawdata.data(), Rawdata.data() + Rawdata.size(), Rawdata.data(), Rawdata.size() };
+
+    // Exists for a frame.
+    std::vector<std::pair<std::shared_ptr<std::string>, struct nk_color>> Messagecache;
 
     // Subsections.
     void addTab(nk_context *Context)
@@ -191,20 +195,25 @@ namespace Console
             nk_layout_row_push(Context, Gamearea.w);
             if (nk_group_begin(Context, "Console.Log", NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER))
             {
-                uint32_t Scrolloffset = 0;
                 nk_layout_row_dynamic(Context, 20, 1);
-                for (const auto &[String, Color] : Messages)
+
+                auto Count = int32_t((Gamearea.h - 60) / 20);
+                Messagecache.clear(); Messagecache.reserve(Count);
+
+                std::for_each(Messages.rbegin(), Messages.rend(), [&](const auto &Item)
+                {
+                    if (Count-- > 0) Messagecache.push_back({ Item });
+                });
+                std::reverse(Messagecache.begin(), Messagecache.end());
+
+                for (const auto &[String, Color] : Messagecache)
                 {
                     // No filtering for maxtabs.
-                    if (Currenttab == Maxtabs || std::strstr(String.c_str(), Filters[Currenttab].c_str()))
+                    if (Currenttab == Maxtabs || std::strstr(String->c_str(), Filters[Currenttab].c_str()))
                     {
-                        nk_label_colored(Context, String.c_str(), NK_TEXT_LEFT, Color);
-                        Scrolloffset += 20;
+                        nk_label_colored(Context, String->c_str(), NK_TEXT_LEFT, Color);
                     }
                 }
-
-                const auto Y = std::max(0.0f, Scrolloffset - Gamearea.h + 70);
-                nk_group_set_scroll(Context, "Console.Log", 0, uint32_t(std::round(Y)));
                 nk_group_end(Context);
             }
         }
@@ -214,7 +223,7 @@ namespace Console
         nk_style_pop_color(Context);
         nk_style_pop_style_item(Context);
     }
-    void Create_inputarea(nk_context *Context)
+    void Create_inputarea(nk_context *Context, HWND Windowhandle)
     {
         // Save the context properties.
         nk_style_push_style_item(Context, &Context->style.window.fixed_background, nk_style_item_color(nk_rgb(0x29, 0x26, 0x29)));
@@ -242,13 +251,15 @@ namespace Console
                 });
 
             // On enter pressed.
-            if (State & NK_EDIT_COMMITED && !Inputstring.empty())
+            if (State & NK_EDIT_COMMITED && Inputstring[0] != '\0')
             {
                 int Argc;
 
                 // Log the input before executing any functions.
-                Messages.push_back({ "> "s + Inputstring.data(), nk_rgb(0xD6, 0xB7, 0x49) });
-
+                {
+                    std::scoped_lock _(Writelock);
+                    Messages.push_back({ std::make_shared<std::string>("> "s + Inputstring.data()), nk_rgb(0xD6, 0xB7, 0x49) });
+                }
                 // Parse the input using the same rules as command-lines.
                 if (const auto Argv = CommandLineToArgvA_wine(Inputstring.data(), &Argc))
                 {
@@ -274,7 +285,7 @@ namespace Console
                 std::memcpy(Inputstring.data(), Lastcommand.c_str(), Lastcommand.size());
 
                 // Hackery to ensure that the cursor gets moved to the end of the input.
-                PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
+                PostMessageA(Windowhandle, WM_KEYDOWN, VK_END, NULL);
             }
             else if (nk_input_is_key_pressed(&Context->input, NK_KEY_DOWN))
             {
@@ -289,14 +300,84 @@ namespace Console
         nk_style_pop_style_item(Context);
     }
 
-    // Immediate mode, so do everything.
-    bool Consolewindow(nk_context *Context)
+    // Callbacks from Graphics.cpp
+    bool onFrame(Graphics::Surface_t *This)
+    {
+        // Fixup for modern Windows having different behaviour than previous.
+        static auto Lastpress{ GetTickCount64() };
+
+        const auto Keydown = (GetAsyncKeyState(VK_OEM_5) & (1 << 31)) | (GetKeyState(VK_OEM_5) & (1 << 31));
+        if (Keydown && GetTickCount64() > (Lastpress + 256))
+        {
+            Lastpress = GetTickCount64();
+
+            // Shift modifier extends the log.
+            if (GetAsyncKeyState(VK_SHIFT) & (1 << 31))
+            {
+                isExtended ^= true;
+            }
+            else
+            {
+                isVisible ^= true;
+
+                // Hide the window.
+                if (!isVisible)
+                {
+                    if (Gamewindowhandle)
+                    {
+                        EnableWindow((HWND)Gamewindowhandle, TRUE);
+                        SetForegroundWindow((HWND)Gamewindowhandle);
+                    }
+                }
+                else
+                {
+                    RECT Gamewindow{};
+                    EnumWindows([](HWND Handle, LPARAM Previouswindow) -> BOOL
+                    {
+                        DWORD ProcessID;
+                        const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+
+                        if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
+                        {
+                            RECT Gamewindow{};
+                            if (GetWindowRect(Handle, &Gamewindow))
+                            {
+                                auto Previous = (RECT *)Previouswindow;
+                                if (Gamewindow.right - Gamewindow.left > Previous->right - Previous->left ||
+                                    Gamewindow.bottom - Gamewindow.top > Previous->bottom - Previous->top)
+                                {
+                                    Gamewindowhandle = Handle;
+                                    *Previous = Gamewindow;
+                                }
+                            }
+                        }
+
+                        return TRUE;
+                    }, (LPARAM)&Gamewindow);
+
+                    // Let's not activate the console if the game isn't active.
+                    if (GetForegroundWindow() == (HWND)Gamewindowhandle)
+                    {
+                        EnableWindow((HWND)Gamewindowhandle, FALSE);
+                        SetForegroundWindow(This->Windowhandle);
+                        SetFocus(This->Windowhandle);
+                    }
+                    else isVisible = false;
+
+                    // Hackery to ensure that the cursor gets moved to the end of the input.
+                    if (isVisible) PostMessageA(This->Windowhandle, WM_KEYDOWN, VK_END, NULL);
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+    bool onRender(Graphics::Surface_t *This)
     {
         if (!isVisible) [[likely]] return false;
-        RECT Gamewindow, Surfacewindow;
-
-        if (!Surfacehandle) [[unlikely]] Surfacehandle = Context->userdata.ptr;
-        assert(Surfacehandle); // WTF?
+        RECT Gamewindow;
 
         // Get the main window.
         GetWindowRect((HWND)Gamewindowhandle, &Gamewindow);
@@ -305,107 +386,37 @@ namespace Console
         const auto Height = (Gamewindow.bottom - Gamewindow.top) * (isExtended ? 0.7 : 0.3);
 
         // Limit the size to save resources (as we draw on the CPU).
-        if (Width < 1440) SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left, Gamewindow.top, Width, Height, 0);
-        else SetWindowPos((HWND)Surfacehandle, 0, Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Widthcropped, Height, 0);
+        if (Width < 1440) SetWindowPos(This->Windowhandle, 0, Gamewindow.left, Gamewindow.top, Width, Height, 0);
+        else SetWindowPos(This->Windowhandle, 0, Gamewindow.left + (Width - 1440) / 2, Gamewindow.top, Widthcropped, Height, 0);
 
-        // Map to our surface.
-        GetWindowRect((HWND)Surfacehandle, &Surfacewindow);
+        // Add offsets now to simplify maths later.
         Gamearea = nk_recti(20, 50, Widthcropped - 40, Height - 50);
 
         // Bound to the game-window.
-        if (nk_begin(Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
+        if (nk_begin(&This->Context, "Console", Gamearea, NK_WINDOW_NO_SCROLLBAR))
         {
             // Ensure a clean state.
-            Context->style.window.spacing = nk_vec2(0, 0);
-            Context->style.window.padding = nk_vec2(0, 0);
-            Context->style.button.rounding = 0;
-            Context->current->bounds = Gamearea;
+            This->Context.style.window.spacing = nk_vec2(0, 0);
+            This->Context.style.window.padding = nk_vec2(0, 0);
+            This->Context.style.button.rounding = 0;
+            This->Context.current->bounds = Gamearea;
 
             // Build the console.
-            Create_tabrow(Context);
-            Create_logarea(Context);
-            Create_inputarea(Context);
+            Create_tabrow(&This->Context);
+            Create_logarea(&This->Context);
+            Create_inputarea(&This->Context, This->Windowhandle);
             // TODO(tcn): Suggestion area?
         }
-        nk_end(Context);
+        nk_end(&This->Context);
 
-        // Always spoil as we have external triggers.
         return true;
     }
 
-    // Internal callbacks.
+    // Callback from Ayria-core.
     void onStartup()
     {
         isExtended = isVisible = false;
-        Graphics::Createsurface("Ayria_console", Consolewindow);
-    }
-    void onFrame()
-    {
-        // Check if we should toggle the console (tilde).§
-        {
-            const auto Keystate = GetAsyncKeyState(VK_OEM_5);
-            const auto Keydown = Keystate & (1 << 31);
-            const auto Newkey = Keystate & (1 << 0);
-            if (Newkey && Keydown)
-            {
-                // Shift modifier extends the log.
-                if (GetAsyncKeyState(VK_SHIFT) & (1 << 31))
-                {
-                    isExtended ^= true;
-                }
-                else
-                {
-                    isVisible ^= true;
-
-                    if (isVisible)
-                    {
-                        RECT Gamewindow{};
-                        EnumWindows([](HWND Handle, LPARAM Previouswindow) -> BOOL
-                        {
-                            DWORD ProcessID;
-                            const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
-
-                            if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
-                            {
-                                RECT Gamewindow{};
-                                if (GetWindowRect(Handle, &Gamewindow))
-                                {
-                                    auto Previous = (RECT *)Previouswindow;
-                                    if(Gamewindow.right - Gamewindow.left > Previous->right - Previous->left ||
-                                        Gamewindow.bottom - Gamewindow.top > Previous->bottom - Previous->top)
-                                    {
-                                        Gamewindowhandle = Handle;
-                                        *Previous = Gamewindow;
-                                    }
-                                }
-                            }
-
-                            return TRUE;
-                        }, (LPARAM)&Gamewindow);
-
-                        // Let's not activate the console if the game isn't active.
-                        if (GetForegroundWindow() == (HWND)Gamewindowhandle)
-                        {
-                            EnableWindow((HWND)Gamewindowhandle, FALSE);
-                        }
-                        else isVisible = false;
-
-                        // Hackery to ensure that the cursor gets moved to the end of the input.
-                        if (isVisible) PostMessageA((HWND)Surfacehandle, WM_KEYDOWN, VK_END, NULL);
-                    }
-                    else
-                    {
-                        if (Gamewindowhandle)
-                        {
-                            EnableWindow((HWND)Gamewindowhandle, TRUE);
-                            SetForegroundWindow((HWND)Gamewindowhandle);
-                        }
-                    }
-                }
-            }
-
-            Graphics::setVisibility("Ayria_console", isVisible);
-        }
+        Graphics::Createsurface("Ayria_console", onFrame, onRender);
     }
 }
 
@@ -442,14 +453,16 @@ namespace API
                 {
                     if (Pos != 0)
                     {
-                        Console::Messages.push_back({ {Input.data(), Pos},
+                        std::scoped_lock _(Console::Writelock);
+                        Console::Messages.push_back({ std::make_shared<std::string>(Input.data(), Pos),
                             nk_rgb(Colour >> 16 & 0xFF, Colour >> 8 & 0xFF, Colour >> 0 & 0xFF) });
                     }
                     Input.remove_prefix(Pos + 1);
                 }
                 else
                 {
-                    Console::Messages.push_back({ {Input.data(), Input.size()},
+                    std::scoped_lock _(Console::Writelock);
+                    Console::Messages.push_back({ std::make_shared<std::string>(Input.data(), Input.size()),
                         nk_rgb(Colour >> 16 & 0xFF, Colour >> 8 & 0xFF, Colour >> 0 & 0xFF) });
                     break;
                 }

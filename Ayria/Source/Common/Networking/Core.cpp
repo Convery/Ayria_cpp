@@ -44,47 +44,53 @@ namespace Networking::Core
         const auto Callback = Messagehandlers.find(Type);
         if (Callback == Messagehandlers.end()) [[unlikely]] return;
 
-        // Try to decompress.
-        #if defined(HAS_LZ4)
-        char *Decompressed;
-        std::unique_ptr<char[]> Heapbuffer;
-        if (Input.size() >= 1 << 10)
+        // If the message is not valid Base64, it's compressed or damaged.
+        if (!Base64::isValid(Input))
         {
-            Heapbuffer = std::make_unique<char[]>(Input.size() * 3);
-            Decompressed = Heapbuffer.get();
+            // Try to decompress.
+            #if defined(HAS_LZ4)
+            char *Decompressed;
+            std::unique_ptr<char[]> Heapbuffer;
+            if (Input.size() >= 1 << 10)
+            {
+                Heapbuffer = std::make_unique<char[]>(Input.size() * 3);
+                Decompressed = Heapbuffer.get();
+            }
+            else Decompressed = (char *)alloca(Input.size() * 3);
+
+            const auto Size = LZ4_decompress_safe(Input.data(), Decompressed, Input.size(), Input.size() * 3);
+            if (Size > 0) Input = std::string_view(Decompressed, Size);
+            if (!Base64::isValid(Input)) [[unlikely]] return;
+
+            // Callbacks take a char * to allow C-APIs.
+            Callback->second(Client, Base64::Decode(Input).c_str());
+            #endif
+
+            return;
         }
-        else Decompressed = (char *)alloca(Input.size() * 3);
-
-        const auto Size = LZ4_decompress_safe(Input.data(), Decompressed, Input.size(), Input.size() * 3);
-        if (Size > 0) Input = std::string_view(Decompressed, Size);
-        #endif
-
-        // We only send messages in base64, so we can use it as integrity verification.
-        if (!Base64::isValid(Input)) [[unlikely]] return;
 
         // Callbacks take a char * to allow C-APIs.
         Callback->second(Client, Base64::Decode(Input).c_str());
     }
     void Sendmessage(uint32_t Type, std::string_view Input)
     {
-        auto Message = Base64::Encode(Input);
-
         // Try to compress.
         #if defined(HAS_LZ4)
         char *Compressed;
         std::unique_ptr<char[]> Heapbuffer;
-        if (Message.size() >= 1 << 10)
+        if (Input.size() >= 1 << 10)
         {
-            Heapbuffer = std::make_unique<char[]>(Message.size());
+            Heapbuffer = std::make_unique<char[]>(Input.size());
             Compressed = Heapbuffer.get();
         }
-        else Compressed = (char *)alloca(Message.size());
+        else Compressed = (char *)alloca(Input.size());
 
-        const auto Size = LZ4_compress_default(Message.data(), Compressed, Message.size(), Message.size());
-        if(Size > 0) Message = std::string(Compressed, Size);
+        const auto Size = LZ4_compress_default(Input.data(), Compressed, Input.size(), Input.size());
+        if(Size > 0) Input = std::string(Compressed, Size);
         #endif
 
         // Windows does not like partial messages, so prefex the buffer.
+        auto Message = Base64::Encode(Input);
         Message.insert(0, (char *)&Type, sizeof(Type));
 
         // Enqueue for later.

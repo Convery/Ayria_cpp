@@ -44,7 +44,6 @@ namespace Console
     void execString(std::string_view Commandline);
 
     void onStartup();
-    void onFrame();
 }
 
 // Broadcast-based networking.
@@ -121,8 +120,24 @@ namespace Clients
 
 namespace Graphics
 {
-    bool Createsurface(std::string_view Classname, std::function<bool(struct nk_context *)> onRender);
-    void setVisibility(std::string_view Classname, bool Visible);
+    struct Surface_t
+    {
+        POINT Position, Size;
+        nk_context Context;
+        HWND Windowhandle;
+        HDC Windowdevice;
+        HDC Memorydevice;
+        bool isDirty;
+
+        // Returns if the surface is dirty.
+        std::function<bool(Surface_t *)> onFrame;
+        std::function<bool(Surface_t *)> onRender;
+    };
+
+    // Callback from external code.
+    Surface_t *Createsurface(std::string_view Identifier, std::function<bool(Surface_t *)> FrameCB, std::function<bool(Surface_t *)> RenderCB);
+
+    // Callback from Ayria-core.
     void onFrame();
 
     // Helpers for Nuklear.

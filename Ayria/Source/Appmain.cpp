@@ -114,5 +114,4 @@ void onFrame()
 {
     Networking::Core::onFrame();
     Graphics::onFrame();
-    Console::onFrame();
 }
