@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <functional>
 #include <algorithm>
+#include <numbers>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
