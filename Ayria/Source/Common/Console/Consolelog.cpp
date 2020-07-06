@@ -67,7 +67,7 @@ namespace Console
         std::string_view Input(Message);
         while (!Input.empty())
         {
-            if (const auto Pos = Input.find('\n'); Pos != Input.npos)
+            if (const auto Pos = Input.find('\n'); Pos != std::string_view::npos)
             {
                 if (Pos != 0)
                 {

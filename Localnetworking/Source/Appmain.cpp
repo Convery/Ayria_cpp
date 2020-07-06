@@ -91,11 +91,11 @@ namespace Localnetworking
     {
         std::scoped_lock _(Bottleneck);
 
-        for (const auto &Item : Proxyservers)
+        for (auto &Item : Proxyservers)
         {
             if (FNV::Equal(Item.second.Address.sin_addr, Hostname->sin_addr))
             {
-                return &Proxyservers[Item.first];
+                return &Item.second;
             }
         }
 
