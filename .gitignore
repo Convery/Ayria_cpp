@@ -68,3 +68,4 @@ Bin
 *.db
 out
 /Ayria/TODO.txt
+/cmake-build-debug/AYRIA.cbp
