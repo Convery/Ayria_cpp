@@ -11,7 +11,7 @@ namespace Paint
 {
     struct Pen_t
     {
-        static std::unordered_map<int, HPEN> Pens;
+        static std::unordered_map<int, HPEN, decltype(FNV::Hash), decltype(FNV::Equal)> Pens;
         HGDIOBJ Previous;
         HDC DC;
 
@@ -64,7 +64,7 @@ namespace Paint
         DeleteDC(Device);
     }
 
-    #define COMMON HDC Devicecontext, POINT Position, COLORREF Colour
+    #define COMMON HDC Devicecontext, [[maybe_unused]] POINT Position, [[maybe_unused]] COLORREF Colour
     namespace Lines
     {
         inline void Singleline(COMMON, int Linewidth, POINT Endpoint)
@@ -87,10 +87,10 @@ namespace Paint
         {
             const Pen_t Pen(Devicecontext, Linewidth, Colour);
 
-            const float X0 = Position.x + Rounding * std::cosf((Angles.x + Angles.y) * std::numbers::pi / 180.0f);
-            const float Y0 = Position.y + Rounding * std::sinf((Angles.x + Angles.y) * std::numbers::pi / 180.0f);
-            const float X1 = Position.x + Rounding * std::cosf(Angles.x * std::numbers::pi / 180.0f);
-            const float Y1 = Position.y + Rounding * std::sinf(Angles.x * std::numbers::pi / 180.0f);
+            const float X0 = Position.x + Rounding * std::cosf(static_cast<float>((Angles.x + Angles.y) * std::numbers::pi / 180.0f));
+            const float Y0 = Position.y + Rounding * std::sinf(static_cast<float>((Angles.x + Angles.y) * std::numbers::pi / 180.0f));
+            const float X1 = Position.x + Rounding * std::cosf(static_cast<float>(Angles.x * std::numbers::pi / 180.0f));
+            const float Y1 = Position.y + Rounding * std::sinf(static_cast<float>(Angles.x * std::numbers::pi / 180.0f));
 
             SetArcDirection(Devicecontext, AD_COUNTERCLOCKWISE);
             Arc(Devicecontext, Position.x - Rounding, Position.y - Rounding,
@@ -102,10 +102,10 @@ namespace Paint
             const Pen_t Pen(Devicecontext, Linewidth, Colour);
             SetDCBrushColor(Devicecontext, Background);
 
-            const float X0 = Position.x + Rounding * std::cosf((Angles.x + Angles.y) * std::numbers::pi / 180.0f);
-            const float Y0 = Position.y + Rounding * std::sinf((Angles.x + Angles.y) * std::numbers::pi / 180.0f);
-            const float X1 = Position.x + Rounding * std::cosf(Angles.x * std::numbers::pi / 180.0f);
-            const float Y1 = Position.y + Rounding * std::sinf(Angles.x * std::numbers::pi / 180.0f);
+            const float X0 = Position.x + Rounding * std::cosf(static_cast<float>((Angles.x + Angles.y) * std::numbers::pi / 180.0f));
+            const float Y0 = Position.y + Rounding * std::sinf(static_cast<float>((Angles.x + Angles.y) * std::numbers::pi / 180.0f));
+            const float X1 = Position.x + Rounding * std::cosf(static_cast<float>(Angles.x * std::numbers::pi / 180.0f));
+            const float Y1 = Position.y + Rounding * std::sinf(static_cast<float>(Angles.x * std::numbers::pi / 180.0f));
 
             SetArcDirection(Devicecontext, AD_COUNTERCLOCKWISE);
             ::Pie(Devicecontext, Position.x - Rounding, Position.y - Rounding,
@@ -240,7 +240,8 @@ namespace Paint
             // Malformed quad, draw as two triangles.
             if (Points.size() == 4)
             {
-                GRADIENT_TRIANGLE Index[2] = { {0, 1, 3}, {2, 1, 3} };
+                GRADIENT_TRIANGLE Index[2] = { { 0, 1, 3 },
+                                               { 2, 1, 3 } };
                 GradientFill(Devicecontext, Array, Points.size(), Index, 2, GRADIENT_FILL_TRIANGLE);
             }
             else
@@ -255,20 +256,18 @@ namespace Paint
 
     namespace Text
     {
-        inline void Transparant(COMMON, HFONT Fonthandle, std::string_view String)
+        inline void Transparant(COMMON, HFONT Fonthandle, std::wstring_view String)
         {
-            const auto Wide = toWide(String);
             SetTextColor(Devicecontext, Colour);
             SelectObject(Devicecontext, Fonthandle);
-            ExtTextOutW(Devicecontext, Position.x, Position.y, ETO_NUMERICSLATIN, NULL, Wide.c_str(), Wide.size(), NULL);
+            ExtTextOutW(Devicecontext, Position.x, Position.y, ETO_NUMERICSLATIN, NULL, String.data(), String.size(), NULL);
         }
-        inline void Opaque(COMMON, HFONT Fonthandle, std::string_view String, COLORREF Background)
+        inline void Opaque(COMMON, HFONT Fonthandle, std::wstring_view String, COLORREF Background)
         {
-            const auto Wide = toWide(String);
             SetTextColor(Devicecontext, Colour);
             SetBkColor(Devicecontext, Background);
             SelectObject(Devicecontext, Fonthandle);
-            ExtTextOutW(Devicecontext, Position.x, Position.y, ETO_NUMERICSLATIN | ETO_OPAQUE, NULL, Wide.c_str(), Wide.size(), NULL);
+            ExtTextOutW(Devicecontext, Position.x, Position.y, ETO_NUMERICSLATIN | ETO_OPAQUE, NULL, String.data(), String.size(), NULL);
         }
         inline void setAlignment(HDC Devicecontext, bool Left, bool Right, bool Centre)
         {
@@ -286,16 +285,6 @@ namespace Paint
 
 namespace Fonts
 {
-    inline POINT getTextsize(HDC Devicecontext, std::string_view Text)
-    {
-        SIZE Textsize;
-        const auto String = toWide(Text);
-
-        if (GetTextExtentPoint32W(Devicecontext, String.c_str(), int(String.size()), &Textsize))
-            return { Textsize.cx, Textsize.cy };
-        return {};
-    }
-
     inline HFONT Createfont(const char *Name, int32_t Fontsize)
     {
         return CreateFontA(Fontsize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, Name);
@@ -307,29 +296,44 @@ namespace Fonts
         (void)AddFontMemResourceEx(Fontdata, Datasize, NULL, &Installedfonts);
         return Createfont(Name, Fontsize);
     }
+
+    inline HFONT getDefaultfont()
+    {
+        static const auto Default = Fonts::Createfont("Consolas", 16);
+        return Default;
+    }
+    inline POINT getTextsize(HDC Devicecontext, std::string_view Text)
+    {
+        SIZE Textsize;
+        const auto String = toWide(Text);
+
+        if (GetTextExtentPoint32W(Devicecontext, String.c_str(), int(String.size()), &Textsize))
+            return { Textsize.cx, Textsize.cy };
+        return {};
+    }
 }
 namespace Images
 {
-    template<bool isRGB>   // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
+    template <bool isRGB>   // NOTE(tcn): Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
     std::pair<BITMAP, HBITMAP> Createimage(const uint8_t *Pixelbuffer, const POINT Size, size_t Bitsperpixel = 24)
     {
         assert(Size.x);
         assert(Size.y);
         assert(Pixelbuffer);
-        BITMAPINFO BMI{sizeof(BITMAPINFOHEADER)};
+        BITMAPINFO BMI{ sizeof(BITMAPINFOHEADER) };
         const size_t Pixelsize = Bitsperpixel / 8;
         uint8_t *DIBPixels{};
 
         // Windows likes to draw bitmaps upside down, so negative height.
         BMI.bmiHeader.biSizeImage = Size.y * Size.x * Pixelsize;
-        BMI.bmiHeader.biBitCount = Bitsperpixel;
+        BMI.bmiHeader.biBitCount = static_cast<WORD>(Bitsperpixel);
         BMI.bmiHeader.biHeight = (-1) * Size.y;
         BMI.bmiHeader.biCompression = BI_RGB;
         BMI.bmiHeader.biWidth = Size.x;
         BMI.bmiHeader.biPlanes = 1;
 
         // Allocate the bitmap in system-memory.
-        const auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **) &DIBPixels, NULL, 0);
+        const auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
         std::memcpy(Bitmap, Pixelbuffer, Size.x * Size.y * Pixelsize);
 
         // Swap R and B channels.
@@ -343,9 +347,9 @@ namespace Images
         }
 
         // Re-associate the memory with our bitmap.
-        SetDIBits(NULL, Bitmap, 0, Size.y, DIBPixels, &BMI, DIB_RGB_COLORS);
+        SetDIBits(NULL, Bitmap, 0, static_cast<UINT>(Size.y), DIBPixels, &BMI, DIB_RGB_COLORS);
         BITMAP Result;
         GetObjectA(Bitmap, sizeof(BITMAP), &Result);
-        return {Result, Bitmap};
+        return { Result, Bitmap };
     }
 }

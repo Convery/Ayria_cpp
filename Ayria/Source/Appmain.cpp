@@ -4,7 +4,8 @@
     License: MIT
 */
 
-#include "Global.hpp"
+#include <Stdinclude.hpp>
+#include "Common.hpp"
 
 // Track if we need to use fallback methods.
 static bool TLSFallback = false;
@@ -80,7 +81,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 // Initialize our subsystems.
 void onStartup()
 {
-    Clients::onStartup();
+    //Clients::onStartup();
 
     std::thread([]() -> void
     {
@@ -101,8 +102,8 @@ void onStartup()
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
         // Initialize the subsystems.
-        Networking::Core::onStartup();
-        Console::onStartup();
+        //Networking::Core::onStartup();
+        //Console::onStartup();
 
         // Depending on system resources, this may still result in 100% utilisation.
         static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
@@ -112,6 +113,6 @@ void onStartup()
 }
 void onFrame()
 {
-    Networking::Core::onFrame();
-    Graphics::onFrame();
+    //Networking::Core::onFrame();
+    //Graphics::onFrame();
 }

@@ -5,8 +5,7 @@
 */
 
 #include <Stdinclude.hpp>
-#include "../Global.hpp"
-#include <unordered_set>
+#include "../Common.hpp"
 
 namespace Pluginloader
 {

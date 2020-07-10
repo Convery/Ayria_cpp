@@ -10,7 +10,7 @@
 namespace Graphics
 {
     std::unordered_map<std::string, Surface_t> Surfaces;
-    constexpr auto Clearcolor = toColor(0xFF, 0xFF, 0xFF, 0xFF);
+    constexpr auto Clearcolor = toColour(0xFF, 0xFF, 0xFF, 0xFF);
     const HBRUSH Clearbrush = CreateSolidBrush(Clearcolor);
 
     Surface_t *Createsurface(std::string_view Identifier)
@@ -52,15 +52,16 @@ namespace Graphics
 
         for (auto &[Name, Surface] : Surfaces)
         {
-            Surface.Mouseposition = { Globalmouse.x - Surface.Position.x, Globalmouse.y - Surface.Position.y };
-            const bool Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
-            const bool Shift = GetKeyState(VK_SHIFT) & (1 << 15);
+            const bool Ctrl = static_cast<const bool>(GetKeyState(VK_CONTROL) & (1 << 15));
+            const bool Shift = static_cast<const bool>(GetKeyState(VK_SHIFT) & (1 << 15));
 
             MSG Message;
             while (PeekMessageA(&Message, Surface.Windowhandle, NULL, NULL, PM_REMOVE))
             {
-                TranslateMessage(&Message);
                 Event_t Event{};
+                TranslateMessage(&Message);
+                Event.Flags.modCtrl = Ctrl;
+                Event.Flags.modShift = Shift;
 
                 switch (Message.message)
                 {
@@ -98,10 +99,10 @@ namespace Graphics
                     }
 
                     // Special keys.
-                    case WM_KEYDOWN:
-                    case WM_KEYUP:
                     case WM_SYSKEYDOWN:
                     case WM_SYSKEYUP:
+                    case WM_KEYDOWN:
+                    case WM_KEYUP:
                     {
                         const bool Down = !((Message.lParam >> 31) & 1);
                         Event.Data.Keycode = Message.wParam;
@@ -128,6 +129,7 @@ namespace Graphics
                                 }
                                 break;
                             }
+                            default: break;
                         }
 
                         break;
@@ -136,9 +138,8 @@ namespace Graphics
                     // Keyboard input.
                     case WM_CHAR:
                     {
-                        const bool Down = !((Message.lParam >> 31) & 1);
-                        Event.Data.Letter = Message.wParam;
-                        Event.Flags.Keydown = Down;
+                        Event.Data.Letter = static_cast<wchar_t>(Message.wParam);
+                        Event.Flags.Keydown = !((Message.lParam >> 31) & 1);
                         break;
                     }
 
@@ -149,8 +150,12 @@ namespace Graphics
                     case WM_RBUTTONDOWN:
                     {
                         Event.Data.Point = { LOWORD(Message.lParam), HIWORD(Message.lParam) };
+                        Event.Flags.Mouseright  |= Message.message == WM_RBUTTONDOWN;
+                        Event.Flags.Mouseleft  |= Message.message == WM_LBUTTONDOWN;
                         Event.Flags.Mousedown |= Message.message == WM_LBUTTONDOWN;
                         Event.Flags.Mousedown |= Message.message == WM_RBUTTONDOWN;
+                        Event.Flags.Mouseright  |= Message.message == WM_RBUTTONUP;
+                        Event.Flags.Mouseleft  |= Message.message == WM_LBUTTONUP;
                         Event.Flags.Mouseup = !Event.Flags.Mousedown;
 
                         if (Event.Flags.Mouseup) ReleaseCapture();
@@ -174,11 +179,11 @@ namespace Graphics
                 // Notify the elements.
                 if (Event.Flags.Raw)
                 {
-                    for (auto &Item : Surface.Elements)
+                    for (auto &[_, Element] : Surface.Elements)
                     {
-                        if (Item.Wantedevents & Event.Flags.Raw)
+                        if (Element->Wantedevents.Raw & Event.Flags.Raw)
                         {
-                            Item.onEvent(&Surface, Event);
+                            Element->onEvent(&Surface, Event);
                         }
                     }
                 }
@@ -199,52 +204,53 @@ namespace Graphics
         // Notify all timers.
         for(auto &[Name, Surface] : Surfaces)
         {
-            for(auto &Element : Surface.Elements)
+            for(auto &[ID, Element] : Surface.Elements)
             {
-                Element.onFrame(&Surface, Deltatime);
+                Element->onFrame(&Surface, Deltatime);
             }
         }
 
         // Paint the surfaces.
         for (auto &[Name, Surface] : Surfaces)
         {
-            // Clean the context.
-            SelectObject(Surface.Devicecontext, GetStockObject(DC_PEN));
-            SelectObject(Surface.Devicecontext, GetStockObject(DC_BRUSH));
-
-            // NOTE(tcn): This seems to be the fastest way to clear.
-            SetBkColor(Surface.Devicecontext, Clearcolor);
-            const RECT Screen = { 0, 0, Surface.Size.x, Surface.Size.y };
-            ExtTextOutW(Surface.Devicecontext, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
-
-            // Paint the surface.
-            for (auto &Element : Surface.Elements)
+            // Only render when a surface is visible.
+            if (IsWindowVisible(Surface.Windowhandle))
             {
-                // The method decides if the device needs updating.
-                Element.onRender(&Surface);
+                // Clean the context.
+                SelectObject(Surface.Devicecontext, GetStockObject(DC_PEN));
+                SelectObject(Surface.Devicecontext, GetStockObject(DC_BRUSH));
 
-                // Transparency through masking.
-                if (Element.Mask)
+                // NOTE(tcn): This seems to be the fastest way to clear.
+                SetBkColor(Surface.Devicecontext, Clearcolor);
+                const RECT Screen = { 0, 0, Surface.Size.x, Surface.Size.y };
+                ExtTextOutW(Surface.Devicecontext, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
+
+                // Paint the surface.
+                for (auto &[ID, Element] : Surface.Elements)
                 {
-                    const auto Device = CreateCompatibleDC(Element.Devicecontext);
-                    SelectObject(Device, Element.Mask);
+                    // The method decides if the device needs updating.
+                    Element->onRender(&Surface);
 
-                    BitBlt(Surface.Devicecontext, Element.Position.x, Element.Position.y, Element.Size.x, Element.Size.y, Device, 0, 0, SRCAND);
-                    BitBlt(Surface.Devicecontext, Element.Position.x, Element.Position.y, Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0, SRCPAINT);
+                    // Transparency through masking.
+                    if (Element->Mask)
+                    {
+                        const auto Device = CreateCompatibleDC(Element->Devicecontext);
+                        SelectObject(Device, Element->Mask);
 
-                    DeleteDC(Device);
+                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Device, 0, 0, SRCAND);
+                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Element->Devicecontext, 0, 0, SRCPAINT);
+
+                        DeleteDC(Device);
+                    }
+                    else
+                    {
+                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Element->Devicecontext, 0, 0, SRCCOPY);
+                    }
                 }
-                else
-                {
-                    BitBlt(Surface.Devicecontext, Element.Position.x, Element.Position.y, Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0, SRCCOPY);
-                }
+
+                // Paint the screen.
+                BitBlt(GetDC(Surface.Windowhandle), 0, 0, Surface.Size.x, Surface.Size.y, Surface.Devicecontext, 0, 0, SRCCOPY);
             }
-
-            // Paint the screen.
-            BitBlt(GetDC(Surface.Windowhandle), 0, 0, Surface.Size.x, Surface.Size.y, Surface.Devicecontext, 0, 0, SRCCOPY);
-
-            // Ensure that the surface is visible.
-            ShowWindowAsync(Surface.Windowhandle, SW_SHOWNORMAL);
         }
     }
 }

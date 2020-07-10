@@ -5,7 +5,7 @@
 */
 
 #include <Stdinclude.hpp>
-#include "../Global.hpp"
+#include "../Common.hpp"
 
 namespace Pluginloader
 {

@@ -6,6 +6,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#include "Graphics.hpp"
 
 namespace Console
 {
@@ -17,10 +18,6 @@ namespace Console
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::string &Message, COLORREF Colour);
 
-    // Which user-selected filter is active?
-    std::string_view getCurrentfilter();
-
-
-
-
+    // Create and assign the elements to the parent-surface.
+    void Initialize(Graphics::Surface_t *Parent);
 }
