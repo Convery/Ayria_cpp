@@ -13,7 +13,8 @@ namespace Graphics
     constexpr auto Clearcolor = toColour(0xFF, 0xFF, 0xFF, 0xFF);
     const HBRUSH Clearbrush = CreateSolidBrush(Clearcolor);
 
-    Surface_t *Createsurface(std::string_view Identifier)
+    // Create a new window and update them.
+    Surface_t *Createsurface(std::string_view Identifier, Surface_t *Original)
     {
         // Register the window.
         WNDCLASSEXA Windowclass{};
@@ -34,15 +35,20 @@ namespace Graphics
         // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
         SetLayeredWindowAttributes(Windowhandle, Clearcolor, 0, LWA_COLORKEY);
 
-        // Default initialization.
-        Surface_t Surface{};
-        Surface.Windowhandle = Windowhandle;
-        Surface.Devicecontext = CreateCompatibleDC(GetDC(Windowhandle));
-
-        // Only insert when ready.
-        auto Entry = &Surfaces[Identifier.data()];
-        *Entry = std::move(Surface);
-        return Entry;
+        // Append to a pre-allocated surface.
+        if (Original)
+        {
+            Original->Windowhandle = Windowhandle;
+            Original->Devicecontext = CreateCompatibleDC(GetDC(Windowhandle));
+            return &Surfaces.emplace(Identifier.data(), std::move(Original)).first->second;
+        }
+        else
+        {
+            auto Entry = &Surfaces[Identifier.data()];
+            Entry->Windowhandle = Windowhandle;
+            Entry->Devicecontext = CreateCompatibleDC(GetDC(Windowhandle));
+            return Entry;
+        }
     }
 
     inline void Processinput()
@@ -176,21 +182,12 @@ namespace Graphics
                     }
                 }
 
-                // Notify the elements.
-                if (Event.Flags.Raw)
-                {
-                    for (auto &[_, Element] : Surface.Elements)
-                    {
-                        if (Element->Wantedevents.Raw & Event.Flags.Raw)
-                        {
-                            Element->onEvent(&Surface, Event);
-                        }
-                    }
-                }
+                // Notify the surface.
+                if (Event.Flags.Raw) Surface.onEvent(&Surface, Event);
             }
         }
     }
-    void doFrame()
+    void Processsurfaces()
     {
         // Track the frame-time, should be less than 33ms.
         const auto Thisframe{ std::chrono::high_resolution_clock::now() };
@@ -202,13 +199,7 @@ namespace Graphics
         Processinput();
 
         // Notify all timers.
-        for(auto &[Name, Surface] : Surfaces)
-        {
-            for(auto &[ID, Element] : Surface.Elements)
-            {
-                Element->onFrame(&Surface, Deltatime);
-            }
-        }
+        for(auto &[Name, Surface] : Surfaces) Surface.onFrame(&Surface, Deltatime);
 
         // Paint the surfaces.
         for (auto &[Name, Surface] : Surfaces)
@@ -226,27 +217,7 @@ namespace Graphics
                 ExtTextOutW(Surface.Devicecontext, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
 
                 // Paint the surface.
-                for (auto &[ID, Element] : Surface.Elements)
-                {
-                    // The method decides if the device needs updating.
-                    Element->onRender(&Surface);
-
-                    // Transparency through masking.
-                    if (Element->Mask)
-                    {
-                        const auto Device = CreateCompatibleDC(Element->Devicecontext);
-                        SelectObject(Device, Element->Mask);
-
-                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Device, 0, 0, SRCAND);
-                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Element->Devicecontext, 0, 0, SRCPAINT);
-
-                        DeleteDC(Device);
-                    }
-                    else
-                    {
-                        BitBlt(Surface.Devicecontext, Element->Position.x, Element->Position.y, Element->Size.x, Element->Size.y, Element->Devicecontext, 0, 0, SRCCOPY);
-                    }
-                }
+                Surface.onRender(&Surface);
 
                 // Paint the screen.
                 BitBlt(GetDC(Surface.Windowhandle), 0, 0, Surface.Size.x, Surface.Size.y, Surface.Devicecontext, 0, 0, SRCCOPY);

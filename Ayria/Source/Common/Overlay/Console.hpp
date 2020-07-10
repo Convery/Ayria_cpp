@@ -6,7 +6,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
-#include "Graphics.hpp"
+#include "Ayria/Source/Common/Graphics/Graphics.hpp"
 
 namespace Console
 {
@@ -17,7 +17,10 @@ namespace Console
 
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::string &Message, COLORREF Colour);
+}
 
-    // Create and assign the elements to the parent-surface.
-    void Initialize(Graphics::Surface_t *Parent);
+namespace Graphics
+{
+    // Create and assign the elements to the surface.
+    Surface_t *Createconsole();
 }

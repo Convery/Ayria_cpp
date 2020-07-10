@@ -81,7 +81,8 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 // Initialize our subsystems.
 void onStartup()
 {
-    //Clients::onStartup();
+    Graphics::Createsurface("Console", Graphics::Createconsole());
+    // TODO(tcn): Init client information.
 
     std::thread([]() -> void
     {
@@ -114,5 +115,5 @@ void onStartup()
 void onFrame()
 {
     //Networking::Core::onFrame();
-    //Graphics::onFrame();
+    Graphics::Processsurfaces();
 }

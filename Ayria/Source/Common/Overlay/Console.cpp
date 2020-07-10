@@ -235,7 +235,7 @@ namespace Console
                     {
                         if (const auto Memory = GetClipboardData(CF_UNICODETEXT))
                         {
-                            if (const auto Size = GlobalSize(Memory) - 1)
+                            if ((GlobalSize(Memory) - 1) > 0)
                             {
                                 if (const auto String = (LPCWSTR)GlobalLock(Memory))
                                 {
@@ -270,9 +270,9 @@ namespace Console
                 if (!Suggestionline.empty())
                 {
                     Paint::Text::Opaque(Devicecontext, {}, Suggestioncolour,
-                                        Fonts::getDefaultfont(), Suggestionline, Backgroundcolour);
+                                        Fonts::getDefault(), Suggestionline, Backgroundcolour);
                 }
-                Paint::Text::Transparant(Devicecontext, {}, Inputcolour, Fonts::getDefaultfont(), Inputline);
+                Paint::Text::Transparant(Devicecontext, {}, Inputcolour, Fonts::getDefault(), Inputline);
             }
         };
     }
@@ -283,7 +283,6 @@ namespace Console
 
         Console_t()
         {
-            Wantedevents.Raw = 0xFFFFFFFF;
         }
 
         void onFrame(Surface_t *Parent, float) final
@@ -351,14 +350,17 @@ namespace Console
 
         }
     };
+}
 
-    // Create and assign the elements to the parent-surface.
-    void Initialize(Surface_t *Parent)
+namespace Graphics
+{
+    // Create and assign the elements to the surface.
+    Surface_t *Createconsole()
     {
-        Parent->Elements["Console"] = new Console_t();
-
+        return new Console::Console_t();
     }
 }
+
 
 // Provide a C-API for external code.
 namespace API
