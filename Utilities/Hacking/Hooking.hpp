@@ -239,20 +239,22 @@ namespace Hooking
             if constexpr (Build::is64bit)
             {
                 // JMP [RIP + 0] | FF 25 00 00 00 00 ... | OP MODRM IMM32 IMM64
-                *(uint64_t *)(Address + Oldcode.size() + 2) = Target + Jumpsize;
-                *(uint8_t *)(Address + Oldcode.size() + 1) = 0x25;
                 *(uint8_t *)(Address + Oldcode.size() + 0) = 0xFF;
-                *(uint64_t *)(Target + 2) = Replacement;
-                *(uint8_t *)(Target + 1) = 0x25;
-                *(uint8_t *)(Target + 0) = 0xFF;
+                *(uint8_t *)(Address + Oldcode.size() + 1) = 0x25;
+                *(uint32_t *)(Address + Oldcode.size() + 2) = 0x0;
+                *(uint64_t *)(Address + Oldcode.size() + 6) = Target + Jumpsize;
+                *(uint8_t *)(Target + 0) = 0xFF;    // JMP
+                *(uint8_t *)(Target + 1) = 0x25;    // RIP
+                *(uint32_t *)(Target + 2) = 0x0;    // Offset (Target + 6)
+                *(uint64_t *)(Target + 6) = Replacement;
             }
             else
             {
                 // JMP short | E9 ... | OP IMM32
-                *(size_t *)(Address + Oldcode.size() + 1) = Target + Jumpsize - Address - Oldcode.size() - 5;
-                *(uint8_t *)(Address + Oldcode.size() + 0) = 0xE9;
-                *(size_t *)(Target + 1) = Replacement - Target - 5;
                 *(uint8_t *)(Target + 0) = 0xE9;
+                *(size_t *)(Target + 1) = Replacement - Target - 5;
+                *(uint8_t *)(Address + Oldcode.size() + 0) = 0xE9;
+                *(size_t *)(Address + Oldcode.size() + 1) = Target + Jumpsize - Address - Oldcode.size() - 5;
             }
 
             return Address;
