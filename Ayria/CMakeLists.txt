@@ -29,3 +29,12 @@ add_definitions(-DMODULENAME="${MODULENAME}")
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
 target_link_libraries(${MODULENAME} ${PLATFORM_LIBS} ${MODULE_LIBS})
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
+
+# For developers, create a host process that can be used to test Ayria.
+if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+    add_executable("Ayriahost" ${SOURCES})
+    add_definitions(-DMODULENAME="Ayriahost")
+    set_target_properties("Ayriahost" PROPERTIES PREFIX "")
+    target_link_libraries("Ayriahost" ${PLATFORM_LIBS} ${MODULE_LIBS})
+    set_target_properties("Ayriahost" PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
+endif()
