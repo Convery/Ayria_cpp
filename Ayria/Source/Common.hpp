@@ -6,9 +6,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
-#include "Common/Graphics/Graphics.hpp"
-#include "Common/Graphics/Drawing.hpp"
-#include "Common/Overlay/Console.hpp"
+#include <Graphics/Graphics.hpp>
 
 namespace Pluginloader
 {
