@@ -86,7 +86,7 @@ namespace Patternscan
     }
 
     // Calculate the hosts default ranges, once per compilation-module on some compilers.
-    [[nodiscard]] inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges(bool Force = false)
+    [[nodiscard]] inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges(bool Forceupdate = false)
     {
         /*
             NOTE(tcn):
@@ -103,7 +103,7 @@ namespace Patternscan
         */
 
         static Range_t Textsegment{}, Datasegment{};
-        if (Textsegment != Datasegment && !Force) return { Textsegment, Datasegment };
+        if (Textsegment != Datasegment && !Forceupdate) return { Textsegment, Datasegment };
 
         #if defined(_WIN32)
         HMODULE Module = GetModuleHandleA(nullptr);
@@ -144,7 +144,7 @@ namespace Patternscan
             Currentpage = (size_t)Pageinformation.BaseAddress + Pageinformation.RegionSize;
         }
         #else
-        assert(false);
+        static_assert(false, "Not implemented");
         #endif
 
         Range.second = Currentpage;
