@@ -5,7 +5,7 @@
 */
 
 #include <Stdinclude.hpp>
-#include "Common.hpp"
+#include <Global.hpp>
 
 // Track if we need to use fallback methods.
 static bool TLSFallback = false;
@@ -78,10 +78,57 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     return TRUE;
 }
 
+// Entrypoint when running as a hostprocess.
+int main(int argc, char **argv)
+{
+    printf("Host startup..\n");
+
+    if (!LoadLibraryA(("Ayria"s + (Build::is64bit ? "64"s : "32"s) + "d.dll"s).c_str()))
+        return 3;
+
+    // Register the window.
+    WNDCLASSEXA Windowclass{};
+    Windowclass.cbSize = sizeof(WNDCLASSEXA);
+    Windowclass.lpfnWndProc = DefWindowProcW;
+    Windowclass.lpszClassName = "Hostwindow";
+    Windowclass.hbrBackground = CreateSolidBrush(0);
+    Windowclass.hInstance = GetModuleHandleA(NULL);
+    Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT | CS_OWNDC;
+    if (NULL == RegisterClassExA(&Windowclass)) return 2;
+
+    // Topmost, optionally transparent, no icon on the taskbar.
+    const auto Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName, "HOST", NULL, 1080, 720,
+                                              1280, 720, NULL, NULL, Windowclass.hInstance, NULL);
+    if (!Windowhandle) return 1;
+    ShowWindow(Windowhandle, SW_SHOW);
+
+    // Trigger TLS.
+    std::thread([] {}).detach();
+
+    MSG Message;
+    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
+    {
+        TranslateMessage(&Message);
+        DispatchMessageW(&Message);
+    }
+
+    return 0;
+}
+
 // Initialize our subsystems.
 void onStartup()
 {
-    Graphics::Createsurface("Console", Graphics::Createconsole());
+    /*
+        TODO(tcn):
+        1. Initialize client info.
+        2. Initialize networking.
+    */
+
+
+
+
+
+    //Graphics::Createsurface("Console", Graphics::Createconsole());
     // TODO(tcn): Init client information.
 
     std::thread([]() -> void
@@ -103,17 +150,20 @@ void onStartup()
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
         // Initialize the subsystems.
+        //Console::Createconsole();
         //Networking::Core::onStartup();
         //Console::onStartup();
 
         // Depending on system resources, this may still result in 100% utilisation.
         static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
-        while (!Shouldquit) { onFrame(); std::this_thread::yield(); }
+        while (!Shouldquit) [[likely]] { onFrame(); std::this_thread::yield(); }
 
     }).detach();
 }
 void onFrame()
 {
+    //Console::onFrame();
+
     //Networking::Core::onFrame();
-    Graphics::Processsurfaces();
+    //Graphics::Processsurfaces();
 }

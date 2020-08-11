@@ -6,7 +6,6 @@
 
 #pragma once
 #include <Stdinclude.hpp>
-#include <Graphics/Graphics.hpp>
 
 namespace Pluginloader
 {
