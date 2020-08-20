@@ -19,10 +19,13 @@
 #include <filesystem>
 #include <functional>
 #include <algorithm>
+#include <execution>
 #include <numbers>
+#include <compare>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <bitset>
 #include <vector>
 #include <memory>
 #include <chrono>

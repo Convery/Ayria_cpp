@@ -6,6 +6,8 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#include <Common/Datatypes.hpp>
+#include <Overlay/Overlay.hpp>
 
 namespace Pluginloader
 {

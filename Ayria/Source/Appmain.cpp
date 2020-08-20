@@ -79,7 +79,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 }
 
 // Entrypoint when running as a hostprocess.
-int main(int argc, char **argv)
+int main(int, char **)
 {
     printf("Host startup..\n");
 
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
 
     // Topmost, optionally transparent, no icon on the taskbar.
     const auto Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName, "HOST", NULL, 1080, 720,
-                                              1280, 720, NULL, NULL, Windowclass.hInstance, NULL);
+        1280, 720, NULL, NULL, Windowclass.hInstance, NULL);
     if (!Windowhandle) return 1;
     ShowWindow(Windowhandle, SW_SHOW);
 
@@ -123,7 +123,6 @@ void onStartup()
         1. Initialize client info.
         2. Initialize networking.
     */
-
 
 
 

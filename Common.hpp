@@ -81,6 +81,9 @@ namespace Build
 // Ignore ANSI compatibility for structs.
 #pragma warning(disable: 4201)
 
+// Ignore warnings about casting float to int.
+#pragma warning(disable: 4244)
+
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)
 
