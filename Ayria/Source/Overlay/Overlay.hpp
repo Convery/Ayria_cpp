@@ -8,12 +8,12 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-constexpr COLORREF Clearcolor{ 0xFFFFFFFF };
+constexpr COLORREF Clearcolor{ 0x00555555 };
 
 inline HDC Createsurface(vec2_t Size, HDC Parent)
 {
     const auto Context = CreateCompatibleDC(Parent);
-    SelectObject(Context, CreateCompatibleBitmap(Context, Size.x, Size.y));
+    SelectObject(Context, CreateCompatibleBitmap(Parent, Size.x, Size.y));
     return Context;
 }
 inline HDC Recreatesurface(vec2_t Size, HDC Context)
@@ -74,6 +74,17 @@ struct Event_t
     } Data;
 };
 
+inline HFONT Createfont(std::string_view Name, int8_t Fontsize)
+{
+    return CreateFontA(Fontsize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, Name.data());
+}
+inline HFONT getDefaultfont()
+{
+    static const auto Default = Createfont("Consolas", 16);
+    return Default;
+}
+
 struct Element_t
 {
     Eventflags_t Wantedevents;
@@ -92,6 +103,7 @@ struct Overlay_t
     vec2_t Position, Size;
     bool Ctrl{}, Shift{};
     HWND Windowhandle;
+    HDC Memorydevice;
 
     void setWindowposition(vec2_t XY, bool Delta = false)
     {
@@ -127,16 +139,25 @@ struct Overlay_t
         // Only render when the overlay is visible.
         if (IsWindowVisible(Windowhandle))
         {
-            const auto Devicecontext{ GetDC(Windowhandle) };
-            const RECT Screen{ 0, 0, Size.x, Size.y };
+            RECT Screen{ 0, 0, Size.x, Size.y };
 
             // Clean the context.
-            SetBkColor(Devicecontext, Clearcolor);
-            SelectObject(Devicecontext, GetStockObject(DC_PEN));
-            SelectObject(Devicecontext, GetStockObject(DC_BRUSH));
+            SelectObject(Memorydevice, GetStockObject(DC_PEN));
+            SelectObject(Memorydevice, GetStockObject(DC_BRUSH));
 
             // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
-            ExtTextOutW(Devicecontext, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
+            FillRect(Memorydevice, &Screen, CreateSolidBrush(Clearcolor));
+
+
+            Screen.bottom -= 150;
+            SetTextColor(Memorydevice, 0xFFFFFFFF);
+            SetBkColor(Memorydevice, Clearcolor);
+            Ellipse(Memorydevice, 50, 50, 100, 100);
+
+
+            SelectObject(Memorydevice, (HFONT)GetStockObject(ANSI_VAR_FONT));
+            ExtTextOutW(Memorydevice, 100, 100, ETO_OPAQUE|ETO_CLIPPED, NULL, L"MEEP", 4, NULL);
+            TextOutA(Memorydevice, 50, 50, "Cake", 4);
 
             // Paint the overlay.
             for (const auto &Element : Elements)
@@ -145,20 +166,24 @@ struct Overlay_t
                 if (Element.Mask) [[unlikely]]
                 {
                     // TODO(tcn): Benchmark against using Createmask() with BitBlt(SRCAND) + BitBlt(SRCPAINT).
-                    TransparentBlt(Devicecontext, Element.Position.x, Element.Position.y,
+                    TransparentBlt(Memorydevice, Element.Position.x, Element.Position.y,
                         Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0,
                         Element.Size.x, Element.Size.y, Element.Mask);
                 }
                 else
                 {
-                    BitBlt(Devicecontext, Element.Position.x, Element.Position.y,
+                    BitBlt(Memorydevice, Element.Position.x, Element.Position.y,
                         Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0, SRCCOPY);
                 }
             }
 
             // Paint the window and notify Windows that it's clean.
-            BitBlt(GetDC(Windowhandle), Position.x, Position.y, Size.x, Size.y, Devicecontext, 0, 0, SRCCOPY);
-            ValidateRect(Windowhandle, NULL);
+            //BitBlt(GetDC(Windowhandle), 0, 0, Size.x, Size.y, Memorydevice, 0, 0, SRCCOPY);
+
+            PAINTSTRUCT Updateinformation{};
+            auto Devicecontext = BeginPaint(Windowhandle, &Updateinformation);
+            BitBlt(Devicecontext, 0, 0, Size.x, Size.y, Memorydevice, 0, 0, SRCCOPY);
+            EndPaint(Windowhandle, &Updateinformation);
         }
     }
     void doFrame()
@@ -170,24 +195,19 @@ struct Overlay_t
             {
                 Event_t Event{};
 
+                if (Message.message == WM_PAINT) break;
+
                 TranslateMessage(&Message);
                 switch (Message.message)
                 {
-                    // Common case.
-                    case WM_PAINT:
-                    {
-                        doPresent();
-                        break;
-                    }
-
                     // Window-changes.
                     case WM_SIZE:
                     {
                         const vec2_t Newsize{ LOWORD(Message.lParam), HIWORD(Message.lParam) };
 
-                        if (Size != Newsize)
+                        if (this->Size != Newsize)
                         {
-                            Recreatesurface(Newsize, GetDC(Windowhandle));
+                            Recreatesurface(Newsize, Memorydevice);
                             Event.Flags.onWindowchange = true;
                             Event.Data.Point = Newsize;
                             Size = Newsize;
@@ -326,6 +346,9 @@ struct Overlay_t
         {
             if (Element.onTick) Element.onTick(Deltatime);
         });
+
+        // Repaint if needed.
+        doPresent();
     }
 
     explicit Overlay_t(vec2_t XY, vec2_t WH) : Position(XY), Size(WH)
@@ -333,28 +356,32 @@ struct Overlay_t
         // Register the window.
         WNDCLASSEXA Windowclass{ sizeof(WNDCLASSEXA) };
         Windowclass.lpszClassName = "Ayria_UI_overlay";
-        Windowclass.hInstance = GetModuleHandleA(NULL);
         Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT | CS_OWNDC;
-        Windowclass.lpfnWndProc = [](HWND a, UINT b, WPARAM c, LPARAM d)
+        Windowclass.hInstance = GetModuleHandleA(NULL);
+        Windowclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+        Windowclass.lpfnWndProc = [](HWND a, UINT b, WPARAM c, LPARAM d) -> LRESULT
         {
+            if (b == WM_SIZE || b == WM_MOVE) PostMessageA(a, b, c, d);
             if (b == WM_PAINT) return LRESULT(1);
-            if (b == WM_SIZE || b == WM_MOVE)
-                PostMessageA(a, b, c, d);
 
             return DefWindowProcA(a, b, c, d);
         };
         if (NULL == RegisterClassExA(&Windowclass)) assert(false); // WTF?
 
         // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
-        Windowhandle = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, Windowclass.lpszClassName,
+        Windowhandle = CreateWindowExA(WS_EX_TOPMOST, Windowclass.lpszClassName,
             NULL, WS_POPUP, Position.x, Position.y, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
         if (!Windowhandle) assert(false); // WTF?
 
+        // A new surface to render to.
+        Memorydevice = Createsurface(Size, GetDC(Windowhandle));
+
         // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
-        SetLayeredWindowAttributes(Windowhandle, Clearcolor, 0, LWA_COLORKEY);
+        //SetLayeredWindowAttributes(Windowhandle, Clearcolor, 0, LWA_COLORKEY);
 
         // If we got a size, resize and show.
         if (Size) setWindowsize(Size);
+        InvalidateRect(Windowhandle, nullptr, FALSE);
     }
 };
 
@@ -362,10 +389,10 @@ struct Overlay_t
 #pragma endregion
 
 // TODO(tcn): Add image loading from disk.
-inline HBITMAP Createimage(vec2_t Dimensions, size_t Size, const void *Data)
+inline HBITMAP Createimage(vec2_t Dimensions, uint32_t Size, const void *Data)
 {
     assert(Dimensions.x); assert(Dimensions.y); assert(Size); assert(Data);
-    const size_t Pixelsize{ Size / int(Dimensions.x * Dimensions.y) };
+    const auto Pixelsize{ Size / int(Dimensions.x * Dimensions.y) };
     BITMAPINFO BMI{ sizeof(BITMAPINFOHEADER) };
     uint8_t *DIBPixels{};
 
@@ -405,4 +432,54 @@ inline HBITMAP Createmask(HDC Devicecontext, vec2_t Size, COLORREF Transparancyk
 
     DeleteDC(Device);
     return Bitmap;
+}
+
+// Windows sometimes want pixels as BGRA.
+inline void SwapRB(uint32_t Size, void *Buffer)
+{
+    const auto Mask = _mm_set_epi8(12, 14, 15, 12, 9, 10, 11, 8, 5, 6, 7, 4, 1, 2, 3, 0);
+    const auto Remaining = Size % sizeof(__m128);
+    const auto Count128 = Size / sizeof(__m128);
+    auto Pixeldata = (__m128i *)Buffer;
+
+    for (int i = 0; i < Count128; ++i)
+    {
+        _mm_storeu_si128(&Pixeldata[i], _mm_shuffle_epi8(_mm_loadu_si128(&Pixeldata[i]), Mask));
+    }
+
+    auto Pixels = &Pixeldata[Count128];
+    for (int i = 0; i < Remaining; i += 4)
+    {
+        std::swap(Pixels->m128i_u8[i], Pixels->m128i_u8[i + 2]);
+    }
+}
+
+// Find windows not associated with our threads.
+inline std::vector<std::pair<HWND, vec2_t>> Findwindows()
+{
+    std::vector<std::pair<HWND, vec2_t>> Results;
+
+    EnumWindows([](HWND Handle, LPARAM pResults) -> BOOL
+    {
+        DWORD ProcessID;
+        const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+
+        if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
+        {
+            RECT Window{};
+            if (GetWindowRect(Handle, &Window))
+            {
+                auto Results = (std::vector<std::pair<HWND, vec2_t>> *)pResults;
+
+                vec2_t Beep(Window.right - Window.left, Window.bottom - Window.top);
+
+
+                Results->push_back(std::make_pair(Handle, Beep ));
+            }
+        }
+
+        return TRUE;
+    }, (LPARAM)&Results);
+
+    return Results;
 }

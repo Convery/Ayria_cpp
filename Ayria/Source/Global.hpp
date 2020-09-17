@@ -6,20 +6,6 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#include <Pluginloader/Pluginloader.hpp>
 #include <Common/Datatypes.hpp>
 #include <Overlay/Overlay.hpp>
-
-namespace Pluginloader
-{
-    void Loadplugins();
-
-    bool InstallTLSCallback();
-    void RestoreTLSCallback();
-
-    bool InstallEPCallback();
-    void RestoreEPCallback();
-}
-
-// Forward declarations for Appmain.
-void onStartup();
-void onFrame();

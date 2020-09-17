@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <execution>
 #include <numbers>
-#include <compare>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>

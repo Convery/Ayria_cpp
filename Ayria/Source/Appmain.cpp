@@ -7,132 +7,15 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-// Track if we need to use fallback methods.
-static bool TLSFallback = false;
-
-// Some games use do not handle exceptions well, so we'll have to catch them.
-LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Info)
+namespace Backend
 {
-    // MSVC thread naming exception for debuggers.
-    if (Info->ExceptionRecord->ExceptionCode == 0x406D1388)
+    static DWORD __stdcall Mainthread(void *)
     {
-        // Double-check, and allow any debugger to handle it if available.
-        if (Info->ExceptionRecord->ExceptionInformation[0] == 0x1000 && !IsDebuggerPresent())
-        {
-            return EXCEPTION_CONTINUE_EXECUTION;
-        }
-    }
+        // As we are single-threaded (in release), boost our priority.
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
-    // OpenSSLs RAND_poll() causes Windows to throw if RPC services are down.
-    if (Info->ExceptionRecord->ExceptionCode == RPC_S_SERVER_UNAVAILABLE)
-    {
-        return EXCEPTION_CONTINUE_EXECUTION;
-    }
-
-    // DirectSound does not like it if the Audio services are down.
-    if (Info->ExceptionRecord->ExceptionCode == RPC_S_UNKNOWN_IF)
-    {
-        return EXCEPTION_CONTINUE_EXECUTION;
-    }
-
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-// Entrypoint when loaded as a shared library.
-BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
-{
-    if (nReason == DLL_PROCESS_ATTACH)
-    {
-        // Ensure that Ayrias default directories exist.
-        std::filesystem::create_directories("./Ayria/Logs");
-        std::filesystem::create_directories("./Ayria/Assets");
-        std::filesystem::create_directories("./Ayria/Plugins");
-
-        // Only keep a log for this session.
-        Logging::Clearlog();
-
-        // Catch any errors.
-        SetUnhandledExceptionFilter(onUnhandledexception);
-
-        // Prefer TLS over EP-hooking.
-        if (Pluginloader::InstallTLSCallback())
-        {
-            // Opt out of further notifications.
-            DisableThreadLibraryCalls(hDllHandle);
-            return TRUE;
-        }
-
-        TLSFallback = true;
-        // TODO EP-hook
-    }
-
-    // Alternative for games without TLS support.
-    if (nReason == DLL_THREAD_ATTACH && TLSFallback)
-    {
-        // Opt out of further notifications.
-        DisableThreadLibraryCalls(hDllHandle);
-        TLSFallback = false; // Disable.
-        Pluginloader::Loadplugins();
-    }
-
-    return TRUE;
-}
-
-// Entrypoint when running as a hostprocess.
-int main(int, char **)
-{
-    printf("Host startup..\n");
-
-    if (!LoadLibraryA(("Ayria"s + (Build::is64bit ? "64"s : "32"s) + "d.dll"s).c_str()))
-        return 3;
-
-    // Register the window.
-    WNDCLASSEXA Windowclass{};
-    Windowclass.cbSize = sizeof(WNDCLASSEXA);
-    Windowclass.lpfnWndProc = DefWindowProcW;
-    Windowclass.lpszClassName = "Hostwindow";
-    Windowclass.hbrBackground = CreateSolidBrush(0);
-    Windowclass.hInstance = GetModuleHandleA(NULL);
-    Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT | CS_OWNDC;
-    if (NULL == RegisterClassExA(&Windowclass)) return 2;
-
-    // Topmost, optionally transparent, no icon on the taskbar.
-    const auto Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName, "HOST", NULL, 1080, 720,
-        1280, 720, NULL, NULL, Windowclass.hInstance, NULL);
-    if (!Windowhandle) return 1;
-    ShowWindow(Windowhandle, SW_SHOW);
-
-    // Trigger TLS.
-    std::thread([] {}).detach();
-
-    MSG Message;
-    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
-    {
-        TranslateMessage(&Message);
-        DispatchMessageW(&Message);
-    }
-
-    return 0;
-}
-
-// Initialize our subsystems.
-void onStartup()
-{
-    /*
-        TODO(tcn):
-        1. Initialize client info.
-        2. Initialize networking.
-    */
-
-
-
-
-    //Graphics::Createsurface("Console", Graphics::Createconsole());
-    // TODO(tcn): Init client information.
-
-    std::thread([]() -> void
-    {
-        // Name the thread for easier debugging.
+        // Name this thread for easier debugging.
+        if constexpr (Build::isDebug)
         {
             #pragma pack(push, 8)
             using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
@@ -145,24 +28,136 @@ void onStartup()
             } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
-        // As we are single-threaded (in release), boost our priority.
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-
         // Initialize the subsystems.
-        //Console::Createconsole();
-        //Networking::Core::onStartup();
-        //Console::onStartup();
+        // TODO(tcn): Initialize console overlay.
+        // TODO(tcn): Initialize networking.
 
-        // Depending on system resources, this may still result in 100% utilisation.
-        static bool Shouldquit{}; std::atexit([]() { Shouldquit = true; });
-        while (!Shouldquit) [[likely]] { onFrame(); std::this_thread::yield(); }
+        // Main loop.
+        while(true)
+        {
+            // Depending on system resources, this may still result in 100% utilisation.
+            std::this_thread::yield();
 
-    }).detach();
+            // Notify the subsystems about a new frame.
+            // TODO(tcn): Console overlay frame.
+            // TODO(tcn): Network frame.
+            // TODO(tcn): Client frame.
+        }
+
+        return 0;
+    }
+
+    static void Initialize()
+    {
+        // TODO(tcn): Init client info.
+
+        CreateThread(NULL, NULL, Mainthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    }
 }
-void onFrame()
-{
-    //Console::onFrame();
 
-    //Networking::Core::onFrame();
-    //Graphics::Processsurfaces();
+// Some applications do not handle exceptions well.
+static LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Context)
+{
+    // OpenSSLs RAND_poll() causes Windows to throw if RPC services are down.
+    if (Context->ExceptionRecord->ExceptionCode == RPC_S_SERVER_UNAVAILABLE)
+    {
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+
+    // DirectSound does not like it if the Audio services are down.
+    if (Context->ExceptionRecord->ExceptionCode == RPC_S_UNKNOWN_IF)
+    {
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+
+    // Semi-documented way for naming Windows threads.
+    if (Context->ExceptionRecord->ExceptionCode == 0x406D1388)
+    {
+        if (Context->ExceptionRecord->ExceptionInformation[0] == 0x1000)
+        {
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+    }
+
+    // Probably crash.
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+// Entrypoint when loaded as a shared library.
+BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserved)
+{
+    // On startup.
+    if (nReason == DLL_PROCESS_ATTACH)
+    {
+        // Ensure that Ayrias default directories exist.
+        std::filesystem::create_directories("./Ayria/Logs");
+        std::filesystem::create_directories("./Ayria/Assets");
+        std::filesystem::create_directories("./Ayria/Plugins");
+
+        // Only keep a log for this session.
+        Logging::Clearlog();
+
+        // Catch any unwanted exceptions.
+        SetUnhandledExceptionFilter(onUnhandledexception);
+
+        // Opt out of further notifications.
+        DisableThreadLibraryCalls(hDllHandle);
+
+        // Initialize the backend; in-case plugins need access.
+        Backend::Initialize();
+
+        // If injected, we can't hook. So just load all plugins directly.
+        if (lpvReserved == NULL) Plugins::Initialize();
+        else
+        {
+            // We prefer TLS-hooks over EP.
+            if (Plugins::InstallTLSHook()) return TRUE;
+
+            // Fallback to EP hooking.
+            if (!Plugins::InstallEPHook())
+            {
+                MessageBoxA(NULL, "Could not install a hook in the target application", "Fatal error", NULL);
+                return FALSE;
+            }
+        }
+    }
+
+    return TRUE;
+}
+
+// Entrypoint when running as a hostprocess.
+int main(int, char **)
+{
+    printf("Host startup..\n");
+
+    // Register the window.
+    WNDCLASSEXA Windowclass{};
+    Windowclass.cbSize = sizeof(WNDCLASSEXA);
+    Windowclass.lpfnWndProc = DefWindowProcW;
+    Windowclass.lpszClassName = "Hostwindow";
+    Windowclass.hInstance = GetModuleHandleA(NULL);
+    Windowclass.hbrBackground = CreateSolidBrush(0xFF00FF);
+    Windowclass.style = CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT;
+    if (NULL == RegisterClassExA(&Windowclass)) return 2;
+
+    // Create a simple window.
+    const auto Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName, "HOST", NULL, 1080, 720,
+        1280, 720, NULL, NULL, Windowclass.hInstance, NULL);
+    if (!Windowhandle) return 1;
+    ShowWindow(Windowhandle, SW_SHOW);
+
+    // Initialize the backend to test features.
+    Backend::Initialize();
+
+    // Poll until quit.
+    MSG Message;
+    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
+    {
+        TranslateMessage(&Message);
+
+        if (Message.message == WM_QUIT) return 3;
+        else DispatchMessageW(&Message);
+    }
+
+    return 0;
 }
