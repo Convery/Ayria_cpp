@@ -356,9 +356,9 @@ struct Overlay_t
         // Register the window.
         WNDCLASSEXA Windowclass{ sizeof(WNDCLASSEXA) };
         Windowclass.lpszClassName = "Ayria_UI_overlay";
-        Windowclass.style = CS_SAVEBITS | CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT | CS_OWNDC;
         Windowclass.hInstance = GetModuleHandleA(NULL);
         Windowclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+        Windowclass.style = CS_BYTEALIGNWINDOW | CS_OWNDC | CS_DROPSHADOW;
         Windowclass.lpfnWndProc = [](HWND a, UINT b, WPARAM c, LPARAM d) -> LRESULT
         {
             if (b == WM_SIZE || b == WM_MOVE) PostMessageA(a, b, c, d);
@@ -369,8 +369,8 @@ struct Overlay_t
         if (NULL == RegisterClassExA(&Windowclass)) assert(false); // WTF?
 
         // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
-        Windowhandle = CreateWindowExA(WS_EX_TOPMOST, Windowclass.lpszClassName,
-            NULL, WS_POPUP, Position.x, Position.y, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
+        Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName,
+            "Test", WS_POPUP, Position.x, Position.y, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
         if (!Windowhandle) assert(false); // WTF?
 
         // A new surface to render to.
