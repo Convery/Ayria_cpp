@@ -40,6 +40,7 @@
 #if defined(_WIN32)
 #include <Ws2tcpip.h>
 #include <WinSock2.h>
+#include <Windowsx.h>
 #include <Windows.h>
 #include <intrin.h>
 #include <direct.h>

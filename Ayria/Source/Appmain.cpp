@@ -6,37 +6,18 @@
 
 #include <Stdinclude.hpp>
 #include <Global.hpp>
+#include <variant>
 
 struct Overlay2_t
 {
-    std::vector<int> Elements;
+    std::vector<Element_t> Elements;
     vec2_t Position, Size;
+    bool Ctrl{}, Shift{};
     HWND Windowhandle;
 
-    LRESULT __stdcall Eventhandler(UINT Message, WPARAM wParam, LPARAM lParam)
-    {
-        switch (Message)
-        {
-            // Default Windows BS.
-            case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-            case WM_NCCREATE: return Windowhandle != NULL;
-
-            // Preferred over WM_MOVE/WM_SIZE for performance.
-            case WM_WINDOWPOSCHANGED:
-            {
-                const auto Info = (WINDOWPOS *)lParam;
-                Position = { Info->x, Info->y };
-                Size = { Info->cx, Info->cy };
-                return NULL;
-            }
-
-        }
-
-        return DefWindowProcA(Windowhandle, Message, wParam, lParam);
-    }
     static LRESULT __stdcall Windowproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
-        Overlay2_t *This;
+        Overlay2_t *This{};
 
         if (Message == WM_NCCREATE)
         {
@@ -50,6 +31,134 @@ struct Overlay2_t
         }
 
         if (This) return This->Eventhandler(Message, wParam, lParam);
+        return DefWindowProcA(Windowhandle, Message, wParam, lParam);
+    }
+    void Broadcastevent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+    {
+        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const Element_t &Element)
+        {
+            if (Element.Wantedevents.Raw & Flags.Raw) [[unlikely]]
+            {
+                if (Element.onEvent) [[likely]]
+                {
+                    Element.onEvent(Flags, Data);
+                }
+            }
+        });
+    }
+    LRESULT __stdcall Eventhandler(UINT Message, WPARAM wParam, LPARAM lParam)
+    {
+        Eventflags_t Flags{};
+
+        switch (Message)
+        {
+            // Default Windows BS.
+            case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+            case WM_NCCREATE: return Windowhandle != NULL;
+
+            // Preferred over WM_MOVE/WM_SIZE for performance.
+            case WM_WINDOWPOSCHANGED:
+            {
+                const auto Info = (WINDOWPOS *)lParam;
+                Position = { Info->x, Info->y };
+                Size = { Info->cx, Info->cy };
+
+                // Notify the elements that they need to resize.
+                Flags.onWindowchange = true;
+                Broadcastevent(Flags, Size);
+                return NULL;
+            }
+
+            // Special keys.
+            case WM_SYSKEYDOWN:
+            case WM_SYSKEYUP:
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            {
+                const bool Down = !((lParam >> 31) & 1);
+
+                switch (wParam)
+                {
+                    case VK_SHIFT: { Shift = Down; break; }
+                    case VK_CONTROL: { Ctrl = Down; break; }
+
+                    case VK_TAB: { Flags.doTab = true; break; }
+                    case VK_RETURN: { Flags.doEnter = true; break; }
+                    case VK_DELETE: { Flags.doDelete = true; break; }
+                    case VK_ESCAPE: { Flags.doCancel = true; break; }
+                    case VK_BACK: { Flags.doBackspace = true; break; }
+                    case 'X': { if (Shift) Flags.doCut = true; break; }
+                    case 'C': { if (Shift) Flags.doCopy = true; break; }
+                    case 'V': { if (Shift) Flags.doPaste = true; break; }
+                    case 'Z':
+                    {
+                        if (Ctrl)
+                        {
+                            if (Shift) Flags.doRedo = true;
+                            else Flags.doUndo = true;
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+
+                if (Flags.Any)
+                {
+                    Flags.modShift = Shift;
+                    Flags.modCtrl = Ctrl;
+                    Flags.Keydown = Down;
+                    Flags.Keyup = !Down;
+
+                    Broadcastevent(Flags, uint32_t(wParam));
+                }
+
+                return NULL;
+            }
+
+            // Keyboard input.
+            case WM_CHAR:
+            {
+                Flags.onCharinput = true; Flags.modShift = Shift; Flags.modCtrl = Ctrl;
+                Broadcastevent(Flags, wchar_t(wParam));
+                return NULL;
+            }
+
+            // Mouse input.
+            case WM_LBUTTONUP:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            {
+                Flags.Mousedown |= Message == WM_LBUTTONDOWN;
+                Flags.Mousedown |= Message == WM_RBUTTONDOWN;
+                Flags.Mousedown |= Message == WM_MBUTTONDOWN;
+                Flags.Mouseup = !Flags.Mousedown;
+
+                if (Flags.Mouseup) ReleaseCapture();
+                else SetCapture(Windowhandle);
+
+                const bool Middle = Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP;
+                const bool Right = Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP;
+                const bool Left = Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP;
+                if (Middle) Broadcastevent(Flags, uint32_t(VK_MBUTTON));
+                if (Right) Broadcastevent(Flags, uint32_t(VK_RBUTTON));
+                if (Left) Broadcastevent(Flags, uint32_t(VK_LBUTTON));
+
+                return NULL;
+            }
+            case WM_MOUSEMOVE:
+            {
+                Flags.Mousemove = true;
+                Broadcastevent(Flags, vec2_t(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+                return NULL;
+            }
+
+            // To keep tools happy.
+            default: break;
+        }
+
         return DefWindowProcA(Windowhandle, Message, wParam, lParam);
     }
 
@@ -68,34 +177,6 @@ struct Overlay2_t
         ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
     }
 
-    void doPresent()
-    {
-        // Only render when the overlay is visible.
-        if (IsWindowVisible(Windowhandle))
-        {
-            const auto Device = GetDC(Windowhandle);
-            RECT Screen{ 0, 0, Size.x, Size.y };
-
-            // Ensure that the device is 'clean'.
-            SelectObject(Device, GetStockObject(DC_PEN));
-            SelectObject(Device, GetStockObject(DC_BRUSH));
-            SelectObject(Device, GetStockObject(SYSTEM_FONT));
-
-            // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
-            static auto Color = 0;
-            SetBkColor(Device, Color++);
-            ExtTextOutW(Device, 0, 0, ETO_OPAQUE, &Screen, NULL, 0, NULL);
-
-            // Paint the overlay.
-            for (const auto &Element : Elements)
-            {
-                // TODO
-            }
-
-            // Cleanup.
-            ReleaseDC(Windowhandle, Device);
-        }
-    }
     void doFrame(float Deltatime)
     {
         // Process events.
@@ -111,13 +192,62 @@ struct Overlay2_t
         // Notify the elements about the frame.
         std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const auto &Element)
         {
-            // TODO
+            if (Element.onTick)
+                Element.onTick(Deltatime);
         });
 
-        // Repaint if needed.
+        // Repaint the overlay.
         doPresent();
     }
+    void doPresent()
+    {
+        // Only render when the overlay is visible.
+        if (IsWindowVisible(Windowhandle))
+        {
+            // Before doing any work, verify that we have to update.
+            if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(), [](const auto &Element)
+            { return Element.Repainted.test(); })) return;
 
+            RECT Clientarea{ 0, 0, Size.x, Size.y };
+            const auto Device = GetDC(Windowhandle);
+
+            // Ensure that the device is 'clean'.
+            SelectObject(Device, GetStockObject(DC_PEN));
+            SelectObject(Device, GetStockObject(DC_BRUSH));
+            SelectObject(Device, GetStockObject(SYSTEM_FONT));
+
+            // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
+            SetBkColor(Device, Clearcolor); ExtTextOutW(Device, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
+
+            // Paint the overlay, elements are ordered by Z.
+            for (auto &Element : Elements)
+            {
+                // Rather than test, just clear.
+                Element.Repainted.clear();
+
+                // Rare, an invisible element.
+                if (!Element.Surface) [[unlikely]]
+                    continue;
+
+                // Transparency mask available.
+                if (Element.Mask) [[unlikely]]
+                {
+                    // TODO(tcn): Benchmark against using Createmask() with BitBlt(SRCAND) + BitBlt(SRCPAINT).
+                    TransparentBlt(Device, Element.Position.x, Element.Position.y,
+                        Element.Size.x, Element.Size.y, Element.Surface, 0, 0,
+                        Element.Size.x, Element.Size.y, Element.Mask);
+                }
+                else
+                {
+                    BitBlt(Device, Element.Position.x, Element.Position.y,
+                        Element.Size.x, Element.Size.y, Element.Surface, 0, 0, SRCCOPY);
+                }
+            }
+
+            // Cleanup.
+            ReleaseDC(Windowhandle, Device);
+        }
+    }
 
     explicit Overlay2_t(vec2_t _Position, vec2_t _Size) : Position(_Position)
     {
@@ -182,7 +312,7 @@ namespace Backend
 
 
         // Main loop, runs until the application terminates or DLL unloads.
-        std::chrono::high_resolution_clock::time_point Lastframe;
+        std::chrono::high_resolution_clock::time_point Lastframe{};
         while (true)
         {
             // Track the frame-time, should be around 33ms.
