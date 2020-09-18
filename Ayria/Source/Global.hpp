@@ -190,7 +190,12 @@ struct Color_t : rgb_t
 #pragma endregion
 
 // Constants used everywhere.
-constexpr COLORREF Clearcolor{ 0xFFFFFFFF };
+#pragma region Constants
+
+// NOTE(tcn): Windows gets confused if Alpha != NULL.
+constexpr COLORREF Clearcolor{ 0x00FFFFFF };
+
+#pragma endregion
 
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>

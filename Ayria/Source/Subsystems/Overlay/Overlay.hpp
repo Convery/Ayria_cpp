@@ -23,7 +23,7 @@ inline HDC Recreatesurface(vec2_t Size, HDC Context)
 }
 
 // Core building blocks.
-#pragma region Elements
+#pragma region Core
 #pragma pack(push, 1)
 
 using Eventflags_t = union
