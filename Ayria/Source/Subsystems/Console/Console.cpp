@@ -19,7 +19,7 @@ namespace Console
     nonstd::ring_span<Logline_t> Consolelog { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
 
     // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::string &Message, COLORREF Colour)
+    void addConsolemessage(const std::wstring &Message, COLORREF Colour)
     {
         static Spinlock Writelock;
 
@@ -29,13 +29,13 @@ namespace Console
             Colour = [&]()
             {
                 // Common keywords.
-                if (std::strstr(Message.c_str(), "[E]") || std::strstr(Message.c_str(), "rror")) return 0xBE282A;
-                if (std::strstr(Message.c_str(), "[W]") || std::strstr(Message.c_str(), "arning")) return 0xBEC02A;
+                if (std::wcsstr(Message.c_str(), L"[E]") || std::wcsstr(Message.c_str(), L"rror")) return 0xBE282A;
+                if (std::wcsstr(Message.c_str(), L"[W]") || std::wcsstr(Message.c_str(), L"arning")) return 0xBEC02A;
 
                 // Ayria default.
-                if (std::strstr(Message.c_str(), "[I]")) return 0x218FBD;
-                if (std::strstr(Message.c_str(), "[D]")) return 0x7F963E;
-                if (std::strstr(Message.c_str(), "[>]")) return 0x7F963E;
+                if (std::wcsstr(Message.c_str(), L"[I]")) return 0x218FBD;
+                if (std::wcsstr(Message.c_str(), L"[D]")) return 0x7F963E;
+                if (std::wcsstr(Message.c_str(), L"[>]")) return 0x7F963E;
 
                 // Default.
                 return 0x315571;
@@ -46,10 +46,10 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        std::string_view Input(Message);
+        std::wstring_view Input(Message);
         while (!Input.empty())
         {
-            if (const auto Pos = Input.find('\n'); Pos != std::string_view::npos)
+            if (const auto Pos = Input.find(L'\n'); Pos != std::string_view::npos)
             {
                 if (Pos != 0)
                 {
@@ -65,16 +65,16 @@ namespace Console
     }
 
     // Fetch a copy of the internal strings.
-    std::vector<Logline_t> getLoglines(size_t Count, std::string_view Filter)
+    std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter)
     {
         std::vector<Logline_t> Result;
-        Result.reserve(Count);
+        Result.reserve(std::clamp(Count, size_t(1), Logsize));
 
         std::for_each(Consolelog.rbegin(), Consolelog.rend(), [&](const auto &Item)
         {
             if (Count)
             {
-                if (std::strstr(Item.first.c_str(), Filter.data()))
+                if (std::wcsstr(Item.first.c_str(), Filter.data()))
                 {
                     Result.push_back(Item);
                     Count--;
@@ -90,15 +90,8 @@ namespace Console
 
     // Console input.
     #pragma region Consoleinput
-    struct Consoleinput_t
-    {
-        std::wstring Lastcommand;
-        std::wstring Inputline;
-        size_t Eventcount;
-        size_t Cursorpos;
-    };
     static Consoleinput_t State{};
-    static std::vector<std::pair<std::string, Callback_t>> Functions;
+    static std::vector<std::pair<std::wstring, Callback_t>> Functions;
 
     // Update the consoles internal state.
     void setConsoleinput(std::wstring_view Input)
@@ -135,9 +128,9 @@ namespace Console
             LocalFree(Argv);
         }
 
-
         if (!noHistory)
         {
+            addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
             State.Lastcommand = State.Inputline;
         }
     }
@@ -233,7 +226,7 @@ namespace Console
     }
 
     // Add a new command to the internal list.
-    void addConsolecommand(std::string_view Name, Callback_t Callback)
+    void addConsolecommand(std::wstring_view Name, Callback_t Callback)
     {
         // Check if we already have this command.
         if (std::any_of(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
@@ -245,7 +238,13 @@ namespace Console
             return true;
         })) return;
 
-        Functions.emplace_back(Name, Callback);
+        Functions.emplace_back(Name.data(), Callback);
+    }
+
+    // Let others view the state.
+    const Consoleinput_t *getState()
+    {
+        return &State;
     }
 
     #pragma endregion
@@ -254,47 +253,46 @@ namespace Console
     #pragma region Consolefilters
     constexpr size_t Maxtabs = 10;
     int32_t Tabcount{ 1 }, Selectedtab{ -1 };
-    std::array<std::string, Maxtabs> Tabtitles;
-    std::array<std::string, Maxtabs> Tabfilters;
+    std::array<std::wstring, Maxtabs> Tabtitles;
+    std::array<std::wstring, Maxtabs> Tabfilters;
 
     // Which user-selected filter is active?
-    std::string_view getCurrentfilter()
+    std::wstring_view getCurrentfilter()
     {
         // Default tab doesn't filter anything.
-        if (Selectedtab == -1) return "";
+        if (Selectedtab == -1) return L"";
         else return Tabfilters[Selectedtab];
     }
 
     // Filter the input based on 'tabs'.
-    void addConsoletab(const std::string &Name, const std::string &Filter)
+    void addConsoletab(const std::wstring &Name, const std::wstring &Filter)
     {
         if (Tabcount >= Maxtabs) return;
-        const auto String = std::string(Filter);
 
         // Sanity-check to avoid redundant filters.
         for (size_t i = 0; i < Maxtabs; ++i)
         {
-            if (Tabfilters[i] == String)
+            if (Tabfilters[i] == Filter)
             {
                 // Already added.
-                if (std::strstr(Tabtitles[i].c_str(), Name.c_str()))
+                if (std::wcsstr(Tabtitles[i].c_str(), Name.c_str()))
                     return;
 
-                Tabtitles[i] += "| "s + String;
+                Tabtitles[i] += L"| "s + Name;
                 return;
             }
         }
 
         // Insert the requested filter.
-        Tabtitles[Tabcount] = " "s + Name + " "s;
-        Tabfilters[Tabcount] = String;
+        Tabtitles[Tabcount] = L" "s + Name + L" "s;
+        Tabfilters[Tabcount] = Filter;
         Tabcount++;
     }
 
     // Get all available filters.
-    std::vector<std::pair<std::string, std::string>> getTabs()
+    std::vector<std::pair<std::wstring, std::wstring>> getTabs()
     {
-        std::vector<std::pair<std::string, std::string>> Result;
+        std::vector<std::pair<std::wstring, std::wstring>> Result;
         Result.reserve(Tabcount);
 
         for (int i = 0; i < Tabcount; ++i)
@@ -308,19 +306,19 @@ namespace Console
     // Provide a C-API for external code.
     namespace API
     {
-        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Colour)
+        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const wchar_t *String, unsigned int Colour)
         {
             assert(String);
             Console::addConsolemessage(String, Colour);
         }
-        extern "C" EXPORT_ATTR void __cdecl addConsoletab(const char *Name, const char *Filter)
+        extern "C" EXPORT_ATTR void __cdecl addConsoletab(const wchar_t *Name, const wchar_t *Filter)
         {
             assert(Name); assert(Filter);
             Console::addConsoletab(Name, Filter);
         }
 
         // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
-        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, const void *Callback)
+        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const wchar_t *Name, const void *Callback)
         {
             assert(Name); assert(Callback);
             Console::addConsolecommand(Name, (Callback_t)Callback);

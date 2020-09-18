@@ -38,14 +38,16 @@ namespace Logging
     void toConsole(std::string_view Message)
     {
         std::lock_guard _(Threadguard);
-        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
         if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        if (!Console) Console = GetModuleHandleA(NULL);
 
         if (Console)
         {
             if (const auto Address = GetProcAddress(Console, "addConsolemessage"))
             {
-                reinterpret_cast<void (__cdecl *)(const char *, int)>(Address)(Message.data(), 0);
+                const std::wstring ASCII(Message.begin(), Message.end());
+                reinterpret_cast<void (__cdecl *)(const wchar_t *, int)>(Address)(ASCII.data(), 0);
             }
         }
     }

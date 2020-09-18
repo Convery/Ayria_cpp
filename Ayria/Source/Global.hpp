@@ -149,7 +149,6 @@ struct Color_t : rgb_t
     Color_t() : rgb_t() { a = 0xFF; }
     Color_t(rgb_t RGB) : rgb_t(RGB) { a = 0xFF; };
     Color_t(uint8_t R, uint8_t G, uint8_t B, uint8_t A = 0xFF) : rgb_t{ R, G, B }, a(A) {}
-    Color_t(float R, float G, float B, float A = 1.0f) { r = R * 0xFF; g = G * 0xFF; b = B * 0xFF; a = A * 0xFF; }
     Color_t(COLORREF RGBA) { r = RGBA & 0xFF; g = (RGBA >> 8) & 0xFF;  b = (RGBA >> 16) & 0xFF; a = (RGBA >> 24) & 0xFF; }
 
     static rgb_t Blend(rgb_t Source, rgb_t Overlay, uint8_t Opacity)
