@@ -20,20 +20,21 @@
 #include <functional>
 #include <algorithm>
 #include <execution>
-#include <numbers>
 #include <cassert>
 #include <cstdint>
-#include <cstdio>
-#include <bitset>
-#include <vector>
-#include <memory>
-#include <chrono>
-#include <thread>
-#include <string>
+#include <numbers>
+#include <variant>
 #include <atomic>
+#include <bitset>
+#include <chrono>
+#include <cstdio>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+#include <array>
 #include <mutex>
 #include <queue>
-#include <array>
 #include <any>
 
 // Platform-specific libraries.

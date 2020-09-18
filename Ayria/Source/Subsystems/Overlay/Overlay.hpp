@@ -9,8 +9,6 @@
 #include <Global.hpp>
 #include <variant>
 
-constexpr COLORREF Clearcolor{ 0x00555555 };
-
 inline HDC Createsurface(vec2_t Size, HDC Parent)
 {
     const auto Context = CreateCompatibleDC(Parent);
@@ -64,17 +62,320 @@ using Eventflags_t = union
         };
     };
 };
-struct Event_t
+struct Element_t
 {
-    Eventflags_t Flags;
-    union
+    Eventflags_t Wantedevents;  // Matched in Overlay::Broadcastevent
+    vec3_t Position;            // Z only used for rendering-order.
+    bool Repainted;             // Should be atomic_flag, but we need to sort elements.
+    COLORREF Mask;              // NULL = unused.
+    vec2_t Size;
+    HDC Surface;                // Bitmap to BitBlt and draw to, update Repainted on write.
+
+    void(__cdecl *onTick)(float Deltatime);
+    void(__cdecl *onEvent)(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
+};
+struct Overlay_t
+{
+    std::vector<Element_t> Elements;
+    vec2_t Position, Size;
+    bool Ctrl{}, Shift{};
+    HWND Windowhandle;
+
+    static LRESULT __stdcall Windowproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
-        uint32_t Keycode{};
-        wchar_t Character;
-        vec2_t Point;
-    } Data;
+        Overlay_t *This{};
+
+        if (Message == WM_NCCREATE)
+        {
+            This = (Overlay_t *)((LPCREATESTRUCTA)lParam)->lpCreateParams;
+            SetWindowLongPtr(Windowhandle, GWLP_USERDATA, (LONG_PTR)This);
+            This->Windowhandle = Windowhandle;
+        }
+        else
+        {
+            This = (Overlay_t *)GetWindowLongPtrA(Windowhandle, GWLP_USERDATA);
+        }
+
+        if (This) return This->Eventhandler(Message, wParam, lParam);
+        return DefWindowProcA(Windowhandle, Message, wParam, lParam);
+    }
+    void Broadcastevent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+    {
+        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const Element_t &Element)
+        {
+            if (Element.Wantedevents.Raw & Flags.Raw) [[unlikely]]
+            {
+                if (Element.onEvent) [[likely]]
+                {
+                    Element.onEvent(Flags, Data);
+                }
+            }
+        });
+    }
+    LRESULT __stdcall Eventhandler(UINT Message, WPARAM wParam, LPARAM lParam)
+    {
+        Eventflags_t Flags{};
+
+        switch (Message)
+        {
+            // Default Windows BS.
+            case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+            case WM_NCCREATE: return Windowhandle != NULL;
+
+            // Preferred over WM_MOVE/WM_SIZE for performance.
+            case WM_WINDOWPOSCHANGED:
+            {
+                const auto Info = (WINDOWPOS *)lParam;
+                Position = { Info->x, Info->y };
+                Size = { Info->cx, Info->cy };
+
+                // Notify the elements that they need to resize.
+                Flags.onWindowchange = true;
+                Broadcastevent(Flags, Size);
+                return NULL;
+            }
+
+            // Special keys.
+            case WM_SYSKEYDOWN:
+            case WM_SYSKEYUP:
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            {
+                const bool Down = !((lParam >> 31) & 1);
+
+                switch (wParam)
+                {
+                    case VK_SHIFT: { Shift = Down; break; }
+                    case VK_CONTROL: { Ctrl = Down; break; }
+
+                    case VK_TAB: { Flags.doTab = true; break; }
+                    case VK_RETURN: { Flags.doEnter = true; break; }
+                    case VK_DELETE: { Flags.doDelete = true; break; }
+                    case VK_ESCAPE: { Flags.doCancel = true; break; }
+                    case VK_BACK: { Flags.doBackspace = true; break; }
+                    case 'X': { if (Shift) Flags.doCut = true; break; }
+                    case 'C': { if (Shift) Flags.doCopy = true; break; }
+                    case 'V': { if (Shift) Flags.doPaste = true; break; }
+                    case 'Z':
+                    {
+                        if (Ctrl)
+                        {
+                            if (Shift) Flags.doRedo = true;
+                            else Flags.doUndo = true;
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+
+                if (Flags.Any)
+                {
+                    Flags.modShift = Shift;
+                    Flags.modCtrl = Ctrl;
+                    Flags.Keydown = Down;
+                    Flags.Keyup = !Down;
+
+                    Broadcastevent(Flags, uint32_t(wParam));
+                }
+
+                return NULL;
+            }
+
+            // Keyboard input.
+            case WM_CHAR:
+            {
+                Flags.onCharinput = true; Flags.modShift = Shift; Flags.modCtrl = Ctrl;
+                Broadcastevent(Flags, wchar_t(wParam));
+                return NULL;
+            }
+
+            // Mouse input.
+            case WM_LBUTTONUP:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            {
+                Flags.Mousedown |= Message == WM_LBUTTONDOWN;
+                Flags.Mousedown |= Message == WM_RBUTTONDOWN;
+                Flags.Mousedown |= Message == WM_MBUTTONDOWN;
+                Flags.Mouseup = !Flags.Mousedown;
+
+                if (Flags.Mouseup) ReleaseCapture();
+                else SetCapture(Windowhandle);
+
+                const bool Middle = Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP;
+                const bool Right = Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP;
+                const bool Left = Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP;
+                if (Middle) Broadcastevent(Flags, uint32_t(VK_MBUTTON));
+                if (Right) Broadcastevent(Flags, uint32_t(VK_RBUTTON));
+                if (Left) Broadcastevent(Flags, uint32_t(VK_LBUTTON));
+
+                return NULL;
+            }
+            case WM_MOUSEMOVE:
+            {
+                Flags.Mousemove = true;
+                Broadcastevent(Flags, vec2_t(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+                return NULL;
+            }
+
+            // To keep tools happy.
+            default: break;
+        }
+
+        return DefWindowProcA(Windowhandle, Message, wParam, lParam);
+    }
+
+    void setWindowposition(vec2_t XY, bool Delta = false)
+    {
+        if (Delta) XY += Position;
+        SetWindowPos(Windowhandle, NULL, XY.x, XY.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
+    }
+    void setWindowsize(vec2_t WH, bool Delta = false)
+    {
+        if (Delta) WH += Size;
+        SetWindowPos(Windowhandle, NULL, Position.x, Position.y, WH.x, WH.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
+    }
+    void setVisible(bool Visible = true)
+    {
+        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+    }
+
+    void addElement(Element_t &&Element)
+    {
+        const auto Device = GetDC(Windowhandle);
+
+        Element.Surface = Createsurface(Element.Size, Device);
+        ReleaseDC(Windowhandle, Device);
+        Elements.emplace_back(Element);
+
+        // Sort by Z-order so we draw in the right order.
+        std::sort(std::execution::par_unseq, Elements.begin(), Elements.end(), [](const auto &a, const auto &b)
+        {
+            return a.Position.z > b.Position.z;
+        });
+
+        // Sort by X and Y for slightly better cache locality in rendering.
+        std::stable_sort(std::execution::par_unseq, Elements.begin(), Elements.end(), [](const auto &a, const auto &b)
+        {
+            return a.Position.x > b.Position.x;
+        });
+        std::stable_sort(std::execution::par_unseq, Elements.begin(), Elements.end(), [](const auto &a, const auto &b)
+        {
+            return a.Position.y > b.Position.y;
+        });
+    }
+
+    void doFrame(float Deltatime)
+    {
+        // Process events.
+        {
+            MSG Message;
+            while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
+            {
+                TranslateMessage(&Message);
+                DispatchMessageA(&Message);
+            }
+        }
+
+        // Notify the elements about the frame.
+        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const auto &Element)
+        {
+            if (Element.onTick)
+                Element.onTick(Deltatime);
+        });
+
+        // Repaint the overlay.
+        doPresent();
+    }
+    void doPresent()
+    {
+        // Only render when the overlay is visible.
+        if (IsWindowVisible(Windowhandle))
+        {
+            // Before doing any work, verify that we have to update.
+            if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
+                [](const auto &Element) { return Element.Repainted; })) return;
+
+            RECT Clientarea{ 0, 0, Size.x, Size.y };
+            const auto Device = GetDC(Windowhandle);
+
+            // Ensure that the device is 'clean'.
+            SelectObject(Device, GetStockObject(DC_PEN));
+            SelectObject(Device, GetStockObject(DC_BRUSH));
+            SelectObject(Device, GetStockObject(SYSTEM_FONT));
+
+            // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
+            SetBkColor(Device, Clearcolor); ExtTextOutW(Device, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
+
+            // Paint the overlay, elements are ordered by Z.
+            for (auto &Element : Elements)
+            {
+                // Rather than test, just clear.
+                Element.Repainted = false;
+
+                // Rare, an invisible element.
+                if (!Element.Surface) [[unlikely]]
+                    continue;
+
+                // Transparency mask available.
+                if (Element.Mask) [[unlikely]]
+                {
+                    // TODO(tcn): Benchmark against using Createmask() with BitBlt(SRCAND) + BitBlt(SRCPAINT).
+                    TransparentBlt(Device, Element.Position.x, Element.Position.y,
+                    Element.Size.x, Element.Size.y, Element.Surface, 0, 0,
+                    Element.Size.x, Element.Size.y, Element.Mask);
+                }
+                else
+                {
+                    BitBlt(Device, Element.Position.x, Element.Position.y,
+                        Element.Size.x, Element.Size.y, Element.Surface, 0, 0, SRCCOPY);
+                }
+            }
+
+            // Cleanup.
+            ReleaseDC(Windowhandle, Device);
+        }
+    }
+
+    explicit Overlay_t(vec2_t _Position, vec2_t _Size) : Position(_Position)
+    {
+        // Register the overlay class.
+        WNDCLASSEXA Windowclass{};
+        Windowclass.lpfnWndProc = Windowproc;
+        Windowclass.cbSize = sizeof(WNDCLASSEXA);
+        Windowclass.style = CS_SAVEBITS | CS_OWNDC;
+        Windowclass.lpszClassName = "Ayria_Overlay";
+        Windowclass.cbWndExtra = sizeof(Overlay_t *);
+        Windowclass.hbrBackground = CreateSolidBrush(Clearcolor);
+        if (NULL == RegisterClassExA(&Windowclass)) assert(false);
+
+        // Generic overlay style.
+        DWORD Style = WS_POPUP | CS_BYTEALIGNWINDOW;
+        DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
+        if constexpr (Build::isDebug) Style |= WS_BORDER;
+
+        // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
+        if (!CreateWindowExA(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,
+            0, 0, NULL, NULL, NULL, this)) assert(false);
+
+        // To keep static-analysis happy. Is set via Windowproc.
+        assert(Windowhandle);
+
+        // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
+        SetLayeredWindowAttributes(Windowhandle, Clearcolor, 0, LWA_COLORKEY);
+
+        // If we have a size, resize to show the window.
+        if (_Size) setWindowsize(_Size);
+    }
 };
 
+#pragma pack(pop)
+#pragma endregion
+
+// TODO(tcn): Add font from disk / resource.
 inline HFONT Createfont(std::string_view Name, int8_t Fontsize)
 {
     return CreateFontA(Fontsize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -86,317 +387,13 @@ inline HFONT getDefaultfont()
     return Default;
 }
 
-struct Element_t
-{
-    std::atomic_flag Repainted;
-    Eventflags_t Wantedevents;
-    vec3_t Position;
-    COLORREF Mask;
-    vec2_t Size;
-    HDC Surface;
-
-    void(__cdecl *onTick)(float Deltatime);
-    void(__cdecl *onEvent)(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
-};
-//struct Overlay_t
-//{
-//    std::chrono::high_resolution_clock::time_point Lastframe;
-//    std::vector<Element_t> Elements;
-//    vec2_t Position, Size;
-//    bool Ctrl{}, Shift{};
-//    HWND Windowhandle;
-//    HDC Memorydevice;
-//
-//    void setWindowposition(vec2_t XY, bool Delta = false)
-//    {
-//        if (Delta) Position += XY;
-//        else Position = XY;
-//
-//        SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
-//    }
-//    void setWindowsize(vec2_t WH, bool Delta = false)
-//    {
-//        if (Delta) Size += WH;
-//        else Size = WH;
-//
-//        SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
-//    }
-//    void setVisible(bool Visible = true)
-//    {
-//        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
-//    }
-//    void addElement(Element_t &&Element)
-//    {
-//        Element.Devicecontext = Createsurface(Element.Size, GetDC(Windowhandle));
-//        Elements.emplace_back(Element);
-//
-//        // Sort by Z-order so we draw in the right order.
-//        std::sort(std::execution::par_unseq, Elements.begin(), Elements.end(), [](const auto &a, const auto &b)
-//        {
-//            return a.Z > b.Z;
-//        });
-//    }
-//    void doPresent()
-//    {
-//        // Only render when the overlay is visible.
-//        if (IsWindowVisible(Windowhandle))
-//        {
-//            RECT Screen{ 0, 0, Size.x, Size.y };
-//
-//            // Clean the context.
-//            SelectObject(Memorydevice, GetStockObject(DC_PEN));
-//            SelectObject(Memorydevice, GetStockObject(DC_BRUSH));
-//
-//            // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
-//            FillRect(Memorydevice, &Screen, CreateSolidBrush(Clearcolor));
-//
-//
-//            Screen.bottom -= 150;
-//            SetTextColor(Memorydevice, 0xFFFFFFFF);
-//            SetBkColor(Memorydevice, Clearcolor);
-//            Ellipse(Memorydevice, 50, 50, 100, 100);
-//
-//
-//            SelectObject(Memorydevice, (HFONT)GetStockObject(ANSI_VAR_FONT));
-//            ExtTextOutW(Memorydevice, 100, 100, ETO_OPAQUE|ETO_CLIPPED, NULL, L"MEEP", 4, NULL);
-//            TextOutA(Memorydevice, 50, 50, "Cake", 4);
-//
-//            // Paint the overlay.
-//            for (const auto &Element : Elements)
-//            {
-//                // Transparency mask available.
-//                if (Element.Mask) [[unlikely]]
-//                {
-//                    // TODO(tcn): Benchmark against using Createmask() with BitBlt(SRCAND) + BitBlt(SRCPAINT).
-//                    TransparentBlt(Memorydevice, Element.Position.x, Element.Position.y,
-//                        Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0,
-//                        Element.Size.x, Element.Size.y, Element.Mask);
-//                }
-//                else
-//                {
-//                    BitBlt(Memorydevice, Element.Position.x, Element.Position.y,
-//                        Element.Size.x, Element.Size.y, Element.Devicecontext, 0, 0, SRCCOPY);
-//                }
-//            }
-//
-//            // Paint the window and notify Windows that it's clean.
-//            //BitBlt(GetDC(Windowhandle), 0, 0, Size.x, Size.y, Memorydevice, 0, 0, SRCCOPY);
-//
-//            PAINTSTRUCT Updateinformation{};
-//            auto Devicecontext = BeginPaint(Windowhandle, &Updateinformation);
-//            BitBlt(Devicecontext, 0, 0, Size.x, Size.y, Memorydevice, 0, 0, SRCCOPY);
-//            EndPaint(Windowhandle, &Updateinformation);
-//        }
-//    }
-//    void doFrame()
-//    {
-//        // Process events.
-//        {
-//            MSG Message;
-//            while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
-//            {
-//                Event_t Event{};
-//
-//                if (Message.message == WM_PAINT) break;
-//
-//                TranslateMessage(&Message);
-//                switch (Message.message)
-//                {
-//                    // Window-changes.
-//                    case WM_SIZE:
-//                    {
-//                        const vec2_t Newsize{ LOWORD(Message.lParam), HIWORD(Message.lParam) };
-//
-//                        if (this->Size != Newsize)
-//                        {
-//                            Recreatesurface(Newsize, Memorydevice);
-//                            Event.Flags.onWindowchange = true;
-//                            Event.Data.Point = Newsize;
-//                            Size = Newsize;
-//                        }
-//
-//                        break;
-//                    }
-//                    case WM_MOVE:
-//                    {
-//                        Position = { LOWORD(Message.lParam), HIWORD(Message.lParam) };
-//                        break;
-//                    }
-//
-//                    // Special keys.
-//                    case WM_SYSKEYDOWN:
-//                    case WM_SYSKEYUP:
-//                    case WM_KEYDOWN:
-//                    case WM_KEYUP:
-//                    {
-//                        const bool Down = !((Message.lParam >> 31) & 1);
-//
-//                        // Special cases.
-//                        switch (Message.wParam)
-//                        {
-//                            case VK_SHIFT: { Shift = Down; break; }
-//                            case VK_CONTROL: { Ctrl = Down; break; }
-//
-//                            case VK_TAB: { Event.Flags.doTab = true; break; }
-//                            case VK_RETURN: { Event.Flags.doEnter = true; break; }
-//                            case VK_DELETE: { Event.Flags.doDelete = true; break; }
-//                            case VK_ESCAPE: { Event.Flags.doCancel = true; break; }
-//                            case VK_BACK: { Event.Flags.doBackspace = true; break; }
-//                            case 'X': { if (Shift) Event.Flags.doCut = true; break; }
-//                            case 'C': { if (Shift) Event.Flags.doCopy = true; break; }
-//                            case 'V': { if (Shift) Event.Flags.doPaste = true; break; }
-//                            case 'Z':
-//                            {
-//                                if (Ctrl)
-//                                {
-//                                    if (Shift) Event.Flags.doRedo = true;
-//                                    else Event.Flags.doUndo = true;
-//                                }
-//                                break;
-//                            }
-//                            default: break;
-//                        }
-//
-//                        if (Event.Flags.Any)
-//                        {
-//                            Event.Data.Keycode = Message.wParam;
-//                            Event.Flags.modShift = Shift;
-//                            Event.Flags.modCtrl = Ctrl;
-//                            Event.Flags.Keydown = Down;
-//                            Event.Flags.Keyup = !Down;
-//                        }
-//                        break;
-//                    }
-//
-//                    // Keyboard input.
-//                    case WM_CHAR:
-//                    {
-//                        Event.Data.Character = static_cast<wchar_t>(Message.wParam);
-//                        Event.Flags.onCharinput = true;
-//                        Event.Flags.modShift = Shift;
-//                        Event.Flags.modCtrl = Ctrl;
-//                        break;
-//                    }
-//
-//                    // Mouse input.
-//                    case WM_LBUTTONUP:
-//                    case WM_RBUTTONUP:
-//                    case WM_MBUTTONUP:
-//                    case WM_LBUTTONDOWN:
-//                    case WM_RBUTTONDOWN:
-//                    case WM_MBUTTONDOWN:
-//                    {
-//                        const bool Middle = Message.message == WM_MBUTTONDOWN || Message.message == WM_MBUTTONUP;
-//                        const bool Right = Message.message == WM_RBUTTONDOWN || Message.message == WM_RBUTTONUP;
-//                        const bool Left = Message.message == WM_LBUTTONDOWN || Message.message == WM_LBUTTONUP;
-//                        if (Middle) Event.Data.Keycode = VK_MBUTTON;
-//                        if (Right) Event.Data.Keycode = VK_RBUTTON;
-//                        if (Left) Event.Data.Keycode = VK_LBUTTON;
-//
-//                        Event.Flags.Mousedown |= Message.message == WM_LBUTTONDOWN;
-//                        Event.Flags.Mousedown |= Message.message == WM_RBUTTONDOWN;
-//                        Event.Flags.Mouseup = !Event.Flags.Mousedown;
-//
-//                        if (Event.Flags.Mouseup) ReleaseCapture();
-//                        else SetCapture(Message.hwnd);
-//                        break;
-//                    }
-//                    case WM_MOUSEMOVE:
-//                    {
-//                        Event.Data.Point = { LOWORD(Message.lParam), HIWORD(Message.lParam) };
-//                        Event.Flags.Mousemove = true;
-//                        break;
-//                    }
-//
-//                    default: continue;
-//                }
-//
-//                // Notify the elements.
-//                std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const Element_t &Element)
-//                {
-//                    if (Element.onEvent && (Element.Wantedevents.Raw & Event.Flags.Raw)) Element.onEvent(Event);
-//                });
-//            }
-//        }
-//
-//        // Track the frame-time, should be less than 33ms.
-//        const auto Thisframe{ std::chrono::high_resolution_clock::now() };
-//        const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
-//        Lastframe = Thisframe;
-//
-//        // Log frame-average every 5 seconds.
-//        if constexpr (Build::isDebug)
-//        {
-//            static std::array<float, 256> Timings{};
-//            static float Elapsedtime{};
-//            static size_t Index{};
-//
-//            Timings[Index % 256] = Deltatime;
-//            Elapsedtime += Deltatime;
-//            Index++;
-//
-//            if (Elapsedtime >= 5.0f)
-//            {
-//                const auto Sum = std::reduce(std::execution::par_unseq, Timings.begin(), Timings.end());
-//                Debugprint(va("Average frametime: %f", Sum / 256.0f));
-//                Elapsedtime = 0;
-//            }
-//        }
-//
-//        // Notify the elements.
-//        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const Element_t &Element)
-//        {
-//            if (Element.onTick) Element.onTick(Deltatime);
-//        });
-//
-//        // Repaint if needed.
-//        doPresent();
-//    }
-//
-//    explicit Overlay_t(vec2_t XY, vec2_t WH) : Position(XY), Size(WH)
-//    {
-//        // Register the window.
-//        WNDCLASSEXA Windowclass{ sizeof(WNDCLASSEXA) };
-//        Windowclass.lpszClassName = "Ayria_UI_overlay";
-//        Windowclass.hInstance = GetModuleHandleA(NULL);
-//        Windowclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-//        Windowclass.style = CS_BYTEALIGNWINDOW | CS_OWNDC | CS_DROPSHADOW;
-//        Windowclass.lpfnWndProc = [](HWND a, UINT b, WPARAM c, LPARAM d) -> LRESULT
-//        {
-//            if (b == WM_SIZE || b == WM_MOVE) PostMessageA(a, b, c, d);
-//            if (b == WM_PAINT) return LRESULT(1);
-//
-//            return DefWindowProcA(a, b, c, d);
-//        };
-//        if (NULL == RegisterClassExA(&Windowclass)) assert(false); // WTF?
-//
-//        // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
-//        Windowhandle = CreateWindowExA(NULL, Windowclass.lpszClassName,
-//            "Test", WS_POPUP, Position.x, Position.y, NULL, NULL, NULL, NULL, Windowclass.hInstance, NULL);
-//        if (!Windowhandle) assert(false); // WTF?
-//
-//        // A new surface to render to.
-//        Memorydevice = Createsurface(Size, GetDC(Windowhandle));
-//
-//        // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
-//        //SetLayeredWindowAttributes(Windowhandle, Clearcolor, 0, LWA_COLORKEY);
-//
-//        // If we got a size, resize and show.
-//        if (Size) setWindowsize(Size);
-//        InvalidateRect(Windowhandle, nullptr, FALSE);
-//    }
-//};
-
-#pragma pack(pop)
-#pragma endregion
-
-// TODO(tcn): Add image loading from disk.
+// TODO(tcn): Add image loading from disk / resource.
 inline HBITMAP Createimage(vec2_t Dimensions, uint32_t Size, const void *Data)
 {
     assert(Dimensions.x); assert(Dimensions.y); assert(Size); assert(Data);
     const auto Pixelsize{ Size / int(Dimensions.x * Dimensions.y) };
     BITMAPINFO BMI{ sizeof(BITMAPINFOHEADER) };
-    uint8_t *DIBPixels{};
+    uint8_t *DIBPixels;
 
     // Windows likes to draw bitmaps upside down, so negative height.
     BMI.bmiHeader.biSizeImage = int(Dimensions.y * Dimensions.x) * Pixelsize;
@@ -408,14 +405,11 @@ inline HBITMAP Createimage(vec2_t Dimensions, uint32_t Size, const void *Data)
 
     // Allocate the bitmap in system-memory.
     const auto Bitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
+    assert(Bitmap); assert(DIBPixels); // WTF?
     std::memcpy(DIBPixels, Data, Size);
 
-    // Need to synchronize the bits with GDI.
-    GdiFlush();
-    {
-        SetDIBits(NULL, Bitmap, 0, Dimensions.y, DIBPixels, &BMI, DIB_RGB_COLORS);
-    }
-    GdiFlush();
+    // NOTE(tcn): Probably need to synchronize the bits with GDI via GdiFlush().
+    SetDIBits(NULL, Bitmap, 0, Dimensions.y, DIBPixels, &BMI, DIB_RGB_COLORS);
 
     return Bitmap;
 }

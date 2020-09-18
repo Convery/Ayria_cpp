@@ -189,6 +189,9 @@ struct Color_t : rgb_t
 #pragma pack(pop)
 #pragma endregion
 
+// Constants used everywhere.
+constexpr COLORREF Clearcolor{ 0xFFFFFFFF };
+
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>
