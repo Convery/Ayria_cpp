@@ -15,30 +15,21 @@ namespace Console
     {
         // Each window needs a unique ID, because reasons.
         constexpr size_t InputID = 1, BufferID = 2;
-        HWND Consolehandle, Bufferhandle;
-        HWND Inputhandle, Outputbuffer;
+        HWND Consolehandle, Inputhandle, Bufferhandle;
         uint32_t Lastmessage;
         vec2_t Windowsize;
         WNDPROC oldLine;
 
         LRESULT __stdcall Inputproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
-            if (Message == WM_KILLFOCUS && Consolehandle == (HWND)wParam)
-            {
-                SetFocus(Handle);
-                return 0;
-            }
-            if (Message == WM_SETFOCUS)
-            {
-                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
-                return 0;
-            }
-            if (Message == WM_KEYDOWN && wParam == VK_RETURN)
+            if (Message == WM_SETFOCUS) SendMessageW(Bufferhandle, EM_SETSEL, (WPARAM)-1, -1);
+            if (Message == WM_CHAR && wParam == VK_RETURN)
             {
                 wchar_t Input[1024]{};
                 GetWindowTextW(Inputhandle, Input, 1024);
                 SetWindowTextW(Inputhandle, L"");
                 Console::execCommandline(Input);
+                return 0;
             }
 
             return CallWindowProcW(oldLine, Handle, Message, wParam, lParam);
@@ -72,12 +63,13 @@ namespace Console
             }
             else if (Message == WM_NCLBUTTONDOWN)
             {
-                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+                SendMessageW(Bufferhandle, EM_SETSEL, (WPARAM)-1, -1);
+                SetFocus(Inputhandle);
             }
             else if (Message == WM_ACTIVATE)
             {
-                if (LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
-                else SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+                if (LOWORD(wParam) == WA_INACTIVE) SendMessageW(Bufferhandle, EM_SETSEL, (WPARAM)-1, -1);
+                SetFocus(Inputhandle);
             }
 
             return DefWindowProcW(Handle, Message, wParam, lParam);
