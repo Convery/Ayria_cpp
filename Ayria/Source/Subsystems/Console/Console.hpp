@@ -26,24 +26,20 @@ namespace Console
     // Fetch a copy of the internal strings.
     std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter);
 
-    // Filter the input based on 'tabs'.
-    void addConsoletab(const std::wstring &Name, const std::wstring &Filter);
-
-    // Get all available filters.
-    std::vector<std::pair<std::wstring, std::wstring>> getTabs();
-
-    // Handle different forms of input.
-    void onEvent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
-
-    // Update the consoles internal state.
-    void setConsoleinput(std::wstring_view Input);
-
     // Add a new command to the internal list.
     void addConsolecommand(std::wstring_view Name, Callback_t Callback);
 
-    // Let others view the internal state.
+    // Evaluate the string, optionally add to the history.
+    void execCommandline(std::wstring Commandline, bool logCommand = true);
+
+    // TODO(tcn): DEPRECATE
+    void onEvent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
+    void addConsoletab(const std::wstring &Name, const std::wstring &Filter);
+    std::vector<std::pair<std::wstring, std::wstring>> getTabs();
+    void setConsoleinput(std::wstring_view Input);
     const Consoleinput_t *getState();
 
+    // Quake-style console.
     namespace Windows
     {
         // Show auto-creates a console if needed.

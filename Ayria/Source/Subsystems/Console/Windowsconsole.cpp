@@ -33,13 +33,8 @@ namespace Console
             {
                 wchar_t Input[1024]{};
                 GetWindowTextW(Inputhandle, Input, 1024);
-
-                Console::setConsoleinput(Input);
-
-                Eventflags_t Flags{}; Flags.doEnter = true;
-                Console::onEvent(Flags, uint32_t(VK_RETURN));
-
                 SetWindowTextW(Inputhandle, L"");
+                Console::execCommandline(Input);
             }
 
             return CallWindowProcW(oldLine, Handle, Message, wParam, lParam);
@@ -49,8 +44,7 @@ namespace Console
             if (Message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
             if (Message == WM_TIMER)
             {
-                const auto Last = Console::getLoglines(1, L"")[0];
-                const auto Hash = Hash::FNV1_32(Last.first.data(), Last.first.size() * sizeof(wchar_t));
+                const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
 
                 if (Lastmessage != Hash)
                 {

@@ -101,11 +101,11 @@ namespace Console
     }
 
     // Evaluate the string, optionally add to the history.
-    void execCommandline(std::wstring Commandline, bool noHistory = true)
+    void execCommandline(std::wstring Commandline, bool logCommand)
     {
         int Argc{};
 
-        // Why would you do this?
+        // Why would you do this? =(
         if (Commandline.empty()) [[unlikely]]
             return;
 
@@ -132,7 +132,7 @@ namespace Console
             LocalFree(Argv);
         }
 
-        if (!noHistory)
+        if (logCommand)
         {
             addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
             State.Lastcommand = State.Inputline;
