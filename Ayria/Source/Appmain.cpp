@@ -7,7 +7,6 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-
 namespace Backend
 {
     static void setThreadname(std::string_view Name)

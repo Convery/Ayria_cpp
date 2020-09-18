@@ -185,6 +185,43 @@ struct Color_t : rgb_t
     operator COLORREF() const { return r | (g << 8U) | (b << 16U) | (a << 24U); }
 };
 
+using Eventflags_t = union
+{
+    union
+    {
+        uint32_t Raw;
+        uint32_t Any;
+        struct
+        {
+            uint32_t
+                onWindowchange : 1,
+                onCharinput : 1,
+
+                doBackspace : 1,
+                doDelete : 1,
+                doCancel : 1,
+                doPaste : 1,
+                doEnter : 1,
+                doUndo : 1,
+                doRedo : 1,
+                doCopy : 1,
+                doTab : 1,
+                doCut : 1,
+
+                Mousemove : 1,
+                Mousedown : 1,
+                Mouseup : 1,
+                Keydown : 1,
+                Keyup : 1,
+
+                modShift : 1,
+                modCtrl : 1,
+
+                FLAG_MAX : 1;
+        };
+    };
+};
+
 #pragma pack(pop)
 #pragma endregion
 
@@ -198,4 +235,5 @@ constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>
+#include <Subsystems/Console/Console.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>

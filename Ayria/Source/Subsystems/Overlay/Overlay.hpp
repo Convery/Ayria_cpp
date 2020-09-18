@@ -26,42 +26,6 @@ inline HDC Recreatesurface(vec2_t Size, HDC Context)
 #pragma region Core
 #pragma pack(push, 1)
 
-using Eventflags_t = union
-{
-    union
-    {
-        uint32_t Raw;
-        uint32_t Any;
-        struct
-        {
-            uint32_t
-                onWindowchange : 1,
-                onCharinput : 1,
-
-                doBackspace : 1,
-                doDelete : 1,
-                doCancel : 1,
-                doPaste : 1,
-                doEnter : 1,
-                doUndo : 1,
-                doRedo : 1,
-                doCopy : 1,
-                doTab : 1,
-                doCut : 1,
-
-                Mousemove : 1,
-                Mousedown : 1,
-                Mouseup : 1,
-                Keydown : 1,
-                Keyup : 1,
-
-                modShift : 1,
-                modCtrl : 1,
-
-                FLAG_MAX : 1;
-        };
-    };
-};
 struct Element_t
 {
     Eventflags_t Wantedevents;  // Matched in Overlay::Broadcastevent
