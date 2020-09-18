@@ -45,16 +45,7 @@ namespace Console
         }
         LRESULT __stdcall Consoleproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
-            if (Message == WM_ACTIVATE)
-            {
-                if (LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
-                else SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
-            }
-            if (Message == WM_NCLBUTTONDOWN)
-            {
-                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
-            }
-            if (Message == WM_TIMER && wParam == Hash::FNV1_32("Tick"))
+            if (Message == WM_TIMER) [[likely]]
             {
                 const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
 
@@ -78,6 +69,15 @@ namespace Console
                         SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
                     }
                 }
+            }
+            else if (Message == WM_NCLBUTTONDOWN)
+            {
+                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+            }
+            else if (Message == WM_ACTIVATE)
+            {
+                if (LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
+                else SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
             }
 
             return DefWindowProcW(Handle, Message, wParam, lParam);
