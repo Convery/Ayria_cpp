@@ -28,7 +28,11 @@ namespace Console
                 SetFocus(Handle);
                 return 0;
             }
-
+            if (Message == WM_SETFOCUS)
+            {
+                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+                return 0;
+            }
             if (Message == WM_KEYDOWN && wParam == VK_RETURN)
             {
                 wchar_t Input[1024]{};
@@ -41,25 +45,38 @@ namespace Console
         }
         LRESULT __stdcall Consoleproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
-            if (Message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
-            if (Message == WM_TIMER)
+            if (Message == WM_ACTIVATE)
+            {
+                if (LOWORD(wParam) != WA_INACTIVE) SetFocus(Inputhandle);
+                else SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+            }
+            if (Message == WM_NCLBUTTONDOWN)
+            {
+                SendMessageW(Bufferhandle, EM_SETSEL, -1, -1);
+            }
+            if (Message == WM_TIMER && wParam == Hash::FNV1_32("Tick"))
             {
                 const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
 
                 if (Lastmessage != Hash)
                 {
-                    std::wstring Concatenated;
-                    Lastmessage = Hash;
-
-                    for (const auto &[String, Colour] : Console::getLoglines(999, L""))
+                    // If the user have selected text, skip.
+                    const auto Pos = SendMessageW(Bufferhandle, EM_GETSEL, NULL, NULL);
+                    if (HIWORD(Pos) == LOWORD(Pos))
                     {
-                        if (String.empty()) continue;
-                        Concatenated += String;
-                        Concatenated += L"\r\n";
-                    }
+                        std::wstring Concatenated;
+                        Lastmessage = Hash;
 
-                    SetWindowTextW(Bufferhandle, Concatenated.c_str());
-                    SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
+                        for (const auto &[String, Colour] : Console::getLoglines(999, L""))
+                        {
+                            if (String.empty()) continue;
+                            Concatenated += String;
+                            Concatenated += L"\r\n";
+                        }
+
+                        SetWindowTextW(Bufferhandle, Concatenated.c_str());
+                        SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
+                    }
                 }
             }
 
@@ -105,10 +122,10 @@ namespace Console
             Consolehandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"Console", Style,
                 Position.x, Position.y, Windowsize.x, Windowsize.y, NULL, NULL, hInstance, NULL);
             assert(Consolehandle); // WTF?
-            SetTimer(Consolehandle, 1, 300, NULL);
+            SetTimer(Consolehandle, Hash::FNV1_32("Tick"), 300, NULL);
 
             constexpr auto Linestyle = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL;
-            constexpr auto Bufferstyle = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY;
+            constexpr auto Bufferstyle = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_READONLY | ES_NOHIDESEL;
             Bufferhandle = CreateWindowExW(NULL, L"edit", NULL, Bufferstyle, 6, 5, 806, 410, Consolehandle, (HMENU)BufferID, hInstance, NULL);
             Inputhandle = CreateWindowExW(NULL, L"edit", NULL, Linestyle, 6, 420, 808, 20, Consolehandle, (HMENU)InputID, hInstance, NULL);
 
