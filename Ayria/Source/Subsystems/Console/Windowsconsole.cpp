@@ -131,7 +131,6 @@ namespace Console
 
             ShowCursor(!Hide);
             ShowWindow(Consolehandle, Hide ? SW_HIDE : SW_SHOWNORMAL);
-            if (!Hide) SendMessageW(Bufferhandle, EM_LINESCROLL, 0, 0xFFFF);
         }
     }
 }

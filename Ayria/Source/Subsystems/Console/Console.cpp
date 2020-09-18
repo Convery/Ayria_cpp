@@ -105,6 +105,10 @@ namespace Console
     {
         int Argc{};
 
+        // Why would you do this?
+        if (Commandline.empty()) [[unlikely]]
+            return;
+
         // Parse the input using the same rules as command-lines.
         if (const auto Argv = CommandLineToArgvW_wine(Commandline.c_str(), &Argc))
         {
