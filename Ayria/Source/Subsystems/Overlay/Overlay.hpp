@@ -196,7 +196,7 @@ struct Overlay_t
     }
     void setVisible(bool Visible = true)
     {
-        ShowWindowAsync(Windowhandle, Visible ? SW_SHOW : SW_HIDE);
+        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
         Forcerepaint = true;
     }
 
@@ -268,16 +268,14 @@ struct Overlay_t
             }
             Forcerepaint = false;
 
-            RECT Clientarea{ 0, 0, Size.x, Size.y };
-            const auto Device = GetDC(Windowhandle);
+            PAINTSTRUCT State;
+            InvalidateRect(Windowhandle, NULL, FALSE);
+            const auto Device = BeginPaint(Windowhandle, &State);
 
             // Ensure that the device is 'clean'.
             SelectObject(Device, GetStockObject(DC_PEN));
             SelectObject(Device, GetStockObject(DC_BRUSH));
             SelectObject(Device, GetStockObject(SYSTEM_FONT));
-
-            // TODO(tcn): Investigate if there's a better way than to clean the whole surface at high-resolution.
-            SetBkColor(Device, Clearcolor); ExtTextOutW(Device, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
 
             // Paint the overlay, elements are ordered by Z.
             for (auto &Element : Elements)
@@ -305,7 +303,7 @@ struct Overlay_t
             }
 
             // Cleanup.
-            ReleaseDC(Windowhandle, Device);
+            EndPaint(Windowhandle, &State);
         }
     }
 
@@ -470,11 +468,4 @@ inline std::pair<HWND, vec4_t> Largestwindow()
     }, (LPARAM)&Result);
 
     return Result;
-}
-inline bool isProcessfocused()
-{
-    DWORD ProcessID{};
-    const auto Handle = GetForegroundWindow();
-    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
-    return ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId();
 }

@@ -53,6 +53,14 @@ namespace Console
                     const auto Lines = Console::getLoglines(Linecount, L"");
 
                     // TODO(tcn): Paint.
+                    RECT Clientarea{ 0, 0, This->Size.x, This->Size.y };
+                    SetBkColor(This->Surface, Clearcolor);
+                    ExtTextOutW(This->Surface, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
+
+                    Clientarea.right -= 20;
+                    Clientarea.left += 20;
+                    SetBkColor(This->Surface, RGB(53, 53, 53));
+                    ExtTextOutW(This->Surface, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
 
                     This->Repainted = true;
                     Eventcount -= Events;
