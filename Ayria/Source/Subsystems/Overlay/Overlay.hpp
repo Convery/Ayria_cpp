@@ -35,8 +35,8 @@ struct Element_t
     vec2_t Size;
     HDC Surface;                // Bitmap to BitBlt and draw to, update Repainted on write.
 
-    void(__cdecl *onTick)(float Deltatime);
-    void(__cdecl *onEvent)(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
+    void(__cdecl *onTick)(Element_t *This, float Deltatime);
+    void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
 };
 struct Overlay_t
 {
@@ -65,14 +65,11 @@ struct Overlay_t
     }
     void Broadcastevent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
     {
-        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const Element_t &Element)
+        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](Element_t &Element)
         {
             if (Element.Wantedevents.Raw & Flags.Raw) [[unlikely]]
             {
-                if (Element.onEvent) [[likely]]
-                {
-                    Element.onEvent(Flags, Data);
-                }
+                if (Element.onEvent) [[likely]] Element.onEvent(&Element, Flags, Data);
             }
         });
     }
@@ -209,10 +206,7 @@ struct Overlay_t
 
     void addElement(Element_t &&Element)
     {
-        const auto Device = GetDC(Windowhandle);
-
-        Element.Surface = Createsurface(Element.Size, Device);
-        ReleaseDC(Windowhandle, Device);
+        Element.Surface = Createsurface(Element.Size);
         Elements.emplace_back(Element);
 
         // Sort by Z-order so we draw in the right order.
@@ -231,6 +225,14 @@ struct Overlay_t
             return a.Position.y > b.Position.y;
         });
     }
+    HDC Createsurface(vec2_t eSize)
+    {
+        const auto Device = GetDC(Windowhandle);
+        const auto Context = CreateCompatibleDC(Device);
+        SelectObject(Context, CreateCompatibleBitmap(Device, eSize.x, eSize.y));
+        ReleaseDC(Windowhandle, Device);
+        return Context;
+    }
 
     void doFrame(float Deltatime)
     {
@@ -245,10 +247,9 @@ struct Overlay_t
         }
 
         // Notify the elements about the frame.
-        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](const auto &Element)
+        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](auto &Element)
         {
-            if (Element.onTick)
-                Element.onTick(Deltatime);
+            if (Element.onTick) [[unlikely]] Element.onTick(&Element, Deltatime);
         });
 
         // Repaint the overlay.
@@ -415,9 +416,9 @@ inline void SwapRB(uint32_t Size, void *Buffer)
 }
 
 // Find windows not associated with our threads.
-inline std::vector<std::pair<HWND, vec2_t>> Findwindows()
+inline std::vector<std::pair<HWND, vec4_t>> Findwindows()
 {
-    std::vector<std::pair<HWND, vec2_t>> Results;
+    std::vector<std::pair<HWND, vec4_t>> Results;
 
     EnumWindows([](HWND Handle, LPARAM pResults) -> BOOL
     {
@@ -429,12 +430,9 @@ inline std::vector<std::pair<HWND, vec2_t>> Findwindows()
             RECT Window{};
             if (GetWindowRect(Handle, &Window))
             {
-                auto Results = (std::vector<std::pair<HWND, vec2_t>> *)pResults;
-
-                vec2_t Beep(Window.right - Window.left, Window.bottom - Window.top);
-
-
-                Results->push_back(std::make_pair(Handle, Beep ));
+                const vec4_t Temp(Window.right, Window.left, Window.bottom, Window.top);
+                auto Results = (std::vector<std::pair<HWND, vec4_t>> *)pResults;
+                Results->push_back(std::make_pair(Handle, Temp));
             }
         }
 
@@ -442,4 +440,37 @@ inline std::vector<std::pair<HWND, vec2_t>> Findwindows()
     }, (LPARAM)&Results);
 
     return Results;
+}
+inline std::pair<HWND, vec4_t> Largestwindow()
+{
+    std::pair<HWND, vec4_t> Result;
+
+    EnumWindows([](HWND Handle, LPARAM pResult) -> BOOL
+    {
+        DWORD ProcessID;
+        const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+
+        if (ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId())
+        {
+            RECT Window{};
+            if (GetWindowRect(Handle, &Window))
+            {
+                const vec4_t Temp(Window.right, Window.left, Window.bottom, Window.top);
+                auto Result = (std::pair<HWND, vec4_t> *)pResult;
+
+                if (Result->second > Temp) *Result = std::make_pair(Handle, Temp);
+            }
+        }
+
+        return TRUE;
+    }, (LPARAM)&Result);
+
+    return Result;
+}
+inline bool isProcessfocused()
+{
+    DWORD ProcessID{};
+    const auto Handle = GetForegroundWindow();
+    const auto ThreadID = GetWindowThreadProcessId(Handle, &ProcessID);
+    return ProcessID == GetCurrentProcessId() && ThreadID != GetCurrentThreadId();
 }

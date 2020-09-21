@@ -40,7 +40,7 @@ namespace Console
             {
                 const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
 
-                if (Lastmessage != Hash)
+                if (Lastmessage != Hash) [[unlikely]]
                 {
                     // If the user have selected text, skip.
                     const auto Pos = SendMessageW(Bufferhandle, EM_GETSEL, NULL, NULL);

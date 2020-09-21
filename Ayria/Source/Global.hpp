@@ -49,20 +49,20 @@ struct bfloat16_t
 
     bool operator!=(const bfloat16_t &Right) const { return !operator==(Right); }
     bool operator==(const bfloat16_t &Right) const { return Value == Right.Value; }
-    bool operator<(const bfloat16_t &Right)  const { return float(*this) < float(Right); }
-    bool operator>(const bfloat16_t &Right)  const { return float(*this) > float(Right); }
-    bool operator<=(const bfloat16_t &Right) const { return float(*this) <= float(Right); }
-    bool operator>=(const bfloat16_t &Right) const { return float(*this) >= float(Right); }
+    template<typename T> bool operator<(const T &Right)  const { return float(*this) < float(Right); }
+    template<typename T> bool operator>(const T &Right)  const { return float(*this) > float(Right); }
+    template<typename T> bool operator<=(const T &Right) const { return float(*this) <= float(Right); }
+    template<typename T> bool operator>=(const T &Right) const { return float(*this) >= float(Right); }
 
-    friend bfloat16_t operator+(bfloat16_t Left, const bfloat16_t &Right) { Left += Right; return Left; }
-    friend bfloat16_t operator-(bfloat16_t Left, const bfloat16_t &Right) { Left -= Right; return Left; }
-    friend bfloat16_t operator*(bfloat16_t Left, const bfloat16_t &Right) { Left *= Right; return Left; }
-    friend bfloat16_t operator/(bfloat16_t Left, const bfloat16_t &Right) { Left /= Right; return Left; }
+    template<typename T> friend bfloat16_t operator+(bfloat16_t Left, const T &Right) { Left += Right; return Left; }
+    template<typename T> friend bfloat16_t operator-(bfloat16_t Left, const T &Right) { Left -= Right; return Left; }
+    template<typename T> friend bfloat16_t operator*(bfloat16_t Left, const T &Right) { Left *= Right; return Left; }
+    template<typename T> friend bfloat16_t operator/(bfloat16_t Left, const T &Right) { Left /= Right; return Left; }
 
-    bfloat16_t &operator+=(const bfloat16_t &Right) { const float L = *this, R = Right; *this = (L + R); return *this; }
-    bfloat16_t &operator-=(const bfloat16_t &Right) { const float L = *this, R = Right; *this = (L - R); return *this; }
-    bfloat16_t &operator*=(const bfloat16_t &Right) { const float L = *this, R = Right; *this = (L * R); return *this; }
-    bfloat16_t &operator/=(const bfloat16_t &Right) { const float L = *this, R = Right; *this = (L / R); return *this; }
+    template<typename T> bfloat16_t &operator+=(const T &Right) { const float L = *this, R = Right; *this = (L + R); return *this; }
+    template<typename T> bfloat16_t &operator-=(const T &Right) { const float L = *this, R = Right; *this = (L - R); return *this; }
+    template<typename T> bfloat16_t &operator*=(const T &Right) { const float L = *this, R = Right; *this = (L * R); return *this; }
+    template<typename T> bfloat16_t &operator/=(const T &Right) { const float L = *this, R = Right; *this = (L / R); return *this; }
 };
 struct vec2_t
 {
@@ -75,10 +75,10 @@ struct vec2_t
 
     bool operator!=(const vec2_t &Right) const { return !operator==(Right); }
     bool operator==(const vec2_t &Right) const { return x == Right.x && y == Right.y; }
-    bool operator<(const vec2_t &Right)  const { return (x < Right.x) && (y < Right.y); }
-    bool operator>(const vec2_t &Right)  const { return (x > Right.x) && (y > Right.y); }
-    bool operator<=(const vec2_t &Right) const { return (x <= Right.x) && (y <= Right.y); }
-    bool operator>=(const vec2_t &Right) const { return (x >= Right.x) && (y >= Right.y); }
+    bool operator<(const vec2_t &Right)  const { return (x < Right.x) || (y < Right.y); }
+    bool operator>(const vec2_t &Right)  const { return (x > Right.x) || (y > Right.y); }
+    bool operator<=(const vec2_t &Right) const { return (x <= Right.x) || (y <= Right.y); }
+    bool operator>=(const vec2_t &Right) const { return (x >= Right.x) || (y >= Right.y); }
 
     friend vec2_t operator+(vec2_t Left, const vec2_t &Right) { Left += Right; return Left; }
     friend vec2_t operator-(vec2_t Left, const vec2_t &Right) { Left -= Right; return Left; }
@@ -95,15 +95,16 @@ struct vec3_t
     vec3_t() = default;
     template<typename T> operator T() const { return { x, y, z }; }
     operator bool() const { return !!(x.Value + y.Value + z.Value); }
+    template<typename T> vec3_t(T X, T Y, T Z) : x(X), y(Y), z(Z) {}
     template<typename T = int> vec3_t(vec2_t XY, T Z = 0) : x(XY.x), y(XY.y), z(Z) {}
     template<typename T, typename U, typename V> vec3_t(T X, U Y, V Z) : x(X), y(Y), z(Z) {}
 
     bool operator!=(const vec3_t &Right) const { return !operator==(Right); }
     bool operator==(const vec3_t &Right) const { return x == Right.x && y == Right.y && z == Right.z; }
-    bool operator<(const vec3_t &Right)  const { return (x < Right.x) && (y < Right.y) && (z < Right.z); }
-    bool operator>(const vec3_t &Right)  const { return (x > Right.x) && (y > Right.y) && (z > Right.z); }
-    bool operator<=(const vec3_t &Right) const { return (x <= Right.x) && (y <= Right.y) && (z <= Right.z); }
-    bool operator>=(const vec3_t &Right) const { return (x >= Right.x) && (y >= Right.y) && (z >= Right.z); }
+    bool operator<(const vec3_t &Right)  const { return (x < Right.x) || (y < Right.y) || (z < Right.z); }
+    bool operator>(const vec3_t &Right)  const { return (x > Right.x) || (y > Right.y) || (z > Right.z); }
+    bool operator<=(const vec3_t &Right) const { return (x <= Right.x) || (y <= Right.y) || (z <= Right.z); }
+    bool operator>=(const vec3_t &Right) const { return (x >= Right.x) || (y >= Right.y) || (z >= Right.z); }
 
     friend vec3_t operator+(vec3_t Left, const vec3_t &Right) { Left += Right; return Left; }
     friend vec3_t operator-(vec3_t Left, const vec3_t &Right) { Left -= Right; return Left; }
@@ -120,17 +121,18 @@ struct vec4_t
     vec4_t() = default;
     template<typename T> operator T() const { return { x, y, z, w }; }
     operator bool() const { return !!(x.Value + y.Value + z.Value + w.Value); }
-    vec4_t(vec2_t XY, vec2_t WH) : x(XY.x), y(XY.y), z(x + WH.x), w(y + WH.y) {};
+    template<typename T> vec4_t(T X, T Y, T Z, T W) : x(X), y(Y), z(Z), w(W) {}
+    vec4_t(vec2_t XY, vec2_t WH) : x(XY.x), y(XY.y), z(x + WH.x), w(y + WH.y) {}
     template<typename T = int> vec4_t(vec3_t XYZ, T W = 0) : x(XYZ.x), y(XYZ.y), z(XYZ.z), w(W) {}
     template<typename T, typename U, typename V> vec4_t(T X, U Y, V Z, T W) : x(X), y(Y), z(Z), w(W) {}
     template<typename T, typename U, typename V> vec4_t(T X, U Y, V Z, U W) : x(X), y(Y), z(Z), w(W) {}
 
     bool operator!=(const vec4_t &Right) const { return !operator==(Right); }
-    bool operator==(const vec4_t &Right) const { return x == Right.x && y == Right.y && z == Right.w && z == Right.w; }
-    bool operator<(const vec4_t &Right)  const { return (x < Right.x) && (y < Right.y) && (z < Right.z) && (w < Right.w); }
-    bool operator>(const vec4_t &Right)  const { return (x > Right.x) && (y > Right.y) && (z > Right.z) && (w > Right.w); }
-    bool operator<=(const vec4_t &Right) const { return (x <= Right.x) && (y <= Right.y) && (z <= Right.z) && (w <= Right.w); }
-    bool operator>=(const vec4_t &Right) const { return (x >= Right.x) && (y >= Right.y) && (z >= Right.z) && (w >= Right.w); }
+    bool operator==(const vec4_t &Right) const { return x == Right.x && y == Right.y && z == Right.w && w == Right.w; }
+    bool operator<(const vec4_t &Right)  const { return (x < Right.x) || (y < Right.y) || (z < Right.z) || (w < Right.w); }
+    bool operator>(const vec4_t &Right)  const { return (x > Right.x) || (y > Right.y) || (z > Right.z) || (w > Right.w); }
+    bool operator<=(const vec4_t &Right) const { return (x <= Right.x) || (y <= Right.y) || (z <= Right.z) || (w <= Right.w); }
+    bool operator>=(const vec4_t &Right) const { return (x >= Right.x) || (y >= Right.y) || (z >= Right.z) || (w >= Right.w); }
 
     friend vec4_t operator+(vec4_t Left, const vec4_t &Right) { Left += Right; return Left; }
     friend vec4_t operator-(vec4_t Left, const vec4_t &Right) { Left -= Right; return Left; }

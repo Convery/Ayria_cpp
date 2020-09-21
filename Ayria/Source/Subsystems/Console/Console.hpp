@@ -32,19 +32,18 @@ namespace Console
     // Evaluate the string, optionally add to the history.
     void execCommandline(std::wstring Commandline, bool logCommand = true);
 
-    // TODO(tcn): DEPRECATE
-    void onEvent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
-    void addConsoletab(const std::wstring &Name, const std::wstring &Filter);
-    std::vector<std::pair<std::wstring, std::wstring>> getTabs();
-    void setConsoleinput(std::wstring_view Input);
-    const Consoleinput_t *getState();
-
     // Quake-style console.
     namespace Windows
     {
         // Show auto-creates a console if needed.
         void Createconsole(HINSTANCE hInstance);
         void Showconsole(bool Hide);
+    }
+
+    // Ingame console.
+    namespace Overlay
+    {
+        void Createconsole(Overlay_t *Parent);
     }
 }
 
