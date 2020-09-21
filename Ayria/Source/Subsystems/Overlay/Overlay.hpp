@@ -44,6 +44,7 @@ struct Overlay_t
     vec2_t Position, Size;
     bool Ctrl{}, Shift{};
     HWND Windowhandle;
+    bool Forcerepaint;
 
     static LRESULT __stdcall Windowproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
@@ -106,9 +107,6 @@ struct Overlay_t
 
                 switch (wParam)
                 {
-                    case VK_SHIFT: { Shift = Down; break; }
-                    case VK_CONTROL: { Ctrl = Down; break; }
-
                     case VK_TAB: { Flags.doTab = true; break; }
                     case VK_RETURN: { Flags.doEnter = true; break; }
                     case VK_DELETE: { Flags.doDelete = true; break; }
@@ -129,16 +127,13 @@ struct Overlay_t
                     default: break;
                 }
 
-                if (Flags.Any)
-                {
-                    Flags.modShift = Shift;
-                    Flags.modCtrl = Ctrl;
-                    Flags.Keydown = Down;
-                    Flags.Keyup = !Down;
 
-                    Broadcastevent(Flags, uint32_t(wParam));
-                }
+                Flags.modShift = Shift;
+                Flags.modCtrl = Ctrl;
+                Flags.Keydown = Down;
+                Flags.Keyup = !Down;
 
+                Broadcastevent(Flags, uint32_t(wParam));
                 return NULL;
             }
 
@@ -201,7 +196,8 @@ struct Overlay_t
     }
     void setVisible(bool Visible = true)
     {
-        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        ShowWindowAsync(Windowhandle, Visible ? SW_SHOW : SW_HIDE);
+        Forcerepaint = true;
     }
 
     void addElement(Element_t &&Element)
@@ -238,6 +234,10 @@ struct Overlay_t
     {
         // Process events.
         {
+            // Reset the state between frames.
+            Shift = GetKeyState(VK_SHIFT) & (1 << 15);
+            Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
+
             MSG Message;
             while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
             {
@@ -261,8 +261,12 @@ struct Overlay_t
         if (IsWindowVisible(Windowhandle))
         {
             // Before doing any work, verify that we have to update.
-            if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
-                [](const auto &Element) { return Element.Repainted; })) return;
+            if (!Forcerepaint)
+            {
+                if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
+                    [](const auto &Element) { return Element.Repainted; })) return;
+            }
+            Forcerepaint = false;
 
             RECT Clientarea{ 0, 0, Size.x, Size.y };
             const auto Device = GetDC(Windowhandle);

@@ -36,7 +36,6 @@ namespace Backend
         Overlay_t Console({ 1080, 720 }, { 600, 720 });
         Console::Overlay::Createconsole(&Console);
         //Console::Windows::Showconsole(false);
-        Console.setVisible();
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};

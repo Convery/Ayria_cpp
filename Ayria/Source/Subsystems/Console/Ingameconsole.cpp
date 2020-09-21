@@ -190,67 +190,64 @@ namespace Console
 
         namespace Frameprocessor
         {
-            uint32_t Previousmove{}, Previousclick{}, Lastmessage{};
+            HWND Lastfocus{};
+            uint32_t Previousclick{}, Previousmove{}, Lastmessage{};
             void __cdecl onTick(Element_t *, float)
             {
+                // Only process if the current focus is on our process.
+                DWORD ProcessID{};
+                const auto Handle = GetForegroundWindow();
+                const auto Overlayfocus = GetCurrentThreadId() == GetWindowThreadProcessId(Handle, &ProcessID);
+                if (ProcessID != GetCurrentProcessId()) return;
+                const auto Currenttick = GetTickCount();
+
+                // OEM_5 seems to map to the key below ESC, '~' for some keyboards, '§' for others.
+                if (GetKeyState(VK_OEM_5) & (1U << 15)) [[unlikely]]
+                {
+                    // Avoid duplicates by only updating every 200ms.
+                    if (Currenttick - Previousclick > 200)
+                    {
+                        if (GetKeyState(VK_SHIFT) & 1U << 15)
+                        {
+                            const auto Newsize = Consoleoverlay->Size.y * (isExtended ? -0.5f : 1);
+                            Consoleoverlay->setWindowsize({0, Newsize}, true);
+                            isExtended ^= true;
+                        }
+                        else
+                        {
+                            isVisible ^= true;
+                            if (isVisible) Lastfocus = Handle;
+                        }
+
+                        Consoleoverlay->setVisible(isVisible);
+                        Previousclick = Currenttick;
+                    }
+                }
+
                 // We spend most ticks invisible.
                 if (!isVisible) [[likely]] return;
 
-                const auto Currenttick = GetTickCount();
+                // Check if the output area needs to be repainted.
+                const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
+                if (Lastmessage != Hash) [[unlikely]]
+                {
+                    Outputarea::Eventcount++;
+                    Lastmessage = Hash;
+                }
+
+                // Follow the app-window 10 times a second.
                 if (Currenttick - Previousmove > 100)
                 {
+                    RECT Windowarea{};
+                    GetWindowRect(Lastfocus, &Windowarea);
+
+                    vec2_t Wantedsize{ Windowarea.right - Windowarea.left, Windowarea.bottom - Windowarea.top };
+                    const vec2_t Position{ Windowarea.left, Windowarea.top + 40 };
+                    Wantedsize.y *= isExtended ? 0.6f : 0.3f;
+
+                    if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
+                    if (Consoleoverlay->Size != Wantedsize) Consoleoverlay->setWindowsize(Wantedsize);
                     Previousmove = Currenttick;
-
-                    // We do not follow background windows.
-                    if (isProcessfocused())
-                    {
-                        RECT Windowarea{};
-                        GetWindowRect(GetForegroundWindow(), &Windowarea);
-
-                        vec2_t Wantedsize{ Windowarea.right - Windowarea.left, Windowarea.bottom - Windowarea.top };
-                        const vec2_t Position{ Windowarea.right, Windowarea.top };
-                        Wantedsize.y *= isExtended ? 0.6f : 0.3f;
-
-                        if (Consoleoverlay->Size != Wantedsize) Consoleoverlay->setWindowsize(Wantedsize);
-                        if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
-                    }
-
-                    // Check if the output area needs to be repainted.
-                    const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
-                    if (Lastmessage != Hash) [[unlikely]]
-                    {
-                        Outputarea::Eventcount++;
-                        Lastmessage = Hash;
-                    }
-                }
-            }
-            void __cdecl onEvent(Element_t *, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
-            {
-                if (Flags.Keydown)
-                {
-                    assert(std::holds_alternative<uint32_t>(Data));
-                    const auto Keycode = std::get<uint32_t>(Data);
-
-                    // Seems to be tilde on most keyboards.
-                    if (Keycode == VK_OEM_5)
-                    {
-                        // Avoid duplicate events.
-                        const auto Currenttick = GetTickCount();
-                        if (Currenttick - Previousclick > 200) [[likely]]
-                        {
-                            Previousclick = Currenttick;
-
-                            if (Flags.modShift) isExtended ^= true;
-                            else isVisible ^= true;
-
-                            // Repaint the areas.
-                            Outputarea::Eventcount++;
-                            Inputarea::Eventcount++;
-
-                            // Notify Windows.
-                            Consoleoverlay->setVisible(isVisible);
-                        }
-                    }
                 }
             }
         }
@@ -262,9 +259,7 @@ namespace Console
             Consoleoverlay = Parent;
 
             Element_t Frame{};
-            Frame.Wantedevents.Keydown = true;
             Frame.onTick = Frameprocessor::onTick;
-            Frame.onEvent = Frameprocessor::onEvent;
             Consoleoverlay->addElement(std::move(Frame));
 
             Element_t Output{};
