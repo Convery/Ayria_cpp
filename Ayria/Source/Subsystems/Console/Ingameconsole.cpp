@@ -11,7 +11,7 @@ namespace Console
 {
     namespace Overlay
     {
-        constexpr uint8_t Inputheight{ 25 };
+        constexpr uint8_t Inputheight{ 30 };
         Overlay_t *Consoleoverlay;
         bool isExtended{};
         bool isVisible{};
@@ -48,25 +48,24 @@ namespace Console
 
                 if (Events)
                 {
-                    // Default font-size should be 20.
-                    const auto Linecount = This->Size.y / 20;
+                    // Default font-size should be ~20.
+                    const auto Linecount = (This->Size.y - 1) / 20;
                     const auto Lines = Console::getLoglines(Linecount, L"");
 
                     auto Renderer = Graphics(This->Surface);
                     Renderer.Clear(This->Size);
 
-                    vec2_t Position{ 20, 0 }, Size{ This->Size.x - 40, This->Size.y };
+                    vec2_t Position{ 20, 5 }, Size{ This->Size.x - 40, This->Size.y };
                     Renderer.Quad(Position, Size).Solid(Color_t(39, 38, 35));
-                    Renderer.Path(Position, { Position.x + Size.x, Position.y }).Outline(2, Color_t(0xBE, 0x90, 00));
-                    Renderer.Path({Position.x, Position.y + Size.y - 1}, { Position.x + Size.x, Position.y + Size.y - 1 }).Outline(2, Color_t(0xBE, 0x90, 00));
+                    Renderer.Path(Position, { Position.x + Size.x, Position.y }).Outline(1, Color_t(0xBE, 0x90, 00));
 
-                    Position.x += 10; Position.y += 3;
+                    Position.x += 10; Position.y += 5;
 
                     for (const auto &Item : Lines)
                     {
                         if (Item.first.empty()) continue;
                         Renderer.Text(Item.second).Opaque(Position, Item.first, Color_t(39, 38, 35));
-                        Position.y += 20;
+                        Position.y += 19;
                     }
 
                     This->Repainted = true;
@@ -111,9 +110,9 @@ namespace Console
                     Renderer.Clear(This->Size);
 
                     vec2_t Position{ 20, 0 }, Size{ This->Size.x - 40, This->Size.y };
-                    Renderer.Quad(Position, Size).Solid(Color_t(39, 38, 35));
+                    Renderer.Quad(Position, Size).Filled(1, Color_t(0xBE, 0x90, 00), Color_t(39, 38, 35));
 
-                    Position.x += 10;
+                    Position.x += 10; Position.y += 5;
                     Renderer.Text(Color_t(127, 150, 62)).Opaque(Position, Output, Color_t(39, 38, 35));
 
                     This->Repainted = true;
@@ -156,7 +155,7 @@ namespace Console
                 {
                     if (Cursorpos)
                     {
-                        Inputline.erase(Cursorpos, 1);
+                        Inputline.erase(Cursorpos - 1, 1);
                         Eventcount++;
                         Cursorpos--;
                     }
@@ -165,7 +164,7 @@ namespace Console
 
                 if (Flags.doDelete)
                 {
-                    Inputline.erase(Cursorpos + 1, 1);
+                    Inputline.erase(Cursorpos, 1);
                     Eventcount++;
                     return;
                 }
@@ -209,6 +208,9 @@ namespace Console
                     Inputline.clear();
                     Cursorpos = 0;
                     Eventcount++;
+
+                    // Notify the output that there's a new line.
+                    Overlay::Outputarea::Eventcount++;
                     return;
                 }
 
@@ -269,8 +271,7 @@ namespace Console
                             if (isVisible)
                             {
                                 Lastfocus = Handle;
-                                Consoleoverlay->setWindowsize(Consoleoverlay->Size);
-                                Consoleoverlay->setWindowposition(Consoleoverlay->Position);
+                                Consoleoverlay->setVisible(false);
                             }
                         }
 
@@ -318,19 +319,12 @@ namespace Console
                     assert(std::holds_alternative<vec2_t>(Data));
                     const auto Position = std::get<vec2_t>(Data);
 
-                    if (Position.x >= Consoleoverlay->Position.x
-                        && Position.y >= Consoleoverlay->Position.y
-                        && Position.x <= Consoleoverlay->Position.x + Consoleoverlay->Size.x
-                        && Position.y <= Consoleoverlay->Position.y + Consoleoverlay->Size.y)
+                    if (Position.x <= Consoleoverlay->Size.x && Position.y <= Consoleoverlay->Size.y)
                     {
-                        Consoleoverlay->setWindowsize(Consoleoverlay->Size);
-                        Consoleoverlay->setWindowposition(Consoleoverlay->Position);
+                        SetForegroundWindow(Consoleoverlay->Windowhandle);
                     }
-
-                    Debugprint(va("Mouse: %f %f", (float)Position.x, (float)Position.y));
                 }
             }
-
         }
 
         // Show auto-creates a console if needed.

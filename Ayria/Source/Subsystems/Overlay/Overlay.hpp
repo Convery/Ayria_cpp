@@ -107,20 +107,20 @@ struct Overlay_t
 
                 switch (wParam)
                 {
-                    case VK_TAB: { Flags.doTab = true; break; }
-                    case VK_RETURN: { Flags.doEnter = true; break; }
-                    case VK_DELETE: { Flags.doDelete = true; break; }
-                    case VK_ESCAPE: { Flags.doCancel = true; break; }
-                    case VK_BACK: { Flags.doBackspace = true; break; }
-                    case 'X': { if (Shift) Flags.doCut = true; break; }
-                    case 'C': { if (Shift) Flags.doCopy = true; break; }
-                    case 'V': { if (Shift) Flags.doPaste = true; break; }
+                    case VK_TAB: { Flags.doTab = !Down; break; }
+                    case VK_RETURN: { Flags.doEnter = !Down; break; }
+                    case VK_DELETE: { Flags.doDelete = !Down; break; }
+                    case VK_ESCAPE: { Flags.doCancel = !Down; break; }
+                    case VK_BACK: { Flags.doBackspace = !Down; break; }
+                    case 'X': { if (Shift) Flags.doCut = !Down; break; }
+                    case 'C': { if (Shift) Flags.doCopy = !Down; break; }
+                    case 'V': { if (Shift) Flags.doPaste = !Down; break; }
                     case 'Z':
                     {
                         if (Ctrl)
                         {
-                            if (Shift) Flags.doRedo = true;
-                            else Flags.doUndo = true;
+                            if (Shift) Flags.doRedo = !Down;
+                            else Flags.doUndo = !Down;
                         }
                         break;
                     }
@@ -141,8 +141,12 @@ struct Overlay_t
             case WM_UNICHAR:
             case WM_CHAR:
             {
-                Flags.onCharinput = true; Flags.modShift = Shift; Flags.modCtrl = Ctrl;
-                Broadcastevent(Flags, wchar_t(wParam));
+                // Why would you send this as a char?!
+                if (VK_BACK != wchar_t(wParam))
+                {
+                    Flags.onCharinput = true; Flags.modShift = Shift; Flags.modCtrl = Ctrl;
+                    Broadcastevent(Flags, wchar_t(wParam));
+                }
                 return NULL;
             }
 
@@ -194,7 +198,7 @@ struct Overlay_t
     }
     void setVisible(bool Visible = true)
     {
-        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNA : SW_HIDE);
+        ShowWindowAsync(Windowhandle, Visible ? SW_SHOW : SW_HIDE);
         Forcerepaint = true;
     }
 

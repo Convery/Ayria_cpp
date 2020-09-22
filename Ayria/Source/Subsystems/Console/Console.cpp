@@ -14,6 +14,7 @@ namespace Console
 
     // Console output.
     #pragma region Consoleoutput
+    Spinlock Writelock;
     constexpr size_t Logsize = 256;
     std::array<Logline_t, Logsize> Rawbuffer;
     nonstd::ring_span<Logline_t> Consolelog { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
@@ -21,8 +22,6 @@ namespace Console
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::wstring &Message, COLORREF Colour)
     {
-        static Spinlock Writelock;
-
         // Scan for keywords to detect a colour if not specified.
         if (Colour == 0)
         {
@@ -69,6 +68,9 @@ namespace Console
     {
         std::vector<Logline_t> Result;
         Result.reserve(std::clamp(Count, size_t(1), Logsize));
+
+        // Safety per fetch, rather than per line.
+        const std::scoped_lock _(Writelock);
 
         std::for_each(Consolelog.rbegin(), Consolelog.rend(), [&](const auto &Item)
         {
