@@ -138,6 +138,7 @@ struct Overlay_t
             }
 
             // Keyboard input.
+            case WM_UNICHAR:
             case WM_CHAR:
             {
                 Flags.onCharinput = true; Flags.modShift = Shift; Flags.modCtrl = Ctrl;
@@ -153,21 +154,18 @@ struct Overlay_t
             case WM_RBUTTONDOWN:
             case WM_MBUTTONDOWN:
             {
+                if (Flags.Mouseup) ReleaseCapture();
+                else SetCapture(Windowhandle);
+
+                Flags.Mousemiddle = Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP;
+                Flags.Mouseright = Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP;
+                Flags.Mouseleft = Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP;
                 Flags.Mousedown |= Message == WM_LBUTTONDOWN;
                 Flags.Mousedown |= Message == WM_RBUTTONDOWN;
                 Flags.Mousedown |= Message == WM_MBUTTONDOWN;
                 Flags.Mouseup = !Flags.Mousedown;
 
-                if (Flags.Mouseup) ReleaseCapture();
-                else SetCapture(Windowhandle);
-
-                const bool Middle = Message == WM_MBUTTONDOWN || Message == WM_MBUTTONUP;
-                const bool Right = Message == WM_RBUTTONDOWN || Message == WM_RBUTTONUP;
-                const bool Left = Message == WM_LBUTTONDOWN || Message == WM_LBUTTONUP;
-                if (Middle) Broadcastevent(Flags, uint32_t(VK_MBUTTON));
-                if (Right) Broadcastevent(Flags, uint32_t(VK_RBUTTON));
-                if (Left) Broadcastevent(Flags, uint32_t(VK_LBUTTON));
-
+                Broadcastevent(Flags, vec2_t(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
                 return NULL;
             }
             case WM_MOUSEMOVE:
@@ -196,7 +194,7 @@ struct Overlay_t
     }
     void setVisible(bool Visible = true)
     {
-        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        ShowWindowAsync(Windowhandle, Visible ? SW_SHOWNA : SW_HIDE);
         Forcerepaint = true;
     }
 
@@ -221,11 +219,11 @@ struct Overlay_t
             return a.Position.y > b.Position.y;
         });
     }
-    HDC Createsurface(vec2_t eSize)
+    HDC Createsurface(vec2_t eSize, HDC *Previous = nullptr)
     {
         const auto Device = GetDC(Windowhandle);
-        const auto Context = CreateCompatibleDC(Device);
-        SelectObject(Context, CreateCompatibleBitmap(Device, eSize.x, eSize.y));
+        const auto Context = Previous ? *Previous : CreateCompatibleDC(Device);
+        DeleteObject(SelectObject(Context, CreateCompatibleBitmap(Device, eSize.x, eSize.y)));
         ReleaseDC(Windowhandle, Device);
         return Context;
     }
@@ -238,7 +236,7 @@ struct Overlay_t
             Shift = GetKeyState(VK_SHIFT) & (1 << 15);
             Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
 
-            MSG Message;
+            MSG Message; int32_t Maxcount = 8;
             while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
             {
                 TranslateMessage(&Message);
@@ -246,8 +244,8 @@ struct Overlay_t
             }
         }
 
-        // Notify the elements about the frame.
-        std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](auto &Element)
+        // Notify the elements about the frame, needs to sync with GDI so Seq.
+        std::for_each(std::execution::seq, Elements.begin(), Elements.end(), [=](auto &Element)
         {
             if (Element.onTick) [[unlikely]] Element.onTick(&Element, Deltatime);
         });
@@ -313,7 +311,6 @@ struct Overlay_t
         WNDCLASSEXA Windowclass{};
         Windowclass.lpfnWndProc = Windowproc;
         Windowclass.cbSize = sizeof(WNDCLASSEXA);
-        Windowclass.style = CS_SAVEBITS | CS_OWNDC;
         Windowclass.lpszClassName = "Ayria_Overlay";
         Windowclass.cbWndExtra = sizeof(Overlay_t *);
         Windowclass.hbrBackground = CreateSolidBrush(Clearcolor);

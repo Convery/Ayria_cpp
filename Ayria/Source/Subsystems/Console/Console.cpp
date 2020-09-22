@@ -90,15 +90,7 @@ namespace Console
 
     // Console input.
     #pragma region Consoleinput
-    static Consoleinput_t State{};
     static std::vector<std::pair<std::wstring, Callback_t>> Functions;
-
-    // Update the consoles internal state.
-    void setConsoleinput(std::wstring_view Input)
-    {
-        State.Inputline = Input;
-        State.Eventcount++;
-    }
 
     // Evaluate the string, optionally add to the history.
     void execCommandline(std::wstring Commandline, bool logCommand)
@@ -106,7 +98,7 @@ namespace Console
         int Argc{};
 
         // Why would you do this? =(
-        if (Commandline.empty()) [[unlikely]]
+        if (Commandline.empty() || Commandline[0] == L'\r' || Commandline[0] == L'\n') [[unlikely]]
             return;
 
         // Parse the input using the same rules as command-lines.
@@ -135,97 +127,6 @@ namespace Console
         if (logCommand)
         {
             addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
-            State.Lastcommand = State.Inputline;
-        }
-    }
-
-    // Handle different forms of input.
-    void onEvent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
-    {
-        if (Flags.onCharinput)
-        {
-            assert(std::holds_alternative<wchar_t>(Data));
-            State.Inputline.insert(State.Cursorpos, 1, std::get<wchar_t>(Data));
-            State.Eventcount++;
-            State.Cursorpos++;
-            return;
-        }
-
-        if (Flags.doBackspace)
-        {
-            if (State.Cursorpos)
-            {
-                State.Inputline.erase(State.Cursorpos + 1, 1);
-                State.Eventcount++;
-                State.Cursorpos--;
-            }
-            return;
-        }
-
-        if (Flags.doCancel)
-        {
-            State.Inputline.clear();
-            State.Cursorpos = 0;
-            State.Eventcount++;
-            return;
-        }
-
-        if (Flags.doPaste)
-        {
-            if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(NULL))
-            {
-                if (const auto Memory = GetClipboardData(CF_UNICODETEXT))
-                {
-                    if ((GlobalSize(Memory) - 1) > 0)
-                    {
-                        if (const auto String = (LPCWSTR)GlobalLock(Memory))
-                        {
-                            State.Inputline.insert(State.Cursorpos, String);
-                            State.Cursorpos = State.Inputline.size();
-                            State.Eventcount++;
-                        }
-                    }
-
-                    GlobalUnlock(Memory);
-                }
-
-                CloseClipboard();
-            }
-            return;
-        }
-
-        if (Flags.doEnter)
-        {
-            execCommandline(State.Inputline, false);
-            State.Inputline.clear();
-            State.Cursorpos = 0;
-            State.Eventcount++;
-            return;
-        }
-
-        // Key-press.
-        if (Flags.Keydown)
-        {
-            assert(std::holds_alternative<uint32_t>(Data));
-            const auto Keycode = std::get<uint32_t>(Data);
-
-            // History navigation.
-            if (Keycode == VK_UP || Keycode == VK_DOWN)
-            {
-                std::swap(State.Lastcommand, State.Inputline);
-                State.Cursorpos = State.Inputline.size();
-                State.Eventcount++;
-                return;
-            }
-
-            // Cursor navigation.
-            if (Keycode == VK_LEFT || Keycode == VK_RIGHT)
-            {
-                const auto Offset = Keycode == VK_LEFT ? -1 : 1;
-                State.Cursorpos = std::clamp(int32_t(State.Cursorpos + Offset), int32_t(), int32_t(State.Inputline.size()));
-                State.Eventcount++;
-                return;
-            }
         }
     }
 
@@ -245,87 +146,21 @@ namespace Console
         Functions.emplace_back(Name.data(), Callback);
     }
 
-    // Let others view the state.
-    const Consoleinput_t *getState()
-    {
-        return &State;
-    }
-
-    #pragma endregion
-
-    // Filtered output.
-    #pragma region Consolefilters
-    constexpr size_t Maxtabs = 10;
-    int32_t Tabcount{ 1 }, Selectedtab{ -1 };
-    std::array<std::wstring, Maxtabs> Tabtitles;
-    std::array<std::wstring, Maxtabs> Tabfilters;
-
-    // Which user-selected filter is active?
-    std::wstring_view getCurrentfilter()
-    {
-        // Default tab doesn't filter anything.
-        if (Selectedtab == -1) return L"";
-        else return Tabfilters[Selectedtab];
-    }
-
-    // Filter the input based on 'tabs'.
-    void addConsoletab(const std::wstring &Name, const std::wstring &Filter)
-    {
-        if (Tabcount >= Maxtabs) return;
-
-        // Sanity-check to avoid redundant filters.
-        for (size_t i = 0; i < Maxtabs; ++i)
-        {
-            if (Tabfilters[i] == Filter)
-            {
-                // Already added.
-                if (std::wcsstr(Tabtitles[i].c_str(), Name.c_str()))
-                    return;
-
-                Tabtitles[i] += L"| "s + Name;
-                return;
-            }
-        }
-
-        // Insert the requested filter.
-        Tabtitles[Tabcount] = L" "s + Name + L" "s;
-        Tabfilters[Tabcount] = Filter;
-        Tabcount++;
-    }
-
-    // Get all available filters.
-    std::vector<std::pair<std::wstring, std::wstring>> getTabs()
-    {
-        std::vector<std::pair<std::wstring, std::wstring>> Result;
-        Result.reserve(Tabcount);
-
-        for (int i = 0; i < Tabcount; ++i)
-            Result.push_back({ Tabtitles[i], Tabfilters[i] });
-
-        return Result;
-    }
-
     #pragma endregion
 
     // Provide a C-API for external code.
     namespace API
     {
-        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const wchar_t *String, unsigned int Colour)
-        {
-            assert(String);
-            Console::addConsolemessage(String, Colour);
-        }
-        extern "C" EXPORT_ATTR void __cdecl addConsoletab(const wchar_t *Name, const wchar_t *Filter)
-        {
-            assert(Name); assert(Filter);
-            Console::addConsoletab(Name, Filter);
-        }
-
         // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
         extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const wchar_t *Name, const void *Callback)
         {
             assert(Name); assert(Callback);
             Console::addConsolecommand(Name, (Callback_t)Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const wchar_t *String, unsigned int Colour)
+        {
+            assert(String);
+            Console::addConsolemessage(String, Colour);
         }
     }
 

@@ -93,6 +93,7 @@ struct vec3_t
     bfloat16_t x{}, y{}, z{};
 
     vec3_t() = default;
+    operator vec2_t() const { return { x, y }; }
     template<typename T> operator T() const { return { x, y, z }; }
     operator bool() const { return !!(x.Value + y.Value + z.Value); }
     template<typename T> vec3_t(T X, T Y, T Z) : x(X), y(Y), z(Z) {}
@@ -183,7 +184,7 @@ struct Color_t : rgb_t
     operator rgb_t() const { return { r, g, b }; }
     operator RGBTRIPLE() const { return { b, g, r }; }
     operator RGBQUAD() const { return { b, g, r, a }; }
-    operator COLORREF() const { return r | (g << 8U) | (b << 16U) | (a << 24U); }
+    operator COLORREF() const { return r | (g << 8U) | (b << 16U); }
 };
 
 using Eventflags_t = union
@@ -215,6 +216,10 @@ using Eventflags_t = union
                 Keydown : 1,
                 Keyup : 1,
 
+                Mousemiddle : 1,
+                Mouseright : 1,
+                Mouseleft : 1,
+
                 modShift : 1,
                 modCtrl : 1,
 
@@ -237,4 +242,5 @@ constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
+#include <Subsystems/Overlay/Rendering.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>

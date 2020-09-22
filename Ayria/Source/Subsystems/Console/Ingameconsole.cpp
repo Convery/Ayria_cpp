@@ -11,7 +11,7 @@ namespace Console
 {
     namespace Overlay
     {
-        constexpr uint8_t Inputheight{ 25 }, Tabheight{ 25 };
+        constexpr uint8_t Inputheight{ 25 };
         Overlay_t *Consoleoverlay;
         bool isExtended{};
         bool isVisible{};
@@ -30,12 +30,12 @@ namespace Console
                     assert(std::holds_alternative<vec2_t>(Data));
                     const auto Newsize = std::get<vec2_t>(Data);
 
-                    const vec2_t Wantedsize{ Newsize.x, Newsize.y - Tabheight - Inputheight };
+                    vec2_t Wantedsize{ Newsize.x, Newsize.y - Inputheight };
                     if (Wantedsize != This->Size)
                     {
                         Eventcount++;
                         This->Size = Wantedsize;
-                        This->Surface = Consoleoverlay->Createsurface(This->Size);
+                        This->Surface = Consoleoverlay->Createsurface(This->Size, &This->Surface);
                     }
                 }
             }
@@ -52,15 +52,22 @@ namespace Console
                     const auto Linecount = This->Size.y / 20;
                     const auto Lines = Console::getLoglines(Linecount, L"");
 
-                    // TODO(tcn): Paint.
-                    RECT Clientarea{ 0, 0, This->Size.x, This->Size.y };
-                    SetBkColor(This->Surface, Clearcolor);
-                    ExtTextOutW(This->Surface, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
+                    auto Renderer = Graphics(This->Surface);
+                    Renderer.Clear(This->Size);
 
-                    Clientarea.right -= 20;
-                    Clientarea.left += 20;
-                    SetBkColor(This->Surface, RGB(53, 53, 53));
-                    ExtTextOutW(This->Surface, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
+                    vec2_t Position{ 20, 0 }, Size{ This->Size.x - 40, This->Size.y };
+                    Renderer.Quad(Position, Size).Solid(Color_t(39, 38, 35));
+                    Renderer.Path(Position, { Position.x + Size.x, Position.y }).Outline(2, Color_t(0xBE, 0x90, 00));
+                    Renderer.Path({Position.x, Position.y + Size.y - 1}, { Position.x + Size.x, Position.y + Size.y - 1 }).Outline(2, Color_t(0xBE, 0x90, 00));
+
+                    Position.x += 10; Position.y += 3;
+
+                    for (const auto &Item : Lines)
+                    {
+                        if (Item.first.empty()) continue;
+                        Renderer.Text(Item.second).Opaque(Position, Item.first, Color_t(39, 38, 35));
+                        Position.y += 20;
+                    }
 
                     This->Repainted = true;
                     Eventcount -= Events;
@@ -100,18 +107,46 @@ namespace Console
                     Output.push_back(Caretstate ? L'|' : L' ');
                     Output.append(Inputline.substr(Cursorpos));
 
-                    // TODO(tcn): Draw.
+                    auto Renderer = Graphics(This->Surface);
+                    Renderer.Clear(This->Size);
+
+                    vec2_t Position{ 20, 0 }, Size{ This->Size.x - 40, This->Size.y };
+                    Renderer.Quad(Position, Size).Solid(Color_t(39, 38, 35));
+
+                    Position.x += 10;
+                    Renderer.Text(Color_t(127, 150, 62)).Opaque(Position, Output, Color_t(39, 38, 35));
 
                     This->Repainted = true;
                     Eventcount -= Events;
                 }
             }
-            void __cdecl onEvent(Element_t *, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            void __cdecl onEvent(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
             {
+                if (Flags.onWindowchange)
+                {
+                    assert(std::holds_alternative<vec2_t>(Data));
+                    const auto Newsize = std::get<vec2_t>(Data);
+                    const vec2_t Wantedsize{ Newsize.x, Inputheight };
+                    const vec3_t Position{ 0, Newsize.y - Inputheight, 0 };
+
+                    if (This->Position != Position) This->Position = { 0, Newsize.y - Inputheight, 0 };
+                    if (This->Size != Wantedsize)
+                    {
+                        Eventcount++;
+                        This->Size = Wantedsize;
+                        This->Surface = Consoleoverlay->Createsurface(This->Size, &This->Surface);
+                    }
+                }
+
                 if (Flags.onCharinput)
                 {
                     assert(std::holds_alternative<wchar_t>(Data));
-                    Inputline.insert(Cursorpos, 1, std::get<wchar_t>(Data));
+                    const auto Letter = std::get<wchar_t>(Data);
+
+                    if (Letter == L'§' || Letter == L'½' || Letter == L'~')
+                        return;
+
+                    Inputline.insert(Cursorpos, 1, Letter);
                     Eventcount++;
                     Cursorpos++;
                     return;
@@ -121,10 +156,17 @@ namespace Console
                 {
                     if (Cursorpos)
                     {
-                        Inputline.erase(Cursorpos + 1, 1);
+                        Inputline.erase(Cursorpos, 1);
                         Eventcount++;
                         Cursorpos--;
                     }
+                    return;
+                }
+
+                if (Flags.doDelete)
+                {
+                    Inputline.erase(Cursorpos + 1, 1);
+                    Eventcount++;
                     return;
                 }
 
@@ -162,7 +204,8 @@ namespace Console
 
                 if (Flags.doEnter)
                 {
-                    Console::execCommandline(Inputline, false);
+                    Console::execCommandline(Inputline, true);
+                    Lastcommand = Inputline;
                     Inputline.clear();
                     Cursorpos = 0;
                     Eventcount++;
@@ -204,18 +247,17 @@ namespace Console
             {
                 // Only process if the current focus is on our process.
                 DWORD ProcessID{};
+                const auto Currenttick = GetTickCount();
                 const auto Handle = GetForegroundWindow();
                 const auto Overlayfocus = GetCurrentThreadId() == GetWindowThreadProcessId(Handle, &ProcessID);
-                if (ProcessID != GetCurrentProcessId()) return;
-                const auto Currenttick = GetTickCount();
 
                 // OEM_5 seems to map to the key below ESC, '~' for some keyboards, '§' for others.
-                if (GetKeyState(VK_OEM_5) & (1U << 15)) [[unlikely]]
+                if (ProcessID == GetCurrentProcessId() && GetAsyncKeyState(VK_OEM_5) & (1U << 15)) [[unlikely]]
                 {
                     // Avoid duplicates by only updating every 200ms.
                     if (Currenttick - Previousclick > 200)
                     {
-                        if (GetKeyState(VK_SHIFT) & 1U << 15)
+                        if (GetAsyncKeyState(VK_SHIFT) & 1U << 15)
                         {
                             const auto Newsize = Consoleoverlay->Size.y * (isExtended ? -0.5f : 1);
                             Consoleoverlay->setWindowsize({0, Newsize}, true);
@@ -224,7 +266,12 @@ namespace Console
                         else
                         {
                             isVisible ^= true;
-                            if (isVisible) Lastfocus = Handle;
+                            if (isVisible)
+                            {
+                                Lastfocus = Handle;
+                                Consoleoverlay->setWindowsize(Consoleoverlay->Size);
+                                Consoleoverlay->setWindowposition(Consoleoverlay->Position);
+                            }
                         }
 
                         Consoleoverlay->setVisible(isVisible);
@@ -240,6 +287,7 @@ namespace Console
                 if (Lastmessage != Hash) [[unlikely]]
                 {
                     Outputarea::Eventcount++;
+                    Inputarea::Eventcount++;
                     Lastmessage = Hash;
                 }
 
@@ -250,7 +298,7 @@ namespace Console
                     GetWindowRect(Lastfocus, &Windowarea);
 
                     vec2_t Wantedsize{ Windowarea.right - Windowarea.left, Windowarea.bottom - Windowarea.top };
-                    const vec2_t Position{ Windowarea.left, Windowarea.top + 40 };
+                    const vec2_t Position{ Windowarea.left, Windowarea.top + 45 };
                     Wantedsize.y *= isExtended ? 0.6f : 0.3f;
 
                     if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
@@ -258,6 +306,31 @@ namespace Console
                     Previousmove = Currenttick;
                 }
             }
+            void __cdecl onEvent(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            {
+                // We spend most ticks invisible.
+                if (!isVisible) [[likely]] return;
+
+                // NOTE(tcn): Maybe a sync issue between drawing and hit-testing.
+                // Hackery for Windows sometimes not activating the overlay.
+                if (Flags.Mousedown)
+                {
+                    assert(std::holds_alternative<vec2_t>(Data));
+                    const auto Position = std::get<vec2_t>(Data);
+
+                    if (Position.x >= Consoleoverlay->Position.x
+                        && Position.y >= Consoleoverlay->Position.y
+                        && Position.x <= Consoleoverlay->Position.x + Consoleoverlay->Size.x
+                        && Position.y <= Consoleoverlay->Position.y + Consoleoverlay->Size.y)
+                    {
+                        Consoleoverlay->setWindowsize(Consoleoverlay->Size);
+                        Consoleoverlay->setWindowposition(Consoleoverlay->Position);
+                    }
+
+                    Debugprint(va("Mouse: %f %f", (float)Position.x, (float)Position.y));
+                }
+            }
+
         }
 
         // Show auto-creates a console if needed.
@@ -267,15 +340,30 @@ namespace Console
             Consoleoverlay = Parent;
 
             Element_t Frame{};
+            Frame.Wantedevents.Mousedown = true;
             Frame.onTick = Frameprocessor::onTick;
+            Frame.onEvent = Frameprocessor::onEvent;
             Consoleoverlay->addElement(std::move(Frame));
 
             Element_t Output{};
             Output.onTick = Outputarea::onTick;
             Output.onEvent = Outputarea::onEvent;
-            Output.Position = { 0, Tabheight, -1 };
             Output.Wantedevents.onWindowchange = true;
             Consoleoverlay->addElement(std::move(Output));
+
+            Element_t Input{};
+            Input.onTick = Inputarea::onTick;
+            Input.onEvent = Inputarea::onEvent;
+            Input.Wantedevents.Keydown = true;
+            Input.Wantedevents.doEnter = true;
+            Input.Wantedevents.doPaste = true;
+            Input.Wantedevents.doDelete = true;
+            Input.Wantedevents.doCancel = true;
+            Input.Wantedevents.doBackspace = true;
+            Input.Wantedevents.onCharinput = true;
+            Input.Wantedevents.onWindowchange = true;
+            Consoleoverlay->addElement(std::move(Input));
+
 
             // TODO(tcn): More.
         }
