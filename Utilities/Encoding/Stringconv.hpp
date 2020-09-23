@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <string_view>
 
+static_assert(sizeof(wchar_t) == 2, "Nix/OSX wchar_t support is not implemented.");
+
 [[nodiscard]] inline std::u8string toUTF8(std::wstring_view Input)
 {
     std::u8string Result{}; Result.reserve(Input.size());
