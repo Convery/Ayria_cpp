@@ -240,7 +240,7 @@ struct Overlay_t
             Shift = GetKeyState(VK_SHIFT) & (1 << 15);
             Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
 
-            MSG Message; int32_t Maxcount = 8;
+            MSG Message;
             while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
             {
                 TranslateMessage(&Message);
