@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <string_view>
 
-[[nodiscard]] inline std::basic_string<uint8_t> toUTF8(std::wstring_view Input)
+[[nodiscard]] inline std::u8string toUTF8(std::wstring_view Input)
 {
-    std::basic_string<uint8_t> Result{}; Result.reserve(Input.size());
+    std::u8string Result{}; Result.reserve(Input.size());
 
     for (const auto &WChar : Input)
     {
@@ -41,7 +41,12 @@
 
     return Result;
 }
-[[nodiscard]] inline std::wstring fromUTF8(std::basic_string_view<uint8_t> Input)
+[[nodiscard]] inline std::u8string toUTF8(const std::wstring &Input)
+{
+    return toUTF8(std::wstring_view(Input));
+}
+
+[[nodiscard]] inline std::wstring fromUTF8(std::u8string_view Input)
 {
     std::wstring Result{}; Result.reserve(Input.size());
 
@@ -75,6 +80,10 @@
     }
 
     return Result;
+}
+[[nodiscard]] inline std::wstring fromUTF8(const std::u8string &Input)
+{
+    return fromUTF8(std::u8string_view(Input));
 }
 
 [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
