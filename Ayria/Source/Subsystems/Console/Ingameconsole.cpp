@@ -318,6 +318,7 @@ namespace Console
                 {
                     assert(std::holds_alternative<vec2_t>(Data));
                     const auto Position = std::get<vec2_t>(Data);
+                    if (Position.x < 0 || Position.y < 0) return;
 
                     if (Position.x <= Consoleoverlay->Size.x && Position.y <= Consoleoverlay->Size.y)
                     {

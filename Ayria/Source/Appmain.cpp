@@ -32,8 +32,12 @@ namespace Backend
 
         // Initialize the subsystems.
         // TODO(tcn): Initialize networking.
-        Overlay_t Console({}, {}); Console::Overlay::Createconsole(&Console);
-        Console::Windows::Showconsole(false);
+        // TODO(tcn): Initialize pluginmenu.
+        Overlay_t Ingameconsole({}, {});
+        Console::Overlay::Createconsole(&Ingameconsole);
+
+        // Optional console for developers, runs its own thread.
+        if(std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Showconsole(false);
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
@@ -45,10 +49,9 @@ namespace Backend
             Lastframe = Thisframe;
 
             // Notify the subsystems about a new frame.
-            // TODO(tcn): Console overlay frame.
             // TODO(tcn): Network frame.
             // TODO(tcn): Client frame.
-            Console.doFrame(Deltatime);
+            Ingameconsole.doFrame(Deltatime);
 
             // Log frame-average every 5 seconds.
             if constexpr (Build::isDebug)
