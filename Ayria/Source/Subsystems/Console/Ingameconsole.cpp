@@ -1,4 +1,4 @@
-/*
+ï»¿/*
     Initial author: Convery (tcn@ayria.se)
     Started: 2020-09-18
     License: MIT
@@ -142,7 +142,7 @@ namespace Console
                     assert(std::holds_alternative<wchar_t>(Data));
                     const auto Letter = std::get<wchar_t>(Data);
 
-                    if (Letter == L'§' || Letter == L'½' || Letter == L'~')
+                    if (Letter == L'Â§' || Letter == L'Â½' || Letter == L'~')
                         return;
 
                     Inputline.insert(Cursorpos, 1, Letter);
@@ -253,7 +253,7 @@ namespace Console
                 const auto Handle = GetForegroundWindow();
                 const auto Overlayfocus = GetCurrentThreadId() == GetWindowThreadProcessId(Handle, &ProcessID);
 
-                // OEM_5 seems to map to the key below ESC, '~' for some keyboards, '§' for others.
+                // OEM_5 seems to map to the key below ESC, '~' for some keyboards, 'Â§' for others.
                 if (ProcessID == GetCurrentProcessId() && GetAsyncKeyState(VK_OEM_5) & (1U << 15)) [[unlikely]]
                 {
                     // Avoid duplicates by only updating every 200ms.
@@ -307,7 +307,7 @@ namespace Console
                     Previousmove = Currenttick;
                 }
             }
-            void __cdecl onEvent(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            void __cdecl onEvent(Element_t *, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
             {
                 // We spend most ticks invisible.
                 if (!isVisible) [[likely]] return;

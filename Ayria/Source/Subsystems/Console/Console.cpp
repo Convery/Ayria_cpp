@@ -112,7 +112,7 @@ namespace Console
             const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
             {
                 if (Pair.first.size() != Name.size()) return false;
-                for (int i = 0; i < Pair.first.size(); i++)
+                for (size_t i = 0; i < Pair.first.size(); i++)
                     if (std::toupper(Pair.first[i]) != std::toupper(Name[i]))
                         return false;
                 return true;
@@ -139,7 +139,7 @@ namespace Console
         if (std::any_of(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
         {
             if (Pair.first.size() != Name.size()) return false;
-            for (int i = 0; i < Pair.first.size(); i++)
+            for (size_t i = 0; i < Pair.first.size(); i++)
                 if (std::toupper(Pair.first[i]) != std::toupper(Name[i]))
                     return false;
             return true;

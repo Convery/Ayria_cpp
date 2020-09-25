@@ -406,13 +406,13 @@ inline void SwapRB(uint32_t Size, void *Buffer)
     const auto Count128 = Size / sizeof(__m128);
     auto Pixeldata = (__m128i *)Buffer;
 
-    for (int i = 0; i < Count128; ++i)
+    for (size_t i = 0; i < Count128; ++i)
     {
         _mm_storeu_si128(&Pixeldata[i], _mm_shuffle_epi8(_mm_loadu_si128(&Pixeldata[i]), Mask));
     }
 
     auto Pixels = &Pixeldata[Count128];
-    for (int i = 0; i < Remaining; i += 4)
+    for (size_t i = 0; i < Remaining; i += 4)
     {
         std::swap(Pixels->m128i_u8[i], Pixels->m128i_u8[i + 2]);
     }
