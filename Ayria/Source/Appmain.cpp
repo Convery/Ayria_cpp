@@ -67,13 +67,13 @@ namespace Backend
                 if (Elapsedtime >= 5.0f)
                 {
                     const auto Sum = std::reduce(std::execution::par_unseq, Timings.begin(), Timings.end());
-                    Debugprint(va("Average frametime[us]: %lu", Sum / 256));
+                    Debugprint(va("Average frametime[us]: %lu (%u FPS)", Sum / 256, 1000000 / (Sum / 256)));
                     Elapsedtime = 0;
                 }
             }
 
-            // Even with software-rendering, we can still hit 600 FPS, so slow down.
-            std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(33));
+            // For reference, my workstations E5 hits 200FPS while laptops i5 gets 50FPS. Cap to 60. 
+            std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
         }
 
         return 0;

@@ -39,10 +39,8 @@ namespace Logging
 
         // Output.
         toFile(Logfile, Formatted);
-        #if !defined(NDEBUG)
-        toStream(Formatted);
         toConsole(Formatted);
-        #endif
+        toStream(Formatted);
     }
 
     // Remove the old logfile.
