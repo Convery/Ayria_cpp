@@ -67,7 +67,7 @@ namespace Backend
                 if (Elapsedtime >= 5.0f)
                 {
                     const auto Sum = std::reduce(std::execution::par_unseq, Timings.begin(), Timings.end());
-                    Debugprint(va("Average frametime[us]: %lu (%u FPS)", Sum / 256, 1000000 / (Sum / 256)));
+                    Debugprint(va("Average framerate: %5.2f FPS %5lu us", 1000000.0 / (Sum / 256), Sum / 256));
                     Elapsedtime = 0;
                 }
             }
