@@ -137,6 +137,12 @@ namespace Hash
     {
         return FNV1a_64(String.data(), String.size());
     }
+
+    // Wrappers for random types.
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(T Value) { return FNV1_32(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_64(T Value) { return FNV1_64(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(T Value) { return FNV1a_32(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_64(T Value) { return FNV1a_64(&Value, sizeof(Value)); }
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.
