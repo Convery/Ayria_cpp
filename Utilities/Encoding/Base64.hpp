@@ -12,7 +12,7 @@ using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base64
 {
-    namespace
+    namespace Internal
     {
         constexpr char Table[64] =
         {
@@ -35,7 +35,7 @@ namespace Base64
         };
     }
 
-    [[nodiscard]] inline std::string Encode(const std::string_view Input)
+    [[nodiscard]] inline std::string Encode(std::string_view Input)
     {
         std::string Result((((Input.size() + 2) / 3) * 4), '=');
         size_t Outputposition{};
@@ -49,19 +49,19 @@ namespace Base64
             while (Bits >= 6)
             {
                 Bits -= 6;
-                Result[Outputposition++] = Table[(Accumulator >> Bits) & 0x3F];
+                Result[Outputposition++] = Internal::Table[(Accumulator >> Bits) & 0x3F];
             }
         }
 
         if (Bits)
         {
-            Accumulator <<= 6 - Bits;
-            Result[Outputposition] = Table[Accumulator & 0x3F];
+            Accumulator <<= (6 - Bits);
+            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
         }
 
         return Result;
     }
-    [[nodiscard]] inline std::string Decode(const std::string_view Input)
+    [[nodiscard]] inline std::string Decode(std::string_view Input)
     {
         std::string Result(((Input.size() / 4) * 3), '\0');
         size_t Outputposition{};
@@ -72,7 +72,7 @@ namespace Base64
         {
             if (Item == '=') continue;
 
-            Accumulator = (Accumulator << 6) | Reversetable[uint8_t(Item)];
+            Accumulator = (Accumulator << 6) | Internal::Reversetable[static_cast<uint8_t>(Item)];
             Bits += 6;
 
             if (Bits >= 8)
@@ -84,7 +84,58 @@ namespace Base64
 
         return Result;
     }
-    [[nodiscard]] constexpr bool isValid(const std::string_view Input)
+
+    [[nodiscard]] inline Blob Encode(Blob_view Input)
+    {
+        Blob Result((((Input.size() + 2) / 3) * 4), '=');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = Internal::Table[(Accumulator >> Bits) & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= (6 - Bits);
+            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
+        }
+
+        return Result;
+    }
+    [[nodiscard]] inline Blob Decode(Blob_view Input)
+    {
+        Blob Result(((Input.size() / 4) * 3), '\0');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            if (Item == '=') continue;
+
+            Accumulator = (Accumulator << 6) | Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
+            }
+        }
+
+        return Result;
+    }
+
+    [[nodiscard]] constexpr bool isValid(Blob_view Input)
     {
         if (Input.size() % 4 != 0) return false;
 
@@ -99,57 +150,7 @@ namespace Base64
 
         return !Input.empty();
     }
-
-    [[nodiscard]] inline Blob Encode(const Blob_view Input)
-    {
-        Blob Result((((Input.size() + 2) / 3) * 4), '=');
-        size_t Outputposition{};
-        uint32_t Accumulator{};
-        uint32_t Bits{};
-
-        for (const auto &Item : Input)
-        {
-            Accumulator = (Accumulator << 8) | (Item & 0xFF);
-            Bits += 8;
-            while (Bits >= 6)
-            {
-                Bits -= 6;
-                Result[Outputposition++] = Table[(Accumulator >> Bits) & 0x3F];
-            }
-        }
-
-        if (Bits)
-        {
-            Accumulator <<= 6 - Bits;
-            Result[Outputposition] = Table[Accumulator & 0x3F];
-        }
-
-        return Result;
-    }
-    [[nodiscard]] inline Blob Decode(const Blob_view Input)
-    {
-        Blob Result(((Input.size() / 4) * 3), '\0');
-        size_t Outputposition{};
-        uint32_t Accumulator{};
-        uint32_t Bits{};
-
-        for (const auto &Item : Input)
-        {
-            if (Item == '=') continue;
-
-            Accumulator = (Accumulator << 6) | Reversetable[uint8_t(Item)];
-            Bits += 6;
-
-            if (Bits >= 8)
-            {
-                Bits -= 8;
-                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
-            }
-        }
-
-        return Result;
-    }
-    [[nodiscard]] constexpr bool isValid(const Blob_view Input)
+    [[nodiscard]] constexpr bool isValid(std::string_view Input)
     {
         if (Input.size() % 4 != 0) return false;
 
@@ -191,7 +192,7 @@ namespace Base64
         {
             case 2: Input += "=="; break;
             case 1: Input += "="; break;
-            default: ;
+            default: break;
         }
 
         return std::move(Input);
