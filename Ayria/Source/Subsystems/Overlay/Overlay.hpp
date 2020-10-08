@@ -28,12 +28,12 @@ inline HDC Recreatesurface(vec2_t Size, HDC Context)
 
 struct Element_t
 {
+    HDC Surface;                // Bitmap to BitBlt and draw to, update Repainted on write.
     Eventflags_t Wantedevents;  // Matched in Overlay::Broadcastevent
     vec3_t Position;            // Z only used for rendering-order.
     bool Repainted;             // Should be atomic_flag, but we need to sort elements.
     COLORREF Mask;              // NULL = unused.
     vec2_t Size;
-    HDC Surface;                // Bitmap to BitBlt and draw to, update Repainted on write.
 
     void(__cdecl *onTick)(Element_t *This, float Deltatime);
     void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);

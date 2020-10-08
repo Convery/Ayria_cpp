@@ -31,7 +31,7 @@ namespace Auxiliary
         // Non-blocking send.
         for (const auto &[Sendersocket, _, Multicast] : Networkgroups)
         {
-            sendto(Sendersocket, Encoded.data(), Encoded.size(), 0, (sockaddr *)&Multicast, sizeof(Multicast));
+            sendto(Sendersocket, Encoded.data(), (int)Encoded.size(), 0, (sockaddr *)&Multicast, sizeof(Multicast));
         }
     }
     void Joinmessagegroup(uint32_t Address, uint16_t Port)

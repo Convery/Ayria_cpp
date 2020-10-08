@@ -9,7 +9,6 @@
 
 namespace Clientinfo
 {
-    #pragma pack(push, 1)
     struct Networkclient
     {
         uint32_t ClientID;
@@ -52,7 +51,6 @@ namespace Clientinfo
         std::wstring Locale;
         std::wstring Username;
     };
-    #pragma pack(pop)
 
     // For modularity.
     namespace Internal
