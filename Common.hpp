@@ -27,9 +27,7 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN
-
-// Windows's MultiByteToWideChar occasionally breaks their compiler.
-#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+#define NOMINMAX
 #endif
 
 // Where to keep the log.

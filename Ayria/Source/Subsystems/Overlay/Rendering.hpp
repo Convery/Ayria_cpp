@@ -36,6 +36,7 @@ struct Texture2D
 
         // Allocate the bitmap in system-memory.
         Internalbitmap = CreateDIBSection(NULL, &BMI, DIB_RGB_COLORS, (void **)&DIBPixels, NULL, 0);
+        assert(Internalbitmap); assert(DIBPixels);
         std::memcpy(DIBPixels, Data, Size);
 
         // TODO(tcn): Perform RGB_SwapRB as needed.

@@ -1,3 +1,4 @@
+
 /*
     Initial author: Convery (tcn@ayria.se)
     Started: 2020-07-10
@@ -243,4 +244,6 @@ constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
 #include <Subsystems/Overlay/Rendering.hpp>
+#include <Subsystems/Auxiliary/Auxiliary.hpp>
+#include <Subsystems/Clientinfo/Clientinfo.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>

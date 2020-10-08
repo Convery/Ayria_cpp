@@ -61,5 +61,10 @@
 #define HAS_POLYHOOK
 #endif
 
+// Agner Fogs SIMD library.
+#if __has_include(<vectorclass/vectorclass.h>)
+#include <vectorclass/vectorclass.h>
+#define HAS_VECTORCLASS
+#endif
 
 #pragma warning(pop)

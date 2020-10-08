@@ -27,17 +27,21 @@ namespace Backend
         // As we are single-threaded (in release), boost our priority.
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
+        // Set SSE mode to behave properly.
+        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+        _mm_setcsr(_mm_getcsr() | 0x8040);
+
         // Name this thread for easier debugging.
         if constexpr (Build::isDebug) setThreadname("Ayria_Main");
 
         // Initialize the subsystems.
-        // TODO(tcn): Initialize networking.
+        Clientinfo::Initialize();
         // TODO(tcn): Initialize pluginmenu.
         Overlay_t Ingameconsole({}, {});
         Console::Overlay::Createconsole(&Ingameconsole);
 
         // Optional console for developers, runs its own thread.
-        if(std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Showconsole(false);
+        if (std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Showconsole(false);
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
@@ -49,8 +53,8 @@ namespace Backend
             Lastframe = Thisframe;
 
             // Notify the subsystems about a new frame.
-            // TODO(tcn): Network frame.
-            // TODO(tcn): Client frame.
+            Auxiliary::Updatenetworking();
+            Clientinfo::doFrame(Deltatime);
             Ingameconsole.doFrame(Deltatime);
 
             // Log frame-average every 5 seconds.
@@ -72,7 +76,7 @@ namespace Backend
                 }
             }
 
-            // For reference, my workstations E5 hits 200FPS while laptops i5 gets 50FPS. Cap to 60. 
+            // For reference, my workstations E5 hits 200FPS while laptops i5 gets 50FPS. Cap to 60.
             std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
         }
 
