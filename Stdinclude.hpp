@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <tuple>
 #include <array>
 #include <mutex>
 #include <queue>
@@ -80,9 +81,9 @@
 #include <Utilities/Wrappers/Filesystem.hpp>
 
 // Temporary includes.
+#include <Utilities/Internal/Misc.hpp>
 #include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
-#include <Utilities/Internal/Singleinstance.hpp>
 
 // Extensions to the language.
 using namespace std::string_literals;

@@ -66,9 +66,6 @@ namespace Build
 #define Traceprint() ((void)0)
 #endif
 
-// Helper to support designated initializers until c++ 20 is mainstream.
-#define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
-
 // Helper to switch between debug and release mutex's.
 #if defined(NDEBUG)
 #define Defaultmutex Spinlock
