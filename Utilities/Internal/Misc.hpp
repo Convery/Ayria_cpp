@@ -57,9 +57,22 @@ struct Range
     Steptype Step;
 
     constexpr Range(Valuetype Start, Valuetype End, Steptype Step = 1) : Current(Start), Min(Start), Max(End), Step(Step) {};
-    constexpr bool operator !=(Range Right) const { return Current != Right.Current; };
-    constexpr bool operator !=(Valuetype Right) const { return Current < Right; };
-    Range &operator++() { Current += Step; return *this; };
+    constexpr bool operator !=(Range Right) const
+    {
+        if constexpr (std::is_arithmetic_v<Valuetype>) return Current < Right.Current;
+        else return Current != Right.Current;
+    };
+    constexpr bool operator !=(Valuetype Right) const
+    {
+        if constexpr (std::is_arithmetic_v<Valuetype>) return Current < Right;
+        else return Current != Right;
+    };
+    Range &operator++()
+    {
+        if constexpr (std::is_arithmetic_v<Valuetype>) Current += Step;
+        else std::advance(Current, Step);
+        return *this;
+    };
     auto operator*() const { return Current; };
 
     // STD accessors.
