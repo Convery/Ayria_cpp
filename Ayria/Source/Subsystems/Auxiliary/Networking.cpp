@@ -37,7 +37,7 @@ namespace Auxiliary
     void Joinmessagegroup(uint32_t Address, uint16_t Port)
     {
         WSADATA WSAData;
-        int32_t Error{ 0 };
+        uint32_t Error{ 0 };
         constexpr uint32_t Argument{ 1 };
         size_t Sendersocket, Receiversocket;
         sockaddr_in Localhost{ AF_INET, htons(Port), {{.S_addr = htonl(INADDR_ANY)}} };
@@ -66,8 +66,11 @@ namespace Auxiliary
         Networkgroups.push_back({ Sendersocket, Receiversocket, Multicast });
 
         // TODO(tcn): Error checking.
-        if (Error) [[unlikely]] {}
+        if (Error) [[unlikely]] { assert(false); }
     }
+
+    // Just for clearer codes..
+    using Message_t = struct { uint32_t Messagetype, RandomID; char Payload[1]; };
 
     // Poll the internal socket(s).
     void Updatenetworking()
@@ -84,18 +87,27 @@ namespace Auxiliary
             const auto Packetlength = recvfrom(Receiversocket, Buffer, Buffersize, 0, (sockaddr *)&Sender, &Size);
             if (Packetlength < static_cast<int>(sizeof(uint64_t))) continue;
 
-            // To ensure that we don't process our own packets.
-            if (*(uint32_t *)Buffer == RandomID) [[likely]] continue;
+            // Clearer codes, should be optimized away.
+            const auto Packet = (Message_t *)Buffer;
 
-            // Type to know how to parse.
-            const auto Messagetype = *(uint32_t *)&Buffer[4];
+            // To ensure that we don't process our own packets.
+            if (Packet->RandomID == RandomID) [[likely]] continue;
 
             // Do we even care for this message?
-            if (const auto Result = Callbacks.find(Messagetype); Result != Callbacks.end())
+            if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
             {
                 // All messages should be base64.
-                Result->second(Base64::Decode({ &Buffer[8], static_cast<size_t>(Packetlength - 8) }));
+                Result->second(Base64::Decode({ Packet->Payload, static_cast<size_t>(Packetlength - 8) }));
             }
+        }
+    }
+
+    // Let's expose these interfaces to the world.
+    namespace API
+    {
+        extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, Messagecallback_t Callback)
+        {
+            Registermessagehandler(MessageID, Callback);
         }
     }
 }

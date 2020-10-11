@@ -15,7 +15,7 @@ namespace Auxiliary
     constexpr uint32_t Multicastaddress = Hash::FNV1_32("Ayria") << 8;  // 228.58.137.0
 
     // Callbacks on group messages.
-    using Messagecallback_t = void(__cdecl *)(std::string_view JSONString);
+    using Messagecallback_t = void(__cdecl *)(const char *JSONString);
     void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback);
     void Joinmessagegroup(uint32_t Address = Multicastaddress, uint16_t Port = Multicastport);
     void Sendmessage(uint32_t Messagetype, std::string_view JSONString);

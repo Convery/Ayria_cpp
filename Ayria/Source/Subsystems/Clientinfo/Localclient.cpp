@@ -22,11 +22,10 @@ namespace Clientinfo
     {
         void Sendclientinfo()
         {
-            const char *String;
-            API::getLocalclient(&String);
+            const auto String = API::getLocalclient();
             Auxiliary::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
         }
-        void __cdecl Discoveryhandler(std::string_view JSONString)
+        void __cdecl Discoveryhandler(const char *JSONString)
         {
             try
             {
@@ -63,18 +62,10 @@ namespace Clientinfo
 
             if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
             {
-                try
-                {
-                    // Allow comments in the JSON file.
-                    const auto Object = nlohmann::json::parse(Filebuffer.c_str(), nullptr, true, true);
-                    Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
-                    Localclient.Username = Object.value("Username", Localclient.Username);
-                    Localclient.Locale = Object.value("Locale", Localclient.Locale);
-                }
-                catch (const std::exception& e)
-                {
-                    Infoprint(va("Invalid Clientinfo.json: %s", e.what()));
-                }
+                const auto Object = ParseJSON(B2S(Filebuffer));
+                Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
+                Localclient.Username = Object.value("Username", Localclient.Username);
+                Localclient.Locale = Object.value("Locale", Localclient.Locale);
             }
 
             // Default group.
@@ -86,7 +77,7 @@ namespace Clientinfo
     namespace API
     {
         static std::string JSON;
-        extern "C" EXPORT_ATTR void __cdecl getLocalclient(const char **JSONString)
+        extern "C" EXPORT_ATTR const char *__cdecl getLocalclient()
         {
             auto Object = nlohmann::json::object();
             Object["Locale"] = Localclient.Locale;
@@ -94,7 +85,7 @@ namespace Clientinfo
             Object["Username"] = Localclient.Username;
 
             JSON = Object.dump(4);
-            *JSONString = JSON.c_str();
+            return JSON.c_str();
         }
     }
 }
