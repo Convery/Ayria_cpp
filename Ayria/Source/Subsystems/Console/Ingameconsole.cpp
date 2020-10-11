@@ -16,10 +16,6 @@ namespace Console
         bool isExtended{};
         bool isVisible{};
 
-        // void(__cdecl *onTick)(Element_t* This, float Deltatime);
-        // void(__cdecl *onEvent)(Element_t* This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
-
-
         namespace Outputarea
         {
             std::atomic<int32_t> Eventcount{};
@@ -359,6 +355,8 @@ namespace Console
             Input.Wantedevents.onWindowchange = true;
             Consoleoverlay->addElement(std::move(Input));
 
+            // Add common commands.
+            Initializebackend();
 
             // TODO(tcn): More.
         }

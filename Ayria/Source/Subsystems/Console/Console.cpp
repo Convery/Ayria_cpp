@@ -52,7 +52,7 @@ namespace Console
             {
                 if (Pos != 0)
                 {
-                    Consolelog.push_back({ Input.data(), Colour });
+                    Consolelog.push_back({ {Input.data(), Pos}, Colour });
                 }
                 Input.remove_prefix(Pos + 1);
                 continue;
@@ -107,6 +107,7 @@ namespace Console
         if (const auto Argv = CommandLineToArgvW_wine(Commandline.c_str(), &Argc))
         {
             std::wstring Name(Argv[0]);
+            while (Name.back() == L'\r' || Name.back() == L'\n') Name.pop_back();
 
             // Check if we have this command.
             const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
@@ -149,6 +150,33 @@ namespace Console
     }
 
     #pragma endregion
+
+    // Add common commands.
+    void Initializebackend()
+    {
+        static const auto Quit = [](int, wchar_t **)
+        {
+            std::exit(0);
+        };
+        addConsolecommand(L"Quit", Quit);
+        addConsolecommand(L"Exit", Quit);
+
+        static const auto List = [](int, wchar_t **)
+        {
+            std::wstring Commands;
+            for (const auto &[Index, Pair] : Enumerate(Functions, 1))
+            {
+                Commands += L"    ";
+                Commands += Pair.first;
+                if (Index % 3 == 0) Commands += L"\n";
+            }
+
+            addConsolemessage(L"Available commands:", 0);
+            addConsolemessage(Commands, 0);
+        };
+        addConsolecommand(L"List", List);
+        addConsolecommand(L"Help", List);
+    }
 
     // Provide a C-API for external code.
     namespace API

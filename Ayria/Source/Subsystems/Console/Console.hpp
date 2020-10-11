@@ -45,5 +45,8 @@ namespace Console
     {
         void Createconsole(Overlay_t *Parent);
     }
+
+    // Add common commands.
+    void Initializebackend();
 }
 

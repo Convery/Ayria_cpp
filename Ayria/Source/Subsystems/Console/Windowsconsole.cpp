@@ -126,6 +126,9 @@ namespace Console
 
             oldLine = (WNDPROC)SetWindowLongPtrW(Inputhandle, GWLP_WNDPROC, (LONG_PTR)Inputproc);
             SetFocus(Inputhandle);
+
+            // Add common commands.
+            Initializebackend();
         }
         void Showconsole(bool Hide)
         {
