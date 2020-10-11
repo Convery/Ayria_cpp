@@ -27,18 +27,12 @@ namespace Clientinfo
         }
         void __cdecl Discoveryhandler(const char *JSONString)
         {
-            try
-            {
-                Ayriaclient Newclient{};
-
-                const auto Object = nlohmann::json::parse(JSONString);
-                Newclient.ClientID = Object.value("ClientID", uint32_t());
-                Newclient.Locale = Object.value("Locale", std::wstring());
-                Newclient.Username = Object.value("Username", std::wstring());
-
-                Localnetwork.insert(std::move(Newclient));
-            }
-            catch (...) {}
+            Ayriaclient Newclient{};
+            const auto Object = ParseJSON(JSONString);
+            Newclient.ClientID = Object.value("ClientID", uint32_t());
+            Newclient.Locale = Object.value("Locale", std::wstring());
+            Newclient.Username = Object.value("Username", std::wstring());
+            if (Newclient.ClientID && !Newclient.Username.empty()) Localnetwork.insert(std::move(Newclient));
         }
 
         static float Updatedelay = 0.0f;

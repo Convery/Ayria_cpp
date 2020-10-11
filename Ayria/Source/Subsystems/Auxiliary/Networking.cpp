@@ -97,7 +97,7 @@ namespace Auxiliary
             if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
             {
                 // All messages should be base64.
-                Result->second(Base64::Decode({ Packet->Payload, static_cast<size_t>(Packetlength - 8) }));
+                Result->second(Base64::Decode({ Packet->Payload, static_cast<size_t>(Packetlength - 8) }).c_str());
             }
         }
     }

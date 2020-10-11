@@ -72,6 +72,6 @@ namespace Clientinfo
     // Exports in JSON.
     namespace API
     {
-        extern "C" EXPORT_ATTR void __cdecl getLocalclient(const char** JSONString);
+        extern "C" EXPORT_ATTR const char *__cdecl getLocalclient();
     }
 }
