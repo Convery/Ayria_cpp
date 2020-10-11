@@ -31,6 +31,11 @@ namespace Console
                 Console::execCommandline(Input);
                 return 0;
             }
+            if (Message == WM_CHAR)
+            {
+                if (wParam == L'§' || wParam == L'½' || wParam == L'~' || wParam == VK_OEM_5)
+                    return 0;
+            }
 
             return CallWindowProcW(oldLine, Handle, Message, wParam, lParam);
         }

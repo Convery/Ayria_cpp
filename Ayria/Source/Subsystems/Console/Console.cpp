@@ -103,6 +103,11 @@ namespace Console
         if (Commandline.empty() || Commandline[0] == L'\r' || Commandline[0] == L'\n') [[unlikely]]
             return;
 
+        if (logCommand)
+        {
+            addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
+        }
+
         // Parse the input using the same rules as command-lines.
         if (const auto Argv = CommandLineToArgvW_wine(Commandline.c_str(), &Argc))
         {
@@ -125,11 +130,6 @@ namespace Console
             }
 
             LocalFree(Argv);
-        }
-
-        if (logCommand)
-        {
-            addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
         }
     }
 
@@ -168,11 +168,11 @@ namespace Console
             {
                 Commands += L"    ";
                 Commands += Pair.first;
-                if (Index % 3 == 0) Commands += L"\n";
+                if (Index % 4 == 0) Commands += L"\n";
             }
 
-            addConsolemessage(L"Available commands:", 0);
-            addConsolemessage(Commands, 0);
+            addConsolemessage(L"Available commands:", 0x218FBD);
+            addConsolemessage(Commands, 0x315571);
         };
         addConsolecommand(L"List", List);
         addConsolecommand(L"Help", List);
