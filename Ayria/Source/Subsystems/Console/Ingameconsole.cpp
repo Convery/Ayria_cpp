@@ -96,12 +96,9 @@ namespace Console
                 const auto Events = Eventcount.load();
                 if (Events)
                 {
-
                     // Split the string so we can have a caret.
-                    std::wstring Output = Inputline.substr(0, Cursorpos);
-                    Output.push_back(Caretstate ? L'|' : L' ');
-                    Output.append(Inputline.substr(Cursorpos));
-
+                    const std::wstring Output = Inputline.substr(0, Cursorpos) +
+                        (Caretstate ? L'|' : L' ') + Inputline.substr(Cursorpos);
                     auto Renderer = Graphics(This->Surface);
                     Renderer.Clear(This->Size);
 
@@ -254,7 +251,7 @@ namespace Console
                 DWORD ProcessID{};
                 const auto Currenttick = GetTickCount();
                 const auto Handle = GetForegroundWindow();
-                const auto Overlayfocus = GetCurrentThreadId() == GetWindowThreadProcessId(Handle, &ProcessID);
+                GetWindowThreadProcessId(Handle, &ProcessID);
 
                 // OEM_5 seems to map to the key below ESC, '~' for some keyboards, '§' for others.
                 if (ProcessID == GetCurrentProcessId() && GetAsyncKeyState(VK_OEM_5) & (1U << 15)) [[unlikely]]
