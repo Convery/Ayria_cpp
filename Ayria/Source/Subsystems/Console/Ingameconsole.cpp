@@ -131,6 +131,8 @@ namespace Console
                         This->Size = Wantedsize;
                         This->Surface = Consoleoverlay->Createsurface(This->Size, &This->Surface);
                     }
+
+                    if (isVisible) [[likely]] SetFocus(Consoleoverlay->Windowhandle);
                 }
 
                 if (Flags.onCharinput)
@@ -208,6 +210,11 @@ namespace Console
                     // Notify the output that there's a new line.
                     Overlay::Outputarea::Eventcount++;
                     return;
+                }
+
+                if (Flags.doTab)
+                {
+                    // TODO(tcn): Try to auto-complete a command.
                 }
 
                 // Key-press.

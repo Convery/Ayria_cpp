@@ -163,7 +163,7 @@ namespace Console
 
         static const auto List = [](int, wchar_t **)
         {
-            std::wstring Commands;
+            std::wstring Commands; Commands.reserve(16 * Functions.size());
             for (const auto &[Index, Pair] : Enumerate(Functions, 1))
             {
                 Commands += L"    ";

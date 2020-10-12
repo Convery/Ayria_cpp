@@ -50,7 +50,6 @@ struct Brush_t
     }
 };
 
-
 namespace gInternal
 {
     void Arc_t::Solid(COLORREF Color)
