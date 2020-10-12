@@ -403,7 +403,7 @@ inline HBITMAP Createmask(HDC Devicecontext, vec2_t Size, COLORREF Transparancyk
 template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
 {
     #if !defined(__AVX__)
-    #pragma message("AVX not enabled, unaligned access may cause poor performance in SwapRB<true>().")
+    #pragma message("AVX not enabled, unaligned access may cause poor performance in SwapRB().")
     #endif
 
     // We only use 120 bits per __m128 for RGB.
