@@ -398,25 +398,44 @@ inline HBITMAP Createmask(HDC Devicecontext, vec2_t Size, COLORREF Transparancyk
     return Bitmap;
 }
 
+#if defined(HAS_VECTORCLASS)
 // Windows sometimes want pixels as BGRA.
-inline void SwapRB(uint32_t Size, void *Buffer)
+template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
 {
-    const auto Mask = _mm_set_epi8(12, 14, 15, 12, 9, 10, 11, 8, 5, 6, 7, 4, 1, 2, 3, 0);
-    const auto Remaining = Size % sizeof(__m128);
-    const auto Count128 = Size / sizeof(__m128);
-    auto Pixeldata = (__m128i *)Buffer;
+    #if !defined(__AVX__)
+    #pragma message("AVX not enabled, unaligned access may cause poor performance in SwapRB<true>().")
+    #endif
 
+    // We only use 120 bits per __m128 for RGB.
+    constexpr auto Pixelsize = 3 + hasAlpha;
+    constexpr auto Stride = 15 + hasAlpha;
+    const auto Remaining = Size % Stride;
+    const auto Count128 = Size / Stride;
+
+    // Bulk operations.
     for (size_t i = 0; i < Count128; ++i)
     {
-        _mm_storeu_si128(&Pixeldata[i], _mm_shuffle_epi8(_mm_loadu_si128(&Pixeldata[i]), Mask));
+        vcl::Vec16c Line;
+        Line.load(Pixeldata + (Stride * i));
+
+        // Line store should be optimized away.
+        if constexpr (hasAlpha)
+            Line = vcl::permute16<2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15>(Line);
+        else
+            Line = vcl::permute16<2, 1, 0, 5, 4, 3, 8, 7, 6, 11, 10, 9, 14, 13, 12, 15>(Line);
+
+        Line.store(Pixeldata + (Stride * i));
     }
 
-    auto Pixels = &Pixeldata[Count128];
-    for (size_t i = 0; i < Remaining; i += 4)
+    // Remainder.
+    const auto Offset = Count128 * Stride;
+    for (size_t i = 0; i < Remaining; ++i)
     {
-        std::swap(Pixels->m128i_u8[i], Pixels->m128i_u8[i + 2]);
+        std::swap(Pixeldata[Offset + (i * Pixelsize)],
+                  Pixeldata[Offset + (i * Pixelsize) + 2]);
     }
 }
+#endif
 
 // Find windows not associated with our threads.
 inline std::vector<std::pair<HWND, vec4_t>> Findwindows()

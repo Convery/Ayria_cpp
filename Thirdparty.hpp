@@ -64,7 +64,7 @@
 // Agner Fogs SIMD library.
 #if __has_include(<vectorclass/vectorclass.h>)
 #define HAS_VECTORCLASS
-#define VCL_NAMESPACE VCL
+#define VCL_NAMESPACE vcl
 #include <vectorclass/vectorclass.h>
 #endif
 
