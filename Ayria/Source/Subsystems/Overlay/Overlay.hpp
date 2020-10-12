@@ -415,7 +415,7 @@ template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
     // Bulk operations.
     for (size_t i = 0; i < Count128; ++i)
     {
-        vcl::Vec16c Line;
+        vcl::Vec16uc Line;
         Line.load(Pixeldata + (Stride * i));
 
         // Line store should be optimized away.
