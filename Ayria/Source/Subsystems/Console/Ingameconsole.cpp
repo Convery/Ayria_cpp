@@ -270,13 +270,15 @@ namespace Console
                             isVisible ^= true;
                             if (isVisible)
                             {
-                                Lastfocus = Handle;
+                                // Hack(tcn): Notify windows that the window needs activation.
                                 Consoleoverlay->setVisible(false);
+                                Lastfocus = Handle;
                             }
                         }
 
-                        Consoleoverlay->setVisible(isVisible);
                         Previousclick = Currenttick;
+                        Consoleoverlay->setVisible(isVisible);
+                        if (isVisible) SetForegroundWindow(Consoleoverlay->Windowhandle);
                     }
                 }
 
@@ -304,6 +306,7 @@ namespace Console
 
                     if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
                     if (Consoleoverlay->Size != Wantedsize) Consoleoverlay->setWindowsize(Wantedsize);
+                    SetFocus(Consoleoverlay->Windowhandle);
                     Previousmove = Currenttick;
                 }
             }
