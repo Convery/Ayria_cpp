@@ -247,3 +247,7 @@ constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 #include <Subsystems/Auxiliary/Auxiliary.hpp>
 #include <Subsystems/Clientinfo/Clientinfo.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>
+
+// Common functionality.
+#include <Common/Social.hpp>
+#include <Common/Fileshare.hpp>
