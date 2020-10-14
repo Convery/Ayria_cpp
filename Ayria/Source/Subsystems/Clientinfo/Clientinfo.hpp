@@ -48,8 +48,8 @@ namespace Clientinfo
     struct Ayriaclient
     {
         uint32_t ClientID;
-        std::wstring Locale;
-        std::wstring Username;
+        char Locale[8];
+        char Username[20];
     };
 
     // For modularity.
@@ -73,5 +73,6 @@ namespace Clientinfo
     namespace API
     {
         extern "C" EXPORT_ATTR const char *__cdecl getLocalclient();
+        extern "C" EXPORT_ATTR const char *__cdecl getNetworkclients();
     }
 }

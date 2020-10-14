@@ -9,7 +9,7 @@
 
 namespace Clientinfo
 {
-    Ayriaclient Localclient;
+    Ayriaclient Localclient{ 0xDEADC0DE, "Ayria", "English" };
     std::unordered_set<Ayriaclient, decltype(FNV::Hash), decltype(FNV::Equal)> Localnetwork;
 
     // Fetch backend info.
@@ -30,9 +30,15 @@ namespace Clientinfo
             Ayriaclient Newclient{};
             const auto Object = ParseJSON(JSONString);
             Newclient.ClientID = Object.value("ClientID", uint32_t());
-            Newclient.Locale = Object.value("Locale", std::wstring());
-            Newclient.Username = Object.value("Username", std::wstring());
-            if (Newclient.ClientID && !Newclient.Username.empty()) Localnetwork.insert(std::move(Newclient));
+
+            if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
+                std::strncpy(Newclient.Locale, Locale.c_str(), 7);
+
+            if (const auto Username = Object.value("Username", std::string()); !Username.empty())
+                std::strncpy(Newclient.Username, Username.c_str(), 19);
+
+            if (Newclient.ClientID && Newclient.Username[0])
+                Localnetwork.insert(std::move(Newclient));
         }
 
         static uint32_t Lastupdate{};
@@ -45,20 +51,22 @@ namespace Clientinfo
 
                 // Announce our presence.
                 Sendclientinfo();
+
+                // TODO(tcn): Poll a server.
             }
         }
         void InitLocalclient()
         {
-            Localclient.ClientID = 0xDEADC0DE;
-            Localclient.Username = L"Ayria";
-            Localclient.Locale = L"English";
-
             if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
             {
                 const auto Object = ParseJSON(B2S(Filebuffer));
                 Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
-                Localclient.Username = Object.value("Username", Localclient.Username);
-                Localclient.Locale = Object.value("Locale", Localclient.Locale);
+
+                if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
+                    std::strncpy(Localclient.Locale, Locale.c_str(), 7);
+
+                if (const auto Username = Object.value("Username", std::string()); !Username.empty())
+                    std::strncpy(Localclient.Username, Username.c_str(), 19);
             }
 
             // Default group.
@@ -69,7 +77,7 @@ namespace Clientinfo
 
     namespace API
     {
-        static std::string JSON;
+        static std::string JSON_local;
         extern "C" EXPORT_ATTR const char *__cdecl getLocalclient()
         {
             auto Object = nlohmann::json::object();
@@ -77,8 +85,24 @@ namespace Clientinfo
             Object["ClientID"] = Localclient.ClientID;
             Object["Username"] = Localclient.Username;
 
-            JSON = Object.dump(4);
-            return JSON.c_str();
+            JSON_local = Object.dump();
+            return JSON_local.c_str();
+        }
+
+        static std::string JSON_network;
+        extern "C" EXPORT_ATTR const char *__cdecl getNetworkclients()
+        {
+            auto Object = nlohmann::json::object();
+
+            for (const auto &Client : Localnetwork)
+            {
+                Object["Locale"] = Client.Locale;
+                Object["ClientID"] = Client.ClientID;
+                Object["Username"] = Client.Username;
+            }
+
+            JSON_network = Object.dump();
+            return JSON_network.c_str();
         }
     }
 }
