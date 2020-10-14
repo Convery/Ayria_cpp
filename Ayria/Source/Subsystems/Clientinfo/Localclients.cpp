@@ -67,6 +67,10 @@ namespace Clientinfo
 
                 if (const auto Username = Object.value("Username", std::string()); !Username.empty())
                     std::strncpy(Localclient.Username, Username.c_str(), 19);
+
+                // Warn the user about bad configurations.
+                if (!Object.contains("ClientID") || !Object.contains("Username"))
+                    Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
             }
 
             // Default group.
