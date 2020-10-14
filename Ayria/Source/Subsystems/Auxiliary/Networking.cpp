@@ -11,22 +11,26 @@ namespace Auxiliary
 {
     using Multicast_t = struct { size_t Sendersocket, Receiversocket; sockaddr_in Address; };
 
-    std::unordered_map<uint32_t, Messagecallback_t> Callbacks;
+    std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
     std::unordered_map<uint16_t, Multicast_t> Networkgroups;
     static uint32_t RandomID;
 
     void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback)
     {
         assert(Callback);
-        Callbacks.emplace(MessageID, Callback);
+        Callbacks[MessageID].insert(Callback);
     }
     void Sendmessage(uint32_t Messagetype, std::string_view JSONString, uint16_t Port)
     {
-        auto Encoded = Base64::isValid(JSONString) ? std::string(JSONString) : Base64::Encode(JSONString);
+        std::string Encoded;
+
+        // Pre-allocate storage for the message rather than trusting STL.
+        Encoded.reserve((((JSONString.size() + 2) / 3) * 4) + sizeof(uint64_t));
 
         // Windows does not like partial messages, so prefix the buffer with ID and type.
-        Encoded.insert(0, (char *)&Messagetype, sizeof(Messagetype));
-        Encoded.insert(0, (char *)&RandomID, sizeof(RandomID));
+        Encoded.append((char *)&RandomID, sizeof(RandomID));
+        Encoded.append((char *)&Messagetype, sizeof(Messagetype));
+        Encoded.append(Base64::isValid(JSONString) ? JSONString : Base64::Encode(JSONString));
 
         // Non-blocking send.
         const auto &[Sendersocket, _, Multicast] = Networkgroups[Port];
@@ -90,7 +94,13 @@ namespace Auxiliary
             if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
             {
                 // All messages should be base64.
-                Result->second(Base64::Decode({ Packet->Payload, size_t(Packetlength - sizeof(uint64_t)) }).c_str());
+                const auto Decoded = Base64::Decode({ Packet->Payload, size_t(Packetlength - sizeof(uint64_t)) });
+
+                // May have multiple listeners for the same messageID.
+                for (const auto Callback : Result->second)
+                {
+                    Callback(Decoded.c_str());
+                }
             }
         }
     }
@@ -101,6 +111,11 @@ namespace Auxiliary
         extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, Messagecallback_t Callback)
         {
             Registermessagehandler(MessageID, Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl Broadcastmessage(uint32_t Messagetype, const char *JSONString)
+        {
+            assert(JSONString);
+            Sendmessage(Messagetype, JSONString, Pluginsport);
         }
     }
 }

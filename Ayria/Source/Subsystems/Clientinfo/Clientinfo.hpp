@@ -67,6 +67,12 @@ namespace Clientinfo
     inline void Initialize()
     {
         Internal::InitLocalclient();
+
+        // Default network groups.
+        Auxiliary::Joinmessagegroup(Auxiliary::Generalport);
+        Auxiliary::Joinmessagegroup(Auxiliary::Pluginsport);
+        Auxiliary::Joinmessagegroup(Auxiliary::Matchmakeport);
+        Auxiliary::Joinmessagegroup(Auxiliary::Fileshareport);
     }
 
     // Exports in JSON.

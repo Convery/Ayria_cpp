@@ -73,8 +73,7 @@ namespace Clientinfo
                     Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
             }
 
-            // Default group.
-            Auxiliary::Joinmessagegroup();
+            // Listen for new clients.
             Auxiliary::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
         }
     }
