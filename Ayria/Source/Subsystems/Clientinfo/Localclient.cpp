@@ -35,17 +35,16 @@ namespace Clientinfo
             if (Newclient.ClientID && !Newclient.Username.empty()) Localnetwork.insert(std::move(Newclient));
         }
 
-        static float Updatedelay = 0.0f;
-        void UpdateLocalclient(float Deltatime)
+        static uint32_t Lastupdate{};
+        void UpdateLocalclient()
         {
-            Updatedelay -= Deltatime;
-            if (Updatedelay < 0.0f)
+            const auto Currenttime = GetTickCount();
+            if (Currenttime > (Lastupdate + 5000))
             {
+                Lastupdate = Currenttime;
+
                 // Announce our presence.
                 Sendclientinfo();
-
-                // TODO(tcn): Poll server.
-                Updatedelay = 5.0f;
             }
         }
         void InitLocalclient()

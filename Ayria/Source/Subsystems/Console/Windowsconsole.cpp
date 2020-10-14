@@ -15,10 +15,10 @@ namespace Console
     {
         // Each window needs a unique ID, because reasons.
         constexpr size_t InputID = 1, BufferID = 2;
-        HWND Consolehandle, Inputhandle, Bufferhandle;
-        uint32_t Lastmessage;
-        vec2_t Windowsize;
-        WNDPROC oldLine;
+        static HWND Consolehandle, Inputhandle, Bufferhandle;
+        static vec2_t Windowsize;
+        static WNDPROC oldLine;
+        static bool isVisible{};
 
         LRESULT __stdcall Inputproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
@@ -41,32 +41,7 @@ namespace Console
         }
         LRESULT __stdcall Consoleproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
-            if (Message == WM_TIMER) [[likely]]
-            {
-                const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
-
-                if (Lastmessage != Hash) [[unlikely]]
-                {
-                    // If the user have selected text, skip.
-                    const auto Pos = SendMessageW(Bufferhandle, EM_GETSEL, NULL, NULL);
-                    if (HIWORD(Pos) == LOWORD(Pos))
-                    {
-                        std::wstring Concatenated;
-                        Lastmessage = Hash;
-
-                        for (const auto &[String, Colour] : Console::getLoglines(999, L""))
-                        {
-                            if (String.empty()) continue;
-                            Concatenated += String;
-                            Concatenated += L"\r\n";
-                        }
-
-                        SetWindowTextW(Bufferhandle, Concatenated.c_str());
-                        SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
-                    }
-                }
-            }
-            else if (Message == WM_NCLBUTTONDOWN)
+            if (Message == WM_NCLBUTTONDOWN)
             {
                 SendMessageW(Bufferhandle, EM_SETSEL, (WPARAM)-1, -1);
                 SetFocus(Inputhandle);
@@ -80,19 +55,6 @@ namespace Console
             return DefWindowProcW(Handle, Message, wParam, lParam);
         }
 
-        DWORD __stdcall Consolethread(void *)
-        {
-            MSG Message;
-            Createconsole(GetModuleHandleA(NULL));
-
-            while (GetMessageW(&Message, 0, 0, 0))
-            {
-                TranslateMessage(&Message);
-                DispatchMessageW(&Message);
-            }
-
-            return 0;
-        }
         void Createconsole(HINSTANCE hInstance)
         {
             constexpr DWORD Style = WS_POPUPWINDOW | WS_CAPTION | WS_MINIMIZEBOX;
@@ -119,7 +81,6 @@ namespace Console
             Consolehandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"Console", Style,
                 Position.x, Position.y, Windowsize.x, Windowsize.y, NULL, NULL, hInstance, NULL);
             assert(Consolehandle); // WTF?
-            SetTimer(Consolehandle, Hash::FNV1_32("Tick"), 300, NULL);
 
             constexpr auto Linestyle = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL;
             constexpr auto Bufferstyle = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_READONLY | ES_NOHIDESEL;
@@ -137,11 +98,51 @@ namespace Console
         }
         void Showconsole(bool Hide)
         {
-            if (!Consolehandle) CreateThread(NULL, NULL, Consolethread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-            while (!Consolehandle) std::this_thread::yield();
+            isVisible = !Hide;
+            ShowCursor(isVisible);
+            ShowWindow(Consolehandle, isVisible ? SW_SHOWNORMAL : SW_HIDE);
+        }
 
-            ShowCursor(!Hide);
-            ShowWindow(Consolehandle, Hide ? SW_HIDE : SW_SHOWNORMAL);
+        static uint32_t Lastupdate{}, Lastmessage{};
+        void doFrame()
+        {
+            // Console is not active.
+            if (!isVisible) [[likely]] return;
+
+            MSG Message;
+            while (PeekMessageW(&Message, Consolehandle, 0, 0, PM_REMOVE))
+            {
+                TranslateMessage(&Message);
+                DispatchMessageW(&Message);
+            }
+
+            // Update the output-buffer.
+            const auto Currenttime = GetTickCount();
+            if (Currenttime > (Lastupdate + 100))
+            {
+                const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
+
+                if (Lastmessage != Hash) [[unlikely]]
+                {
+                    // If the user have selected text, skip.
+                    const auto Pos = SendMessageW(Bufferhandle, EM_GETSEL, NULL, NULL);
+                    if (HIWORD(Pos) == LOWORD(Pos))
+                    {
+                        std::wstring Concatenated;
+                        Lastmessage = Hash;
+
+                        for (const auto &[String, Colour] : Console::getLoglines(999, L""))
+                        {
+                            if (String.empty()) continue;
+                            Concatenated += String;
+                            Concatenated += L"\r\n";
+                        }
+
+                        SetWindowTextW(Bufferhandle, Concatenated.c_str());
+                        SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
+                    }
+                }
+            }
         }
     }
 }

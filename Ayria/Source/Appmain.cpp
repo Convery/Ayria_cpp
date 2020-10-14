@@ -22,40 +22,34 @@ namespace Backend
         } __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 
-    static DWORD __stdcall Mainthread(void *)
+    static DWORD __stdcall Graphicsthread(void *)
     {
-        // As we are single-threaded (in release), boost our priority.
+        // UI-thread, boost our priority.
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
-        // Set SSE mode to behave properly.
-        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-        _mm_setcsr(_mm_getcsr() | 0x8040);
-
         // Name this thread for easier debugging.
-        if constexpr (Build::isDebug) setThreadname("Ayria_Main");
+        if constexpr (Build::isDebug) setThreadname("Ayria_Graphics");
 
         // Initialize the subsystems.
-        Clientinfo::Initialize();
         // TODO(tcn): Initialize pluginmenu.
         Overlay_t Ingameconsole({}, {});
         Console::Overlay::Createconsole(&Ingameconsole);
 
         // Optional console for developers, runs its own thread.
-        if (std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Showconsole(false);
+        if (std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Createconsole(GetModuleHandleW((NULL)));
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
         while (true)
         {
-            // Track the frame-time, should be around 33ms.
+            // Track the frame-time, should be less than 33ms at worst.
             const auto Thisframe{ std::chrono::high_resolution_clock::now() };
             const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
             Lastframe = Thisframe;
 
-            // Notify the subsystems about a new frame.
-            Auxiliary::Updatenetworking();
-            Clientinfo::doFrame(Deltatime);
+            // Notify all elements about the frame.
             Ingameconsole.doFrame(Deltatime);
+            Console::Windows::doFrame();
 
             // Log frame-average every 5 seconds.
             if constexpr (Build::isDebug)
@@ -82,12 +76,38 @@ namespace Backend
 
         return 0;
     }
+    static DWORD __stdcall Backgroundthread(void *)
+    {
+        // Mainly IO bound thread, might as well sleep a lot.
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+
+        // Name this thread for easier debugging.
+        if constexpr (Build::isDebug) setThreadname("Ayria_Background");
+
+        // Main loop, runs until the application terminates or DLL unloads.
+        while (true)
+        {
+            // Notify the subsystems about a new frame.
+            Auxiliary::Updatenetworking();
+            Clientinfo::doFrame();
+
+            // TODO(tcn): Get async-job requests and process them here.
+        }
+
+        return 0;
+    }
 
     static void Initialize()
     {
-        // TODO(tcn): Init client info.
+        // Set SSE to behave properly, MSVC seems to be missing a flag.
+        _mm_setcsr(_mm_getcsr() | 0x8040); // _MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON
 
-        CreateThread(NULL, NULL, Mainthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        // Initialize subsystems that plugins may need.
+        Clientinfo::Initialize();
+
+        // Workers.
+        CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     }
 }
 

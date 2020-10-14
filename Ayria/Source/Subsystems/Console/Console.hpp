@@ -38,6 +38,7 @@ namespace Console
         // Show auto-creates a console if needed.
         void Createconsole(HINSTANCE hInstance);
         void Showconsole(bool Hide);
+        void doFrame();
     }
 
     // Ingame console.

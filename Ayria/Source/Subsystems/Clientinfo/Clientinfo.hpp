@@ -55,14 +55,14 @@ namespace Clientinfo
     // For modularity.
     namespace Internal
     {
-        void UpdateLocalclient(float Deltatime);
+        void UpdateLocalclient();
         void InitLocalclient();
     }
 
     // Wrappers for the subsystems.
-    inline void doFrame(float Deltatime)
+    inline void doFrame()
     {
-        Internal::UpdateLocalclient(Deltatime);
+        Internal::UpdateLocalclient();
     }
     inline void Initialize()
     {

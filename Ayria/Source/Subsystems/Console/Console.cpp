@@ -154,6 +154,10 @@ namespace Console
     // Add common commands.
     void Initializebackend()
     {
+        static bool Initialized{};
+        if (Initialized) return;
+        Initialized = true;
+
         static const auto Quit = [](int, wchar_t **)
         {
             std::exit(0);
