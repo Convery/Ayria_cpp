@@ -63,8 +63,24 @@ namespace Backend
 
         return "{}";
     }
+    inline std::string __cdecl Joinmessagegroup(const char *JSONString)
+    {
+        do
+        {
+            if (!JSONString) break;
+
+            const auto Object = ParseJSON(JSONString);
+            if (!Object.contains("Address")) break;
+            if (!Object.contains("Port")) break;
+
+            Joinmessagegroup(Object["Port"], inet_addr(Object["Address"].get<std::string>().c_str()));
+        } while (false);
+
+        return "{}";
+    }
     inline void API_Initialize()
     {
         API::Registerhandler_Network("Broadcastmessage", Broadcastmessage);
+        API::Registerhandler_Network("Joinmessagegroup", Joinmessagegroup);
     }
 }
