@@ -13,6 +13,10 @@ namespace Social
     bool Sendinstantmessage(std::vector<uint32_t> Clients, uint32_t Messagetype, std::string_view Message);
     bool Sendinstantmessage_enc(uint32_t Client, uint32_t Messagetype, std::string_view Message);
 
+    // Returns the chat messages seen this session.
+    using Message_t = struct { uint32_t Type; std::string Message; };
+    std::vector<Message_t> Readinstantmessages(uint32_t Offset, uint32_t Count, uint32_t SenderID = 0);
+
     // Requests key from Clients, shares own.
     void Syncpublickeys(std::vector<uint32_t> Clients);
 
@@ -64,5 +68,7 @@ namespace Social
         API::Registerhandler_Social("addFriend", addFriend);
         API::Registerhandler_Social("Friendslist", Friendslist);
         API::Registerhandler_Social("removeFriend", removeFriend);
+
+        // SendIM, SendIM_enc, ReadIM
     }
 }

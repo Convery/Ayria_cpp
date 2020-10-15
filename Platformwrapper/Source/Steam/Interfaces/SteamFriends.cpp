@@ -9,6 +9,25 @@
 
 namespace Steam
 {
+    static nlohmann::json getFriends()
+    {
+        if (const auto Callback = Global.Ayria.API_Social)
+        {
+            return ParseJSON(Callback(Global.Ayria.toFunctionID("Friendslist"), nullptr));
+        }
+
+        return nlohmann::json::object();
+    }
+    static nlohmann::json getNetwork()
+    {
+        if (const auto Callback = Global.Ayria.API_Social)
+        {
+            return ParseJSON(Callback(Global.Ayria.toFunctionID("LANClients"), nullptr));
+        }
+
+        return nlohmann::json::object();
+    }
+
     struct SteamFriends
     {
         const char *GetPersonaName()
@@ -18,10 +37,7 @@ namespace Steam
         void SetPersonaName0(const char *pchPersonaName)
         {
             Traceprint();
-            Social::Friend_t Delta{};
-            Delta.Username = pchPersonaName;
             Global.Username = pchPersonaName;
-            Social::Announceupdate(Delta);
         }
         uint32_t GetPersonaState()
         {
@@ -30,35 +46,38 @@ namespace Steam
         void SetPersonaState(uint32_t ePersonaState)
         {
             Traceprint();
-
-            Social::Friend_t Delta{};
-            switch (ePersonaState)
-            {
-                case 1: Delta.Status = Delta.Online; break;
-                case 2: Delta.Status = Delta.Busy; break;
-                case 0:
-                default:
-                Delta.Status = Delta.Offline; break;
-            }
-            Social::Announceupdate(Delta);
         }
         bool AddFriend(CSteamID steamIDFriend)
         {
             Traceprint();
+
+            if (const auto Callback = Global.Ayria.API_Social)
+            {
+                Callback(Global.Ayria.toFunctionID("addFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
+                return true;
+            }
+
             return false;
         }
         bool RemoveFriend(CSteamID steamIDFriend)
         {
             Traceprint();
-            return false;
+
+            if (const auto Callback = Global.Ayria.API_Social)
+            {
+                Callback(Global.Ayria.toFunctionID("removeFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
+                return true;
+            }
+
+            return true;
         }
         bool HasFriend0(CSteamID steamIDFriend)
         {
-            const auto FriendID = steamIDFriend.ConvertToUint64();
+            const auto FriendID = steamIDFriend.GetAccountID();
 
-            for (const auto &Friend : Social::getFriends())
+            for (const auto &Friend : getFriends())
             {
-                if (Friend.UserID == FriendID)
+                if (Friend.value("UserID", 0) == FriendID)
                     return true;
             }
             return false;
@@ -69,15 +88,12 @@ namespace Steam
         }
         uint32_t GetFriendPersonaState(CSteamID steamIDFriend)
         {
-            const auto FriendID = steamIDFriend.ConvertToUint64();
+            const auto FriendID = steamIDFriend.GetAccountID();
 
-            for (const auto &Friend : Social::getFriends())
+            for (const auto &Client : getNetwork())
             {
-                if (Friend.UserID == FriendID)
-                {
-                    if (Friend.Status == Friend.Busy) return 2;
-                    if (Friend.Status == Friend.Online) return 1;
-                }
+                if (Client.value("ClientID", 0) == FriendID)
+                    return 1; // Online
             }
 
             return 0; // EPersonaState::Offline
@@ -89,40 +105,61 @@ namespace Steam
         }
         const char *GetFriendPersonaName(CSteamID steamIDFriend)
         {
-            const auto FriendID = steamIDFriend.ConvertToUint64();
-            static std::unordered_set<std::string> Cachednames;
+            const auto FriendID = steamIDFriend.GetAccountID();
 
-            for (const auto &Friend : Social::getFriends())
+            for (const auto &Friend : getFriends())
             {
-                if (Friend.UserID == FriendID)
+                if (Friend.value("UserID", 0) == FriendID)
                 {
-                    return Cachednames.insert(Friend.Username).first->c_str();
+                    static std::string Result;
+                    Result = Friend.value("Username", "Unknown");
+                    return Result.c_str();
                 }
             }
 
-            return "Unknown player";
+            return "Unknown";
         }
         uint32_t AddFriendByName(const char *pchEmailOrAccountName)
         {
-            Traceprint();
+            for (const auto &Client : getNetwork())
+            {
+                if (!Client.contains("Username")) continue;
+                if (std::strstr(Client["Username"].get<std::string>().c_str(), pchEmailOrAccountName))
+                    return AddFriend(uint64_t(Client.value("ClientID", 0)));
+            }
+
             return 0;
         }
         int GetFriendCount0()
         {
-            return int(Social::getFriends().size());
+            return int(getFriends().size() + getNetwork().size());
         }
         CSteamID GetFriendByIndex0(int iFriend)
         {
-            for (const auto &Friend : Social::getFriends())
+            for (const auto &Friend : getFriends())
             {
                 if (iFriend--) continue;
-                return CSteamID(Friend.UserID);
+                return uint64_t(Friend.value("UserID", 0));
             }
+            for (const auto &Client : getNetwork())
+            {
+                if (iFriend--) continue;
+                return uint64_t(Client.value("ClientID", 0));
+            }
+
             return CSteamID();
         }
         void SendMsgToFriend0(CSteamID steamIDFriend, uint32_t eFriendMsgType, const char *pchMsgBody)
         {
-            Traceprint();
+            if (const auto Callback = Global.Ayria.API_Social)
+            {
+                auto Object = nlohmann::json::object();
+                Object["UserID"] = steamIDFriend.GetAccountID();
+                Object["Type"] = eFriendMsgType;
+                Object["Message"] = pchMsgBody;
+
+                Callback(Global.Ayria.toFunctionID("SendIM_enc"), Object.dump().c_str());
+            }
         }
         void SetFriendRegValue(CSteamID steamIDFriend, const char *pchKey, const char *pchValue)
         {
@@ -140,13 +177,28 @@ namespace Steam
         }
         int GetChatMessage(CSteamID steamIDFriend, int iChatID, void *pvData, int cubData, uint32_t *peFriendMsgType)
         {
-            Traceprint();
+            if (const auto Callback = Global.Ayria.API_Social)
+            {
+                auto Object = nlohmann::json::object();
+                Object["SenderID"] = steamIDFriend.GetAccountID();
+                Object["Offset"] = iChatID;
+                Object["Count"] = 1;
+
+                const auto Result = ParseJSON(Callback(Global.Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
+                if (!Result.contains("Message")) return 0;
+
+                *peFriendMsgType = Result.value("Type", 0);
+                std::strncpy((char *)pvData, Result["Message"].get<std::string>().c_str(), cubData);
+                return std::strlen((char *)pvData);
+            }
+
             return 0;
         }
         bool SendMsgToFriend1(CSteamID steamIDFriend, uint32_t eFriendMsgType, const void *pvMsgBody, int cubMsgBody)
         {
-            Traceprint();
-            return false;
+            std::string Safestring((const char *)pvMsgBody, cubMsgBody);
+            SendMsgToFriend0(steamIDFriend, eFriendMsgType, Safestring.c_str());
+            return true;
         }
         int GetChatIDOfChatHistoryStart(CSteamID steamIDFriend)
         {
@@ -239,15 +291,6 @@ namespace Steam
         int GetFriendAvatar0(CSteamID steamIDFriend)
         {
             Traceprint();
-            const auto FriendID = steamIDFriend.ConvertToUint64();
-
-            for (const auto &Friend : Social::getFriends())
-            {
-                if (Friend.UserID == FriendID)
-                {
-                    return int(Friend.Avatar.size());
-                }
-            }
             return 0;
         }
         bool IsUserInSource(CSteamID steamIDUser, CSteamID steamIDSource)
@@ -261,7 +304,7 @@ namespace Steam
         }
         void ActivateGameOverlay(const char *pchDialog)
         {
-            Traceprint();
+            Debugprint(va("%s: %s", __FUNCTION__, pchDialog));
         }
         int GetFriendAvatar1(CSteamID steamIDFriend, int eAvatarSize)
         {
@@ -277,15 +320,15 @@ namespace Steam
         }
         void ActivateGameOverlayToUser(const char *pchDialog, CSteamID steamID)
         {
-            Traceprint();
+            Debugprint(va("%s: %s", __FUNCTION__, pchDialog));
         }
         void ActivateGameOverlayToWebPage(const char *pchURL)
         {
-            Traceprint();
+            Debugprint(va("%s: %s", __FUNCTION__, pchURL));
         }
         void ActivateGameOverlayToStore0(uint32_t nAppID)
         {
-            Traceprint();
+            Debugprint(va("%s: %u", __FUNCTION__, nAppID));
         }
         void SetPlayedWith(CSteamID steamIDUserPlayedWith)
         {
@@ -298,7 +341,7 @@ namespace Steam
         }
         void ActivateGameOverlayInviteDialog(CSteamID steamIDLobby)
         {
-            Traceprint();
+            Debugprint(va("%s: %llu", __FUNCTION__, steamIDLobby.ConvertToUint64()));
         }
         int GetSmallFriendAvatar(CSteamID steamIDFriend)
         {
@@ -352,6 +395,7 @@ namespace Steam
         }
         bool SetRichPresence(const char *pchKey, const char *pchValue)
         {
+            Debugprint(va("%s: %s %s", __FUNCTION__, pchKey, pchValue));
             return true;
         }
         void ClearRichPresence()
@@ -375,7 +419,7 @@ namespace Steam
         }
         bool InviteUserToGame(CSteamID steamIDFriend, const char *pchConnectString)
         {
-            Debugprint(va("Invite user: %s", pchConnectString));
+            Debugprint(va("Want to invite user with: %s", pchConnectString));
             return false;
         }
         int GetCoplayFriendCount()
@@ -470,8 +514,7 @@ namespace Steam
         }
         int GetFriendMessage(CSteamID friendID, int iChatID, void *pvData, int cubData, uint32_t *peChatEntryType)
         {
-            Traceprint();
-            return 0;
+            return GetChatMessage(friendID, iChatID, pvData, cubData, peChatEntryType);
         }
         void RequestFriendRichPresence(CSteamID steamIDFriend)
         {
@@ -495,24 +538,29 @@ namespace Steam
         }
         uint64_t SetPersonaName1(const char *pchPersonaName)
         {
-            Traceprint();
-            return 0;
+            const auto Request = new Callbacks::SetPersonaNameResponse_t();
+            const auto RequestID = Callbacks::Createrequest();
+            Request->m_result = EResult::k_EResultOK;
+            Request->m_bLocalSuccess = true;
+            Request->m_bSuccess = true;
+
+            SetPersonaName0(pchPersonaName);
+
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
+            return RequestID;
         }
         void ActivateGameOverlayToStore1(uint32_t nAppID, uint32_t eFlag)
         {
-            Traceprint();
-            return;
+            return ActivateGameOverlayToStore0(nAppID);
         }
         const char *GetPlayerNickname(CSteamID steamIDPlayer)
         {
             Traceprint();
-            return "AYA";
+            return "";
         }
         uint64_t SetPersonaName2(const char *pchPersonaName)
         {
-            Traceprint();
-            Global.Username = pchPersonaName;
-            return 0;
+            return SetPersonaName1(pchPersonaName);
         }
         int GetFriendSteamLevel(CSteamID steamIDFriend)
         {
