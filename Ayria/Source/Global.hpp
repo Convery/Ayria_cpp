@@ -266,9 +266,9 @@ namespace API
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
 #include <Subsystems/Overlay/Rendering.hpp>
-#include <Subsystems/Clientinfo/Clientinfo.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>
 
 // Common functionality.
 #include <Common/Social.hpp>
 #include <Common/Fileshare.hpp>
+#include <Common/Clientinfo/Clientinfo.hpp>
