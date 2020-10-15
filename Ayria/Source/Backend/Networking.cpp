@@ -36,14 +36,14 @@ namespace Backend
         const auto &[Sendersocket, _, Multicast] = Networkgroups[Port];
         sendto(Sendersocket, Encoded.data(), (int)Encoded.size(), 0, (sockaddr *)&Multicast, sizeof(Multicast));
     }
-    void Joinmessagegroup(uint16_t Port)
+    void Joinmessagegroup(uint16_t Port, uint32_t Address)
     {
         WSADATA WSAData;
         uint32_t Error{ 0 };
         constexpr uint32_t Argument{ 1 };
         size_t Sendersocket, Receiversocket;
         sockaddr_in Localhost{ AF_INET, htons(Port), {{.S_addr = htonl(INADDR_ANY)}} };
-        const sockaddr_in Multicast{ AF_INET, htons(Port), {{.S_addr = htonl(Multicastaddress)}} };
+        const sockaddr_in Multicast{ AF_INET, htons(Port), {{.S_addr = htonl(Address)}} };
 
         // We only need WS 1.1, no need for more.
         (void)WSAStartup(MAKEWORD(1, 1), &WSAData);
@@ -53,7 +53,7 @@ namespace Backend
         Error |= ioctlsocket(Receiversocket, FIONBIO, (u_long *)&Argument);
 
         // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for devs).
-        const auto Request = ip_mreq{ {{.S_addr = htonl(Multicastaddress)}}, {{.S_addr = htonl(INADDR_ANY)}} };
+        const auto Request = ip_mreq{ {{.S_addr = htonl(Address)}}, {{.S_addr = htonl(INADDR_ANY)}} };
         Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&Request, sizeof(Request));
         Error |= setsockopt(Receiversocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
         Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
@@ -105,7 +105,7 @@ namespace Backend
         }
     }
 
-    // Let's expose these interfaces to the world.
+    // Let's expose this interface to the world.
     namespace API
     {
         extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, Messagecallback_t Callback)

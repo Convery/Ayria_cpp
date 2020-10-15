@@ -91,8 +91,8 @@ namespace Backend
         _mm_setcsr(_mm_getcsr() | 0x8040); // _MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON
 
         // Initialize subsystems that plugins may need.
-        API_Initialize();
         Clientinfo::API_Initialize();
+        Backend::API_Initialize();
         Social::API_Initialize();
         Clientinfo::Initialize();
 

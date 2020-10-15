@@ -18,10 +18,10 @@ namespace Backend
     constexpr uint16_t Generalport = Hash::FNV1_32("Ayria") & 0xFFFF; // 14985
     using Messagecallback_t = void(__cdecl *)(const char *JSONString);
 
-    // Callbacks on group messages, groups are identified by their port, multicast address is shared between all.
+    // Callbacks on group messages, groups are identified by their port, multicast is for all of Ayria.
     void Sendmessage(uint32_t Messagetype, std::string_view JSONString, uint16_t Port = Generalport);
     void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback);
-    void Joinmessagegroup(uint16_t Port = Generalport);
+    void Joinmessagegroup(uint16_t Port, uint32_t Address = Multicastaddress);
 
     // Poll the internal socket(s).
     void Updatenetworking();
