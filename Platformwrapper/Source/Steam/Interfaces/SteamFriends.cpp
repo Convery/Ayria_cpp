@@ -546,7 +546,7 @@ namespace Steam
 
             SetPersonaName0(pchPersonaName);
 
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamFriendsCallbacks + 47, Request);
             return RequestID;
         }
         void ActivateGameOverlayToStore1(uint32_t nAppID, uint32_t eFlag)
