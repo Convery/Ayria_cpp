@@ -196,6 +196,11 @@ namespace Console
             assert(String);
             Console::addConsolemessage(String, Colour);
         }
+        extern "C" EXPORT_ATTR void __cdecl execCommandline(const wchar_t *String)
+        {
+            assert(String);
+            Console::execCommandline(String, false);
+        }
     }
 
     #pragma region Thirdparty
