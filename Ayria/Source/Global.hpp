@@ -259,11 +259,13 @@ namespace API
     extern "C" EXPORT_ATTR const char *__cdecl API_Fileshare(uint32_t FunctionID, const char *JSONString);
 }
 
+// Core systems.
+#include <Backend/Backend.hpp>
+
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
 #include <Subsystems/Overlay/Rendering.hpp>
-#include <Subsystems/Auxiliary/Auxiliary.hpp>
 #include <Subsystems/Clientinfo/Clientinfo.hpp>
 #include <Subsystems/Pluginloader/Pluginloader.hpp>
 

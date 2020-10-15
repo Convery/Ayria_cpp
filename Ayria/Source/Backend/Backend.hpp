@@ -8,7 +8,7 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-namespace Auxiliary
+namespace Backend
 {
     // Totally randomly selected constants..
     constexpr uint32_t Multicastaddress = Hash::FNV1_32("Ayria") << 8;  // 228.58.137.0
@@ -25,6 +25,26 @@ namespace Auxiliary
 
     // Poll the internal socket(s).
     void Updatenetworking();
+
+    // Initialize the system.
+    void Initialize();
+
+    // Helper for debug-builds.
+    inline void setThreadname(std::string_view Name)
+    {
+        if constexpr (Build::isDebug)
+        {
+            #pragma pack(push, 8)
+            using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+            #pragma pack(pop)
+
+            __try
+            {
+                THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF };
+                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+    }
 
     // Add API handlers.
     inline std::string __cdecl Broadcastmessage(const char *JSONString)

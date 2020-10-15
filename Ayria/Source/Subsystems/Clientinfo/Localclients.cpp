@@ -20,7 +20,7 @@ namespace Clientinfo
     static void Sendclientinfo()
     {
         const auto String = Accountinfo(nullptr);
-        Auxiliary::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
+        Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
     }
     static void __cdecl Discoveryhandler(const char *JSONString)
     {
@@ -61,7 +61,7 @@ namespace Clientinfo
         }
 
         // Listen for new clients.
-        Auxiliary::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
+        Backend::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
     }
 
     static uint32_t Lastupdate{};

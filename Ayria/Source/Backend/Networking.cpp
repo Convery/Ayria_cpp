@@ -7,7 +7,7 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-namespace Auxiliary
+namespace Backend
 {
     using Multicast_t = struct { size_t Sendersocket, Receiversocket; sockaddr_in Address; };
 
