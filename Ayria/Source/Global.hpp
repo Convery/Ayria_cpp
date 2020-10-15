@@ -271,4 +271,4 @@ namespace API
 // Common functionality.
 #include <Common/Social.hpp>
 #include <Common/Fileshare.hpp>
-#include <Common/Clientinfo/Clientinfo.hpp>
+#include <Common/Clientinfo.hpp>
