@@ -73,15 +73,12 @@ extern "C"
             Global.Language = "english";
             Global.UserID = 0x1100001DEADC0DE;
 
-            if (const auto Callback = Global.Ayria.getClientID)
+            if (const auto Callback = Global.Ayria.API_Client)
             {
-                uint32_t AyriaID{}; Callback(&AyriaID);
-                if (AyriaID) Global.UserID = 0x0110000100000000 | AyriaID;
-            }
-            if (const auto Callback = Global.Ayria.getClientname)
-            {
-                const char *Ayrianame{}; Callback(&Ayrianame);
-                if (Ayrianame)Global.Username = Ayrianame;
+                const auto Object = ParseJSON(Callback(Global.Ayria.toFunctionID("Accountinfo"), nullptr));
+                Global.UserID = 0x0110000100000000 | Object.value("ClientID", 0xDEADC0DE);
+                Global.Username = Object.value("Username", "Ayria");
+                Global.Language = Object.value("Locale", "english");
             }
         }
 
