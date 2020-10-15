@@ -10,102 +10,72 @@
 namespace Clientinfo
 {
     Ayriaclient Localclient{ 0xDEADC0DE, "Ayria", "English" };
-    std::unordered_set<Ayriaclient, decltype(FNV::Hash), decltype(FNV::Equal)> Localnetwork;
+    std::vector<Ayriaclient> Networkclients;
 
-    // Fetch backend info.
-    const Ayriaclient *getLocalclient()
+    // Backend access.
+    Ayriaclient *getLocalclient() { return &Localclient; }
+    std::vector<Ayriaclient> *getNetworkclients() { return &Networkclients; }
+
+    // Internal helpers.
+    static void Sendclientinfo()
     {
-        return &Localclient;
+        const auto String = Accountinfo(nullptr);
+        Auxiliary::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
+    }
+    static void __cdecl Discoveryhandler(const char *JSONString)
+    {
+        Ayriaclient Newclient{};
+        const auto Object = ParseJSON(JSONString);
+        Newclient.ClientID = Object.value("ClientID", uint32_t());
+
+        if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
+            std::strncpy(Newclient.Locale, Locale.c_str(), 7);
+
+        if (const auto Username = Object.value("Username", std::string()); !Username.empty())
+            std::strncpy(Newclient.Username, Username.c_str(), 19);
+
+        if (Newclient.ClientID && Newclient.Username[0])
+        {
+            std::erase_if(Networkclients, [&](const auto &Item) { return Newclient.ClientID == Item.ClientID; });
+            Networkclients.emplace_back(std::move(Newclient));
+        }
     }
 
-    namespace Internal
+    // Initialize and update.
+    void Initialize()
     {
-        void Sendclientinfo()
+        if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
         {
-            const auto String = API::getLocalclient();
-            Auxiliary::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
-        }
-        void __cdecl Discoveryhandler(const char *JSONString)
-        {
-            Ayriaclient Newclient{};
-            const auto Object = ParseJSON(JSONString);
-            Newclient.ClientID = Object.value("ClientID", uint32_t());
+            const auto Object = ParseJSON(B2S(Filebuffer));
+            Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
 
             if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
-                std::strncpy(Newclient.Locale, Locale.c_str(), 7);
+                std::strncpy(Localclient.Locale, Locale.c_str(), 7);
 
             if (const auto Username = Object.value("Username", std::string()); !Username.empty())
-                std::strncpy(Newclient.Username, Username.c_str(), 19);
+                std::strncpy(Localclient.Username, Username.c_str(), 19);
 
-            if (Newclient.ClientID && Newclient.Username[0])
-                Localnetwork.insert(std::move(Newclient));
+            // Warn the user about bad configurations.
+            if (!Object.contains("ClientID") || !Object.contains("Username"))
+                Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
         }
 
-        static uint32_t Lastupdate{};
-        void UpdateLocalclient()
-        {
-            const auto Currenttime = GetTickCount();
-            if (Currenttime > (Lastupdate + 5000))
-            {
-                Lastupdate = Currenttime;
-
-                // Announce our presence.
-                Sendclientinfo();
-
-                // TODO(tcn): Poll a server.
-            }
-        }
-        void InitLocalclient()
-        {
-            if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
-            {
-                const auto Object = ParseJSON(B2S(Filebuffer));
-                Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
-
-                if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
-                    std::strncpy(Localclient.Locale, Locale.c_str(), 7);
-
-                if (const auto Username = Object.value("Username", std::string()); !Username.empty())
-                    std::strncpy(Localclient.Username, Username.c_str(), 19);
-
-                // Warn the user about bad configurations.
-                if (!Object.contains("ClientID") || !Object.contains("Username"))
-                    Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
-            }
-
-            // Listen for new clients.
-            Auxiliary::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
-        }
+        // Listen for new clients.
+        Auxiliary::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
     }
 
-    namespace API
+    static uint32_t Lastupdate{};
+    void doFrame()
     {
-        static std::string JSON_local;
-        extern "C" EXPORT_ATTR const char *__cdecl getLocalclient()
+        const auto Currenttime = GetTickCount();
+        if (Currenttime > (Lastupdate + 5000))
         {
-            auto Object = nlohmann::json::object();
-            Object["Locale"] = Localclient.Locale;
-            Object["ClientID"] = Localclient.ClientID;
-            Object["Username"] = Localclient.Username;
+            Lastupdate = Currenttime;
 
-            JSON_local = Object.dump();
-            return JSON_local.c_str();
-        }
+            // Announce our presence.
+            Sendclientinfo();
 
-        static std::string JSON_network;
-        extern "C" EXPORT_ATTR const char *__cdecl getNetworkclients()
-        {
-            auto Object = nlohmann::json::object();
-
-            for (const auto &Client : Localnetwork)
-            {
-                Object["Locale"] = Client.Locale;
-                Object["ClientID"] = Client.ClientID;
-                Object["Username"] = Client.Username;
-            }
-
-            JSON_network = Object.dump();
-            return JSON_network.c_str();
+            // TODO(tcn): Poll a server.
         }
     }
 }

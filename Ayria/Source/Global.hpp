@@ -240,6 +240,25 @@ constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 
 #pragma endregion
 
+// C-exports, JSON in and JSON out.
+namespace API
+{
+    using Functionhandler = std::string (__cdecl *)(const char *JSONString);
+
+    void Registerhandler_Client(std::string_view Function, Functionhandler Handler);
+    void Registerhandler_Social(std::string_view Function, Functionhandler Handler);
+    void Registerhandler_Network(std::string_view Function, Functionhandler Handler);
+    void Registerhandler_Matchmake(std::string_view Function, Functionhandler Handler);
+    void Registerhandler_Fileshare(std::string_view Function, Functionhandler Handler);
+
+    // FunctionID = FNV1_32("Service name"); ID 0 / Invalid = List all available.
+    extern "C" EXPORT_ATTR const char *__cdecl API_Client(uint32_t FunctionID, const char *JSONString);
+    extern "C" EXPORT_ATTR const char *__cdecl API_Social(uint32_t FunctionID, const char *JSONString);
+    extern "C" EXPORT_ATTR const char *__cdecl API_Network(uint32_t FunctionID, const char *JSONString);
+    extern "C" EXPORT_ATTR const char *__cdecl API_Matchmake(uint32_t FunctionID, const char *JSONString);
+    extern "C" EXPORT_ATTR const char *__cdecl API_Fileshare(uint32_t FunctionID, const char *JSONString);
+}
+
 // Subsystems that depend on the datatypes.
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>

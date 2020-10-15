@@ -112,10 +112,5 @@ namespace Auxiliary
         {
             Registermessagehandler(MessageID, Callback);
         }
-        extern "C" EXPORT_ATTR void __cdecl Broadcastmessage(uint32_t Messagetype, const char *JSONString)
-        {
-            assert(JSONString);
-            Sendmessage(Messagetype, JSONString, Pluginsport);
-        }
     }
 }

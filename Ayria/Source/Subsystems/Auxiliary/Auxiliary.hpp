@@ -25,4 +25,26 @@ namespace Auxiliary
 
     // Poll the internal socket(s).
     void Updatenetworking();
+
+    // Add API handlers.
+    inline std::string __cdecl Broadcastmessage(const char *JSONString)
+    {
+        do
+        {
+            if (!JSONString) break;
+
+            const auto Object = ParseJSON(JSONString);
+            if (!Object.contains("Messagetype")) break;
+            if (!Object.contains("Message")) break;
+
+            Sendmessage(Object["Messagetype"], Object["Message"], Pluginsport);
+
+        } while (false);
+
+        return "{}";
+    }
+    inline void API_Initialize()
+    {
+        API::Registerhandler_Network("Broadcastmessage", Broadcastmessage);
+    }
 }
