@@ -46,8 +46,7 @@ namespace Logging
         {
             if (const auto Address = GetProcAddress(Console, "addConsolemessage"))
             {
-                const std::wstring ASCII(Message.begin(), Message.end());
-                reinterpret_cast<void (__cdecl *)(const wchar_t *, int)>(Address)(ASCII.data(), 0);
+                reinterpret_cast<void (__cdecl *)(const wchar_t *, int)>(Address)(toWide(Message).c_str(), 0);
             }
         }
     }
