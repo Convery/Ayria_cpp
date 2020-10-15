@@ -20,4 +20,34 @@ namespace Social
     using Userinfo_t = struct { uint32_t UserID; std::string Username; };
     void addFriend(uint32_t UserID, std::string_view Username);
     const std::vector<Userinfo_t> *getFriendslist();
+
+    // Add API handlers.
+    inline std::string __cdecl addFriend(const char *JSONString)
+    {
+        do
+        {
+            if (!JSONString) break;
+            const auto Object = ParseJSON(JSONString);
+            if (!Object.contains("UserID")) break;
+
+            addFriend(Object["UserID"], Object.value("Username", "Unknown"));
+        } while (false);
+
+        return "{}";
+    }
+    inline std::string __cdecl Friendslist(const char *)
+    {
+        const auto Friends = getFriendslist();
+        auto Array = nlohmann::json::array();
+
+        for (const auto &Item : *Friends)
+            Array += { { "Username", Item.Username }, { "UserID", Item.UserID } };
+
+        return Array.dump(4);
+    }
+    inline void API_Initialize()
+    {
+        API::Registerhandler_Social("addFriend", addFriend);
+        API::Registerhandler_Social("Friendslist", Friendslist);
+    }
 }

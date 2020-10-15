@@ -105,6 +105,7 @@ namespace Backend
         // Initialize subsystems that plugins may need.
         Clientinfo::API_Initialize();
         Auxiliary::API_Initialize();
+        Social::API_Initialize();
         Clientinfo::Initialize();
 
         // Default network groups.
