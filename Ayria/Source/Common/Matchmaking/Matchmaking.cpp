@@ -46,7 +46,7 @@ namespace Matchmaking
 
         Session->Sessiondata.update(Object.value("Sessiondata", nlohmann::json::object()));
         Session->Playerdata.update(Object.value("Playerdata", nlohmann::json::array()));
-        Session->Gamedata.update(Object.value("Gamedata", nlohmann::json::object()));
+        Session->Gameinfo.update(Object.value("Gameinfo", nlohmann::json::object()));
         Session->Hostinfo.update(Object.value("Hostinfo", nlohmann::json::object()));
 
         Session->Lastmessage = GetTickCount();

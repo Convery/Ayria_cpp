@@ -15,7 +15,7 @@ namespace Matchmaking
         uint32_t Lastmessage;
 
         nlohmann::json Hostinfo;
-        nlohmann::json Gamedata;
+        nlohmann::json Gameinfo;
         nlohmann::json Playerdata;
         nlohmann::json Sessiondata;
     };
@@ -42,7 +42,7 @@ namespace Matchmaking
         static std::string Result;
 
         Object["Hostinfo"] = Session->Hostinfo;
-        Object["Gamedata"] = Session->Gamedata;
+        Object["Gameinfo"] = Session->Gameinfo;
         Object["Playerdata"] = Session->Playerdata;
         Object["Sessiondata"] = Session->Sessiondata;
 
@@ -59,7 +59,7 @@ namespace Matchmaking
         {
             auto Object = nlohmann::json::object();
             Object["Hostinfo"] = Session->Hostinfo;
-            Object["Gamedata"] = Session->Gamedata;
+            Object["Gameinfo"] = Session->Gameinfo;
             Object["Playerdata"] = Session->Playerdata;
             Object["Sessiondata"] = Session->Sessiondata;
 
@@ -78,7 +78,7 @@ namespace Matchmaking
     inline std::string __cdecl Gameupdate(const char *JSONString)
     {
         auto Session = getLocalsession();
-        Session->Gamedata.update(ParseJSON(JSONString));
+        Session->Gameinfo.update(ParseJSON(JSONString));
         return getLocalsession(nullptr);
     }
     inline std::string __cdecl Playerupdate(const char *JSONString)
@@ -106,7 +106,7 @@ namespace Matchmaking
 
         Session->Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
         Session->Playerdata = Config.value("Playerdata", nlohmann::json::array());
-        Session->Gamedata = Config.value("Gamedata", nlohmann::json::object());
+        Session->Gameinfo = Config.value("Gameinfo", nlohmann::json::object());
         Session->Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
         Session->Active = true;
 
