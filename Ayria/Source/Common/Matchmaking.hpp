@@ -16,8 +16,8 @@ namespace Matchmaking
 
         nlohmann::json Hostinfo;
         nlohmann::json Gamedata;
+        nlohmann::json Playerdata;
         nlohmann::json Sessiondata;
-        nlohmann::json Platformdata;
     };
     struct Localsession_t : Session_t
     {
@@ -43,8 +43,8 @@ namespace Matchmaking
 
         Object["Hostinfo"] = Session->Hostinfo;
         Object["Gamedata"] = Session->Gamedata;
+        Object["Playerdata"] = Session->Playerdata;
         Object["Sessiondata"] = Session->Sessiondata;
-        Object["Platformdata"] = Session->Platformdata;
 
         const auto Plaintext = Object.dump(4);
         if (Result != Plaintext) Result = Plaintext;
@@ -60,8 +60,8 @@ namespace Matchmaking
             auto Object = nlohmann::json::object();
             Object["Hostinfo"] = Session->Hostinfo;
             Object["Gamedata"] = Session->Gamedata;
+            Object["Playerdata"] = Session->Playerdata;
             Object["Sessiondata"] = Session->Sessiondata;
-            Object["Platformdata"] = Session->Platformdata;
 
             Array += Object;
         }
@@ -81,16 +81,16 @@ namespace Matchmaking
         Session->Gamedata.update(ParseJSON(JSONString));
         return getLocalsession(nullptr);
     }
+    inline std::string __cdecl Playerupdate(const char *JSONString)
+    {
+        auto Session = getLocalsession();
+        Session->Playerdata.update(ParseJSON(JSONString));
+        return getLocalsession(nullptr);
+    }
     inline std::string __cdecl Sessionupdate(const char *JSONString)
     {
         auto Session = getLocalsession();
         Session->Sessiondata.update(ParseJSON(JSONString));
-        return getLocalsession(nullptr);
-    }
-    inline std::string __cdecl Platformupdate(const char *JSONString)
-    {
-        auto Session = getLocalsession();
-        Session->Platformdata.update(ParseJSON(JSONString));
         return getLocalsession(nullptr);
     }
 
@@ -104,8 +104,8 @@ namespace Matchmaking
         const auto Config = ParseJSON(JSONString);
         auto Session = getLocalsession();
 
-        Session->Platformdata = Config.value("Platformdata", nlohmann::json::object());
         Session->Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
+        Session->Playerdata = Config.value("Playerdata", nlohmann::json::array());
         Session->Gamedata = Config.value("Gamedata", nlohmann::json::object());
         Session->Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
         Session->Active = true;
@@ -119,8 +119,8 @@ namespace Matchmaking
 
         API::Registerhandler_Matchmake("Hostupdate", Hostupdate);
         API::Registerhandler_Matchmake("Gameupdate", Gameupdate);
+        API::Registerhandler_Matchmake("Playerupdate", Playerupdate);
         API::Registerhandler_Matchmake("Sessionupdate", Sessionupdate);
-        API::Registerhandler_Matchmake("Platformupdate", Platformupdate);
         API::Registerhandler_Matchmake("getLocalsession", getLocalsession);
         API::Registerhandler_Matchmake("getNetworksessions", getNetworksessions);
 

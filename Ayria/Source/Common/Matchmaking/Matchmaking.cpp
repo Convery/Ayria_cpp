@@ -44,8 +44,8 @@ namespace Matchmaking
         const auto Object = ParseJSON(JSONString);
         auto Session = Networksessions[NodeID];
 
-        Session->Platformdata.update(Object.value("Platformdata", nlohmann::json::object()));
         Session->Sessiondata.update(Object.value("Sessiondata", nlohmann::json::object()));
+        Session->Playerdata.update(Object.value("Playerdata", nlohmann::json::array()));
         Session->Gamedata.update(Object.value("Gamedata", nlohmann::json::object()));
         Session->Hostinfo.update(Object.value("Hostinfo", nlohmann::json::object()));
 
