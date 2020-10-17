@@ -99,7 +99,7 @@ namespace Backend
                 // May have multiple listeners for the same messageID.
                 for (const auto Callback : Result->second)
                 {
-                    Callback(Decoded.c_str());
+                    Callback(Packet->RandomID, Decoded.c_str());
                 }
             }
         }
@@ -108,7 +108,7 @@ namespace Backend
     // Let's expose this interface to the world.
     namespace API
     {
-        // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
+        // using Messagecallback_t = void(__cdecl *)(uint32_t NodeID, const char *JSONString);
         extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, void *Callback)
         {
             Registermessagehandler(MessageID, (Messagecallback_t)Callback);

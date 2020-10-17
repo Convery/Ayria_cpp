@@ -16,7 +16,7 @@ namespace Backend
     constexpr uint16_t Fileshareport = Hash::FNV1_32("Ayria") & 0xFFF7; // 14977
     constexpr uint16_t Pluginsport = Hash::FNV1_32("Ayria") & 0xFFF8; // 14984
     constexpr uint16_t Generalport = Hash::FNV1_32("Ayria") & 0xFFFF; // 14985
-    using Messagecallback_t = void(__cdecl *)(const char *JSONString);
+    using Messagecallback_t = void(__cdecl *)(uint32_t NodeID, const char *JSONString);
 
     // Callbacks on group messages, groups are identified by their port, multicast is for all of Ayria.
     void Sendmessage(uint32_t Messagetype, std::string_view JSONString, uint16_t Port = Generalport);

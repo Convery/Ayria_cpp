@@ -22,7 +22,7 @@ namespace Clientinfo
         const auto String = Accountinfo(nullptr);
         Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
     }
-    static void __cdecl Discoveryhandler(const char *JSONString)
+    static void __cdecl Discoveryhandler(uint32_t, const char *JSONString)
     {
         Ayriaclient Newclient{};
         const auto Object = ParseJSON(JSONString);
