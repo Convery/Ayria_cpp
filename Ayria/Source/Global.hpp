@@ -318,3 +318,4 @@ struct Ayriamodule_t
 #include <Common/Social.hpp>
 #include <Common/Fileshare.hpp>
 #include <Common/Clientinfo.hpp>
+#include <Common/Matchmaking.hpp>
