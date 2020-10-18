@@ -69,9 +69,9 @@ namespace Steam
 
     // Block and wait for Steams IPC initialization event as some games need it.
     // Also redirect module lookups for legacy compatibility.
+    DWORD __stdcall InitializeIPC(void *);
     void Redirectmodulehandle();
     void Initializeinterfaces();
-    void InitializeIPC();
 
     // Async replies.
     namespace Callbacks

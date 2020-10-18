@@ -20,7 +20,7 @@ namespace Steam
             GetModuleFileNameA(*Handle, Filename, 260);
             if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Platformwrapper"))
             {
-                constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
+                constexpr auto *Clientlibrary = Build::is64bit ? "steamclient64.dll" : "steamclient.dll";
                 *Handle = GetModuleHandleA(Clientlibrary);
             }
 
@@ -37,11 +37,14 @@ namespace Steam
     }
 
     // Block and wait for Steams IPC initialization event as some games need it.
-    void InitializeIPC()
+    DWORD __stdcall InitializeIPC(void *)
     {
         static bool Initialized = false;
-        if (Initialized) return;
+        if (Initialized) return 0;
         Initialized = true;
+
+        // No point in taking resources here.
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
 
         SECURITY_DESCRIPTOR pSecurityDescriptor;
         InitializeSecurityDescriptor(&pSecurityDescriptor, 1);
@@ -65,7 +68,7 @@ namespace Steam
             CloseHandle(Sharedfilehandle);
             CloseHandle(Consumesemaphore);
             CloseHandle(Producesemaphore);
-            return;
+            return 0;
         }
 
         // Parse the shared buffer to get the process information.
@@ -112,5 +115,7 @@ namespace Steam
         CloseHandle(Sharedfilehandle);
         CloseHandle(Consumesemaphore);
         CloseHandle(Producesemaphore);
+
+        return 0;
     }
 }

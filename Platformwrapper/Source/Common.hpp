@@ -67,12 +67,3 @@ namespace Matchmaking
     void doFrame();
     void Update();
 }
-
-// Broadcast events over Ayrias communications layer.
-namespace Communication
-{
-    using Eventcallback_t = std::function<void(uint64_t TargetID, uint64_t SenderID, std::string_view Sendername, Bytebuffer &&Data)>;
-    void Broadcastmessage(std::string_view Eventtype, uint64_t TargetID, Bytebuffer &&Data);
-    void addMessagecallback(std::string_view Eventtype, Eventcallback_t Callback);
-    void __cdecl Messagehandler(const char *Request);
-}

@@ -30,7 +30,7 @@ namespace Steam
             Redirectmodulehandle();
 
             // Start processing the IPC separately.
-            std::thread(InitializeIPC).detach();
+            CreateThread(NULL, NULL, InitializeIPC, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 
             // Ensure that interfaces are loaded, this should only be relevant for developers.
             if (Getinterfaceversion(Interfacetype_t::APPS) == 0) Initializeinterfaces();
