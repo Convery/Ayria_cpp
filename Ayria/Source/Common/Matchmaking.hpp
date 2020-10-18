@@ -12,6 +12,7 @@ namespace Matchmaking
     struct Session_t
     {
         // Internal use.
+        uint32_t HostID;
         uint32_t Lastmessage;
 
         nlohmann::json Hostinfo;
@@ -19,14 +20,10 @@ namespace Matchmaking
         nlohmann::json Playerdata;
         nlohmann::json Sessiondata;
     };
-    struct Localsession_t : Session_t
-    {
-        bool Active;
-    };
 
     // Fetch all known sessions on the LAN.
     std::vector<std::shared_ptr<Session_t>> getNetworksessions();
-    Localsession_t *getLocalsession();
+    Session_t *getLocalsession();
 
     // Register handlers and set up session.
     void Initialize();
@@ -35,21 +32,6 @@ namespace Matchmaking
     void doFrame();
 
     // Add API handlers.
-    inline std::string __cdecl getLocalsession(const char *)
-    {
-        auto Object = nlohmann::json::object();
-        auto Session = getLocalsession();
-        static std::string Result;
-
-        Object["Hostinfo"] = Session->Hostinfo;
-        Object["Gameinfo"] = Session->Gameinfo;
-        Object["Playerdata"] = Session->Playerdata;
-        Object["Sessiondata"] = Session->Sessiondata;
-
-        const auto Plaintext = Object.dump(4);
-        if (Result != Plaintext) Result = Plaintext;
-        return Result.c_str();
-    }
     inline std::string __cdecl getNetworksessions(const char *)
     {
         auto Array = nlohmann::json::array();
@@ -58,6 +40,7 @@ namespace Matchmaking
         for (const auto &Session : getNetworksessions())
         {
             auto Object = nlohmann::json::object();
+            Object["HostID"] = Session->HostID;
             Object["Hostinfo"] = Session->Hostinfo;
             Object["Gameinfo"] = Session->Gameinfo;
             Object["Playerdata"] = Session->Playerdata;
@@ -69,37 +52,28 @@ namespace Matchmaking
         Result = Array.dump(4);
         return Result.c_str();
     }
-    inline std::string __cdecl Hostupdate(const char *JSONString)
+    inline std::string __cdecl getLocalsession(const char *)
     {
-        auto Session = getLocalsession(); Session->Active = true;
-        Session->Hostinfo.update(ParseJSON(JSONString));
-        return getLocalsession(nullptr);
-    }
-    inline std::string __cdecl Gameupdate(const char *JSONString)
-    {
-        auto Session = getLocalsession(); Session->Active = true;
-        Session->Gameinfo.update(ParseJSON(JSONString));
-        return getLocalsession(nullptr);
-    }
-    inline std::string __cdecl Playerupdate(const char *JSONString)
-    {
-        auto Session = getLocalsession(); Session->Active = true;
-        Session->Playerdata.update(ParseJSON(JSONString));
-        return getLocalsession(nullptr);
-    }
-    inline std::string __cdecl Sessionupdate(const char *JSONString)
-    {
-        auto Session = getLocalsession(); Session->Active = true;
-        Session->Sessiondata.update(ParseJSON(JSONString));
-        return getLocalsession(nullptr);
-    }
+        auto Object = nlohmann::json::object();
+        auto Session = getLocalsession();
+        static std::string Result;
 
+        Object["HostID"] = Session->HostID;
+        Object["Hostinfo"] = Session->Hostinfo;
+        Object["Gameinfo"] = Session->Gameinfo;
+        Object["Playerdata"] = Session->Playerdata;
+        Object["Sessiondata"] = Session->Sessiondata;
+
+        const auto Plaintext = Object.dump(4);
+        if (Result != Plaintext) Result = Plaintext;
+        return Result.c_str();
+    }
     inline std::string __cdecl Terminatesession(const char *)
     {
-        getLocalsession()->Active = false;
+        getLocalsession()->HostID = 0;
         return "{}";
     }
-    inline std::string __cdecl Fullsessionupdate(const char *JSONString)
+    inline std::string __cdecl Sessionupdate(const char *JSONString)
     {
         const auto Config = ParseJSON(JSONString);
         auto Session = getLocalsession();
@@ -108,23 +82,18 @@ namespace Matchmaking
         Session->Playerdata.update(Config.value("Playerdata", nlohmann::json::array()));
         Session->Gameinfo.update(Config.value("Gameinfo", nlohmann::json::object()));
         Session->Hostinfo.update(Config.value("Hostinfo", nlohmann::json::object()));
-        Session->Active = true;
+        Session->HostID = Clientinfo::getLocalclient()->ClientID;
 
-        return getLocalsession(nullptr);
+        return "{}";
     }
 
     inline void API_Initialize()
     {
         Initialize();
 
-        API::Registerhandler_Matchmake("Hostupdate", Hostupdate);
-        API::Registerhandler_Matchmake("Gameupdate", Gameupdate);
-        API::Registerhandler_Matchmake("Playerupdate", Playerupdate);
-        API::Registerhandler_Matchmake("Sessionupdate", Sessionupdate);
-        API::Registerhandler_Matchmake("getLocalsession", getLocalsession);
         API::Registerhandler_Matchmake("getNetworksessions", getNetworksessions);
-
-        API::Registerhandler_Matchmake("Fullsessionupdate", Fullsessionupdate);
+        API::Registerhandler_Matchmake("getLocalsession", getLocalsession);
         API::Registerhandler_Matchmake("Terminatesession", Terminatesession);
+        API::Registerhandler_Matchmake("Sessionupdate", Sessionupdate);
     }
 }

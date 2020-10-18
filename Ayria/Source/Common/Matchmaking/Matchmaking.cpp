@@ -10,7 +10,7 @@
 namespace Matchmaking
 {
     std::unordered_map<uint32_t, std::shared_ptr<Session_t>> Networksessions;
-    Localsession_t Localsession{};
+    Session_t Localsession{};
 
     // Fetch all known sessions on the LAN.
     std::vector<std::shared_ptr<Session_t>> getNetworksessions()
@@ -23,7 +23,7 @@ namespace Matchmaking
 
         return Result;
     }
-    Localsession_t *getLocalsession()
+    Session_t *getLocalsession()
     {
         return &Localsession;
     }
@@ -48,6 +48,7 @@ namespace Matchmaking
         Session->Playerdata.update(Object.value("Playerdata", nlohmann::json::array()));
         Session->Gameinfo.update(Object.value("Gameinfo", nlohmann::json::object()));
         Session->Hostinfo.update(Object.value("Hostinfo", nlohmann::json::object()));
+        Session->HostID = Object.value("HostID", 0);
 
         Session->Lastmessage = GetTickCount();
     }
@@ -71,7 +72,7 @@ namespace Matchmaking
                 { return (Currenttime - Item.second->Lastmessage) > 10000; });
 
             // Announce our presence.
-            if (Localsession.Active) [[unlikely]]
+            if (Localsession.HostID) [[unlikely]]
                 Sendserverinfo();
 
             Lastupdate = Currenttime;
