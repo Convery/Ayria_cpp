@@ -37,15 +37,16 @@ namespace Steam
             Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n> Product: %s\n> Description: %s\n> Maxplayers: %u",
                           bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
 
-            auto Localserver = Matchmaking::Localserver();
-            Localserver->Set("Server.Region", pRegionName);
-            Localserver->Set("Steam.Productname", pProductName);
-            Localserver->Set("Network.Version", nProtocolVersion);
-            Localserver->Set("Players.Current", nMaxReportedClients);
-            Localserver->Set("Server.isDedicated", bDedicatedServer);
-            Localserver->Set("Steam.Productdescription", pGameDescription);
-            Localserver->Set("Security.Passwordprotected", bPasswordProtected);
-            Matchmaking::Announceupdate();
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["Region"] = pRegionName;
+            Session->Gameinfo["Maxplayers"] = nMaxReportedClients;
+            Session->Gameinfo["Productname"] = pProductName;
+            Session->Gameinfo["Productdesc"] = pGameDescription;
+            Session->Hostinfo["Protocol"] = nProtocolVersion;
+            Session->Hostinfo["isDedicated"] = bDedicatedServer;
+            Session->Hostinfo["isPrivate"] = bPasswordProtected;
+
+            Matchmaking::Update();
         }
         void ClearAllKeyValues()
         {
@@ -53,11 +54,15 @@ namespace Steam
         }
         void SetKeyValue(const char *pKey, const char *pValue) const
         {
-            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pKey, pValue));
+            Matchmaking::getLocalsession()->Sessiondata[pKey] = pValue;
+            Matchmaking::Update();
         }
         void NotifyShutdown()
         {
-            Traceprint();
+            if (const auto Callback = Ayria.API_Matchmake)
+            {
+                Callback(Ayria.toFunctionID("Terminatesession"), nullptr);
+            }
         }
         bool WasRestartRequested()
         {

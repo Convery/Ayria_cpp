@@ -11,18 +11,18 @@ namespace Steam
 {
     static nlohmann::json getFriends()
     {
-        if (const auto Callback = Global.Ayria.API_Social)
+        if (const auto Callback = Ayria.API_Social)
         {
-            return ParseJSON(Callback(Global.Ayria.toFunctionID("Friendslist"), nullptr));
+            return ParseJSON(Callback(Ayria.toFunctionID("Friendslist"), nullptr));
         }
 
         return nlohmann::json::object();
     }
     static nlohmann::json getNetwork()
     {
-        if (const auto Callback = Global.Ayria.API_Social)
+        if (const auto Callback = Ayria.API_Social)
         {
-            return ParseJSON(Callback(Global.Ayria.toFunctionID("LANClients"), nullptr));
+            return ParseJSON(Callback(Ayria.toFunctionID("LANClients"), nullptr));
         }
 
         return nlohmann::json::object();
@@ -32,12 +32,12 @@ namespace Steam
     {
         const char *GetPersonaName()
         {
-            return Global.Username.c_str();
+            return Steam.Username.c_str();
         }
         void SetPersonaName0(const char *pchPersonaName)
         {
             Traceprint();
-            Global.Username = pchPersonaName;
+            Steam.Username = pchPersonaName;
         }
         uint32_t GetPersonaState()
         {
@@ -51,9 +51,9 @@ namespace Steam
         {
             Traceprint();
 
-            if (const auto Callback = Global.Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social)
             {
-                Callback(Global.Ayria.toFunctionID("addFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
+                Callback(Ayria.toFunctionID("addFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
                 return true;
             }
 
@@ -63,9 +63,9 @@ namespace Steam
         {
             Traceprint();
 
-            if (const auto Callback = Global.Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social)
             {
-                Callback(Global.Ayria.toFunctionID("removeFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
+                Callback(Ayria.toFunctionID("removeFriend"), va("{ \"UserID\" : %u }", steamIDFriend.GetAccountID()).c_str());
                 return true;
             }
 
@@ -151,14 +151,14 @@ namespace Steam
         }
         void SendMsgToFriend0(CSteamID steamIDFriend, uint32_t eFriendMsgType, const char *pchMsgBody)
         {
-            if (const auto Callback = Global.Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social)
             {
                 auto Object = nlohmann::json::object();
                 Object["UserID"] = steamIDFriend.GetAccountID();
                 Object["Type"] = eFriendMsgType;
                 Object["Message"] = pchMsgBody;
 
-                Callback(Global.Ayria.toFunctionID("SendIM_enc"), Object.dump().c_str());
+                Callback(Ayria.toFunctionID("SendIM_enc"), Object.dump().c_str());
             }
         }
         void SetFriendRegValue(CSteamID steamIDFriend, const char *pchKey, const char *pchValue)
@@ -177,14 +177,14 @@ namespace Steam
         }
         int GetChatMessage(CSteamID steamIDFriend, int iChatID, void *pvData, int cubData, uint32_t *peFriendMsgType)
         {
-            if (const auto Callback = Global.Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social)
             {
                 auto Object = nlohmann::json::object();
                 Object["SenderID"] = steamIDFriend.GetAccountID();
                 Object["Offset"] = iChatID;
                 Object["Count"] = 1;
 
-                const auto Result = ParseJSON(Callback(Global.Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
+                const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
                 if (!Result.contains("Message")) return 0;
 
                 *peFriendMsgType = Result.value("Type", 0);
@@ -196,7 +196,7 @@ namespace Steam
         }
         bool SendMsgToFriend1(CSteamID steamIDFriend, uint32_t eFriendMsgType, const void *pvMsgBody, int cubMsgBody)
         {
-            std::string Safestring((const char *)pvMsgBody, cubMsgBody);
+            const std::string Safestring((const char *)pvMsgBody, cubMsgBody);
             SendMsgToFriend0(steamIDFriend, eFriendMsgType, Safestring.c_str());
             return true;
         }
@@ -263,7 +263,7 @@ namespace Steam
         CSteamID GetClanByIndex(int iClan)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         const char *GetClanName(CSteamID steamIDClan)
         {
@@ -368,7 +368,7 @@ namespace Steam
         CSteamID GetClanOwner(CSteamID steamIDClan)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         int GetClanOfficerCount(CSteamID steamIDClan)
         {
@@ -378,7 +378,7 @@ namespace Steam
         CSteamID GetClanOfficerByIndex(CSteamID steamIDClan, int iOfficer)
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         uint32_t GetUserRestrictions()
         {

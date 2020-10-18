@@ -9,8 +9,21 @@
 #include "../Common.hpp"
 #include "Auxiliary/CSteamID.hpp"
 
+
 namespace Steam
 {
+    struct Steaminfo_t
+    {
+        CSteamID XUID;
+        time_t Startuptime;
+        uint32_t ApplicationID;
+
+        std::string Locale;
+        std::string Username;
+        std::string Installpath;
+    };
+    extern Steaminfo_t Steam;
+
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
     using Interface_t = Fakeclass_t;
@@ -57,6 +70,7 @@ namespace Steam
     // Block and wait for Steams IPC initialization event as some games need it.
     // Also redirect module lookups for legacy compatibility.
     void Redirectmodulehandle();
+    void Initializeinterfaces();
     void InitializeIPC();
 
     // Async replies.

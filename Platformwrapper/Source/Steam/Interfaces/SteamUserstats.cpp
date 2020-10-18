@@ -202,19 +202,19 @@ namespace Steam
         }
         bool GetUserStat1(CSteamID steamIDUser, const char *pchName, int32_t *pData) const
         {
-            if (steamIDUser.ConvertToUint64() == Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetStat3(pchName, pData);
         }
         bool GetUserStat2(CSteamID steamIDUser, const char *pchName, float *pData) const
         {
-            if (steamIDUser.ConvertToUint64() == Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetStat4(pchName, pData);
         }
         bool GetUserAchievement(CSteamID steamIDUser, const char *pchName, bool *pbAchieved) const
         {
-            if (steamIDUser.ConvertToUint64() == Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetAchievement1(pchName, pbAchieved);
         }

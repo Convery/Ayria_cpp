@@ -19,7 +19,7 @@ namespace Steam
     */
     static nlohmann::json getAppdata()
     {
-        const auto Filename = va("./Ayria/Assets/Steam/Appdata_%u.json", Global.ApplicationID);
+        const auto Filename = va("./Ayria/Assets/Steam/Appdata_%u.json", Steam.ApplicationID);
         if (const auto Filebuffer = FS::Readfile(Filename); !Filebuffer.empty())
         {
             return ParseJSON(B2S(Filebuffer));
@@ -61,16 +61,16 @@ namespace Steam
         const char *GetCurrentGameLanguage()
         {
             Traceprint();
-            return Global.Language.c_str();
+            return Steam.Locale.c_str();
         }
         const char *GetAvailableGameLanguages()
         {
             const auto Object = getAppdata();
-            if (!Object.contains("Languages")) return Global.Language.c_str();
+            if (!Object.contains("Languages")) return Steam.Locale.c_str();
 
             static std::string Result{};
             if (!Result.empty()) return Result.c_str();
-            Result += Global.Language;
+            Result += Steam.Locale;
 
             for (const auto &Item : Object["Languages"])
             {
@@ -177,7 +177,7 @@ namespace Steam
         }
         CSteamID GetAppOwner()
         {
-            return CSteamID(Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         const char *GetLaunchQueryParam(const char *pchKey)
         {

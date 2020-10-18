@@ -55,12 +55,16 @@ namespace Steam
         }
         CSteamID GetLobbyByIndex(int iLobby)
         {
-            Traceprint();
-            return CSteamID(Global.UserID);
+            const auto Serverlist = Matchmaking::getNetworkservers();
+            if (Serverlist->size() < iLobby) return k_steamIDNil;
+
+            return CSteamID(Serverlist->at(iLobby).HostID, 1, k_EAccountTypeGameServer);
         }
         void CreateLobby0(uint64_t ulGameID, bool bPrivate)
         {
-            Traceprint();
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["isPrivate"] = bPrivate;
+            Matchmaking::Update();
         }
         void JoinLobby0(CSteamID steamIDLobby)
         {
@@ -77,29 +81,123 @@ namespace Steam
         }
         int GetNumLobbyMembers(CSteamID steamIDLobby)
         {
-            return 1;
+            const auto HostID = steamIDLobby.GetAccountID();
+            for (const auto &Session : *Matchmaking::getNetworkservers())
+                if (HostID == Session.HostID)
+                    return int(Session.Playerdata.size());
+
+            return 0;
         }
         CSteamID GetLobbyMemberByIndex(CSteamID steamIDLobby, int iMember)
         {
-            return CSteamID(Global.UserID);
+            const auto HostID = steamIDLobby.GetAccountID();
+            for (const auto &Session : *Matchmaking::getNetworkservers())
+            {
+                if (HostID == Session.HostID)
+                {
+                    if (iMember > Session.Playerdata.size()) return k_steamIDNil;
+                    return CSteamID(Session.Playerdata.at(iMember).value("PlayerID", 0), 1, k_EAccountTypeIndividual);
+                }
+            }
+
+            return k_steamIDNil;
         }
         const char *GetLobbyData(CSteamID SteamIDLobby, const char *pchKey)
         {
-            Traceprint();
+            const auto HostID = SteamIDLobby.GetAccountID();
+
+            if (HostID == Steam.XUID.GetAccountID())
+            {
+                static std::string Result;
+                Result = Matchmaking::getLocalsession()->Sessiondata.value(pchKey, "").c_str();
+                return Result.c_str();
+            }
+            else
+            {
+                for (const auto &Session : *Matchmaking::getNetworkservers())
+                {
+                    if (HostID == Session.HostID)
+                    {
+                        static std::string Result;
+                        Result = Session.Sessiondata.value(pchKey, "");
+                        return Result.c_str();
+                    }
+                }
+            }
+
             return "";
         }
         void SetLobbyData0(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
-            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            const auto HostID = steamIDLobby.GetAccountID();
+            if (HostID == Steam.XUID.GetAccountID())
+            {
+                Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+                Matchmaking::getLocalsession()->Sessiondata[pchKey] = pchValue;
+                Matchmaking::Update();
+            }
         }
         const char *GetLobbyMemberData(CSteamID steamIDLobby, CSteamID steamIDUser, const char *pchKey)
         {
-            Traceprint();
-            return "";
+            const auto HostID = steamIDLobby.GetAccountID();
+            const auto UserID = steamIDUser.GetAccountID();
+
+            if (HostID == Steam.XUID.GetAccountID())
+            {
+                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                {
+                    if (Item.value("PlayerID", 0) == UserID)
+                    {
+                        static std::string Result;
+                        Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
+                        return Result.c_str();
+                    }
+                }
+                return "";
+            }
+            else
+            {
+                for (const auto &Session : *Matchmaking::getNetworkservers())
+                {
+                    if (HostID == Session.HostID)
+                    {
+                        for (const auto &Item : Session.Playerdata)
+                        {
+                            if (Item.value("PlayerID", 0) == UserID)
+                            {
+                                static std::string Result;
+                                Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
+                                return Result.c_str();
+                            }
+                        }
+
+                        break;
+                    }
+                }
+            }
         }
         void SetLobbyMemberData(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
-            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            // TODO(tcn): This should probably be implemented via Ayria::Clientinfo::Publicdata or something.
+
+            const auto HostID = steamIDLobby.GetAccountID();
+            const auto UserID = Steam.XUID.GetAccountID();
+
+            if (HostID == Steam.XUID.GetAccountID())
+            {
+                Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+                for (auto &Player : Matchmaking::getLocalsession()->Playerdata)
+                {
+                    if (Player.value("PlayerID", 0) == UserID)
+                    {
+                        if (!Player.contains("Steamdata")) Player["Steamdata"] = nlohmann::json::object();
+                        Player["Steamdata"][pchKey] = pchValue;
+                        break;
+                    }
+                }
+
+                Matchmaking::Update();
+            }
         }
         void ChangeLobbyAdmin(CSteamID steamIDLobby, CSteamID steamIDNewAdmin)
         {
@@ -107,12 +205,65 @@ namespace Steam
         }
         bool SendLobbyChatMsg(CSteamID steamIDLobby, const void *pvMsgBody, int cubMsgBody)
         {
-            Traceprint();
-            return false;
+            const auto HostID = steamIDLobby.GetAccountID();
+            std::vector<uint32_t> Users;
+
+            if (HostID == Steam.XUID.GetAccountID())
+            {
+                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                {
+                    const auto ID = Item.value("PlayerID", 0);
+                    if (ID) Users.push_back(ID);
+                }
+            }
+            else
+            {
+                for (const auto &Session : *Matchmaking::getNetworkservers())
+                {
+                    if (HostID == Session.HostID)
+                    {
+                        for (const auto &Item : Session.Playerdata)
+                        {
+                            const auto ID = Item.value("PlayerID", 0);
+                            if (ID) Users.push_back(ID);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            const std::string Safestring((const char *)pvMsgBody, cubMsgBody);
+            if (const auto Callback = Ayria.API_Social)
+            {
+                auto Object = nlohmann::json::object();
+                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
+                Object["Message"] = Safestring;
+                Object["Users"] = Users;
+
+                Callback(Ayria.toFunctionID("SendIM"), Object.dump().c_str());
+            }
+
+            return true;
         }
         int GetLobbyChatEntry(CSteamID steamIDLobby, int iChatID, CSteamID *pSteamIDUser, void *pvData, int cubData, uint32_t  *peChatEntryType)
         {
-            Traceprint();
+            if (const auto Callback = Ayria.API_Social)
+            {
+                auto Object = nlohmann::json::object();
+                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
+                Object["Offset"] = iChatID;
+                Object["Count"] = 1;
+
+                const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
+                if (!Result.contains("Message")) return 0;
+
+                *peChatEntryType = Result.value("Type", 0);
+                pSteamIDUser->Set(Result.value("SenderID", 0), 1, k_EAccountTypeIndividual);
+                std::strncpy((char *)pvData, Result["Message"].get<std::string>().c_str(), cubData);
+                return std::strlen((char *)pvData);
+            }
+
             return 0;
         }
         bool RequestLobbyData(CSteamID steamIDLobby)
@@ -141,17 +292,11 @@ namespace Steam
         }
         void CreateLobby1(bool bPrivate)
         {
-            Traceprint();
+            CreateLobby0(0, bPrivate);
         }
         void SetLobbyGameServer(CSteamID steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, CSteamID steamIDGameServer) const
         {
-            Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
-                         ((uint8_t *)&unGameServerIP)[3], ((uint8_t *)&unGameServerIP)[2], ((uint8_t *)&unGameServerIP)[1], ((uint8_t *)&unGameServerIP)[0],
-                         0, unGameServerPort, 0, 0, ""));
-
-            auto Localserver = Matchmaking::Localserver();
-            Localserver->Set("Network.Gameport", unGameServerPort);
-            Localserver->Set("Server.XUID", steamIDGameServer.ConvertToUint64());
+            Traceprint();
         }
         uint64_t RequestLobbyList2()
         {
@@ -172,7 +317,7 @@ namespace Steam
         }
         bool SetLobbyData1(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
-            Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
+            SetLobbyData0(steamIDLobby, pchKey, pchValue);
             return true;
         }
         bool GetLobbyGameServer(CSteamID steamIDLobby, uint32_t *punGameServerIP, uint16_t *punGameServerPort, CSteamID *psteamIDGameServer)
@@ -182,13 +327,26 @@ namespace Steam
         }
         bool SetLobbyMemberLimit(CSteamID steamIDLobby, int cMaxMembers)
         {
-            Traceprint();
-            return true;
+            if (steamIDLobby.GetAccountID() == Steam.XUID.GetAccountID())
+            {
+                Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
+                Matchmaking::Update();
+                return true;
+            }
+
+            return false;
         }
         int GetLobbyMemberLimit(CSteamID steamIDLobby)
         {
-            Traceprint();
-            return 1;
+            const auto HostID = steamIDLobby.GetAccountID();
+
+            for (const auto &Session : *Matchmaking::getNetworkservers())
+            {
+                if (Session.HostID == HostID)
+                    return Session.Gameinfo.value("Maxplayers", 6);
+            }
+
+            return 6;
         }
         void SetLobbyVoiceEnabled(CSteamID steamIDLobby, bool bEnabled)
         {
@@ -205,13 +363,21 @@ namespace Steam
         }
         uint64_t CreateLobby2(uint32_t eLobbyType)
         {
-            Traceprint();
-            return 0;
+            const auto LobbyID = CSteamID(Steam.XUID.GetAccountID(), 0x40000, 1, k_EAccountTypeGameServer);
+            auto Response = new Callbacks::LobbyCreated_t();
+            const auto RequestID = Callbacks::Createrequest();
+
+            Response->m_eResult = EResult::k_EResultOK;
+            Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();
+            Infoprint(va("Creating a lobby of type %d.", eLobbyType));
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
+
+            Matchmaking::Update();
+            return RequestID;
         }
         uint64_t JoinLobby1(CSteamID steamIDLobby) const
         {
-            Infoprint(va("Joining lobby 0x%llX.", steamIDLobby.ConvertToUint64()));
-
+            Infoprint(va("Want to join lobby 0x%llX.", steamIDLobby.ConvertToUint64()));
             return 0;
         }
         bool SetLobbyType(CSteamID steamIDLobby, uint32_t eLobbyType)
@@ -221,7 +387,7 @@ namespace Steam
         }
         CSteamID GetLobbyOwner(CSteamID steamIDLobby)
         {
-            return CSteamID(Global.UserID);
+            return CSteamID(steamIDLobby.GetAccountID(), 1, k_EAccountTypeIndividual);
         }
         double GetLobbyDistance(CSteamID steamIDLobby)
         {
@@ -242,15 +408,17 @@ namespace Steam
         }
         uint64_t CreateLobby3(uint32_t eLobbyType, int cMaxMembers) const
         {
-            const auto LobbyID = CSteamID(1337, 0x40000, 1, k_EAccountTypeChat);
+            const auto LobbyID = CSteamID(Steam.XUID.GetAccountID(), 0x40000, 1, k_EAccountTypeGameServer);
             auto Response = new Callbacks::LobbyCreated_t();
             const auto RequestID = Callbacks::Createrequest();
 
             Response->m_eResult = EResult::k_EResultOK;
             Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();
             Infoprint(va("Creating a lobby of type %d for %d players.", eLobbyType, cMaxMembers));
-            Callbacks::Completerequest(RequestID, 513, Response);
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
 
+            Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
+            Matchmaking::Update();
             return RequestID;
         }
         int GetLobbyDataCount(CSteamID steamIDLobby)
@@ -266,17 +434,17 @@ namespace Steam
         bool DeleteLobbyData(CSteamID steamIDLobby, const char *pchKey)
         {
             Traceprint();
-            return false;
+            return true;
         }
         bool SetLobbyJoinable(CSteamID steamIDLobby, bool bLobbyJoinable)
         {
             Traceprint();
-            return false;
+            return true;
         }
         bool SetLobbyOwner(CSteamID steamIDLobby, CSteamID steamIDNewOwner)
         {
             Traceprint();
-            return false;
+            return true;
         }
         void AddRequestLobbyListDistanceFilter(uint32_t eLobbyDistanceFilter)
         {
@@ -293,7 +461,7 @@ namespace Steam
         bool SetLinkedLobby(CSteamID steamIDLobby, CSteamID steamIDLobby2)
         {
             Traceprint();
-            return false;
+            return true;
         }
     };
 

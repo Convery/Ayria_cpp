@@ -28,7 +28,9 @@ namespace Steam
         }
         void SetSpawnCount(uint32_t ucSpawn)
         {
-            Traceprint();
+            auto Session = Matchmaking::getLocalsession();
+            Session->Gameinfo["Spawncount"] = ucSpawn;
+            Matchmaking::Update();
         }
         bool GetSteam2GetEncryptionKeyToSendToNewClient(void *pvEncryptionKey, uint32_t *pcbEncryptionKey, uint32_t cbMaxEncryptionKey)
         {
@@ -67,13 +69,13 @@ namespace Steam
         }
         bool UpdateStatus0(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
         {
-            auto Localserver = Matchmaking::Localserver();
-            Localserver->Set("Players.Max", cPlayersMax);
-            Localserver->Set("Players.Bots", cBotPlayers);
-            Localserver->Set("Players.Current", cPlayers);
-            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
-            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
-            // We do not force an update as this may be called multiple times with the same information.
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["Servername"] = pchServerName;
+            Session->Gameinfo["Currentplayers"] = cPlayers;
+            Session->Gameinfo["Botplayers"] = cBotPlayers;
+            Session->Gameinfo["Maxplayers"] = cPlayersMax;
+            Session->Gameinfo["Mapname"] = pchMapName;
+            Matchmaking::Update();
             return true;
         }
         bool BSecure()
@@ -90,30 +92,47 @@ namespace Steam
         }
         CSteamID GetSteamID()
         {
-            auto ID = CSteamID(Global.UserID);
+            auto ID = Steam.XUID;
             ID.Set(ID.GetAccountID(), ID.GetEUniverse(), k_EAccountTypeGameServer);
             return ID;
         }
         bool SetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint32_t unGamePort, const char *pchGameDir, const char *pchVersion)
         {
-            Traceprint();
-            return false;
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["Serverflags"] = unServerFlags;
+            Session->Hostinfo["Versionstring"] = pchVersion;
+            Session->Hostinfo["Gameport"] = unGamePort;
+            Session->Hostinfo["IPAddress"] = unGameIP;
+            Session->Hostinfo["AppID"] = nGameAppId;
+            Session->Gameinfo["Gamemod"] = pchGameDir;
+            Matchmaking::Update();
+            return true;
         }
         bool SetServerType1(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
-            Traceprint();
-            return false;
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["Spectatorport"] = usSpectatorPort;
+            Session->Hostinfo["Serverflags"] = unServerFlags;
+            Session->Hostinfo["Versionstring"] = pchVersion;
+            Session->Hostinfo["Queryport"] = usQueryPort;
+            Session->Hostinfo["Gameport"] = unGamePort;
+            Session->Hostinfo["IPAddress"] = unGameIP;
+            Session->Hostinfo["AppID"] = nGameAppId;
+            Session->Hostinfo["isLAN"] = bLANMode;
+            Session->Gameinfo["Gamemod"] = pchGameDir;
+            Matchmaking::Update();
+            return true;
         }
         bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            auto Localserver = Matchmaking::Localserver();
-            Localserver->Set("Players.Max", cPlayersMax);
-            Localserver->Set("Players.Bots", cBotPlayers);
-            Localserver->Set("Players.Current", cPlayers);
-            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
-            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
-            Localserver->Set("Server.Friendlyname", pSpectatorServerName ? pSpectatorServerName : "");
-            // We do not force an update as this may be called multiple times with the same information.
+            auto Session = Matchmaking::getLocalsession();
+            Session->Gameinfo["Currentplayers"] = cPlayers;
+            Session->Gameinfo["Botplayers"] = cBotPlayers;
+            Session->Gameinfo["Maxplayers"] = cPlayersMax;
+            Session->Gameinfo["Mapname"] = pchMapName;
+            Session->Hostinfo["Spectatorname"] = pSpectatorServerName;
+            Session->Hostinfo["Servername"] = pchServerName;
+            Matchmaking::Update();
             return true;
         }
         bool CreateUnauthenticatedUser(CSteamID *pSteamID)
@@ -123,16 +142,35 @@ namespace Steam
         }
         bool SetUserData(CSteamID steamIDUser, const char *pchPlayerName, uint32_t uScore)
         {
-            Traceprint();
-            return false;
+            bool hasPlayer = false;
+            auto Session = Matchmaking::getLocalsession();
+            const auto PlayerID = steamIDUser.GetAccountID();
+
+            for (auto &Object : Session->Playerdata)
+            {
+                if (Object.value("PlayerID", 0) == PlayerID)
+                {
+                    Object["Playername"] = pchPlayerName;
+                    Object["Score"] = uScore;
+                    hasPlayer = true;
+                }
+            }
+
+            if (!hasPlayer)
+                Session->Playerdata += { { "PlayerID", PlayerID }, { "Playername", pchPlayerName }, { "Score", uScore }  };
+
+            Matchmaking::Update();
+            return true;
         }
         void UpdateSpectatorPort(uint16_t unSpectatorPort)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["Spectatorport"] = unSpectatorPort;
+            Matchmaking::Update();
         }
         void SetGameType(const char *pchGameType)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Gametype"] = pchGameType;
+            Matchmaking::Update();
         }
         bool SendUserConnect(uint32_t, uint32_t, uint16_t, const void *, uint32_t)
         {
@@ -152,7 +190,7 @@ namespace Steam
         CSteamID CreateUnauthenticatedUserConnection()
         {
             Traceprint();
-            return CSteamID(Global.UserID);
+            return Steam.XUID;
         }
         void SendUserDisconnect1(CSteamID steamIDUser)
         {
@@ -160,13 +198,12 @@ namespace Steam
         }
         bool BUpdateUserData(CSteamID steamIDUser, const char *pchPlayerName, uint32_t uScore)
         {
-            Traceprint();
-            return false;
+            SetUserData(steamIDUser, pchPlayerName, uScore);
+            return true;
         }
         bool BSetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
-            Traceprint();
-            return false;
+            return SetServerType1(nGameAppId, unServerFlags, unGameIP, unGamePort, usSpectatorPort, usQueryPort, pchGameDir, pchVersion, bLANMode);
         }
         bool BGetUserAchievementStatus(CSteamID steamID, const char *pchAchievementName)
         {
@@ -187,19 +224,11 @@ namespace Steam
         }
         bool BSetServerType1(uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t unSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
-            Traceprint();
-            return false;
+            return SetServerType1(Steam.ApplicationID, unServerFlags, unGameIP, unGamePort, unSpectatorPort, usQueryPort, pchGameDir, pchVersion, bLANMode);
         }
         void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            auto Localserver = Matchmaking::Localserver();
-            Localserver->Set("Players.Max", cPlayersMax);
-            Localserver->Set("Players.Bots", cBotPlayers);
-            Localserver->Set("Players.Current", cPlayers);
-            Localserver->Set("Session.Mapname", pchMapName ? pchMapName : "");
-            Localserver->Set("Server.Hostname", pchServerName ? pchServerName : "");
-            Localserver->Set("Server.Friendlyname", pSpectatorServerName ? pSpectatorServerName : "");
-            // We do not force an update as this may be called multiple times with the same information.
+            UpdateStatus1(cPlayers, cPlayersMax, cBotPlayers, pchServerName, pSpectatorServerName, pchMapName);
         }
         void GetGameplayStats()
         {
@@ -222,8 +251,8 @@ namespace Steam
         }
         void SetGameTags(const char *pchGameTags)
         {
-            Matchmaking::Localserver()->Set("Session.Gametags", pchGameTags);
-            Matchmaking::Announceupdate();
+            Matchmaking::getLocalsession()->Gameinfo["Gametags"] = pchGameTags;
+            Matchmaking::Update();
         }
         uint64_t GetServerReputation()
         {
@@ -262,24 +291,34 @@ namespace Steam
         }
         bool InitGameServer(uint32_t unGameIP, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, uint32_t nAppID, const char *pchVersion)
         {
-            Traceprint();
+            auto Session = Matchmaking::getLocalsession();
+            Session->Hostinfo["Serverflags"] = unServerFlags;
+            Session->Hostinfo["Versionstring"] = pchVersion;
+            Session->Hostinfo["IPAddress"] = unGameIP;
+            Session->Hostinfo["Gameport"] = unGamePort;
+            Session->Hostinfo["AppID"] = nAppID;
+            Matchmaking::Update();
             return true;
         }
         void SetProduct(const char *pchProductName)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Productname"] = pchProductName;
+            Matchmaking::Update();
         }
         void SetGameDescription(const char *pchGameDescription)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Productdesc"] = pchGameDescription;
+            Matchmaking::Update();
         }
         void SetModDir(const char *pchModDir)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Gamemod"] = pchModDir;
+            Matchmaking::Update();
         }
         void SetDedicatedServer(bool bDedicatedServer)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["isDedicated"] = bDedicatedServer;
+            Matchmaking::Update();
         }
         void LogOn1(const char *pszAccountName, const char *pszPassword)
         {
@@ -294,31 +333,38 @@ namespace Steam
         }
         void SetMaxPlayerCount(int cPlayersMax)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cPlayersMax;
+            Matchmaking::Update();
         }
         void SetBotPlayerCount(int cBotPlayers)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Botplayers"] = cBotPlayers;
+            Matchmaking::Update();
         }
         void SetServerName(const char *pszServerName)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["Servername"] = pszServerName;
+            Matchmaking::Update();
         }
         void SetMapName(const char *pszMapName)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Mapname"] = pszMapName;
+            Matchmaking::Update();
         }
         void SetPasswordProtected(bool bPasswordProtected)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["isPrivate"] = bPasswordProtected;
+            Matchmaking::Update();
         }
         void SetSpectatorPort(uint16_t unSpectatorPort)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["Spectatorport"] = unSpectatorPort;
+            Matchmaking::Update();
         }
         void SetSpectatorServerName(const char *pszSpectatorServerName)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["Spectatorname"] = pszSpectatorServerName;
+            Matchmaking::Update();
         }
         void ClearAllKeyValues()
         {
@@ -326,15 +372,18 @@ namespace Steam
         }
         void SetKeyValue(const char *pKey, const char *pValue)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Sessiondata[pKey] = pValue;
+            Matchmaking::Update();
         }
-        void SetGameData(const char *pchGameData)
+        void SetGameinfo(const char *pchGameinfo)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Gameinfo["Infostring"] = pchGameinfo;
+            Matchmaking::Update();
         }
         void SetRegion(const char *pchRegionName)
         {
-            Traceprint();
+            Matchmaking::getLocalsession()->Hostinfo["Region"] = pchRegionName;
+            Matchmaking::Update();
         }
         int SendUserConnectAndAuthenticate2(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, CSteamID *pSteamIDUser)
         {
@@ -568,7 +617,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
             Createmethod(16, SteamGameserver, GetPublicIP);
-            Createmethod(17, SteamGameserver, SetGameData);
+            Createmethod(17, SteamGameserver, SetGameinfo);
             Createmethod(18, SteamGameserver, UserHasLicenseForApp);
 
         };
@@ -594,7 +643,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetServerReputation);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
             Createmethod(16, SteamGameserver, GetPublicIP);
-            Createmethod(17, SteamGameserver, SetGameData);
+            Createmethod(17, SteamGameserver, SetGameinfo);
             Createmethod(18, SteamGameserver, UserHasLicenseForApp);
             Createmethod(19, SteamGameserver, GetAuthSessionTicket);
             Createmethod(20, SteamGameserver, BeginAuthSession);
@@ -628,7 +677,7 @@ namespace Steam
             Createmethod(19, SteamGameserver, ClearAllKeyValues);
             Createmethod(20, SteamGameserver, SetKeyValue);
             Createmethod(21, SteamGameserver, SetGameTags);
-            Createmethod(22, SteamGameserver, SetGameData);
+            Createmethod(22, SteamGameserver, SetGameinfo);
             Createmethod(23, SteamGameserver, SetRegion);
             Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate1);
             Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);
@@ -678,7 +727,7 @@ namespace Steam
             Createmethod(19, SteamGameserver, ClearAllKeyValues);
             Createmethod(20, SteamGameserver, SetKeyValue);
             Createmethod(21, SteamGameserver, SetGameTags);
-            Createmethod(22, SteamGameserver, SetGameData);
+            Createmethod(22, SteamGameserver, SetGameinfo);
             Createmethod(23, SteamGameserver, SetRegion);
             Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate2);
             Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);

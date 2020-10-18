@@ -14,7 +14,7 @@ namespace Steam
         uint32_t GetSecondsSinceAppActive() const
         {
             Traceprint();
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() - Global.Startuptimestamp);
+            return uint32_t(time(NULL) - Steam.Startuptime);
         }
         uint32_t GetSecondsSinceComputerActive() const
         {
@@ -23,11 +23,11 @@ namespace Steam
         }
         uint32_t GetConnectedUniverse()
         {
-            return CSteamID(Global.UserID).GetEUniverse();
+            return Steam.XUID.GetEUniverse();
         }
         uint32_t GetServerRealTime() const
         {
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+            return uint32_t(time(NULL));
         }
 
         const char *GetIPCountry()
@@ -71,7 +71,7 @@ namespace Steam
 
         uint32_t GetAppID()
         {
-            return Global.ApplicationID;
+            return Steam.ApplicationID;
         }
         void SetOverlayNotificationPosition(uint32_t eNotificationPosition)
         {
@@ -142,7 +142,7 @@ namespace Steam
         const char *GetSteamUILanguage()
         {
             Traceprint();
-            return Global.Language.c_str();
+            return Steam.Locale.c_str();
         }
         bool IsSteamRunningInVR()
         {

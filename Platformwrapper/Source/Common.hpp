@@ -6,56 +6,67 @@
 
 #pragma once
 #include <Stdinclude.hpp>
-using Blob = std::basic_string<uint8_t>;
-using Blob_view = std::basic_string_view<uint8_t>;
 
 // Helper to create 'classes' when needed.
 using Fakeclass_t = struct { void *VTABLE[70]; };
 
-// Ayria exports.
+// Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
-    void *Modulehandle;
+    HMODULE Modulehandle{};
 
-    // Client information.
-    void(__cdecl *getClientID)(unsigned int *ClientID);
-    void(__cdecl *getClientname)(const char **Clientname);
-    void(__cdecl *getClientticket)(const char **Clientticket);
+    // Create a functionID from the name of the service.
+    static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };
 
-    // Console interaction, callback = void f(int argc, const char **argv);
-    void(__cdecl *addConsolemessage)(const char *String, unsigned int Colour);
-    void(__cdecl *addConsolefunction)(const char *Name, void *Callback);
-    void(__cdecl *execConsolestring)(const char *Commandline);
+    // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
+    void(__cdecl *addConsolemessage)(const wchar_t *String, unsigned int Colour);
+    void(__cdecl *addConsolecommand)(const wchar_t *Name, const void *Callback);
+    void(__cdecl *execCommandline)(const wchar_t *String);
 
-    // Network interaction, callback = void f(const char *Content);
-    void(__cdecl *addNetworklistener)(const char *Subject, void *Callback);
-    void(__cdecl *addNetworkbroadcast)(const char *Subject, const char *Message);
+    // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
+    void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
 
-    // Social interactions, returns JSON.
-    void(__cdecl *getLocalplayers)(const char **Playerlist);
-    void(__cdecl *getFriends)(const char **Friendslist);
-    void(__cdecl *setFriends)(const char *Friendslist);
+    // FunctionID = FNV1_32("Service name"); ID 0 / Invalid = List all available.
+    const char *(__cdecl *API_Client)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Social)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Network)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Matchmake)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Fileshare)(uint32_t FunctionID, const char *JSONString);
+
+    Ayriamodule_t()
+    {
+        #if defined(NDEBUG)
+        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        #else
+        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+        #endif
+        assert(Modulehandle);
+
+        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
+        Import(addConsolemessage);
+        Import(addConsolecommand);
+        Import(execCommandline);
+        Import(addNetworklistener);
+        Import(API_Client);
+        Import(API_Social);
+        Import(API_Network);
+        Import(API_Matchmake);
+        Import(API_Fileshare);
+        #undef Import
+    }
 };
+extern Ayriamodule_t Ayria;
 
-// Keep the global state together.
-#pragma pack(push, 1)
-struct Globalstate_t
+// Common functionality.
+namespace Matchmaking
 {
-    // Ayria helper.
-    Ayriamodule_t Ayria;
+    struct Session_t { uint32_t HostID; nlohmann::json Hostinfo, Gameinfo, Playerdata, Sessiondata; };
+    std::vector<Session_t> *getNetworkservers();
+    Session_t *getLocalsession();
 
-    // Core info.
-    uint64_t UserID;
-    std::string Username;
-    uint64_t Startuptimestamp;
-
-    // Steam extensions.
-    std::string Path;
-    std::string Language;
-    uint32_t ApplicationID;
-};
-extern Globalstate_t Global;
-#pragma pack(pop)
+    void doFrame();
+    void Update();
+}
 
 // Broadcast events over Ayrias communications layer.
 namespace Communication
@@ -64,88 +75,4 @@ namespace Communication
     void Broadcastmessage(std::string_view Eventtype, uint64_t TargetID, Bytebuffer &&Data);
     void addMessagecallback(std::string_view Eventtype, Eventcallback_t Callback);
     void __cdecl Messagehandler(const char *Request);
-}
-
-// Manage friends and such.
-namespace Social
-{
-    struct Friend_t : ISerializable
-    {
-        uint32_t Lastmodified{};
-
-        std::string Avatar;
-        uint64_t UserID;
-        std::string Username;
-        enum : uint8_t { Online = 1, Offline = 2, Busy = 3, } Status;
-
-        void Serialize(Bytebuffer &Buffer) override
-        {
-            Buffer.Write(Status);
-            Buffer.Write(UserID);
-            Buffer.Write(Avatar);
-            Buffer.Write(Username);
-        }
-        void Deserialize(Bytebuffer &Buffer) override
-        {
-            Buffer.Read(Status);
-            Buffer.Read(UserID);
-            Buffer.Read(Avatar);
-            Buffer.Read(Username);
-        }
-    };
-
-    std::vector<Friend_t> getFriends();
-    void Announceupdate(Friend_t Delta);
-    void Announcequit();
-}
-
-// Basic matchmaking.
-namespace Matchmaking
-{
-    struct Server_t : ISerializable
-    {
-        uint32_t Lastmodified{};
-
-        uint16_t Port;
-        uint32_t Address;
-        uint64_t ServerID;
-        uint32_t Maxplayers;
-        std::string Gametags;
-        std::vector<uint64_t> Players;
-
-        nlohmann::json Session{ nlohmann::json::object() };
-        template<typename T> void Set(std::string &&Property, T Value) { Session[Property] = Value; }
-        template<typename T> T Get(std::string &&Property, T Defaultvalue) { return Session.value(Property, Defaultvalue); }
-
-        void Serialize(Bytebuffer &Buffer) override
-        {
-            Buffer.Write(Port);
-            Buffer.Write(Address);
-            Buffer.Write(ServerID);
-            Buffer.Write(Maxplayers);
-            Buffer.Write(Players);
-            Buffer.Write(Gametags);
-            Buffer.Write(Base64::Encode(Session.dump()));
-        }
-        void Deserialize(Bytebuffer &Buffer) override
-        {
-            Buffer.Read(Port);
-            Buffer.Read(Address);
-            Buffer.Read(ServerID);
-            Buffer.Read(Maxplayers);
-            Buffer.Read(Players);
-            Buffer.Read(Gametags);
-
-            try
-            {
-                const auto Sessioninfo = Base64::Decode(Buffer.Read<std::string>());
-                Session = nlohmann::json::parse(Sessioninfo.c_str());
-            } catch(...){}
-        }
-    };
-
-    void Announceupdate(Server_t Delta = {});
-    std::vector<Server_t> getServers();
-    Server_t *Localserver();
-    void Announcequit();
 }
