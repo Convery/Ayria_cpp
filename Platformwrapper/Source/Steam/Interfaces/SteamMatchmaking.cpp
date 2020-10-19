@@ -146,7 +146,7 @@ namespace Steam
             {
                 for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
                 {
-                    if (Item.value("PlayerID", 0) == UserID)
+                    if (Item.value("PlayerID", uint32_t()) == UserID)
                     {
                         static std::string Result;
                         Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
@@ -163,7 +163,7 @@ namespace Steam
                     {
                         for (const auto &Item : Session.Playerdata)
                         {
-                            if (Item.value("PlayerID", 0) == UserID)
+                            if (Item.value("PlayerID", uint32_t()) == UserID)
                             {
                                 static std::string Result;
                                 Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
@@ -212,7 +212,7 @@ namespace Steam
             {
                 for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
                 {
-                    const auto ID = Item.value("PlayerID", 0);
+                    const auto ID = Item.value("PlayerID", uint32_t());
                     if (ID) Users.push_back(ID);
                 }
             }
@@ -224,7 +224,7 @@ namespace Steam
                     {
                         for (const auto &Item : Session.Playerdata)
                         {
-                            const auto ID = Item.value("PlayerID", 0);
+                            const auto ID = Item.value("PlayerID", uint32_t());
                             if (ID) Users.push_back(ID);
                         }
 
