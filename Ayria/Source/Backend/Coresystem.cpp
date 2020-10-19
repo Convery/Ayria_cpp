@@ -96,7 +96,6 @@ namespace Backend
         Clientinfo::API_Initialize();
         Backend::API_Initialize();
         Social::API_Initialize();
-        Clientinfo::Initialize();
 
         // Default network groups.
         Joinmessagegroup(Generalport);

@@ -1,4 +1,4 @@
-/*
+ï»¿/*
     Initial author: Convery (tcn@ayria.se)
     Started: 2020-09-18
     License: MIT
@@ -33,7 +33,7 @@ namespace Console
             }
             if (Message == WM_CHAR)
             {
-                if (wParam == L'§' || wParam == L'½' || wParam == L'~' || wParam == VK_OEM_5)
+                if (wParam == L'Â§' || wParam == L'Â½' || wParam == L'~' || wParam == VK_OEM_5)
                     return 0;
             }
 

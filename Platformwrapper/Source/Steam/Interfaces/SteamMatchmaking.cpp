@@ -96,7 +96,7 @@ namespace Steam
                 if (HostID == Session.HostID)
                 {
                     if (iMember > Session.Playerdata.size()) return k_steamIDNil;
-                    return CSteamID(Session.Playerdata.at(iMember).value("PlayerID", 0), 1, k_EAccountTypeIndividual);
+                    return CSteamID(Session.Playerdata.at(iMember).value("PlayerID", uint32_t()), 1, k_EAccountTypeIndividual);
                 }
             }
 
@@ -175,6 +175,7 @@ namespace Steam
                     }
                 }
             }
+            return "";
         }
         void SetLobbyMemberData(CSteamID steamIDLobby, const char *pchKey, const char *pchValue) const
         {
@@ -188,7 +189,7 @@ namespace Steam
                 Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
                 for (auto &Player : Matchmaking::getLocalsession()->Playerdata)
                 {
-                    if (Player.value("PlayerID", 0) == UserID)
+                    if (Player.value("PlayerID", uint32_t()) == UserID)
                     {
                         if (!Player.contains("Steamdata")) Player["Steamdata"] = nlohmann::json::object();
                         Player["Steamdata"][pchKey] = pchValue;
@@ -239,7 +240,7 @@ namespace Steam
                 auto Object = nlohmann::json::object();
                 Object["Type"] = Hash::FNV1_32("Steamlobbychat");
                 Object["Message"] = Safestring;
-                Object["Users"] = Users;
+                Object["Clients"] = Users;
 
                 Callback(Ayria.toFunctionID("SendIM"), Object.dump().c_str());
             }
@@ -256,12 +257,13 @@ namespace Steam
                 Object["Count"] = 1;
 
                 const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
-                if (!Result.contains("Message")) return 0;
+                const auto Value = Result.empty() ? nlohmann::json::object() : Result.at(0);
+                if (!Value.contains("Message")) return 0;
 
-                *peChatEntryType = Result.value("Type", 0);
-                pSteamIDUser->Set(Result.value("SenderID", 0), 1, k_EAccountTypeIndividual);
-                std::strncpy((char *)pvData, Result["Message"].get<std::string>().c_str(), cubData);
-                return std::strlen((char *)pvData);
+                *peChatEntryType = Value.value("Type", 0);
+                pSteamIDUser->Set(Value.value("Sender", 0), 1, k_EAccountTypeIndividual);
+                std::strncpy((char *)pvData, Value["Message"].get<std::string>().c_str(), cubData);
+                return (int)std::strlen((char *)pvData);
             }
 
             return 0;

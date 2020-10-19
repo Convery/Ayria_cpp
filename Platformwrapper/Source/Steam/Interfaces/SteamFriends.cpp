@@ -77,7 +77,7 @@ namespace Steam
 
             for (const auto &Friend : getFriends())
             {
-                if (Friend.value("UserID", 0) == FriendID)
+                if (Friend.value("UserID", uint32_t()) == FriendID)
                     return true;
             }
             return false;
@@ -92,7 +92,7 @@ namespace Steam
 
             for (const auto &Client : getNetwork())
             {
-                if (Client.value("ClientID", 0) == FriendID)
+                if (Client.value("ClientID", uint32_t()) == FriendID)
                     return 1; // Online
             }
 
@@ -109,7 +109,7 @@ namespace Steam
 
             for (const auto &Friend : getFriends())
             {
-                if (Friend.value("UserID", 0) == FriendID)
+                if (Friend.value("UserID", uint32_t()) == FriendID)
                 {
                     static std::string Result;
                     Result = Friend.value("Username", "Unknown");
@@ -139,7 +139,7 @@ namespace Steam
             for (const auto &Friend : getFriends())
             {
                 if (iFriend--) continue;
-                return uint64_t(Friend.value("UserID", 0));
+                return uint64_t(Friend.value("UserID", uint32_t()));
             }
             for (const auto &Client : getNetwork())
             {
@@ -154,7 +154,7 @@ namespace Steam
             if (const auto Callback = Ayria.API_Social)
             {
                 auto Object = nlohmann::json::object();
-                Object["UserID"] = steamIDFriend.GetAccountID();
+                Object["Client"] = steamIDFriend.GetAccountID();
                 Object["Type"] = eFriendMsgType;
                 Object["Message"] = pchMsgBody;
 
@@ -180,16 +180,17 @@ namespace Steam
             if (const auto Callback = Ayria.API_Social)
             {
                 auto Object = nlohmann::json::object();
-                Object["SenderID"] = steamIDFriend.GetAccountID();
+                Object["Sender"] = steamIDFriend.GetAccountID();
                 Object["Offset"] = iChatID;
                 Object["Count"] = 1;
 
                 const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
-                if (!Result.contains("Message")) return 0;
+                const auto Value = Result.empty() ? nlohmann::json::object() : Result.at(0);
+                if (!Value.contains("Message")) return 0;
 
-                *peFriendMsgType = Result.value("Type", 0);
-                std::strncpy((char *)pvData, Result["Message"].get<std::string>().c_str(), cubData);
-                return std::strlen((char *)pvData);
+                *peFriendMsgType = Value.value("Type", uint32_t());
+                std::strncpy((char *)pvData, Value["Message"].get<std::string>().c_str(), cubData);
+                return (int)std::strlen((char *)pvData);
             }
 
             return 0;

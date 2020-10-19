@@ -64,5 +64,7 @@ namespace Clientinfo
     {
         API::Registerhandler_Client("Accountinfo", Accountinfo);
         API::Registerhandler_Network("LANClients", LANClients);
+
+        Initialize();
     }
 }
