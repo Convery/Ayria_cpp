@@ -11,8 +11,9 @@ namespace Clientinfo
 {
     struct Ayriaclient
     {
+        uint32_t NodeID;    // Ephemeral identifier.
         uint32_t ClientID;
-        char Username[20];
+        char Username[16];
         char Locale[8];
     };
 
@@ -23,6 +24,15 @@ namespace Clientinfo
     // Initialize and update.
     void Initialize();
     void doFrame();
+
+    // Helper for network messages.
+    inline uint32_t toClientID(uint32_t NodeID)
+    {
+        for (const auto &Client : *getNetworkclients())
+            if (Client.NodeID == NodeID)
+                return Client.ClientID;
+        return 0;
+    }
 
     // Add API handlers.
     inline std::string __cdecl Accountinfo(const char *)

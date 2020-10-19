@@ -9,7 +9,7 @@
 
 namespace Clientinfo
 {
-    Ayriaclient Localclient{ 0xDEADC0DE, "Ayria", "English" };
+    Ayriaclient Localclient{ 0, 0xDEADC0DE, "Ayria", "English" };
     std::vector<Ayriaclient> Networkclients;
 
     // Backend access.
@@ -22,9 +22,9 @@ namespace Clientinfo
         const auto String = Accountinfo(nullptr);
         Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
     }
-    static void __cdecl Discoveryhandler(uint32_t, const char *JSONString)
+    static void __cdecl Discoveryhandler(uint32_t NodeID, const char *JSONString)
     {
-        Ayriaclient Newclient{};
+        Ayriaclient Newclient{ NodeID };
         const auto Object = ParseJSON(JSONString);
         Newclient.ClientID = Object.value("ClientID", uint32_t());
 
@@ -50,10 +50,10 @@ namespace Clientinfo
             Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
 
             if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
-                std::strncpy(Localclient.Locale, Locale.c_str(), 7);
+                std::strncpy(Localclient.Locale, Locale.c_str(), 8);
 
             if (const auto Username = Object.value("Username", std::string()); !Username.empty())
-                std::strncpy(Localclient.Username, Username.c_str(), 19);
+                std::strncpy(Localclient.Username, Username.c_str(), 16);
 
             // Warn the user about bad configurations.
             if (!Object.contains("ClientID") || !Object.contains("Username"))
