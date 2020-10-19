@@ -128,7 +128,7 @@ namespace FS
             #if defined(_WIN32)
             std::FILE *Filehandle = _wfopen(Path.data(), L"rb");
             #else
-            std::FILE *Filehandle = std::fopen(Path.data(), "rb");
+            std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "rb");
             #endif
             if (!Filehandle) return {};
 
@@ -175,7 +175,7 @@ namespace FS
         #if defined(_WIN32)
         std::FILE *Filehandle = _wfopen(Path.data(), L"wb");
         #else
-        std::FILE *Filehandle = std::fopen(Path.data(), "wb");
+        std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "wb");
         #endif
         if (!Filehandle) return false;
 
@@ -186,8 +186,6 @@ namespace FS
     template<typename T>
     inline bool Writefile(std::wstring_view Path, const std::basic_string<T> &Buffer)
     { return Writefile(Path, std::basic_string_view<T>(Buffer)); }
-
-
 
     // Directory iteration, filename if not recursive; else full path.
     [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Directorypath, std::string_view Criteria, bool Recursive = false)
@@ -267,7 +265,7 @@ namespace FS
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #else
         struct stat Buffer;
-        if (stat(Path.data(), &Buffer) == -1) return {};
+        if (stat(toNarrow(Path).c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #endif
     }
