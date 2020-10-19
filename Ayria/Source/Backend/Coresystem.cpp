@@ -65,9 +65,6 @@ namespace Backend
     }
     static DWORD __stdcall Backgroundthread(void *)
     {
-        // Mainly IO bound thread, might as well sleep a lot.
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
-
         // Name this thread for easier debugging.
         setThreadname("Ayria_Background");
 
@@ -80,6 +77,7 @@ namespace Backend
             Updatenetworking();
 
             // TODO(tcn): Get async-job requests and process them here.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         return 0;
