@@ -40,7 +40,8 @@ struct bfloat16_t
     }
 
     constexpr bfloat16_t() = default;
-    template<typename T> constexpr bfloat16_t(T Input)
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T>, T>>
+    constexpr bfloat16_t(T Input)
     {
         if constexpr (std::is_same_v<T, uint16_t>) Value = Input;
         else if constexpr (std::is_floating_point_v<T>) *this = Round(Input);
