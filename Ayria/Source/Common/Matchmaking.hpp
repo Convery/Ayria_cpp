@@ -58,6 +58,9 @@ namespace Matchmaking
         auto Session = getLocalsession();
         static std::string Result;
 
+        // Sanity check, the user has not set any data yet.
+        if (Session->HostID == 0) [[unlikely]] return "{}";
+
         Object["HostID"] = Session->HostID;
         Object["Hostinfo"] = Session->Hostinfo;
         Object["Gameinfo"] = Session->Gameinfo;

@@ -41,6 +41,9 @@ namespace Matchmaking
     }
     Session_t *getLocalsession()
     {
+        // Ensure that we don't update in the middle of a frame.
+        if (isDirty) [[likely]] return &Localsession;
+
         const auto Currenttime = GetTickCount();
         if ((Currenttime - Lastlocalupdate) > 2000)
         {
