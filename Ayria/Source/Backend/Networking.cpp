@@ -71,7 +71,7 @@ namespace Backend
     }
 
     // Just for clearer codes..
-    using Message_t = struct { uint32_t Messagetype, RandomID; char Payload[1]; };
+    using Message_t = struct { uint32_t RandomID, Messagetype; char Payload[1]; };
 
     // Poll the internal socket(s).
     void Updatenetworking()
