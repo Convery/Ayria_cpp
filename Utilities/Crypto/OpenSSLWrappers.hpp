@@ -186,6 +186,41 @@ namespace PK_RSA
         return Result;
     }
 
+    inline std::string Encrypt(std::string_view Input, RSA *Key)
+    {
+        std::string Result; Result.resize(Input.size());
+        if (Input.size() != RSA_public_encrypt((int)Input.size(), (const uint8_t *)Input.data(),
+                                               (uint8_t *)Result.data(), Key, RSA_NO_PADDING))
+            return "";
+
+        return Result;
+    }
+    inline std::string Decrypt(std::string_view Input, RSA *Key)
+    {
+        std::string Result; Result.resize(Input.size());
+        if (Input.size() != RSA_private_decrypt((int)Input.size(), (const uint8_t *)Input.data(),
+                                                (uint8_t *)Result.data(), Key, RSA_NO_PADDING))
+            return "";
+
+        return Result;
+    }
+    inline std::string Encrypt(std::string_view Input, std::string_view Publickey)
+    {
+        const auto Keypointer = Publickey.data();
+        const auto Key = d2i_RSA_PUBKEY(NULL, (const uint8_t **)&Keypointer, (long)Publickey.size());
+        if (!Key) return "";    // WTF?
+
+        return Encrypt(Input, Key);
+    }
+    inline std::string Decrypt(std::string_view Input, std::string_view Privatekey)
+    {
+        const auto Keypointer = Privatekey.data();
+        const auto Key = d2i_RSAPrivateKey(NULL, (const uint8_t **)&Keypointer, (long)Privatekey.size());
+        if (!Key) return "";    // WTF?
+
+        return Decrypt(Input, Key);
+    }
+
     inline std::string getPublickey(RSA *Key)
     {
         const auto Bio = BIO_new(BIO_s_mem());
@@ -198,6 +233,32 @@ namespace PK_RSA
         BIO_free_all(Bio);
         return Result;
     }
+    inline std::string getPrivatekey(RSA *Key)
+    {
+        const auto Bio = BIO_new(BIO_s_mem());
+        i2d_RSAPrivateKey_bio(Bio, Key);
+
+        const auto Length = BIO_pending(Bio);
+        std::string Result; Result.resize(Length);
+        BIO_read(Bio, Result.data(), Length);
+
+        BIO_free_all(Bio);
+        return Result;
+    }
+
+    // We send data without padding, so add your own for security if needed.
+    inline std::string RSAPadding(std::string_view Input, std::string_view Padding, size_t Finallength)
+    {
+        std::string Result; Result.resize(Finallength);
+
+        if (1 != RSA_padding_add_PKCS1_OAEP((uint8_t *)Result.data(), (int)Finallength,
+                                            (const uint8_t *)Input.data(), (int)Input.size(),
+                                            (const uint8_t *)Padding.data(), (int)Padding.size()))
+            return "";
+
+        return Result;
+    }
+
     inline std::string fromLibtom(std::string_view Key)
     {
         std::string Opensslkey;
