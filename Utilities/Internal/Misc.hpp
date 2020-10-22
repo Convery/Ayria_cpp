@@ -34,11 +34,11 @@ struct Enumerate
     {
         Indextype Index;
         Iteratortype Iterator;
-        Internaliterator(Iteratortype &&Iterator, Indextype Start = {}) : Iterator(Iterator), Index(Start) {};
 
-        Internaliterator &operator++() { Iterator++; Index++; return *this; };
-        auto operator*() const { return std::forward_as_tuple(Index, *Iterator); };
+        Internaliterator(Iteratortype &&Iterator, Indextype Start = {}) : Iterator(Iterator), Index(Start) {};
         bool operator!=(const Internaliterator &Right) const { return Iterator != Right.Iterator; };
+        auto operator*() const { return std::forward_as_tuple(Index, *Iterator); };
+        Internaliterator &operator++() { Iterator++; Index++; return *this; };
     };
 
     // STD accessors.
@@ -51,12 +51,10 @@ template <typename Valuetype, typename Steptype = int>
 struct Range
 {
     using value_type = Valuetype;
-    Valuetype Current;
-    Valuetype Min;
-    Valuetype Max;
+    Valuetype Current, Max;
     Steptype Step;
 
-    constexpr Range(Valuetype Start, Valuetype End, Steptype Step = 1) : Current(Start), Min(Start), Max(End), Step(Step) {};
+    constexpr Range(Valuetype Start, Valuetype End, Steptype Step = 1) : Current(Start), Max(End), Step(Step) {};
     constexpr bool operator !=(Range Right) const
     {
         if constexpr (std::is_arithmetic_v<Valuetype>) return Current < Right.Current;
