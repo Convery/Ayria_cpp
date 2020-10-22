@@ -20,7 +20,7 @@
 // Python-esque constructs for loops.
 #pragma region Python
 
-// for(const auto &[Index, Value] : Enumerate(std::vector({ 1, 2, 3, 4 }))) ...
+// for (const auto &[Index, Value] : Enumerate(std::vector({ 1, 2, 3, 4 }))) ...
 template <typename Iteratortype, typename Indextype = size_t>
 struct Enumerate
 {
@@ -55,7 +55,7 @@ struct Range
     Steptype Step;
 
     constexpr Range(Valuetype Start, Valuetype End, Steptype Step = 1) : Current(Start), Max(End), Step(Step) {};
-    constexpr bool operator !=(Range Right) const
+    constexpr bool operator !=(const Range &Right) const
     {
         if constexpr (std::is_arithmetic_v<Valuetype>) return Current < Right.Current;
         else return Current != Right.Current;
