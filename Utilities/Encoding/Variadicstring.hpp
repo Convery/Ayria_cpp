@@ -32,7 +32,7 @@ template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Arg
 template<typename ... Args> [[nodiscard]] std::wstring va(std::wstring_view Format, Args ...args)
 {
     const auto Size = 1 + _snwprintf(nullptr, 0, Format.data(), args ...);
-    auto Buffer = std::make_unique<char[]>(Size + 1);
+    auto Buffer = std::make_unique<wchar_t[]>(Size + 1);
 
     _snwprintf(Buffer.get(), Size, Format.data(), args ...);
     return Buffer.get();
@@ -40,7 +40,7 @@ template<typename ... Args> [[nodiscard]] std::wstring va(std::wstring_view Form
 template<typename ... Args> [[nodiscard]] std::wstring va(const wchar_t *Format, Args ...args)
 {
     const auto Size = 1 + _snwprintf(nullptr, 0, Format, args ...);
-    auto Buffer = std::make_unique<char[]>(Size + 1);
+    auto Buffer = std::make_unique<wchar_t[]>(Size + 1);
 
     _snwprintf(Buffer.get(), Size, Format, args ...);
     return Buffer.get();
