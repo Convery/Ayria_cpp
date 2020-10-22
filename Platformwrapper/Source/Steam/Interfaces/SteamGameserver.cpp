@@ -148,7 +148,7 @@ namespace Steam
 
             for (auto &Object : Session->Playerdata)
             {
-                if (Object.value("PlayerID", 0) == PlayerID)
+                if (Object.value("PlayerID", uint32_t()) == PlayerID)
                 {
                     Object["Playername"] = pchPlayerName;
                     Object["Score"] = uScore;

@@ -38,7 +38,7 @@ namespace Steam
             if (!Object["Appdata"].contains(pchKey)) return 0;
 
             std::strncpy(pchValue, Object["Appdata"][pchKey].get<std::string>().c_str(), cchValueMax);
-            return std::strlen(pchValue);
+            return (int)std::strlen(pchValue);
         }
         bool BIsSubscribed()
         {
@@ -91,7 +91,7 @@ namespace Steam
 
             for (const auto &DLC : Object["DLC"])
             {
-                if (DLC.value("ID", 0) == nAppID)
+                if (DLC.value("ID", uint32_t()) == nAppID)
                 {
                     return FS::Fileexists(DLC.value("Filename", "3123123123123"));
                 }
@@ -112,7 +112,7 @@ namespace Steam
         {
             const auto Object = getAppdata();
             if (!Object.contains("DLC")) return 0;
-            return Object["DLC"].size();
+            return (int)Object["DLC"].size();
         }
         bool BGetDLCDataByIndex(int iDLC, uint32_t *pAppID, bool *pbAvailable, char *pchName, int cchNameBufferSize)
         {
