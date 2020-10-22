@@ -409,8 +409,21 @@ template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
     // We only use 120 bits per __m128 for RGB.
     constexpr auto Pixelsize = 3 + hasAlpha;
     constexpr auto Stride = 15 + hasAlpha;
-    const auto Remaining = Size % Stride;
     const auto Count128 = Size / Stride;
+
+    // NOTE(tcn): MSVC has issues optimizing Size % Stride, so we do it manually.
+    const auto Remaining = [=]()
+    {
+        if constexpr (hasAlpha) return Size & (Stride - 1);
+        else
+        {
+            uint32_t Rem = 0;
+            for (Rem = Size; Size > Stride; Size = Rem)
+                for (Rem = 0; Size; Size >>= 4)
+                    Rem += Size & Stride;
+            return Rem == Stride ? 0 : Rem;
+        }
+    }();
 
     // Bulk operations.
     for (size_t i = 0; i < Count128; ++i)
