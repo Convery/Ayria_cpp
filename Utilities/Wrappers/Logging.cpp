@@ -10,18 +10,18 @@ namespace Logging
 {
     Defaultmutex Threadguard;
 
-    void toFile(std::string_view Filename, std::string_view Message)
+    void toFile(std::string_view Filename, std::u8string_view Message)
     {
         std::lock_guard _(Threadguard);
 
         // Open the logfile on disk and push to it.
-        if (const auto Filehandle = std::fopen(Filename.data(), "a"))
+        if (const auto Filehandle = std::fopen(Filename.data(), "a+b"))
         {
             std::fwrite(Message.data(), Message.size(), 1, Filehandle);
             std::fclose(Filehandle);
         }
     }
-    void toStream(std::string_view Message)
+    void toStream(std::u8string_view Message)
     {
         std::lock_guard _(Threadguard);
 
@@ -30,23 +30,25 @@ namespace Logging
 
         // Duplicate to NT.
         #if defined(_WIN32) && !defined(NDEBUG)
-        OutputDebugStringA(Message.data());
+        OutputDebugStringW(Encoding::toWide(Message).c_str());
         #endif
     }
 
     static HMODULE Console = nullptr;
-    void toConsole(std::string_view Message)
+    void toConsole(std::u8string_view Message)
     {
         std::lock_guard _(Threadguard);
-        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
-        if (!Console) Console = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
-        if (!Console) Console = GetModuleHandleA(NULL);
+        if (!Console) Console = GetModuleHandleW(Build::is64bit ? L"./Ayria/Ayria64d.dll" : L"./Ayria/Ayria32d.dll");
+        if (!Console) Console = GetModuleHandleW(Build::is64bit ? L"./Ayria/Ayria64.dll" : L"./Ayria/Ayria32.dll");
+        if (!Console) Console = GetModuleHandleW(NULL);
 
         if (Console)
         {
             if (const auto Address = GetProcAddress(Console, "addConsolemessage"))
             {
-                reinterpret_cast<void (__cdecl *)(const wchar_t *, int)>(Address)(toWide(Message).c_str(), 0);
+                // ASCII or UTF8 string.
+                reinterpret_cast<void(__cdecl *)(const void *, unsigned int, unsigned int)>
+                    (Address)(Message.data(), (unsigned int)Message.size(), 0);
             }
         }
     }
