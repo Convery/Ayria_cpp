@@ -9,7 +9,7 @@
 
 namespace Logging
 {
-    extern void Print(char Prefix, std::string_view Message);
+    extern void Print(const char Prefix, std::string_view Message);
 }
 
 struct Debugmutex
