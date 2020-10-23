@@ -18,9 +18,9 @@ namespace Steam
         time_t Startuptime;
         uint32_t ApplicationID;
 
-        std::string Locale;
-        std::string Username;
-        std::string Installpath;
+        String_t Locale;
+        String_t Username;
+        String_t Installpath;
     };
     extern Steaminfo_t Steam;
 

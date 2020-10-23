@@ -61,24 +61,25 @@ namespace Steam
         const char *GetCurrentGameLanguage()
         {
             Traceprint();
-            return Steam.Locale.c_str();
+            { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
         }
         const char *GetAvailableGameLanguages()
         {
             const auto Object = getAppdata();
-            if (!Object.contains("Languages")) return Steam.Locale.c_str();
+            if (!Object.contains("Languages")) { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
 
-            static std::string Result{};
-            if (!Result.empty()) return Result.c_str();
-            Result += Steam.Locale;
+            static std::u8string Result{};
+            if (!Result.empty()) return (char *)Result.c_str();
 
+            String_t Temp = Steam.Locale;
             for (const auto &Item : Object["Languages"])
             {
-                Result += ',';
-                Result += Item;
+                Temp += u8","s;
+                Temp += Item.get<std::u8string>();
             }
 
-            return Result.c_str();
+            Result = Temp.asUTF8();
+            return (char *)Result.c_str();
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {

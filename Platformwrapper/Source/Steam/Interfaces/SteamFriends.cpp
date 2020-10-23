@@ -32,12 +32,13 @@ namespace Steam
     {
         const char *GetPersonaName()
         {
-            return Steam.Username.c_str();
+            static auto Username = Steam.Username.asUTF8();
+            return (char *)Username.c_str();
         }
         void SetPersonaName0(const char *pchPersonaName)
         {
             Traceprint();
-            Steam.Username = pchPersonaName;
+            Steam.Username = std::string(pchPersonaName);
         }
         uint32_t GetPersonaState()
         {

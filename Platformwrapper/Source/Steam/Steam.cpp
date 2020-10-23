@@ -64,16 +64,16 @@ namespace Steam
 
             // Ask Ayria nicely for data on the client.
             {
-                Steam.Username = "Ayria";
-                Steam.Locale = "english";
+                Steam.Username = "Ayria"s;
+                Steam.Locale = "english"s;
                 Steam.XUID = 0x1100001DEADC0DEULL;
 
                 if (const auto Callback = Ayria.API_Client)
                 {
                     const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
                     Steam.XUID = 0x0110000100000000ULL | Object.value("ClientID", 0xDEADC0DE);
-                    Steam.Username = Object.value("Username", "Ayria");
-                    Steam.Locale = Object.value("Locale", "english");
+                    Steam.Username = Object.value("Username", u8"Ayria"s);
+                    Steam.Locale = Object.value("Locale", u8"english"s);
                 }
             }
 
@@ -87,7 +87,7 @@ namespace Steam
                 {
                     unsigned long Size = 260; unsigned char Buffer[260]{};
                     RegQueryValueExA(Registrykey, "InstallPath", NULL, NULL, Buffer, &Size);
-                    Steam.Installpath = (char *)Buffer;
+                    Steam.Installpath = std::u8string((char8_t *)Buffer);
                     RegCloseKey(Registrykey);
                 }
             }
@@ -105,10 +105,10 @@ namespace Steam
                     DWORD UserID = Steam.XUID.GetAccountID();
 
                     // Legacy wants the dlls loaded.
-                    const std::string Clientpath64 = Steam.Installpath + "\\steamclient64.dll";
-                    const std::string Clientpath32 = Steam.Installpath + "\\steamclient.dll";
-                    if (Build::is64bit) LoadLibraryA(Clientpath64.c_str());
-                    else LoadLibraryA(Clientpath32.c_str());
+                    const auto Clientpath64 = Steam.Installpath.asUTF8() + u8"\\steamclient64.dll"s;
+                    const auto Clientpath32 = Steam.Installpath.asUTF8() + u8"\\steamclient.dll"s;
+                    if (Build::is64bit) LoadLibraryA((char *)Clientpath64.c_str());
+                    else LoadLibraryA((char *)Clientpath32.c_str());
 
                     RegSetValueExA(Registrykey, "pid", NULL, REG_DWORD, (LPBYTE)&ProcessID, sizeof(DWORD));
                     RegSetValueExA(Registrykey, "ActiveUser", NULL, REG_DWORD, (LPBYTE)&UserID, sizeof(DWORD));
@@ -136,11 +136,11 @@ namespace Steam
             #if defined(_WIN32)
             if (std::strstr(GetCommandLineA(), "-overlay"))
             {
-                constexpr auto Gameoverlay = Build::is64bit ? "gameoverlayrenderer64.dll" : "gameoverlayrenderer.dll";
-                constexpr auto Clientlibrary = Build::is64bit ? "steamclient64.dll" : "steamclient.dll";
+                constexpr auto Gameoverlay = Build::is64bit ? u8"gameoverlayrenderer64.dll" : u8"gameoverlayrenderer.dll";
+                constexpr auto Clientlibrary = Build::is64bit ? u8"steamclient64.dll" : u8"steamclient.dll";
 
-                LoadLibraryA((Steam.Installpath + Clientlibrary).c_str());
-                LoadLibraryA((Steam.Installpath + Gameoverlay).c_str());
+                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Clientlibrary).c_str());
+                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Gameoverlay).c_str());
             }
             #endif
 
@@ -157,8 +157,8 @@ namespace Steam
         EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
         EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
         EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
-        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { return Steam.Installpath.c_str(); }
         EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam.ApplicationID = unOwnAppID; return false; }
+        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { const auto Path = Steam.Installpath.asUTF8(); return (char *)Path.c_str(); }
 
         // Callback management.
         EXPORT_ATTR void SteamAPI_RunCallbacks()

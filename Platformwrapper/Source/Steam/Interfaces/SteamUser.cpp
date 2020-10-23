@@ -16,15 +16,15 @@ namespace Steam
     uint8_t Ticketdata[176]{};
 
     // Ayria-internal.
-    #pragma pack(push, 1)
-    struct Steamappticket
+    union Steamappticket
     {
-        uint8_t Identifier[6];
-        uint8_t SteamaccountID[8];
-        uint8_t Steamusername[17];
-        uint8_t Reserved;
+        uint8_t Raw[32];
+        struct
+        {
+            uint32_t AccountID;
+            char8_t Username[28];
+        };
     };
-    #pragma pack(pop)
 
     struct SteamUser
     {
@@ -213,7 +213,7 @@ namespace Steam
         bool SetLanguage(const char *pchLanguage)
         {
             Traceprint();
-            Steam.Locale = pchLanguage;
+            Steam.Locale = std::string(pchLanguage);
             return true;
         }
         void TrackAppUsageEvent0(CGameID gameID, uint32_t eAppUsageEvent, const char *pchExtraInfo = "")
@@ -341,10 +341,8 @@ namespace Steam
         uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude) const
         {
             // Fill the buffer with useful information.
-            ((Steamappticket *)Ticketdata)->Reserved = 0;
-            std::memcpy(&((Steamappticket *)Ticketdata)->Identifier, "Ayria", 6);
-            std::memcpy(&((Steamappticket *)Ticketdata)->SteamaccountID, &Steam.XUID, 8);
-            std::memcpy(&((Steamappticket *)Ticketdata)->Steamusername, Steam.Username.c_str(), Steam.Username.size());
+            ((Steamappticket *)Ticketdata)->AccountID = Steam.XUID.GetAccountID();
+            std::strncpy((char *)((Steamappticket *)Ticketdata)->Username, (char *)Steam.Username.asUTF8().c_str(), 28);
 
             // Append game data.
             Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));

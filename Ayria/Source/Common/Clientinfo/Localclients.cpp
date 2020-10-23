@@ -9,7 +9,7 @@
 
 namespace Clientinfo
 {
-    Ayriaclient Localclient{ 0xDEADC0DE, u8"Ayria"s, u8"English"s };
+    Ayriaclient Localclient{ 0xDEADC0DE, "Ayria"s, "English"s };
     std::vector<Networkclient> Networkclients;
 
     // Backend access.
