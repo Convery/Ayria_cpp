@@ -9,12 +9,12 @@
 
 namespace Clientinfo
 {
-    Ayriaclient Localclient{ 0, 0xDEADC0DE, "Ayria", "English" };
-    std::vector<Ayriaclient> Networkclients;
+    Ayriaclient Localclient{ 0xDEADC0DE, u8"Ayria"s, u8"English"s };
+    std::vector<Networkclient> Networkclients;
 
     // Backend access.
     Ayriaclient *getLocalclient() { return &Localclient; }
-    std::vector<Ayriaclient> *getNetworkclients() { return &Networkclients; }
+    std::vector<Networkclient> *getNetworkclients() { return &Networkclients; }
 
     // Internal helpers.
     static void Sendclientinfo()
@@ -24,15 +24,15 @@ namespace Clientinfo
     }
     static void __cdecl Discoveryhandler(uint32_t NodeID, const char *JSONString)
     {
-        Ayriaclient Newclient{ NodeID };
+        Networkclient Newclient{ NodeID };
         const auto Object = ParseJSON(JSONString);
         Newclient.ClientID = Object.value("ClientID", uint32_t());
 
-        if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
-            std::strncpy(Newclient.Locale, Locale.c_str(), 7);
+        if (const auto Locale = Object.value("Locale", std::u8string()); !Locale.empty())
+            std::memcpy(Newclient.Locale, Locale.data(), std::min(Locale.size(), size_t(7)));
 
-        if (const auto Username = Object.value("Username", std::string()); !Username.empty())
-            std::strncpy(Newclient.Username, Username.c_str(), 19);
+        if (const auto Username = Object.value("Username", std::u8string()); !Username.empty())
+            std::memcpy(Newclient.Username, Username.data(), std::min(Username.size(), size_t(31)));
 
         if (Newclient.ClientID && Newclient.Username[0])
         {
@@ -49,11 +49,11 @@ namespace Clientinfo
             const auto Object = ParseJSON(B2S(Filebuffer));
             Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
 
-            if (const auto Locale = Object.value("Locale", std::string()); !Locale.empty())
-                std::strncpy(Localclient.Locale, Locale.c_str(), 8);
+            if (const auto Locale = Object.value("Locale", std::u8string()); !Locale.empty())
+                Localclient.Locale = Locale;
 
-            if (const auto Username = Object.value("Username", std::string()); !Username.empty())
-                std::strncpy(Localclient.Username, Username.c_str(), 16);
+            if (const auto Username = Object.value("Username", std::u8string()); !Username.empty())
+                Localclient.Username = Username;
 
             // Warn the user about bad configurations.
             if (!Object.contains("ClientID") || !Object.contains("Username"))

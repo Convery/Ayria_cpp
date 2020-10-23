@@ -59,11 +59,7 @@ namespace Backend
         Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
 
         // Make a unique identifier for later.
-        if (!RandomID)
-        {
-            RandomID = Hash::FNV1_32(GetTickCount64() ^ Sendersocket);
-            Clientinfo::getLocalclient()->NodeID = RandomID;
-        }
+        if (!RandomID) RandomID = Hash::FNV1_32(GetTickCount64() ^ Sendersocket);
         Networkgroups[Port] = { Sendersocket, Receiversocket, Multicast };
 
         // TODO(tcn): Error checking.

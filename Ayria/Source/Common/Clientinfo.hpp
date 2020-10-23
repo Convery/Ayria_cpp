@@ -11,15 +11,21 @@ namespace Clientinfo
 {
     struct Ayriaclient
     {
+        uint32_t ClientID;
+        String_t Username;
+        String_t Locale;
+    };
+    struct Networkclient
+    {
         uint32_t NodeID;    // Ephemeral identifier.
         uint32_t ClientID;
-        char Username[16];
-        char Locale[8];
+        char8_t Username[32];
+        char8_t Locale[8];
     };
 
     // Backend access.
     Ayriaclient *getLocalclient();
-    std::vector<Ayriaclient> *getNetworkclients();
+    std::vector<Networkclient> *getNetworkclients();
 
     // Initialize and update.
     void Initialize();
@@ -40,11 +46,11 @@ namespace Clientinfo
         const auto Localclient = getLocalclient();
 
         auto Object = nlohmann::json::object();
-        Object["Locale"] = Localclient->Locale;
         Object["ClientID"] = Localclient->ClientID;
-        Object["Username"] = Localclient->Username;
+        Object["Locale"] = Localclient->Locale.asUTF8();
+        Object["Username"] = Localclient->Username.asUTF8();
 
-        return Object.dump();
+        return Object.dump(-1, ' ', true);
     }
     inline std::string __cdecl LANClients(const char *)
     {
@@ -54,11 +60,11 @@ namespace Clientinfo
         for (const auto &Client : Localnetwork)
         {
             Object["Locale"] = Client.Locale;
-            Object["ClientID"] = Client.ClientID;
             Object["Username"] = Client.Username;
+            Object["ClientID"] = Client.ClientID;
         }
 
-        return Object.dump();
+        return Object.dump(-1, ' ', true);
     }
     inline void API_Initialize()
     {

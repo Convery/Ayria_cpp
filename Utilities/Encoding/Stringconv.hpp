@@ -308,7 +308,9 @@ struct UTF8Char_t
         return *this;
     }
     wchar_t operator*() { return Internal; }
+
     operator wchar_t() const { return Internal; };
+    operator bool() const { return !!Internal; }
     operator std::u8string()
     {
         std::u8string Result{};
@@ -392,7 +394,15 @@ struct String_t
     String_t() = default;
     String_t(std::string_view Input) : Storage(Input.begin(), Input.end()) {}
     String_t(std::wstring_view Input) : Storage(Input.begin(), Input.end()) {}
+    String_t(const std::string &Input) : Storage(Input.begin(), Input.end()) {}
+    String_t(const std::wstring &Input) : Storage(Input.begin(), Input.end()) {}
     String_t(std::u8string_view Input)
+    {
+        const auto Wide = Encoding::toWide(Input);
+        Storage.resize(Wide.size());
+        std::move(Wide.begin(), Wide.end(), Storage.begin());
+    }
+    String_t(const std::u8string &Input)
     {
         const auto Wide = Encoding::toWide(Input);
         Storage.resize(Wide.size());
@@ -404,18 +414,8 @@ struct String_t
     std::u8string asUTF8() const { return Encoding::toUTF8({ (wchar_t *)Storage.data(), Storage.size() }); }
     std::wstring_view asView() const { return std::wstring_view((wchar_t *)Storage.data(), Storage.size()); }
 
-    String_t &operator=(std::string_view Input) { Storage = { Input.begin(), Input.end() }; return *this; }
-    String_t &operator=(std::wstring_view Input) { Storage = { Input.begin(), Input.end() }; return *this; }
     String_t &operator+=(std::string_view Input) { Storage.append(Input.begin(), Input.end()); return *this; }
     String_t &operator+=(std::wstring_view Input) { Storage.append(Input.begin(), Input.end()); return *this; }
-
-    String_t &operator=(std::u8string_view Input)
-    {
-        const auto Wide = Encoding::toWide(Input);
-        Storage.resize(Wide.size());
-        std::move(Wide.begin(), Wide.end(), Storage.begin());
-        return *this;
-    }
     String_t &operator+=(std::u8string_view Input)
     {
         const auto Wide = Encoding::toWide(Input);
