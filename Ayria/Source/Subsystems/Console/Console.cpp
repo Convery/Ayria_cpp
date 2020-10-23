@@ -146,7 +146,7 @@ namespace Console
             return true;
         })) return;
 
-        Functions.emplace_back(Name.data(), Callback);
+        Functions.emplace_back(Name, Callback);
     }
 
     #pragma endregion
@@ -185,21 +185,22 @@ namespace Console
     // Provide a C-API for external code.
     namespace API
     {
+        // ASCII or UTF8 strings.
         // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
-        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const wchar_t *Name, const void *Callback)
+        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const void *Name, unsigned int Length, const void *Callback)
         {
             assert(Name); assert(Callback);
-            Console::addConsolecommand(Name, (Callback_t)Callback);
+            Console::addConsolecommand(Encoding::toWide({ (char8_t *)Name, Length }), (Callback_t)Callback);
         }
-        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const wchar_t *String, unsigned int Colour)
+        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const void *String, unsigned int Length, unsigned int Colour)
         {
             assert(String);
-            Console::addConsolemessage(String, Colour);
+            Console::addConsolemessage(Encoding::toWide({ (char8_t *)String, Length }), Colour);
         }
-        extern "C" EXPORT_ATTR void __cdecl execCommandline(const wchar_t *String)
+        extern "C" EXPORT_ATTR void __cdecl execCommandline(const void *String, unsigned int Length)
         {
             assert(String);
-            Console::execCommandline(String, false);
+            Console::execCommandline(Encoding::toWide({ (char8_t *)String, Length }), false);
         }
     }
 
