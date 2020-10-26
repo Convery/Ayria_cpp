@@ -81,20 +81,17 @@ namespace Backend
         while (true)
         {
             // Notify the subsystems about a new frame.
-            Matchmaking::doFrame();
-            Updatenetworking();
-
             const auto Currenttime = time(NULL);
             for (auto &Task : Backgroundtasks)
             {
-                if ((Task.Last + Task.Period) > Currenttime) [[unlikely]]
+                if ((Task.Last + Task.Period) < Currenttime) [[unlikely]]
                 {
                     Task.Last = Currenttime;
                     Task.Callback();
                 }
             }
 
-            // TODO(tcn): Get async-job requests and process them here.
+            // Most tasks run with periods in seconds.
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
@@ -112,6 +109,9 @@ namespace Backend
         Clientinfo::API_Initialize();
         Backend::API_Initialize();
         Social::API_Initialize();
+
+        // Backend background tasks.
+        Enqueuetask(0, Updatenetworking);
 
         // Default network groups.
         Joinmessagegroup(Generalport);
