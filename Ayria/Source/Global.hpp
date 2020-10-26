@@ -229,6 +229,60 @@ using Eventflags_t = union
         };
     };
 };
+using Securityflags_t = union
+{
+    uint8_t Raw;
+    struct
+    {
+        uint8_t
+            isModerator : 1,
+            isPrivate : 1,
+            isAdmin : 1,
+            MAX : 1;
+    };
+};
+using Accountflags_t = union
+{
+    uint8_t Raw;
+    struct
+    {
+        uint8_t
+            isUser : 1,
+            isClan : 1,
+            isGroup : 1,
+            isServer : 1,
+            isTemporary : 1,
+            MAX : 1;
+    };
+};
+using AccountID_t = union
+{
+    uint64_t Raw;
+    struct
+    {
+        // Security flags are only set by the server.
+        Securityflags_t Accountsecurity;
+        Accountflags_t Accounttype;
+        union
+        {
+            uint16_t Creationdate;
+            struct
+            {
+                uint16_t
+                    Year : 8,
+                    Month : 4,
+                    Day : 4;
+            };
+        };
+        uint32_t AccountID;
+    };
+};
+using Account_t = struct
+{
+    AccountID_t ID;
+    String_t Locale;
+    String_t Username;
+};
 
 #pragma pack(pop)
 #pragma endregion

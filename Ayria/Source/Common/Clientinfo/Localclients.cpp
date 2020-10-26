@@ -9,73 +9,80 @@
 
 namespace Clientinfo
 {
-    Ayriaclient Localclient{ 0xDEADC0DE, "Ayria"s, "English"s };
-    std::vector<Networkclient> Networkclients;
+    Account_t Localclient{ 0xDEADC0DE, "English"s, "Ayria"s };
+    std::vector<Networkclient_t> Networkclients;
 
-    // Backend access.
-    Ayriaclient *getLocalclient() { return &Localclient; }
-    std::vector<Networkclient> *getNetworkclients() { return &Networkclients; }
+    // Client core information.
+    Account_t *getLocalclient()
+    {
+        return &Localclient;
+    }
+    bool isClientonline(uint32_t ClientID)
+    {
+        for (const auto &Client : Networkclients)
+            if (Client.AccountID.AccountID == ClientID)
+                return true;
+        return false;
+    }
+    std::vector<Networkclient_t> Hack;
+    const std::vector<Networkclient_t> *getNetworkclients()
+    {
+        return &Networkclients;
+    }
+    const Networkclient_t *getNetworkclient(uint32_t NodeID)
+    {
+        for (auto it = Networkclients.cbegin(); it != Networkclients.cend(); ++it)
+            if (it->NodeID == NodeID)
+                return &*it;
+
+        return {};
+    }
 
     // Internal helpers.
-    static void Sendclientinfo()
+    static void __cdecl Sendclientinfo()
     {
         const auto String = Accountinfo(nullptr);
         Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), String);
     }
     static void __cdecl Discoveryhandler(uint32_t NodeID, const char *JSONString)
     {
-        Networkclient Newclient{ NodeID };
+        Networkclient_t Newclient{ NodeID };
         const auto Object = ParseJSON(JSONString);
-        Newclient.ClientID = Object.value("ClientID", uint32_t());
+        const auto AccountID = Object.value("AccountID", uint64_t());
+        const auto Username = Object.value("Username", std::u8string());
 
-        if (const auto Locale = Object.value("Locale", std::u8string()); !Locale.empty())
-            std::memcpy(Newclient.Locale, Locale.data(), std::min(Locale.size(), size_t(7)));
+        if (!AccountID || Username.empty()) return;
+        Newclient.AccountID.Raw = Object.value("AccountID", uint64_t());
+        std::memcpy(Newclient.Username, Username.data(), std::min(Username.size(), size_t(31)));
 
-        if (const auto Username = Object.value("Username", std::u8string()); !Username.empty())
-            std::memcpy(Newclient.Username, Username.data(), std::min(Username.size(), size_t(31)));
-
-        if (Newclient.ClientID && Newclient.Username[0])
-        {
-            std::erase_if(Networkclients, [&](const auto &Item) { return Newclient.ClientID == Item.ClientID; });
-            Networkclients.emplace_back(std::move(Newclient));
-        }
+        // MSVC does not like custom unordered_set shared across translation-units -.-'
+        std::erase_if(Networkclients, [&](const auto &Item) { return Item.NodeID == NodeID; });
+        Networkclients.push_back(std::move(Newclient));
     }
 
-    // Initialize and update.
-    void Initialize()
+    // Initialize the subsystems.
+    void Initialize_client()
     {
         if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
         {
             const auto Object = ParseJSON(B2S(Filebuffer));
-            Localclient.ClientID = Object.value("ClientID", Localclient.ClientID);
-
-            if (const auto Locale = Object.value("Locale", std::u8string()); !Locale.empty())
-                Localclient.Locale = Locale;
-
-            if (const auto Username = Object.value("Username", std::u8string()); !Username.empty())
-                Localclient.Username = Username;
+            const auto Locale = Object.value("Locale", std::u8string());
+            const auto Username = Object.value("Username", std::u8string());
+            const auto AccountID = Object.value("AccountID", Localclient.ID.Raw);
 
             // Warn the user about bad configurations.
             if (!Object.contains("ClientID") || !Object.contains("Username"))
                 Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
+
+            Localclient.ID.Raw = AccountID;
+            if (!Locale.empty()) Localclient.Locale = Locale;
+            if (!Username.empty()) Localclient.Username = Username;
         }
 
         // Listen for new clients.
         Backend::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
-    }
 
-    static uint32_t Lastupdate{};
-    void doFrame()
-    {
-        const auto Currenttime = GetTickCount();
-        if (Currenttime > (Lastupdate + 5000))
-        {
-            Lastupdate = Currenttime;
-
-            // Announce our presence.
-            Sendclientinfo();
-
-            // TODO(tcn): Poll a server.
-        }
+        // Register a background event.
+        Backend::Enqueuetask(5000, Sendclientinfo);
     }
 }

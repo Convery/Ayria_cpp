@@ -9,48 +9,65 @@
 
 namespace Clientinfo
 {
-    struct Ayriaclient
-    {
-        uint32_t ClientID;
-        String_t Username;
-        String_t Locale;
-    };
-    struct Networkclient
+    #pragma region Datatypes
+    #pragma pack(push, 1)
+    struct Networkclient_t
     {
         uint32_t NodeID;    // Ephemeral identifier.
-        uint32_t ClientID;
+        AccountID_t AccountID;
         char8_t Username[32];
-        char8_t Locale[8];
     };
+    #pragma pack(pop)
+    #pragma endregion
 
-    // Backend access.
-    Ayriaclient *getLocalclient();
-    std::vector<Networkclient> *getNetworkclients();
+    // Client core information.
+    Account_t *getLocalclient();
+    bool isClientonline(uint32_t ClientID);
+    const std::vector<Networkclient_t> *getNetworkclients();
+    const Networkclient_t *getNetworkclient(uint32_t NodeID);
 
-    // Initialize and update.
-    void Initialize();
-    void doFrame();
+    // Client crypto information.
+    std::string_view getPublickey(uint32_t ClientID);
+    std::string_view getHardwarekey();
+    RSA *getSessionkey();
 
-    // Helper for network messages.
-    inline uint32_t toClientID(uint32_t NodeID)
+    // Initialize the subsystems.
+    void Initialize_client();
+    void Initialize_crypto();
+
+    // Helpers for creating AccountIDs.
+    inline AccountID_t Createaccount(Accountflags_t Type)
     {
-        for (const auto &Client : *getNetworkclients())
-            if (Client.NodeID == NodeID)
-                return Client.ClientID;
-        return 0;
+        AccountID_t Client{};
+
+        const auto Time = time(NULL); const auto UTC = gmtime(&Time);
+        Client.Creationdate = (UTC->tm_year << 8) | (UTC->tm_mon << 4) | (UTC->tm_mday - 1);
+        Client.AccountID = getLocalclient()->ID.AccountID;
+        Client.Accounttype = Type;
+        return Client;
+    }
+    inline AccountID_t Createserver()
+    {
+        Accountflags_t Flags{}; Flags.isServer = true;
+        return Createaccount(Flags);
+    }
+    inline AccountID_t Creategroup()
+    {
+        Accountflags_t Flags{}; Flags.isGroup = true;
+        return Createaccount(Flags);
     }
 
-    // Add API handlers.
+    // JSON API handlers.
     inline std::string __cdecl Accountinfo(const char *)
     {
         const auto Localclient = getLocalclient();
 
         auto Object = nlohmann::json::object();
-        Object["ClientID"] = Localclient->ClientID;
+        Object["AccountID"] = Localclient->ID.Raw;
         Object["Locale"] = Localclient->Locale.asUTF8();
         Object["Username"] = Localclient->Username.asUTF8();
 
-        return Object.dump(-1, ' ', true);
+        return DumpJSON(Object);
     }
     inline std::string __cdecl LANClients(const char *)
     {
@@ -59,18 +76,18 @@ namespace Clientinfo
 
         for (const auto &Client : Localnetwork)
         {
-            Object["Locale"] = Client.Locale;
             Object["Username"] = Client.Username;
-            Object["ClientID"] = Client.ClientID;
+            Object["AccountID"] = Client.AccountID.Raw;
         }
 
-        return Object.dump(-1, ' ', true);
+        return DumpJSON(Object);
     }
     inline void API_Initialize()
     {
+        Initialize_client();
+        Initialize_crypto();
+
         API::Registerhandler_Client("Accountinfo", Accountinfo);
         API::Registerhandler_Network("LANClients", LANClients);
-
-        Initialize();
     }
 }
