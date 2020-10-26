@@ -62,72 +62,88 @@ namespace Steam
                 }
             }
 
-            // Ask Ayria nicely for data on the client.
-            {
-                Steam.Username = "Ayria"s;
-                Steam.Locale = "english"s;
-                Steam.XUID = 0x1100001DEADC0DEULL;
-
-                if (const auto Callback = Ayria.API_Client)
-                {
-                    const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
-                    Steam.XUID = 0x0110000100000000ULL | Object.value("ClientID", 0xDEADC0DE);
-                    Steam.Username = Object.value("Username", u8"Ayria"s);
-                    Steam.Locale = Object.value("Locale", u8"english"s);
-                }
-            }
-
-            // Query the Steam platform for installation-location.
+            // Fetch Steam information from the registry.
             #if defined(_WIN32)
             {
                 HKEY Registrykey;
-                constexpr auto Steamregistry = Build::is64bit ? "Software\\Wow6432Node\\Valve\\Steam" : "Software\\Valve\\Steam";
-
-                if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, Steamregistry, 0, KEY_QUERY_VALUE, &Registrykey) == ERROR_SUCCESS)
+                constexpr auto Steamregistry = Build::is64bit ? L"Software\\Wow6432Node\\Valve\\Steam" : L"Software\\Valve\\Steam";
+                if (ERROR_SUCCESS == RegOpenKeyW(HKEY_LOCAL_MACHINE, Steamregistry, &Registrykey))
                 {
-                    unsigned long Size = 260; unsigned char Buffer[260]{};
-                    RegQueryValueExA(Registrykey, "InstallPath", NULL, NULL, Buffer, &Size);
-                    Steam.Installpath = std::u8string((char8_t *)Buffer);
+                    {
+                        wchar_t Buffer[260]{}; long Size{ 260 };
+                        if (ERROR_SUCCESS == RegQueryValueW(Registrykey, L"InstallPath", Buffer, &Size))
+                            Steam.Installpath = std::wstring(Buffer);
+                    }
+                    {
+                        wchar_t Buffer[260]{}; long Size{ 260 };
+                        if (ERROR_SUCCESS == RegQueryValueW(Registrykey, L"Language", Buffer, &Size))
+                            Steam.Steamlocale = std::wstring(Buffer);
+                    }
                     RegCloseKey(Registrykey);
                 }
             }
             #endif
 
+            // Ask Ayria nicely for data on the client.
+            {
+                Steam.Username = u8"Ayria"s;
+                Steam.Ayrialocale = u8"english"s;
+                Steam.XUID = 0x1100001DEADC0DEULL;
+
+                if (const auto Callback = Ayria.API_Client)
+                {
+                    const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
+                    const auto AccountID = Object.value("AccountID", 0xDEADC0DE);
+                    Steam.Ayrialocale = Object.value("Locale", u8"english"s);
+                    Steam.Username = Object.value("Username", u8"Ayria"s);
+                    Steam.XUID = 0x0110000100000000ULL | AccountID;
+
+                    // Ensure that a locale is set.
+                    if (Steam.Steamlocale.size() == 0)
+                        Steam.Steamlocale = Steam.Ayrialocale;
+                }
+            }
+
             // Some legacy applications query the application info from the environment.
-            SetEnvironmentVariableA("SteamAppId", va("%lu", Steam.ApplicationID).c_str());
-            SetEnvironmentVariableA("SteamGameId", va("%llu", Steam.ApplicationID & 0xFFFFFF).c_str());
+            SetEnvironmentVariableW(L"SteamAppId", va(L"%u", Steam.ApplicationID).c_str());
+            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Steam.ApplicationID & 0xFFFFFF).c_str());
             #if defined(_WIN32)
             {
-                HKEY Registrykey;
-                if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Valve\\Steam\\ActiveProcess", 0, KEY_QUERY_VALUE, &Registrykey) == ERROR_SUCCESS)
                 {
-                    DWORD ProcessID = GetCurrentProcessId();
-                    DWORD UserID = Steam.XUID.GetAccountID();
+                    HKEY Registrykey;
+                    constexpr auto Steamregistry = Build::is64bit ? L"Software\\Wow6432Node\\Valve\\Steam\\ActiveProcess" : L"Software\\Valve\\Steam\\ActiveProcess";
+                    if (ERROR_SUCCESS == RegOpenKeyW(HKEY_CURRENT_USER, Steamregistry, &Registrykey))
+                    {
+                        const auto ProcessID = GetCurrentProcessId();
+                        const auto UserID = Steam.XUID.GetAccountID();
 
-                    // Legacy wants the dlls loaded.
-                    const auto Clientpath64 = Steam.Installpath.asUTF8() + u8"\\steamclient64.dll"s;
-                    const auto Clientpath32 = Steam.Installpath.asUTF8() + u8"\\steamclient.dll"s;
-                    if (Build::is64bit) LoadLibraryA((char *)Clientpath64.c_str());
-                    else LoadLibraryA((char *)Clientpath32.c_str());
+                        // Legacy wants the dlls loaded.
+                        const auto Clientpath64 = Steam.Installpath.asWCHAR() + L"\\steamclient64.dll";
+                        const auto Clientpath32 = Steam.Installpath.asWCHAR() + L"\\steamclient.dll";
+                        if (Build::is64bit) LoadLibraryW(Clientpath64.c_str());
+                        else LoadLibraryW(Clientpath32.c_str());
 
-                    RegSetValueExA(Registrykey, "pid", NULL, REG_DWORD, (LPBYTE)&ProcessID, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "ActiveUser", NULL, REG_DWORD, (LPBYTE)&UserID, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "Universe", NULL, REG_SZ, (LPBYTE)"Public", (DWORD)std::strlen("Public") + 1);
-                    RegSetValueExA(Registrykey, "SteamClientDll", NULL, REG_SZ, (LPBYTE)Clientpath32.c_str(), (DWORD)Clientpath32.length() + 1);
-                    RegSetValueExA(Registrykey, "SteamClientDll64", NULL, REG_SZ, (LPBYTE)Clientpath64.c_str(), (DWORD)Clientpath64.length() + 1);
-
-                    RegCloseKey(Registrykey);
+                        RegSetValueW(Registrykey, L"SteamClientDll64", REG_SZ, Clientpath64.c_str(), (DWORD)Clientpath64.length() + 1);
+                        RegSetValueW(Registrykey, L"SteamClientDll", REG_SZ, Clientpath32.c_str(), (DWORD)Clientpath32.length() + 1);
+                        RegSetValueW(Registrykey, L"ActiveUser", REG_DWORD, (LPCWSTR)&UserID, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"pid", REG_DWORD, (LPCWSTR)&ProcessID, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"Universe", REG_SZ, L"Public", 7);
+                        RegCloseKey(Registrykey);
+                    }
                 }
-
-                DWORD Disposition;
-                if (RegCreateKeyExA(HKEY_CURRENT_USER, va("Software\\Valve\\Steam\\Apps\\%i", Steam.ApplicationID).c_str(), 0, NULL, 0, KEY_WRITE, NULL, &Registrykey, &Disposition) == ERROR_SUCCESS)
                 {
-                    DWORD Running = TRUE;
+                    HKEY Registrykey;
+                    auto Steamregistry = Build::is64bit ?
+                        L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\"s + va(L"%u", Steam.ApplicationID) :
+                        L"Software\\Valve\\Steam\\Apps\\"s + va(L"%u", Steam.ApplicationID);
+                    if (ERROR_SUCCESS == RegCreateKeyW(HKEY_CURRENT_USER, Steamregistry.c_str(), &Registrykey))
+                    {
+                        DWORD Running = TRUE;
 
-                    RegSetValueExA(Registrykey, "Installed", NULL, REG_DWORD, (LPBYTE)&Running, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "Running", NULL, REG_DWORD, (LPBYTE)&Running, sizeof(DWORD));
-
-                    RegCloseKey(Registrykey);
+                        RegSetValueW(Registrykey, L"Installed", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"Running", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
+                        RegCloseKey(Registrykey);
+                    }
                 }
             }
             #endif
@@ -136,11 +152,11 @@ namespace Steam
             #if defined(_WIN32)
             if (std::strstr(GetCommandLineA(), "-overlay"))
             {
-                constexpr auto Gameoverlay = Build::is64bit ? u8"gameoverlayrenderer64.dll" : u8"gameoverlayrenderer.dll";
-                constexpr auto Clientlibrary = Build::is64bit ? u8"steamclient64.dll" : u8"steamclient.dll";
+                constexpr auto Gameoverlay = Build::is64bit ? L"gameoverlayrenderer64.dll" : L"gameoverlayrenderer.dll";
+                constexpr auto Clientlibrary = Build::is64bit ? L"steamclient64.dll" : L"steamclient.dll";
 
-                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Clientlibrary).c_str());
-                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Gameoverlay).c_str());
+                LoadLibraryW((Steam.Installpath.asWCHAR() + Clientlibrary).c_str());
+                LoadLibraryW((Steam.Installpath.asWCHAR() + Gameoverlay).c_str());
             }
             #endif
 
@@ -158,7 +174,7 @@ namespace Steam
         EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
         EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
         EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam.ApplicationID = unOwnAppID; return false; }
-        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { const auto Path = Steam.Installpath.asUTF8(); return (char *)Path.c_str(); }
+        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { static auto Path = Steam.Installpath.asUTF8(); return (char *)Path.c_str(); }
 
         // Callback management.
         EXPORT_ATTR void SteamAPI_RunCallbacks()

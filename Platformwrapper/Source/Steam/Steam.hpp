@@ -18,7 +18,8 @@ namespace Steam
         time_t Startuptime;
         uint32_t ApplicationID;
 
-        String_t Locale;
+        String_t Steamlocale;
+        String_t Ayrialocale;
         String_t Username;
         String_t Installpath;
     };

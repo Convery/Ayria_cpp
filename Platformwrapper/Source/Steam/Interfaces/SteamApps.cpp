@@ -61,17 +61,17 @@ namespace Steam
         const char *GetCurrentGameLanguage()
         {
             Traceprint();
-            { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
+            { static auto Locale = Steam.Steamlocale.asUTF8(); return (char *)Locale.c_str(); };
         }
         const char *GetAvailableGameLanguages()
         {
             const auto Object = getAppdata();
-            if (!Object.contains("Languages")) { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
+            if (!Object.contains("Languages")) { static auto Locale = Steam.Steamlocale.asUTF8(); return (char *)Locale.c_str(); };
 
             static std::u8string Result{};
             if (!Result.empty()) return (char *)Result.c_str();
 
-            String_t Temp = Steam.Locale;
+            String_t Temp = Steam.Steamlocale;
             for (const auto &Item : Object["Languages"])
             {
                 Temp += u8","s;
