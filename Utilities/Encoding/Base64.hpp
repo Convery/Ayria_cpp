@@ -84,21 +84,6 @@ namespace Base64
 
         return Result;
     }
-    [[nodiscard]] constexpr bool isValid(std::string_view Input)
-    {
-        if (Input.size() % 4 != 0) return false;
-
-        for (const auto &Item : Input)
-        {
-            if (Item >= 'A' && Item <= 'Z') continue;
-            if (Item >= 'a' && Item <= 'z') continue;
-            if (Item >= '/' && Item <= '9') continue;
-            if (Item == '=' || Item == '+') continue;
-            return false;
-        }
-
-        return !Input.empty();
-    }
 
     [[nodiscard]] inline Blob Encode(Blob_view Input)
     {
@@ -149,7 +134,23 @@ namespace Base64
 
         return Result;
     }
+
     [[nodiscard]] constexpr bool isValid(Blob_view Input)
+    {
+        if (Input.size() % 4 != 0) return false;
+
+        for (const auto &Item : Input)
+        {
+            if (Item >= 'A' && Item <= 'Z') continue;
+            if (Item >= 'a' && Item <= 'z') continue;
+            if (Item >= '/' && Item <= '9') continue;
+            if (Item == '=' || Item == '+') continue;
+            return false;
+        }
+
+        return !Input.empty();
+    }
+    [[nodiscard]] constexpr bool isValid(std::string_view Input)
     {
         if (Input.size() % 4 != 0) return false;
 

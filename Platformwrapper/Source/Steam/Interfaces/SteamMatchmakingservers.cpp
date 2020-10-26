@@ -92,41 +92,36 @@ namespace Steam
         void RequestSpectatorServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
 
         Callbacks::gameserveritem_t *GetServerDetails1(uint32_t eType, int iServer) { Traceprint(); return {}; };
-        Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer)
+        Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer) const
         {
             auto Serialized = new Callbacks::gameserveritem_t();
-            const auto Servers = Matchmaking::Externalservers();
-            if (Servers.size() <= iServer) return 0;
-            auto Server = Servers[iServer];
+            auto Servers = *Matchmaking::getNetworkservers();
+
+            if (Servers.size() <= size_t(iServer)) return 0;
+            auto Server = &Servers[iServer];
 
             // Address in host-order.
-            Serialized->m_NetAdr.m_unIP = ntohl(Server->Core->Address);
-            Serialized->m_NetAdr.m_usQueryPort = Server->Get("Network.Queryport", uint16_t());
-            Serialized->m_NetAdr.m_usConnectionPort = Server->Get("Network.Gameport", uint16_t());
-
-            // To make it a little more readable.
-            #define Copy(x, y) lCopy(x, sizeof(x), Server->Get(y, std::string()));
-            auto lCopy = [](char *Dst, size_t Max, std::string &&Src) -> void
-            {
-                std::memcpy(Dst, Src.c_str(), std::min(Max, Src.size()));
-            };
+            Serialized->m_NetAdr.m_unIP = Server->Hostinfo.value("IPAddress", 0);
+            Serialized->m_NetAdr.m_usQueryPort = Server->Hostinfo.value("Queryport", 0);
+            Serialized->m_NetAdr.m_usConnectionPort = Server->Hostinfo.value("Gameport", 0);
 
             // String-properties.
-            Copy(Serialized->m_szGameDescription, "Steam.Productdescription");
-            Copy(Serialized->m_szGameDir, "Steam.Gamedirectory");
-            Copy(Serialized->m_szServerName, "Server.Hostname");
-            Copy(Serialized->m_szGameTags, "Session.Gametags");
-            Copy(Serialized->m_szMap, "Session.Mapname");
+            std::strncpy(Serialized->m_szGameDescription, Server->Gameinfo.value("Productdesc", "").c_str(), 64);
+            std::strncpy(Serialized->m_szGameDir, Server->Hostinfo.value("Gamemod", "").c_str(), 32);
+            std::strncpy(Serialized->m_szServerName, Server->Hostinfo.value("Servername", "").c_str(), 64);
+            std::strncpy(Serialized->m_szGameTags, Server->Gameinfo.value("Gametags", "").c_str(), 128);
+            std::strncpy(Serialized->m_szMap, Server->Gameinfo.value("Mapname", "").c_str(), 32);
 
             // TODO(tcn): Get some real information.
-            Serialized->m_bSecure = Serialized->m_bPassword = Server->Get("Security.Anticheat", false);
-            Serialized->m_bPassword = Server->Get("Security.Passwordprotected", false);
-            Serialized->m_nServerVersion = Server->Get("Server.Version", 1001);
-            Serialized->m_steamID = Server->Get("Server.XUID", uint64_t());
-            Serialized->m_nBotPlayers = Server->Get("Players.Bots", 0);
-            Serialized->m_nPlayers = Server->Get("Players.Current", 0);
-            Serialized->m_nMaxPlayers = Server->Get("Players.Max", 0);
-            Serialized->m_nAppID = Global.ApplicationID;
+            Serialized->m_bSecure = Serialized->m_bPassword = Server->Hostinfo.value("isSecure", false);
+            Serialized->m_steamID = CSteamID(Server->HostID, 1, k_EAccountTypeGameServer);
+            Serialized->m_nServerVersion = Server->Hostinfo.value("Versionint", 1001);
+            Serialized->m_bPassword = Server->Hostinfo.value("isPrivate", false);
+
+            Serialized->m_nAppID = Server->Hostinfo.value("AppID", Steam.ApplicationID);
+            Serialized->m_nPlayers = Server->Gameinfo.value("Currentplayers", 0);
+            Serialized->m_nBotPlayers = Server->Gameinfo.value("Botplayers", 0);
+            Serialized->m_nMaxPlayers = Server->Gameinfo.value("Maxplayers", 0);
             Serialized->m_bHadSuccessfulResponse = true;
             Serialized->m_bDoNotRefresh = false;
             Serialized->m_ulTimeLastPlayed = 0;
@@ -140,8 +135,8 @@ namespace Steam
         int GetServerCount(uint32_t eType)
         {
             // Complete the listing as we did it in the background.
-            const auto Servers = Matchmaking::Externalservers();
-            for(size_t i = 0; i < Servers.size(); ++i)
+            const auto Servers = *Matchmaking::getNetworkservers();
+            for(int i = 0; i < int(Servers.size()); ++i)
             {
                 if (Responsecallback1) Responsecallback1->ServerResponded(i);
                 if (Responsecallback2) Responsecallback2->ServerResponded(this, i);
@@ -150,7 +145,7 @@ namespace Steam
             if (Responsecallback2) Responsecallback2->RefreshComplete(this, 0);
             if (Responsecallback1) Responsecallback1->RefreshComplete(0);
 
-            return Servers.size();
+            return int(Servers.size());
         }
         void RefreshServer(uint32_t eType, int iServer) { Traceprint(); };
         int PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse)

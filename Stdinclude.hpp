@@ -14,27 +14,35 @@
 
 // Standard-library includes for all projects in this repository.
 #include <unordered_map>
+#include <unordered_set>
 #include <string_view>
 #include <filesystem>
 #include <functional>
 #include <algorithm>
+#include <execution>
 #include <cassert>
 #include <cstdint>
-#include <cstdio>
-#include <vector>
-#include <memory>
-#include <chrono>
-#include <thread>
-#include <string>
+#include <numbers>
+#include <variant>
 #include <atomic>
+#include <bitset>
+#include <chrono>
+#include <cstdio>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+#include <tuple>
+#include <array>
 #include <mutex>
 #include <queue>
-#include <array>
 #include <any>
 
 // Platform-specific libraries.
 #if defined(_WIN32)
+#include <Ws2tcpip.h>
 #include <WinSock2.h>
+#include <Windowsx.h>
 #include <Windows.h>
 #include <intrin.h>
 #include <direct.h>
@@ -49,20 +57,13 @@
 #include <dlfcn.h>
 #endif
 
-// Third-party includes, usually included via VCPKG.
-#if __has_include(<nlohmann/json.hpp>)
-#include <nlohmann/json.hpp>
-#endif
-#if __has_include(<mhook-lib/mhook.h>)
-#pragma comment(lib, "mhook.lib")
-#include <mhook-lib/mhook.h>
-#endif
-
 // Restore warnings.
 #pragma warning(pop)
 
+// Third-party includes, usually included via VCPKG.
+#include "Thirdparty.hpp"
+
 // Global utilities.
-#include <Utilities/Communication/Filesharing.hpp>
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
@@ -70,16 +71,19 @@
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
+#include <Utilities/Encoding/Stringconv.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 #include <Utilities/Hacking/Branchless.hpp>
+#include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
 
 // Temporary includes.
+#include <Utilities/Internal/Misc.hpp>
+#include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
-#include <Utilities/Internal/Singleinstance.hpp>
 
 // Extensions to the language.
 using namespace std::string_literals;

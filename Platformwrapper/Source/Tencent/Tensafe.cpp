@@ -9,7 +9,7 @@
 
 #include <winternl.h>
 #include <Stdinclude.hpp>
-#include "../Common/Common.hpp"
+#include "../Common.hpp"
 #pragma warning(disable : 4100)
 
 #pragma region Datatypes
@@ -87,7 +87,7 @@ struct Callbackinterface000
 {
     virtual int onPacket(IPCPacket_t *Packet);
 };
-void Sendtoserver(const Packettypes_t Packettype, Blob &&Data, struct Tensafe *Interface);
+void Sendtoserver(Packettypes_t Packettype, Blob &&Data, struct Tensafe *Interface);
 template <typename T> bool PackIPC(IPCPacket_t *Packet, T Value)
 {
     if (Packet->Maxsize - Packet->Dataused < sizeof(T))
@@ -174,7 +174,7 @@ struct Tensafe
         Buffer = va("Encrypt Command %u, Enclen %u, Gamelen %u\n", Packet->Command, Packet->Encryptedlength, Packet->Gamelength);
         Debugprint(Buffer);
 
-        auto Ptr = Packet->Gamepackage;
+        const auto Ptr = Packet->Gamepackage;
         for (size_t i = 0; i < Packet->Gamelength; ++i)
         {
             if (i % 16 == 0) Buffer += "\n\t\t";
@@ -227,12 +227,12 @@ void Sendtoserver(const Packettypes_t Packettype, Blob &&Data, struct Tensafe *I
     Traceprint();
 
     // Network format of the packet.
-    auto Packetbuffer = std::make_unique<uint8_t[]>(Headersize + Data.size());
-    Packet_t *Packet = (Packet_t *)Packetbuffer.get();
-    Packet->Totalsize = Headersize + Data.size();
-    Packet->SequenceID = ++Interface->SequenceID;
+    const auto Packetbuffer = std::make_unique<uint8_t[]>(Headersize + Data.size());
+    auto Packet = (Packet_t *)Packetbuffer.get();
+    Packet->SequenceID = uint32_t(++Interface->SequenceID);
+    Packet->Totalsize = uint32_t(Headersize + Data.size());
+    Packet->Payloadlength = uint32_t(Data.size());
     Packet->Packettype = (uint8_t)Packettype;
-    Packet->Payloadlength = Data.size();
     Packet->CRC32Checksum = 0;
 
     // Inline packing wrapper thingy because Tencent.

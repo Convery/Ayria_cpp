@@ -37,7 +37,7 @@ namespace Hash
     }
 
     // Compile-time hashing for fixed-length datablocks.
-    [[nodiscard]] constexpr uint32_t FNV1_32(const void *Input, const uint32_t Length)
+    [[nodiscard]] constexpr uint32_t FNV1_32(const void *Input, const size_t Length)
     {
         uint32_t Hash = Internal::FNV1_Offset_32;
 
@@ -61,7 +61,7 @@ namespace Hash
 
         return Hash;
     }
-    [[nodiscard]] constexpr uint32_t FNV1a_32(const void *Input, const uint32_t Length)
+    [[nodiscard]] constexpr uint32_t FNV1a_32(const void *Input, const size_t Length)
     {
         uint32_t Hash = Internal::FNV1_Offset_32;
 
@@ -104,7 +104,7 @@ namespace Hash
         return Internal::FNV1a_64(String);
     }
 
-    // Wrappers for runtime hashing of strings, and C++ 20 compiletime std::strings.
+    // Wrappers for runtime hashing of strings, and C++ 20 compile-time std::strings.
     template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string<T> String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
@@ -137,6 +137,12 @@ namespace Hash
     {
         return FNV1a_64(String.data(), String.size());
     }
+
+    // Wrappers for random types.
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(T Value) { return FNV1_32(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_64(T Value) { return FNV1_64(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(T Value) { return FNV1a_32(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_64(T Value) { return FNV1a_64(&Value, sizeof(Value)); }
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.

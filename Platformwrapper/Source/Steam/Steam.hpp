@@ -6,23 +6,27 @@
 
 #pragma once
 #include "Stdinclude.hpp"
-#include "../Common/Common.hpp"
+#include "../Common.hpp"
 #include "Auxiliary/CSteamID.hpp"
+
 
 namespace Steam
 {
-    // Keep the global state together.
-    struct Globalstate_t
+    struct Steaminfo_t
     {
-        std::string Path;
-        std::string Language;
+        CSteamID XUID;
+        time_t Startuptime;
         uint32_t ApplicationID;
+
+        String_t Locale;
+        String_t Username;
+        String_t Installpath;
     };
-    extern Globalstate_t Global;
+    extern Steaminfo_t Steam;
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
-    using Interface_t = Ayria::Fakeclass_t;
+    using Interface_t = Fakeclass_t;
 
     // The types of interfaces provided as of writing.
     enum class Interfacetype_t
@@ -65,8 +69,9 @@ namespace Steam
 
     // Block and wait for Steams IPC initialization event as some games need it.
     // Also redirect module lookups for legacy compatibility.
+    DWORD __stdcall InitializeIPC(void *);
     void Redirectmodulehandle();
-    void InitializeIPC();
+    void Initializeinterfaces();
 
     // Async replies.
     namespace Callbacks

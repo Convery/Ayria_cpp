@@ -16,15 +16,15 @@ namespace Steam
     uint8_t Ticketdata[176]{};
 
     // Ayria-internal.
-    #pragma pack(push, 1)
-    struct Steamappticket
+    union Steamappticket
     {
-        uint8_t Identifier[6];
-        uint8_t SteamaccountID[8];
-        uint8_t Steamusername[17];
-        uint8_t Reserved;
+        uint8_t Raw[32];
+        struct
+        {
+            uint32_t AccountID;
+            char8_t Username[28];
+        };
     };
-    #pragma pack(pop)
 
     struct SteamUser
     {
@@ -58,7 +58,7 @@ namespace Steam
         }
         CSteamID GetSteamID()
         {
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         bool IsVACBanned(uint32_t eVACBan)
         {
@@ -213,7 +213,7 @@ namespace Steam
         bool SetLanguage(const char *pchLanguage)
         {
             Traceprint();
-            Global.Language = pchLanguage;
+            Steam.Locale = std::string(pchLanguage);
             return true;
         }
         void TrackAppUsageEvent0(CGameID gameID, uint32_t eAppUsageEvent, const char *pchExtraInfo = "")
@@ -295,7 +295,7 @@ namespace Steam
             Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
             return Request->m_hAuthTicket;
         }
-        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID)
+        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID) const
         {
             Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
             const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
@@ -338,13 +338,11 @@ namespace Steam
         {
             Traceprint();
         }
-        uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude)
+        uint64_t RequestEncryptedAppTicket(void *pDataToInclude, unsigned int cbDataToInclude) const
         {
             // Fill the buffer with useful information.
-            ((Steamappticket *)Ticketdata)->Reserved = 0;
-            std::memcpy(&((Steamappticket *)Ticketdata)->Identifier, "Ayria", 6);
-            std::memcpy(&((Steamappticket *)Ticketdata)->SteamaccountID, &Ayria::Global.UserID, 8);
-            std::memcpy(&((Steamappticket *)Ticketdata)->Steamusername, Ayria::Global.Username.c_str(), Ayria::Global.Username.size());
+            ((Steamappticket *)Ticketdata)->AccountID = Steam.XUID.GetAccountID();
+            std::strncpy((char *)((Steamappticket *)Ticketdata)->Username, (char *)Steam.Username.asUTF8().c_str(), 28);
 
             // Append game data.
             Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));
@@ -358,7 +356,7 @@ namespace Steam
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 54, Request);
             return RequestID;
         }
-        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t *pcbTicket)
+        bool GetEncryptedAppTicket(void *pTicket, unsigned int cbMaxTicket, uint32_t *pcbTicket) const
         {
             memcpy(pTicket, Ticketdata, std::min(cbMaxTicket, (unsigned int)sizeof(Ticketdata)));
             *pcbTicket = sizeof(Ticketdata);

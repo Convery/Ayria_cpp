@@ -58,25 +58,25 @@ struct Bitbuffer
             Internalbuffer.swap(Newbuffer);
         }
 
+        const auto Input = (uint8_t *)Buffer;
         size_t Bitstowrite = Writecount;
-        auto Input = (uint8_t *)Buffer;
 
         while (Bitstowrite)
         {
-            size_t Readposition = (Writecount - Bitstowrite) / 8;
-            uint8_t Currentbit = (Writecount - Bitstowrite) & 7;
-            uint8_t Writeposition = Internaliterator & 7;
-            uint8_t Currentwrite = uint8_t(std::min(Bitstowrite, size_t(8 - Writeposition)));
+            const size_t Readposition = (Writecount - Bitstowrite) / 8;
+            const uint8_t Currentbit = (Writecount - Bitstowrite) & 7;
+            const uint8_t Writeposition = Internaliterator & 7;
+            const uint8_t Currentwrite = uint8_t(std::min(Bitstowrite, size_t(8 - Writeposition)));
 
             // Can be null when padding/aligning.
             if (Input)
             {
                 uint8_t Inputbyte = Input[Readposition];
-                uint8_t Nextbyte = (Writecount - 1) / 8 > Readposition ? Input[Readposition + 1] : 0;
-                uint8_t Mask = (0xFF >> (8 - Writeposition)) | (0xFF << (Writeposition + Currentwrite));
+                const uint8_t Nextbyte = (Writecount - 1) / 8 > Readposition ? Input[Readposition + 1] : 0;
+                const uint8_t Mask = (0xFF >> (8 - Writeposition)) | (0xFF << (Writeposition + Currentwrite));
 
                 Inputbyte = (Nextbyte << (8 - Currentbit)) | Inputbyte >> Currentbit;
-                uint8_t Resultbyte = (~Mask & (Inputbyte << Writeposition)) | (Mask & Internalbuffer[Internaliterator / 8]);
+                const uint8_t Resultbyte = (~Mask & (Inputbyte << Writeposition)) | (Mask & Internalbuffer[Internaliterator / 8]);
                 Internalbuffer[Internaliterator / 8] = Resultbyte;
             }
 
@@ -91,9 +91,9 @@ struct Bitbuffer
 
         while (Readcount)
         {
-            uint8_t Thisread = uint8_t(std::min(Readcount, size_t(8)));
-            uint8_t Thisbyte = Internalbuffer[Internaliterator / 8];
-            uint8_t Remaining = Internaliterator & 7;
+            const uint8_t Thisread = uint8_t(std::min(Readcount, size_t(8)));
+            const uint8_t Thisbyte = Internalbuffer[Internaliterator / 8];
+            const uint8_t Remaining = Internaliterator & 7;
 
             // Can be null for discarding data.
             if (Buffer)
@@ -246,7 +246,7 @@ struct Bitbuffer
     }
 
     // Utility functionality.
-    [[nodiscard]] Blob asBlob()
+    [[nodiscard]] Blob asBlob() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
@@ -260,17 +260,17 @@ struct Bitbuffer
         if (Byte != BB_NONE) Internaliterator -= 5;
         return Byte;
     }
-    [[nodiscard]] size_t Remaininglength()
+    [[nodiscard]] size_t Remaininglength() const
     {
-        return Internalsize * 8 - Internaliterator;
+        return (Internalsize * 8 - Internaliterator) / 8;
     }
-    [[nodiscard]] std::basic_string_view<uint8_t> asView()
+    [[nodiscard]] std::basic_string_view<uint8_t> asView() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
 
     // Supported operators, acts on the internal state.
-    bool operator == (const Bitbuffer &Right) noexcept
+    bool operator == (const Bitbuffer &Right) const noexcept
     {
         if (Internalsize != Right.Internalsize) return false;
         return 0 == std::memcmp(Internalbuffer.get(), Right.Internalbuffer.get(), Internalsize);

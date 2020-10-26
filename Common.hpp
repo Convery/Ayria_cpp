@@ -27,10 +27,14 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #endif
 
 // Where to keep the log.
 #define LOGPATH "./Ayria/Logs"
+
+// Produce a smaller build by not including third-party detours.
+// #define NO_HOOKLIB
 
 // Build information helpers to avoid the preprocessor.
 namespace Build
@@ -58,15 +62,22 @@ namespace Build
 #define Debugprint(string) Logging::Print('D', string)
 #define Traceprint() Logging::Print('>', __FUNCTION__)
 #else
-#define Debugprint(string)
-#define Traceprint()
+#define Debugprint(string) ((void)0)
+#define Traceprint() ((void)0)
 #endif
 
-// Helper to support designated initializers until c++ 20 is mainstream.
-#define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
+// Helper to switch between debug and release mutex's.
+#if defined(NDEBUG)
+#define Defaultmutex Spinlock
+#else
+#define Defaultmutex Debugmutex
+#endif
 
 // Ignore ANSI compatibility for structs.
 #pragma warning(disable: 4201)
+
+// Ignore warnings about casting float to int.
+#pragma warning(disable: 4244)
 
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)
@@ -78,7 +89,7 @@ struct IServer
     struct Address_t { unsigned int IPv4; unsigned short Port; };
 
     // No complaints.
-    virtual ~IServer() {}
+    virtual ~IServer() = default;
 
     // Utility functionality.
     virtual void onConnect() {}
@@ -86,21 +97,21 @@ struct IServer
 
     // Stream-based IO for protocols such as TCP.
     virtual bool onStreamread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onStreamwrite(const void *Databuffer, const unsigned int Datasize) = 0;
+    virtual bool onStreamwrite(const void *Databuffer, unsigned int Datasize) = 0;
 
     // Packet-based IO for protocols such as UDP and ICMP.
     virtual bool onPacketread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onPacketwrite(const void *Databuffer, const unsigned int Datasize, const Address_t *Endpoint) = 0;
+    virtual bool onPacketwrite(const void *Databuffer, unsigned int Datasize, const Address_t *Endpoint) = 0;
 };
 struct IStreamserver : IServer
 {
     // Nullsub packet-based IO.
-    virtual bool onPacketread(void *, unsigned int *) { return false; }
-    virtual bool onPacketwrite(const void *, const unsigned int, const Address_t *) { return false; }
+    bool onPacketread(void *, unsigned int *) override { return false; }
+    bool onPacketwrite(const void *, unsigned int, const Address_t *) override { return false; }
 };
 struct IDatagramserver : IServer
 {
     // Nullsub stream-based IO.
-    virtual bool onStreamread(void *, unsigned int *) { return false; }
-    virtual bool onStreamwrite(const void *, const unsigned int) { return false; }
+    bool onStreamread(void *, unsigned int *) override { return false; }
+    bool onStreamwrite(const void *, unsigned int) override { return false; }
 };

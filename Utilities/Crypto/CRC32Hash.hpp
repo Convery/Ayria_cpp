@@ -24,9 +24,9 @@ namespace Hash
             using reference = value_type &;
             using const_reference = const value_type &;
 
+            static constexpr size_type size() noexcept { return N; }
             constexpr reference operator[](size_type i) noexcept { return m_data[i]; }
             constexpr const_reference operator[](size_type i) const noexcept { return m_data[i]; }
-            constexpr size_type size() const noexcept { return N; }
         };
         constexpr Array<uint32_t, 256> CRC32B_Table()
         {

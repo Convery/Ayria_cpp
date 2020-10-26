@@ -9,12 +9,36 @@
 
 namespace Steam
 {
+    /*
+        {
+            "DLC" : [ { "Friendlyname": "", "Filename": "", "ID": 0 } ],
+            "Appdata": [ { "Key" : "Value" } ],
+            "Languages": [ "", "" ]
+
+        }
+    */
+    static nlohmann::json getAppdata()
+    {
+        const auto Filename = va("./Ayria/Assets/Steam/Appdata_%u.json", Steam.ApplicationID);
+        if (const auto Filebuffer = FS::Readfile(Filename); !Filebuffer.empty())
+        {
+            return ParseJSON(B2S(Filebuffer));
+        }
+        return nlohmann::json::object();
+    }
+
     struct SteamApps
     {
         int GetAppData(uint32_t nAppID, const char *pchKey, char *pchValue, int cchValueMax)
         {
-            Traceprint();
-            return 0;
+            Debugprint(va("%s: %s", __FUNCTION__, pchKey));
+
+            const auto Object = getAppdata();
+            if (!Object.contains("Appdata")) return 0;
+            if (!Object["Appdata"].contains(pchKey)) return 0;
+
+            std::strncpy(pchValue, Object["Appdata"][pchKey].get<std::string>().c_str(), cchValueMax);
+            return (int)std::strlen(pchValue);
         }
         bool BIsSubscribed()
         {
@@ -37,12 +61,25 @@ namespace Steam
         const char *GetCurrentGameLanguage()
         {
             Traceprint();
-            return Steam::Global.Language.c_str();
+            { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
         }
         const char *GetAvailableGameLanguages()
         {
-            Traceprint();
-            return Steam::Global.Language.c_str();
+            const auto Object = getAppdata();
+            if (!Object.contains("Languages")) { static auto Locale = Steam.Locale.asUTF8(); return (char *)Locale.c_str(); };
+
+            static std::u8string Result{};
+            if (!Result.empty()) return (char *)Result.c_str();
+
+            String_t Temp = Steam.Locale;
+            for (const auto &Item : Object["Languages"])
+            {
+                Temp += u8","s;
+                Temp += Item.get<std::u8string>();
+            }
+
+            Result = Temp.asUTF8();
+            return (char *)Result.c_str();
         }
         bool BIsSubscribedApp(uint32_t nAppID)
         {
@@ -50,12 +87,22 @@ namespace Steam
         }
         bool BIsDlcInstalled(uint32_t nAppID)
         {
-            return true;
+            const auto Object = getAppdata();
+            if (!Object.contains("DLC")) return false;
+
+            for (const auto &DLC : Object["DLC"])
+            {
+                if (DLC.value("ID", uint32_t()) == nAppID)
+                {
+                    return FS::Fileexists(DLC.value("Filename", "3123123123123"));
+                }
+            }
+
+            return false;
         }
         uint32_t GetEarliestPurchaseUnixTime(uint32_t nAppID)
         {
-            Traceprint();
-            return uint32_t(Ayria::Global.Startuptimestamp - 600);
+            return 0;
         }
         bool BIsSubscribedFromFreeWeekend()
         {
@@ -64,30 +111,45 @@ namespace Steam
         }
         int GetDLCCount()
         {
-            Traceprint();
-            return 0;
+            const auto Object = getAppdata();
+            if (!Object.contains("DLC")) return 0;
+            return (int)Object["DLC"].size();
         }
         bool BGetDLCDataByIndex(int iDLC, uint32_t *pAppID, bool *pbAvailable, char *pchName, int cchNameBufferSize)
         {
-            Traceprint();
+            const auto Object = getAppdata();
+            if (!Object.contains("DLC")) return false;
+
+            for (const auto &DLC : Object["DLC"])
+            {
+                if (iDLC != 0) iDLC--;
+                else
+                {
+                    *pbAvailable = true;
+                    *pAppID = DLC.value("ID", 0);
+                    std::strncpy(pchName, DLC.value("Friendlyname", "").c_str(), cchNameBufferSize);
+                    return true;
+                }
+            }
+
             return false;
         }
-        void InstallDLC(uint32_t nAppID)
+        void InstallDLC(uint32_t nAppID) const
         {
-            Infoprint(va("Installing DLC %u..", nAppID));
+            Infoprint(va("Want to install DLC %u..", nAppID));
         }
-        void UninstallDLC(uint32_t nAppID)
+        void UninstallDLC(uint32_t nAppID) const
         {
-            Infoprint(va("Uninstalling DLC %u..", nAppID));
+            Infoprint(va("Want to uninstall DLC %u..", nAppID));
         }
         void RequestAppProofOfPurchaseKey(uint32_t nAppID)
         {
+            // Deprecated.
             Traceprint();
             return;
         }
         bool GetCurrentBetaName(char *pchName, int cchNameBufferSize)
         {
-            Traceprint();
             return false;
         }
         bool MarkContentCorrupt(bool bMissingFilesOnly)
@@ -102,9 +164,8 @@ namespace Steam
         }
         uint32_t GetAppInstallDir(uint32_t appID, char *pchFolder, uint32_t cchFolderBufferSize)
         {
-            Traceprint();
-
-            return 0;
+            Debugprint(va("%s: %u", __FUNCTION__, appID));
+            return GetCurrentDirectoryA(cchFolderBufferSize, pchFolder);
         }
         bool BIsAppInstalled(uint32_t appID)
         {
@@ -117,13 +178,15 @@ namespace Steam
         }
         CSteamID GetAppOwner()
         {
-            Traceprint();
-            return CSteamID(Ayria::Global.UserID);
+            return CSteamID(Steam.XUID);
         }
         const char *GetLaunchQueryParam(const char *pchKey)
         {
-            Traceprint();
-            return "";
+            auto Offset = std::strstr(GetCommandLineA(), pchKey);
+            if (!Offset) return "";
+
+            Offset += strlen(pchKey) + 1;
+            return Offset;
         }
         bool GetDlcDownloadProgress(uint32_t nAppID, uint64_t *punBytesDownloaded, uint64_t *punBytesTotal)
         {
@@ -137,6 +200,7 @@ namespace Steam
         }
         uint64_t RegisterActivationCode(const char *pchActivationCode)
         {
+            // Steam internal.
             Traceprint();
             return 0;
         }

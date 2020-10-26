@@ -4,16 +4,16 @@
     License: MIT
 */
 
-#include "Common/Common.hpp"
 #include "Stdinclude.hpp"
+#include "Common.hpp"
+#include "Steam/Steam.hpp"
 
 // Keep the global state together.
-namespace Ayria { Globalstate_t Global{}; }
+Ayriamodule_t Ayria{};
 
 // Exported from the various platforms.
 extern void Arclight_init();
 extern void Tencent_init();
-extern void Steam_init();
 
 // Entrypoint when loaded as a shared library.
 #if defined _WIN32
@@ -31,25 +31,6 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
 
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
-
-        // Although useless for most users, we create a console if we get a switch.
-        #if defined(NDEBUG)
-        if (std::strstr(GetCommandLineA(), "-devcon"))
-        #endif
-        {
-            AllocConsole();
-            freopen("CONOUT$", "w", stdout);
-            freopen("CONOUT$", "w", stderr);
-            SetConsoleTitleA("Platformwrapper Console");
-            SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
-        }
-
-        // Start tracking availability.
-        Ayria::Global.Startuptimestamp = time(NULL);
-
-        // If there's a local bootstrap module, we'll load it and trigger TLS.
-        if(LoadLibraryA("./Ayria/Bootstrapper64d.dll") || LoadLibraryA("./Ayria/Bootstrapper32d.dll"))
-            std::thread([]() { volatile bool NOP{}; (void)NOP; }).detach();
     }
 
     return TRUE;
@@ -67,10 +48,10 @@ __attribute__((constructor)) void __stdcall DllMain()
 }
 #endif
 
-//Callback when loaded as a plugin.
+// Callback when loaded as a plugin.
 extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
 {
     // Initialize the various platforms.
+    Steam::Initializeinterfaces();
     Tencent_init();
-    Steam_init();
 }

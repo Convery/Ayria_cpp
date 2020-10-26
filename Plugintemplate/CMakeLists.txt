@@ -14,19 +14,18 @@ endif()
 
 # Platform libraries to be linked.
 if(WIN32)
-    set(PLATFORM_LIBS ws2_32 Crypt32)
+    set(PLATFORM_LIBS)
 else()
     set(PLATFORM_LIBS dl pthread)
 endif()
 
-# Third-party libraries, prefer find_library() and find_path().
-# set(MODULE_LIBS ${MODULE_LIBS} mhook.lib)
+# Easier access to top-level files.
+include_directories("${CMAKE_CURRENT_LIST_DIR}/Source")
 
 # Just pull all the files from /Source
-file(GLOB_RECURSE SOURCES "Source/*.cpp")
-file(GLOB_RECURSE ASSEMBLY "Source/*.asm")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS Source/*.cpp Source/*.c Source/*.asm)
+add_library(${MODULENAME} SHARED ${SOURCES})
 add_definitions(-DMODULENAME="${MODULENAME}")
-add_library(${MODULENAME} SHARED ${SOURCES} ${ASSEMBLY})
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
 target_link_libraries(${MODULENAME} ${PLATFORM_LIBS} ${MODULE_LIBS})
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")

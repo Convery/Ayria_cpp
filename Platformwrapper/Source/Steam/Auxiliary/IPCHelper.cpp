@@ -20,7 +20,7 @@ namespace Steam
             GetModuleFileNameA(*Handle, Filename, 260);
             if (std::strstr(Filename, "steam_api") || std::strstr(Filename, "Platformwrapper"))
             {
-                constexpr auto *Clientlibrary = sizeof(void *) == sizeof(uint64_t) ? "steamclient64.dll" : "steamclient.dll";
+                constexpr auto *Clientlibrary = Build::is64bit ? "steamclient64.dll" : "steamclient.dll";
                 *Handle = GetModuleHandleA(Clientlibrary);
             }
 
@@ -31,13 +31,21 @@ namespace Steam
     }
     void Redirectmodulehandle()
     {
-        Originalfunction = GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA");
-        Mhook_SetHook(&Originalfunction, Callback);
+        const auto Address = GetProcAddress(LoadLibraryA("kernel32.dll"), "GetModuleHandleExA");
+        Originalfunction = Hooking::Stomphook(Address, Callback);
+        assert(Originalfunction);
     }
 
     // Block and wait for Steams IPC initialization event as some games need it.
-    void InitializeIPC()
+    DWORD __stdcall InitializeIPC(void *)
     {
+        static bool Initialized = false;
+        if (Initialized) return 0;
+        Initialized = true;
+
+        // No point in taking resources here.
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+
         SECURITY_DESCRIPTOR pSecurityDescriptor;
         InitializeSecurityDescriptor(&pSecurityDescriptor, 1);
         SetSecurityDescriptorDacl(&pSecurityDescriptor, 1, 0, 0);
@@ -47,13 +55,21 @@ namespace Steam
         SemaphoreAttributes.bInheritHandle = FALSE;
         SemaphoreAttributes.lpSecurityDescriptor = &pSecurityDescriptor;
 
-        auto Consumesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 0, 512, "STEAM_DIPC_CONSUME");
-        auto Producesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 1, 512, "SREAM_DIPC_PRODUCE");    // Intentional typo.
-        auto Sharedfilehandle = CreateFileMappingA(INVALID_HANDLE_VALUE, &SemaphoreAttributes, 4u, 0, 0x1000u, "STEAM_DRM_IPC");
-        auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
+        const auto Consumesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 0, 512, "STEAM_DIPC_CONSUME");
+        const auto Producesemaphore = CreateSemaphoreA(&SemaphoreAttributes, 1, 512, "SREAM_DIPC_PRODUCE");    // Intentional typo.
+        const auto Sharedfilehandle = CreateFileMappingA(INVALID_HANDLE_VALUE, &SemaphoreAttributes, 4u, 0, 0x1000u, "STEAM_DRM_IPC");
+        const auto Sharedfilemapping = MapViewOfFile(Sharedfilehandle, 0xF001Fu, 0, 0, 0);
 
         // Wait for the game to initialize or timeout if unused.
-        if (WaitForSingleObject(Consumesemaphore, 20000)) return;
+        if (NULL != WaitForSingleObject(Consumesemaphore, 20000))
+        {
+            ReleaseSemaphore(Producesemaphore, 1, NULL);
+            UnmapViewOfFile(Sharedfilemapping);
+            CloseHandle(Sharedfilehandle);
+            CloseHandle(Consumesemaphore);
+            CloseHandle(Producesemaphore);
+            return 0;
+        }
 
         // Parse the shared buffer to get the process information.
         const char *Buffer = (char *)Sharedfilemapping;
@@ -65,13 +81,13 @@ namespace Steam
         Infoprint(va("Terminationevent: \"%s\"", Buffer));
 
         // Parse the startup module.
-        if (auto Filehandle = std::fopen(Startupmodule, "rb"))
+        if (const auto Filehandle = std::fopen(Startupmodule, "rb"))
         {
             std::fseek(Filehandle, SEEK_SET, SEEK_END);
             const auto Size = std::ftell(Filehandle);
             std::rewind(Filehandle);
 
-            auto Filebuffer = std::make_unique<char[]>(Size);
+            const auto Filebuffer = std::make_unique<char[]>(Size);
             std::fread(Filebuffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
@@ -88,7 +104,7 @@ namespace Steam
         }
 
         // Acknowledge that the game has started.
-        auto Event = OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, Startevent);
+        const auto Event = OpenEventA(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, Startevent);
         SetEvent(Event); CloseHandle(Event);
 
         // Notify the game that we are done.
@@ -99,5 +115,7 @@ namespace Steam
         CloseHandle(Sharedfilehandle);
         CloseHandle(Consumesemaphore);
         CloseHandle(Producesemaphore);
+
+        return 0;
     }
 }

@@ -12,7 +12,7 @@ namespace Logging
     // Usually set by CMAKE.
     #if !defined(MODULENAME)
     #define MODULENAME "NoModuleName"
-    #warning No module name specified for the logging.
+    #pragma message("Warning: No module name specified for the logging.")
     #endif
 
     // Set in Common.hpp
@@ -24,30 +24,60 @@ namespace Logging
     constexpr auto Logfile = LOGPATH "/" MODULENAME ".log";
 
     // Logfile, stderr, and Ingame_GUI
-    void toStream(const std::string_view Message);
-    void toConsole(const std::string_view Message);
-    void toFile(std::string_view Filename, const std::string_view Message);
+    void toStream(std::u8string_view Message);
+    void toConsole(std::u8string_view Message);
+    void toFile(std::string_view Filename, std::u8string_view Message);
 
     // Formatted standard printing.
-    inline void Print(const char Prefix, const std::string_view Message)
+    inline void Print(const char Prefix, std::string_view Message)
     {
+        char Buffer[16]{};
         const auto Now{ std::time(nullptr) };
-        char Buffer[80]{};
+        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
+        const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.data(), Message.size());
+        const auto Encoded = Encoding::toUTF8(Formatted);
 
-        std::strftime(Buffer, 80, "%H:%M:%S", std::localtime(&Now));
-        const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data());
+        // Output.
+        toFile(Logfile, Encoded);
+        toConsole(Encoded);
+        toStream(Encoded);
+    }
+    inline void Print(const char Prefix, std::wstring_view Message)
+    {
+        char Buffer[16]{};
+        const auto Now{ std::time(nullptr) };
+        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
+        const auto Formatted = va(L"[%c][%-8s] %*ls\n", Prefix, Buffer, Message.data(), Message.size());
+        const auto Encoded = Encoding::toUTF8(Formatted);
+
+        // Output.
+        toFile(Logfile, Encoded);
+        toConsole(Encoded);
+        toStream(Encoded);
+    }
+    inline void Print(const char Prefix, std::u8string_view Message)
+    {
+        char Buffer[16]{};
+        const auto Now{ std::time(nullptr) };
+        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
+        auto Formatted = Encoding::toUTF8(va(L"[%c][%-8s] ", Prefix, Buffer));
+        Formatted += Message;
+        Formatted += u8'\n';
 
         // Output.
         toFile(Logfile, Formatted);
-        #if !defined(NDEBUG)
-        toStream(Formatted);
         toConsole(Formatted);
-        #endif
+        toStream(Formatted);
     }
 
     // Remove the old logfile.
     inline void Clearlog()
     {
+        #if defined(_WIN32)
+        // We use UTF88 for the output, always.
+        SetConsoleOutputCP(CP_UTF8);
+        #endif
+
         std::remove(Logfile);
     }
 }

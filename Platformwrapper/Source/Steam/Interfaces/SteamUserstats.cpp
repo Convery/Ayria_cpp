@@ -54,22 +54,22 @@ namespace Steam
             Traceprint();
             return true;
         }
-        bool GetStat1(CGameID nGameID, const char *pchName, int32_t *pData)
+        bool GetStat1(CGameID nGameID, const char *pchName, int32_t *pData) const
         {
             Infoprint(va("Get stat \"%s\"..", pchName));
             return false;
         }
-        bool GetStat2(CGameID nGameID, const char *pchName, float *pData)
+        bool GetStat2(CGameID nGameID, const char *pchName, float *pData) const
         {
             Infoprint(va("Get stat \"%s\"..", pchName));
             return false;
         }
-        bool SetStat1(CGameID nGameID, const char *pchName, int32_t nData)
+        bool SetStat1(CGameID nGameID, const char *pchName, int32_t nData) const
         {
             Infoprint(va("Set stat \"%s\" = %d", pchName, nData));
             return false;
         }
-        bool SetStat2(CGameID nGameID, const char *pchName, float fData)
+        bool SetStat2(CGameID nGameID, const char *pchName, float fData) const
         {
             Infoprint(va("Set stat \"%s\" = %f", pchName, fData));
             return false;
@@ -79,7 +79,7 @@ namespace Steam
             Traceprint();
             return false;
         }
-        bool GetAchievement0(CGameID nGameID, const char *pchName, bool *pbAchieved)
+        bool GetAchievement0(CGameID nGameID, const char *pchName, bool *pbAchieved) const
         {
             Infoprint(va("Get achievement \"%s\"..", pchName));
             return false;
@@ -89,7 +89,7 @@ namespace Steam
             Traceprint();
             return false;
         }
-        bool SetAchievement0(CGameID nGameID, const char *pchName)
+        bool SetAchievement0(CGameID nGameID, const char *pchName) const
         {
             Infoprint(va("Achievement \"%s\" progress: 100%%", pchName));
             return false;
@@ -104,7 +104,7 @@ namespace Steam
             Traceprint();
             return true;
         }
-        bool ClearAchievement0(CGameID nGameID, const char *pchName)
+        bool ClearAchievement0(CGameID nGameID, const char *pchName) const
         {
             Infoprint(va("Achievement \"%s\" progress: 0%%", pchName));
             return false;
@@ -129,7 +129,7 @@ namespace Steam
             Traceprint();
             return false;
         }
-        bool IndicateAchievementProgress0(CGameID nGameID, const char *pchName, uint32_t nCurProgress, uint32_t nMaxProgress)
+        bool IndicateAchievementProgress0(CGameID nGameID, const char *pchName, uint32_t nCurProgress, uint32_t nMaxProgress) const
         {
             Infoprint(va("Achievement \"%s\" progress: %f%%", pchName, float(nCurProgress) / float(nMaxProgress)));
 
@@ -145,19 +145,19 @@ namespace Steam
             Traceprint();
             return true;
         }
-        bool GetStat3(const char *pchName, int32_t *pData)
+        bool GetStat3(const char *pchName, int32_t *pData) const
         {
             return GetStat1({}, pchName, pData);
         }
-        bool GetStat4(const char *pchName, float *pData)
+        bool GetStat4(const char *pchName, float *pData) const
         {
             return GetStat2({}, pchName, pData);
         }
-        bool SetStat3(const char *pchName, int32_t nData)
+        bool SetStat3(const char *pchName, int32_t nData) const
         {
             return SetStat1({}, pchName, nData);
         }
-        bool SetStat4(const char *pchName, float fData)
+        bool SetStat4(const char *pchName, float fData) const
         {
             return SetStat2({}, pchName, fData);
         }
@@ -166,15 +166,15 @@ namespace Steam
             Traceprint();
             return false;
         }
-        bool GetAchievement1(const char *pchName, bool *pbAchieved)
+        bool GetAchievement1(const char *pchName, bool *pbAchieved) const
         {
             return GetAchievement0({}, pchName, pbAchieved);
         }
-        bool SetAchievement1(const char *pchName)
+        bool SetAchievement1(const char *pchName) const
         {
             return SetAchievement0({}, pchName);
         }
-        bool ClearAchievement1(const char *pchName)
+        bool ClearAchievement1(const char *pchName) const
         {
             return ClearAchievement0({}, pchName);
         }
@@ -191,7 +191,7 @@ namespace Steam
         {
             return GetAchievementDisplayAttribute0({}, pchName, pchKey);
         }
-        bool IndicateAchievementProgress1(const char *pchName, uint32_t nCurProgress, uint32_t nMaxProgress)
+        bool IndicateAchievementProgress1(const char *pchName, uint32_t nCurProgress, uint32_t nMaxProgress) const
         {
             return IndicateAchievementProgress0({}, pchName, nCurProgress, nMaxProgress);
         }
@@ -200,21 +200,21 @@ namespace Steam
             Traceprint();
             return 0;
         }
-        bool GetUserStat1(CSteamID steamIDUser, const char *pchName, int32_t *pData)
+        bool GetUserStat1(CSteamID steamIDUser, const char *pchName, int32_t *pData) const
         {
-            if (steamIDUser.ConvertToUint64() == Ayria::Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetStat3(pchName, pData);
         }
-        bool GetUserStat2(CSteamID steamIDUser, const char *pchName, float *pData)
+        bool GetUserStat2(CSteamID steamIDUser, const char *pchName, float *pData) const
         {
-            if (steamIDUser.ConvertToUint64() == Ayria::Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetStat4(pchName, pData);
         }
-        bool GetUserAchievement(CSteamID steamIDUser, const char *pchName, bool *pbAchieved)
+        bool GetUserAchievement(CSteamID steamIDUser, const char *pchName, bool *pbAchieved) const
         {
-            if (steamIDUser.ConvertToUint64() == Ayria::Global.UserID)
+            if (steamIDUser.ConvertToUint64() == Steam.XUID)
                 return false;
             return GetAchievement1(pchName, pbAchieved);
         }

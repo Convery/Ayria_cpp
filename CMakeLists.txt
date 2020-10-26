@@ -19,30 +19,22 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
     if(CMAKE_BUILD_TYPE MATCHES Release)
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /Gw /GR- /GL /Os /Oy /O2 /GF /Brepro")
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /W4 /Ogsiytyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except- /arch:AVX")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy") # /d2cgsummary
-        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:fastlink /cgthreads:8")
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /utf-8 /fp:except- /arch:AVX") # /d2cgsummary
+        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:full /cgthreads:8")
     endif()
 
-    # Force static runtime.
-    foreach(flag_var
-            CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO
-            CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
-            CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO
-            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
-        if(${flag_var} MATCHES "/MD")
-            string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-        endif()
+    # Force static runtime, warnings, and override default flags.
+    foreach(Flag
+            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+            CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE)
+        string(REGEX REPLACE "/W[0-4]" "/W4" ${Flag} "${${Flag}}")
+        string(REPLACE "/GR " "/GR- " ${Flag} "${${Flag}}")
+        string(REPLACE "/Ob2" "/Ob3" ${Flag} "${${Flag}}")
+        string(REPLACE "/MD" "/MT" ${Flag} "${${Flag}}")
     endforeach()
-
-    # Force warnings to level 4.
-    if (CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-    endif()
 else()
     # Assume GNU-GCC/CLANG.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
@@ -75,8 +67,8 @@ set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 add_subdirectory(Utilities)
 
 # Add the sub-projects.
+add_subdirectory(Ayria)
 add_subdirectory(Injector)
-add_subdirectory(Bootstrapper)
 add_subdirectory(Localnetworking)
 add_subdirectory(Platformwrapper)
 

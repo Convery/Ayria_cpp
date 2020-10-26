@@ -64,6 +64,13 @@ namespace Winsock
     {
         const auto Readableaddress = getAddress(Name);
 
+        // Windows IPv6 sockets should be in dual-stack mode before binding.
+        if(Name->sa_family == AF_INET6)
+        {
+            const DWORD Argument{};
+            setsockopt(Socket, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&Argument, sizeof(Argument));
+        }
+
         // We don't allow binding to internal addresses, just localhost.
         if (0 == std::memcmp(Readableaddress.c_str(), "192.168.", 8) || 0 == std::memcmp(Readableaddress.c_str(), "10.", 3))
         {
@@ -92,6 +99,9 @@ namespace Winsock
             // Create a new one if needed and send to the socket.
             const auto Localsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             Localnetworking::Connectserver(Localsocket, Proxyserver->Instance);
+
+            unsigned long Argument{ 1 };
+            ioctlsocket(Localsocket, FIONBIO, &Argument);
             Connections[Localsocket] = *(sockaddr_in *)To;
             return send(Localsocket, Buffer, Length, NULL);
         }
@@ -133,7 +143,7 @@ namespace Winsock
         if (!Proxyserver) return Calloriginal(gethostbyname)(Hostname);
 
         // Resolve to a known host and replace the address.
-        auto Result = Calloriginal(gethostbyname)("localhost");
+        const auto Result = Calloriginal(gethostbyname)("localhost");
         Result->h_name = const_cast<char *>(Hostname);
         Result->h_addr_list[1] = nullptr;
         Result->h_addrtype = AF_INET;
@@ -152,7 +162,7 @@ namespace Winsock
         if (!Proxyserver) return Calloriginal(getaddrinfo)(Nodename, Servicename, Hints, Result);
 
         // Resolve to a known host and replace the address.
-        auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
+        const auto lResult = Calloriginal(getaddrinfo)("localhost", Servicename, Hints, Result);
 
         // Possibly leak some memory if the setup is silly.
         ((sockaddr_in *)(*Result)->ai_addr)->sin_addr.s_addr = Proxyserver->Address.sin_addr.s_addr;
@@ -206,13 +216,15 @@ namespace Localnetworking
 
             if (Address1)
             {
-                Mhook_SetHook((void **)&Address1, Target);
-                Winsock::Originalfunctions[Name] = (void *)Address1;
+                const auto Trampoline = Hooking::Stomphook(Address1, Target);
+                Winsock::Originalfunctions[Name] = Trampoline;
+                assert(Trampoline);
             }
             if (Address2)
             {
-                Mhook_SetHook((void **)&Address2, Target);
-                Winsock::Originalfunctions[Name] = (void *)Address2;
+                const auto Trampoline = Hooking::Stomphook(Address2, Target);
+                Winsock::Originalfunctions[Name] = Trampoline;
+                assert(Trampoline);
             }
         };
 

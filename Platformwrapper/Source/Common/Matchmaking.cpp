@@ -1,88 +1,90 @@
-/*
-    Initial author: Convery (tcn@ayria.se)
-    Started: 2019-12-08
-    License: MIT
-*/
 
-#include "Common.hpp"
+
+
+#include <Stdinclude.hpp>
+#include <Common.hpp>
+#include "../Steam/Steam.hpp"
 
 namespace Matchmaking
 {
-    std::vector<std::shared_ptr<Server_t>> Externalhosts{};
-    std::shared_ptr<Server_t> Localhost{};
+    std::vector<Session_t> Netservers;
+    static uint32_t Lastlocalupdate{};
+    static uint32_t Lastnetupdate{};
+    Session_t Localsession;
+    bool isDirty{};
 
-    // A list of all currently active servers on the local net.
-    std::vector<std::shared_ptr<Server_t>> Externalservers()
+    std::vector<Session_t> *getNetworkservers()
     {
-        const auto Localtime = time(nullptr) - Ayria::Global.Startuptimestamp;
-        std::vector<std::shared_ptr<Server_t>> Activeservers{};
-        for (const auto &Server : Externalhosts)
+        const auto Currenttime = GetTickCount();
+        if ((Currenttime - Lastnetupdate) > 2000)
         {
-            if ((Localtime - Server->Core->Timestamp) < 30)
+            if (const auto Callback = Ayria.API_Matchmake)
             {
-                Activeservers.push_back(Server);
-            }
-        }
-        return Activeservers;
-    }
-    std::shared_ptr<Server_t> Localserver()
-    {
-        if (!Localhost)
-        {
-            Server_t Local{};
-            Local.Core = Communication::getLocalhost();
-            Localhost = std::make_shared<Server_t>(std::move(Local));
-        }
-
-        return Localhost;
-    }
-
-    // Notify the public about our node being dirty.
-    void Broadcast()
-    {
-        if (Localserver()->Session.empty()) Communication::Broadcast("Matchmaking::Terminate", "");
-        else Communication::Broadcast("Matchmaking::Update", Base64::Encode(Localserver()->Session.dump()));
-    }
-
-    // Callbacks on events by name.
-    void addEventhandler(const std::string &Event, Eventcallback_t Callback)
-    {
-        Communication::addEventhandler(Event, [=](std::shared_ptr<Communication::Node_t> Sender, std::string &&Payload)
-        {
-            LABEL_RETRY:
-            for (const auto &Server : Externalhosts)
-            {
-                if (Server->Core == Sender)
+                Netservers.clear();
+                const auto Array = ParseJSON(Callback(Ayria.toFunctionID("getNetworksessions"), nullptr));
+                for (const auto &Config : Array)
                 {
-                    return Callback(Server, std::move(Payload));
+                    Session_t Session{};
+                    Session.Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
+                    Session.Playerdata = Config.value("Playerdata", nlohmann::json::object());
+                    Session.Gameinfo = Config.value("Gameinfo", nlohmann::json::object());
+                    Session.Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
+                    Session.HostID = Config.value("HostID", 0);
+                    Netservers.push_back(Session);
                 }
             }
 
-            Externalhosts.emplace_back(std::make_shared<Server_t>())->Core = Sender;
-            goto LABEL_RETRY;
-        });
-    }
-
-    // Standard matchmaking callbacks.
-    static void onUpdate(std::shared_ptr<Server_t> Sender, std::string &&Payload)
-    {
-        try
-        {
-            // Parse the payload-data as JSON, for some reason std::string doesn't decay properly.
-            Sender->Session = nlohmann::json::parse(Base64::Decode(Payload).c_str());
-        } catch (std::exception &) {}
-    }
-    static void onTerminate(std::shared_ptr<Server_t> Sender, std::string &&)
-    {
-        Sender->Core->Timestamp = 0;
-    }
-
-    struct Startup
-    {
-        Startup()
-        {
-            addEventhandler("Matchmaking::Update", onUpdate);
-            addEventhandler("Matchmaking::Terminate", onTerminate);
+            Lastnetupdate = Currenttime;
         }
-    }; static Startup Loader{};
+
+        return &Netservers;
+    }
+    Session_t *getLocalsession()
+    {
+        // Ensure that we don't update in the middle of a frame.
+        if (isDirty) [[likely]] return &Localsession;
+
+        const auto Currenttime = GetTickCount();
+        if ((Currenttime - Lastlocalupdate) > 2000)
+        {
+            if (const auto Callback = Ayria.API_Matchmake)
+            {
+                const auto Config = ParseJSON(Callback(Ayria.toFunctionID("getLocalsession"), nullptr));
+                Localsession.Playerdata = Config.value("Playerdata", nlohmann::json::object());
+                Localsession.Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
+                Localsession.Gameinfo = Config.value("Gameinfo", nlohmann::json::object());
+                Localsession.Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
+                Localsession.HostID = Config.value("HostID", 0);
+            }
+
+            Lastlocalupdate = Currenttime;
+        }
+
+        return &Localsession;
+    }
+
+    void doFrame()
+    {
+        if (!isDirty) [[likely]] return;
+
+        auto Object = nlohmann::json::object();
+        Object["Hostinfo"] = Localsession.Hostinfo;
+        Object["Gameinfo"] = Localsession.Gameinfo;
+        Object["Playerdata"] = Localsession.Playerdata;
+        Object["Sessiondata"] = Localsession.Sessiondata;
+
+        const auto Plaintext = Object.dump();
+        if (const auto Callback = Ayria.API_Matchmake)
+        {
+            Callback(Ayria.toFunctionID("Sessionupdate"), Object.dump().c_str());
+        }
+
+        isDirty = false;
+    }
+    void Update()
+    {
+        isDirty = true;
+    }
 }
+
+

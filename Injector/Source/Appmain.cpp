@@ -88,7 +88,7 @@ int wmain(int Argc, wchar_t **Argv)
 
         Modulepath = Modulepath.substr(0, Modulepath.find_last_of(L'\\'));
         Modulepath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
-        auto Remotestring = VirtualAllocEx(Processinfo.hProcess, NULL, Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        const auto Remotestring = VirtualAllocEx(Processinfo.hProcess, NULL, Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
         if (!Remotestring)
         {
@@ -96,9 +96,9 @@ int wmain(int Argc, wchar_t **Argv)
             return 1;
         }
 
-        auto Libraryaddress = GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
+        const auto Libraryaddress = GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
         WriteProcessMemory(Processinfo.hProcess, Remotestring, Modulepath.c_str(), Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), NULL);
-        auto Result = CreateRemoteThread(Processinfo.hProcess, NULL, NULL, LPTHREAD_START_ROUTINE(Libraryaddress), Remotestring, NULL, NULL);
+        const auto Result = CreateRemoteThread(Processinfo.hProcess, NULL, NULL, LPTHREAD_START_ROUTINE(Libraryaddress), Remotestring, NULL, NULL);
 
         if(Result == NULL)
         {

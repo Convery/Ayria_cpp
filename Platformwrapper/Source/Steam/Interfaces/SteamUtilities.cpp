@@ -11,27 +11,23 @@ namespace Steam
 {
     struct SteamUtils
     {
-        uint32_t GetSecondsSinceAppActive()
+        uint32_t GetSecondsSinceAppActive() const
         {
             Traceprint();
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() - Ayria::Global.Startuptimestamp);
+            return uint32_t(time(NULL) - Steam.Startuptime);
         }
-        uint32_t GetSecondsSinceComputerActive()
+        uint32_t GetSecondsSinceComputerActive() const
         {
             Traceprint();
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+            return uint32_t(GetTickCount64() / 1000);
         }
         uint32_t GetConnectedUniverse()
         {
-            Traceprint();
-
-            // k_EUniversePublic
-            return 1;
+            return Steam.XUID.GetEUniverse();
         }
-        uint32_t GetServerRealTime()
+        uint32_t GetServerRealTime() const
         {
-            Traceprint();
-            return uint32_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+            return uint32_t(time(NULL));
         }
 
         const char *GetIPCountry()
@@ -75,7 +71,7 @@ namespace Steam
 
         uint32_t GetAppID()
         {
-            return Global.ApplicationID;
+            return Steam.ApplicationID;
         }
         void SetOverlayNotificationPosition(uint32_t eNotificationPosition)
         {
@@ -120,8 +116,12 @@ namespace Steam
         }
         uint64_t CheckFileSignature(const char *szFileName)
         {
-            Traceprint();
-            return 0;
+            const auto RequestID = Callbacks::Createrequest();
+            const auto Request = new Callbacks::CheckFileSignature_t();
+            Request->m_eCheckFileSignature = Callbacks::CheckFileSignature_t::ECheckFileSignature(1); // k_ECheckFileSignatureValidSignature
+
+            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUtilsCallbacks + 5, Request);
+            return RequestID;
         }
         bool ShowGamepadTextInput(uint32_t eInputMode, uint32_t eInputLineMode, const char *szText, uint32_t uMaxLength)
         {
@@ -142,7 +142,8 @@ namespace Steam
         const char *GetSteamUILanguage()
         {
             Traceprint();
-            return Global.Language.c_str();
+            static const auto Locale = Steam.Locale.asASCII();
+            return Locale.c_str();
         }
         bool IsSteamRunningInVR()
         {

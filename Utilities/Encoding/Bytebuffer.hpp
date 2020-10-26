@@ -11,9 +11,10 @@
 #pragma warning(push)
 #include <Stdinclude.hpp>
 #pragma warning(disable: 4702)
+using Blob = std::basic_string<uint8_t>;
+using Blob_view = std::basic_string_view<uint8_t>;
 
 // The types of data that can be handled.
-using Blob = std::basic_string<uint8_t>;
 enum Bytebuffertype : uint8_t
 {
     BB_NONE = 0,
@@ -57,7 +58,7 @@ namespace Internal
         if constexpr (std::is_enum<Type>::value) return toID<typename std::underlying_type<Type>::type>();
 
         // Special containers.
-        if constexpr (std::is_same<Type, Blob>::value)                          return BB_BLOB;
+        if constexpr (std::is_same<Type, std::basic_string<uint8_t>>::value)    return BB_BLOB;
         if constexpr (std::is_same<Type, std::basic_string<char>>::value)       return BB_ASCIISTRING;
         if constexpr (std::is_same<Type, std::basic_string<wchar_t>>::value)    return BB_UNICODESTRING;
 
@@ -111,6 +112,11 @@ struct Bytebuffer
         Internaliterator = Right.Internaliterator;
         Internalbuffer.swap(Right.Internalbuffer);
         Internalsize = Right.Internalsize;
+    }
+    Bytebuffer(size_t Size)
+    {
+        Internalbuffer = std::make_unique<uint8_t[]>(Size);
+        Internalsize = Size;
     }
     Bytebuffer() = default;
 
@@ -223,8 +229,7 @@ struct Bytebuffer
             Buffer.reserve(Read<uint32_t>(true));
             auto Count = Read<uint32_t>(false);
 
-            while (Count--)
-                Buffer.push_back(Read<typename Type::value_type>(false));
+            while (Count--) Buffer.emplace_back(Read<typename Type::value_type>(false));
             return !Buffer.empty();
         }
 
@@ -293,7 +298,7 @@ struct Bytebuffer
     }
 
     // Utility functionality.
-    [[nodiscard]] Blob asBlob()
+    [[nodiscard]] Blob asBlob() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
@@ -307,17 +312,17 @@ struct Bytebuffer
         if (Byte != BB_NONE) Internaliterator--;
         return Byte;
     }
-    [[nodiscard]] size_t Remaininglength()
+    [[nodiscard]] size_t Remaininglength() const
     {
         return Internalsize - Internaliterator;
     }
-    [[nodiscard]] std::basic_string_view<uint8_t> asView()
+    [[nodiscard]] Blob_view asView() const
     {
         return { Internalbuffer.get(), Internalsize };
     }
 
     // Supported operators, acts on the internal state.
-    bool operator == (const Bytebuffer &Right) noexcept
+    bool operator == (const Bytebuffer &Right) const noexcept
     {
         if (Internalsize != Right.Internalsize) return false;
         return 0 == std::memcmp(Internalbuffer.get(), Right.Internalbuffer.get(), Internalsize);
@@ -373,7 +378,7 @@ struct bbObject : ISerializable
     std::vector<ISerializable *> Values;
 
     ~bbObject() override { for (auto Item : Values) delete Item; }
-    explicit bbObject(std::vector<ISerializable *> Input) : Values(Input) {}
+    explicit bbObject(std::vector<ISerializable *> Input) : Values(std::move(Input)) {}
 
     void Serialize(Bytebuffer &Buffer) override { for (const auto &Item : Values) Item->Serialize(Buffer); }
     void Deserialize(Bytebuffer &Buffer) override { for (const auto &Item : Values) Item->Deserialize(Buffer); }
@@ -393,5 +398,20 @@ template<typename Type> struct bbValue : ISerializable
     bbValue(Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
     bbValue(Type &&Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
 };
+
+// Helper to bypass formatting.
+inline Blob bbSerialize(ISerializable &Object)
+{
+    Bytebuffer Tempbuffer;
+    Object.Serialize(Tempbuffer);
+    return Tempbuffer.asBlob();
+}
+inline Blob bbSerialize(ISerializable &&Object)
+{
+    Bytebuffer Tempbuffer;
+    Object.Serialize(Tempbuffer);
+    return Tempbuffer.asBlob();
+}
+
 #pragma endregion
 #pragma warning(pop)

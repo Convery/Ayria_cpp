@@ -7,6 +7,7 @@
 */
 
 #pragma once
+#if __has_include(<concepts>)
 #include <type_traits>
 
 namespace Branchless
@@ -50,6 +51,5 @@ namespace Branchless
     static_assert(clamp(42, 3, 40) == 40, "Branchless::clamp");
     static_assert(clamp(23, 3, 40) == 23, "Branchless::clamp");
     static_assert(clamp(2, 3, 40) == 3, "Branchless::clamp");
-
-    constexpr auto k = clamp(42, 3, 40);
 }
+#endif

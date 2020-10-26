@@ -22,7 +22,7 @@ namespace Patternscan
     using Patternmask_t = std::basic_string<uint8_t>;
 
     // Find a single pattern in a range.
-    [[nodiscard]] inline std::uintptr_t Findpattern(Range_t &Range, Patternmask_view Pattern, Patternmask_view Mask)
+    [[nodiscard]] inline std::uintptr_t Findpattern(const Range_t &Range, Patternmask_view Pattern, Patternmask_view Mask)
     {
         assert(Pattern.size() == Mask.size());
         assert(Pattern.size() != 0);
@@ -32,31 +32,36 @@ namespace Patternscan
 
         size_t Count = Range.second - Range.first - Pattern.size();
         auto Base = (const uint8_t *)Range.first;
-        uint8_t Firstbyte = Pattern[0];
+        const uint8_t Firstbyte = Pattern[0];
 
         // Inline compare.
         const auto Compare = [&](const uint8_t *Address) -> bool
         {
             const size_t Patternlength = Pattern.size();
-            for(size_t i = 1; i < Patternlength; ++i)
+            for (size_t i = 1; i < Patternlength; ++i)
             {
-                if(Mask[i] && Address[i] != Pattern[i])
+                if (Mask[i] && Address[i] != Pattern[i])
                     return false;
             }
             return true;
         };
 
-        // Iterate over the range.
-        for(size_t Index = 0; Index < Count; ++Index)
+        while (true)
         {
-            if(Base[Index] != Firstbyte)
-                continue;
+            // Use memchr as the compiler can use an optimized scan rather than a for loop.
+            auto Piviot = (const uint8_t *)std::memchr(Base, Firstbyte, Count);
 
-            if(Compare(Base + Index))
-                return Range.first + Index;
+            // No more bytes in the range.
+            if (!Piviot) [[unlikely]]
+                return 0;
+
+            // Rare case that something is found.
+            if (Compare(Piviot)) [[unlikely]]
+                return std::uintptr_t(Piviot);
+
+            Base = Piviot + 1;
+            Count = Range.second - std::uintptr_t(Base) - Pattern.size();
         }
-
-        return 0;
     }
 
     // Scan until the end of the range and return all results.
@@ -66,11 +71,11 @@ namespace Patternscan
         Range_t Localrange = Range;
         size_t Lastresult = 0;
 
-        while(true)
+        while (true)
         {
             Lastresult = Findpattern(Localrange, Pattern, Mask);
 
-            if(Lastresult == 0)
+            if (Lastresult == 0)
                 break;
 
             Localrange.first = Lastresult + 1;
@@ -81,7 +86,7 @@ namespace Patternscan
     }
 
     // Calculate the hosts default ranges, once per compilation-module on some compilers.
-    [[nodiscard]] inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges(bool Force = false)
+    [[nodiscard]] inline std::pair<Range_t /* .text */, Range_t /* .data */> Defaultranges(bool Forceupdate = false)
     {
         /*
             NOTE(tcn):
@@ -91,36 +96,37 @@ namespace Patternscan
 
             #include <mach-o/getsect.h>
 
+            Textsegment.first = size_t(dlopen(NULL, RTLD_LAZY));
             Textsegment.second = size_t(get_etext());
             Datasegment.first = size_t(get_etext());
             Datasegment.second = size_t(get_end());
         */
 
         static Range_t Textsegment{}, Datasegment{};
-        if(Textsegment != Datasegment && !Force) return { Textsegment, Datasegment };
+        if (Textsegment != Datasegment && !Forceupdate) return { Textsegment, Datasegment };
 
         #if defined(_WIN32)
-            HMODULE Module = GetModuleHandleA(nullptr);
-            if(!Module) return { Textsegment, Datasegment };
+        HMODULE Module = GetModuleHandleA(nullptr);
+        if (!Module) return { Textsegment, Datasegment };
 
-            SYSTEM_INFO SI;
-            GetNativeSystemInfo(&SI);
+        SYSTEM_INFO SI;
+        GetNativeSystemInfo(&SI);
 
-            PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
-            PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
+        const PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
+        const PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
 
-            Textsegment.first = size_t(Module) + NTHeader->OptionalHeader.BaseOfCode;
-            Textsegment.second = Textsegment.first + NTHeader->OptionalHeader.SizeOfCode;
-            Textsegment.second -= Textsegment.second % SI.dwPageSize;
+        Textsegment.first = size_t(Module) + NTHeader->OptionalHeader.BaseOfCode;
+        Textsegment.second = Textsegment.first + NTHeader->OptionalHeader.SizeOfCode;
+        Textsegment.second -= Textsegment.second % SI.dwPageSize;
 
-            Datasegment.first = Textsegment.second;
-            Datasegment.second = Datasegment.first + NTHeader->OptionalHeader.SizeOfInitializedData;
-            Datasegment.second -= Datasegment.second % SI.dwPageSize;
+        Datasegment.first = Textsegment.second;
+        Datasegment.second = Datasegment.first + NTHeader->OptionalHeader.SizeOfInitializedData;
+        Datasegment.second -= Datasegment.second % SI.dwPageSize;
         #else
-            Textsegment.first = *(size_t *)dlopen(NULL, RTLD_LAZY);
-            Textsegment.second = size_t(&_etext);
-            Datasegment.first = size_t(&_etext);
-            Datasegment.second = size_t(&_end);
+        Textsegment.first = size_t(dlopen(NULL, RTLD_LAZY));
+        Textsegment.second = size_t(&_etext);
+        Datasegment.first = size_t(&_etext);
+        Datasegment.second = size_t(&_end);
         #endif
 
         return { Textsegment, Datasegment };
@@ -138,7 +144,7 @@ namespace Patternscan
             Currentpage = (size_t)Pageinformation.BaseAddress + Pageinformation.RegionSize;
         }
         #else
-        assert(false);
+        static_assert(false, "Not implemented");
         #endif
 
         Range.second = Currentpage;
@@ -155,13 +161,13 @@ namespace Patternscan
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 10, 11, 12, 13, 14, 15 };
 
-        for(const auto &Item : Readable)
+        for (const auto &Item : Readable)
         {
-            if(Item == ' ') { Count = 0; continue; }
-            if(Item == '?') Result.push_back('\x00');
+            if (Item == ' ') { Count = 0; continue; }
+            if (Item == '?') Result.push_back('\x00');
             else
             {
-                if(Count++ & 1) Result.back() = Result.back() << 4 | Hex[Item - 0x30];
+                if (Count++ & 1) Result.back() = Result.back() << 4 | Hex[Item - 0x30];
                 else Result.push_back(Hex[Item - 0x30]);
             }
         }
@@ -173,10 +179,19 @@ namespace Patternscan
     {
         const auto Pattern = from_string(IDAPattern);
 
-        while(IDAPattern.find(" 0 ") != std::string::npos) IDAPattern.replace(IDAPattern.find(" 0 "), 4, " 00 ");
-        while(IDAPattern.find("00") != std::string::npos) IDAPattern.replace(IDAPattern.find("00"), 2, "01" );
+        while (IDAPattern.find(" 0 ") != std::string::npos) IDAPattern.replace(IDAPattern.find(" 0 "), 4, " 00 ");
+        while (IDAPattern.find("00") != std::string::npos) IDAPattern.replace(IDAPattern.find("00"), 2, "01");
 
         return Findpatterns(Range, Pattern, from_string(IDAPattern));
+    }
+    [[nodiscard]] inline std::uintptr_t Findpattern(const Range_t Range, std::string IDAPattern)
+    {
+        const auto Pattern = from_string(IDAPattern);
+
+        while (IDAPattern.find(" 0 ") != std::string::npos) IDAPattern.replace(IDAPattern.find(" 0 "), 4, " 00 ");
+        while (IDAPattern.find("00") != std::string::npos) IDAPattern.replace(IDAPattern.find("00"), 2, "01");
+
+        return Findpattern(Range, Pattern, from_string(IDAPattern));
     }
 
     // Find strings in memory - helper.

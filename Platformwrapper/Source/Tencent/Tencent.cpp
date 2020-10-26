@@ -6,7 +6,7 @@
 
 #include <winternl.h>
 #include <Stdinclude.hpp>
-#include "../Common/Common.hpp"
+#include "../Common.hpp"
 #pragma warning(disable : 4100)
 
 namespace Tencent
@@ -66,8 +66,8 @@ namespace Tencent
         virtual BOOL Initialize()
         {
             // Other components may expect us to have a mapping with at least 64 'entries'. See the unordered_maps above.
-            auto Handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 4096, va("TCLS_SHAREDMEMEMORY%u", GetCurrentProcessId()).c_str());
-            auto Pointer = MapViewOfFile(Handle, 0xF001F, 0, 0, 0);
+            const auto Handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 4096, va("TCLS_SHAREDMEMEMORY%u", GetCurrentProcessId()).c_str());
+            const auto Pointer = MapViewOfFile(Handle, 0xF001F, 0, 0, 0);
             *(DWORD *)Pointer = 64;
             Traceprint();
 
@@ -90,7 +90,7 @@ namespace Tencent
         {
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
 
-            auto Result = Integers.find(Tag);
+            const auto Result = Integers.find(Tag);
             if(Buffer && Result != Integers.end())
                 *Buffer = Result->second;
 
@@ -115,7 +115,7 @@ namespace Tencent
         // User info. NOTE(tcn): '_' because it needs to have a different name or CL changes the layout.
         virtual BOOL getBytestring_(uint32_t Tag, uint8_t *Buffer, uint32_t *Size, uint32_t ServerID)
         {
-            auto Result = Bytestrings.find(Tag);
+            const auto Result = Bytestrings.find(Tag);
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
             if(Result == Bytestrings.end()) return FALSE;
 
@@ -123,7 +123,7 @@ namespace Tencent
             if(Buffer) std::memcpy(Buffer, Result->second.c_str(), std::min(size_t(*Size), Result->second.size()));
 
             // Always set the total size.
-            *Size = Result->second.size();
+            *Size = uint32_t(Result->second.size());
 
             // Notify listeners.
             Sendmessage(1 | (Tag << 0x10), ServerID != 0);
@@ -132,7 +132,7 @@ namespace Tencent
         }
         virtual BOOL getWidestring_(uint32_t Tag, wchar_t *Buffer, uint32_t *Size, uint32_t ServerID)
         {
-            auto Result = Widestrings.find(Tag);
+            const auto Result = Widestrings.find(Tag);
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
             if(Result == Widestrings.end()) return FALSE;
 
@@ -140,7 +140,7 @@ namespace Tencent
             if(Buffer) std::wmemcpy(Buffer, Result->second.c_str(), std::min(size_t(*Size >> 1), Result->second.size()));
 
             // Always set the total size.
-            *Size = Result->second.size() * sizeof(wchar_t);
+            *Size = uint32_t(Result->second.size()) * sizeof(wchar_t);
 
             // Notify listeners.
             Sendmessage(1 | (Tag << 0x10), ServerID != 0);
@@ -151,7 +151,7 @@ namespace Tencent
         {
             Debugprint(va("%s(%u)", __FUNCTION__, Tag));
 
-            auto Result = DWORDs.find(Tag);
+            const auto Result = DWORDs.find(Tag);
             if(Buffer && Result != DWORDs.end())
                 *Buffer = Result->second;
 
@@ -172,19 +172,18 @@ extern "C" EXPORT_ATTR void Invoke(uint32_t GameID, void **Interface)
 
     // Notify the plugins that we are initialized.
     #if defined(_WIN32)
-    auto Bootstrapper = GetModuleHandleA("Localbootstrap.dll");
-    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%d.dll", Build::is64bit ? 64 : 32).c_str());
-    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(va("Bootstrapper%dd.dll", Build::is64bit ? 64 : 32).c_str());
+    HMODULE Bootstrapper = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+    if (!Bootstrapper) Bootstrapper = GetModuleHandleA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
     if (Bootstrapper)
     {
-        auto Callback = GetProcAddress(Bootstrapper, "onInitializationdone");
+        const auto Callback = GetProcAddress(Bootstrapper, "onInitialized");
         if (Callback) (reinterpret_cast<void (*)()>(Callback))();
     }
     #endif
 }
 
 // Tencent anti-cheat initialization override.
-extern "C" EXPORT_ATTR void* CreateObj(int Type);
+extern "C" EXPORT_ATTR void *CreateObj(int Type);
 
 // Tencent OpenID resolving override.
 extern "C" EXPORT_ATTR int InitCrossContextByOpenID(void *)
@@ -197,7 +196,7 @@ extern "C" EXPORT_ATTR int InitCrossContextByOpenID(void *)
 void Tencent_init()
 {
     #define Hook(x, y, z) { void *Address = GetProcAddress(LoadLibraryA(x), y); \
-    if(Address && Address != z && !Mhook_SetHook((void **)&Address, z)) assert(false);  }
+    if(Address && Address != z && !Hooking::Stomphook(Address, z)) assert(false);  }
 
     // Override the original interface generation.
     Hook("TenProxy.dll", "Invoke", Invoke);

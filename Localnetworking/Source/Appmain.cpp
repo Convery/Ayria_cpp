@@ -46,7 +46,7 @@ namespace Localnetworking
     std::unordered_map<size_t, IServer *> Serversockets{};
     std::vector<std::string> Hostblacklist{};
     std::vector<size_t> Pluginhandles{};
-    std::mutex Bottleneck{};
+    Defaultmutex Bottleneck{};
     FD_SET Activesockets{};
     uint16_t Backendport{};
     size_t Listensocket{};
@@ -75,7 +75,7 @@ namespace Localnetworking
                     auto Entry = &Proxyservers[Hostname.data()];
                     static uint16_t Proxycount{ 1 };
 
-                    Entry->Address.sin_addr.s_addr = 0xF0000000 | ++Proxycount;
+                    Entry->Address.sin_addr.s_addr = htonl(0xF0000000 | ++Proxycount);
                     Entry->Hostname = Hostname.data();
                     Entry->Instance = Server;
                     return Entry;
@@ -84,18 +84,18 @@ namespace Localnetworking
         }
 
         // No servers wants to deal with this address =(
-        Hostblacklist.push_back(Hostname.data());
+        Hostblacklist.emplace_back(Hostname.data());
         return nullptr;
     }
     Proxyserver_t *getProxyserver(sockaddr_in *Hostname)
     {
         std::scoped_lock _(Bottleneck);
 
-        for (const auto &Item : Proxyservers)
+        for (auto &Item : Proxyservers)
         {
             if (FNV::Equal(Item.second.Address.sin_addr, Hostname->sin_addr))
             {
-                return &Proxyservers[Item.first];
+                return &Item.second;
             }
         }
 
@@ -130,8 +130,15 @@ namespace Localnetworking
         // Sleeps through select().
         while (!Shouldquit)
         {
+            // Let's not poll when we don't have any sockets.
+            if (Activesockets.fd_count == 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+
             FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
-            const auto Count{ Activesockets.fd_count };
+            const auto Count{ Activesockets.fd_count + 1 };
             auto Timeout{ Defaulttimeout };
 
             // Now POSIX compatible.
@@ -166,7 +173,7 @@ namespace Localnetworking
                 if (Size <= 0)
                 {
                     // Winsock had some internal issue that we can't be arsed to recover from..
-                    if (Size == -1) Infoprint(va("Error on socket - %u", WSAGetLastError()));
+                    if (Size == -1) Infoprint(va("Error on socket %u - %u", Socket, WSAGetLastError()));
                     if (Server) Server->onDisconnect();
                     assert(Activesockets.fd_count);
                     FD_CLR(Socket, &Activesockets);
@@ -215,7 +222,23 @@ namespace Localnetworking
         // Notify the developer and spawn the server.
         Debugprint(va("Spawning localnet backend on %u", ntohs(Backendport)));
         std::atexit([]() { Shouldquit = true; });
-        std::thread(Pollsockets).detach();
+        std::thread([]()
+        {
+            // Name the thread for easier debugging.
+            {
+                #pragma pack(push, 8)
+                using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+                #pragma pack(pop)
+
+                __try
+                {
+                    THREADNAME_INFO Info{ 0x1000, "Localnetworking_Mainthread", 0xFFFFFFFF };
+                    RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+                } __except (EXCEPTION_EXECUTE_HANDLER) {}
+            }
+
+            Pollsockets();
+        }).detach();
 
         // Load all plugins from disk.
         for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))
@@ -232,6 +255,11 @@ namespace Localnetworking
 // Entrypoint when loaded as a plugin.
 extern "C" EXPORT_ATTR void __cdecl onStartup(bool)
 {
+    // Don't trust the bootstrapper to manage this.
+    static bool Initialized = false;
+    if (Initialized) return;
+    Initialized = true;
+
     // Initialize the background thread.
     Localnetworking::Createbackend(4200);
 
