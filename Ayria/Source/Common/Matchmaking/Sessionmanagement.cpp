@@ -64,9 +64,8 @@ namespace Matchmaking
         const auto Publickey = Clientinfo::getPublickey(Client->AccountID.AccountID);
         if (Publickey.empty()) return;
 
-        Session_t Session{ true, uint32_t(time(NULL)) };
-
         const auto Request = ParseJSON(JSONString);
+        Session_t Session{ true, uint32_t(time(NULL)) };
         Session.Signature = Request.value("Signature", std::string());
         Session.Hostinfo.ID.Raw = Request.value("HostID", uint64_t());
         Session.JSONData = Request.value("Sessiondata", std::string());
