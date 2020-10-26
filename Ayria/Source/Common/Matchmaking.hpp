@@ -12,91 +12,117 @@ namespace Matchmaking
     struct Session_t
     {
         // Internal use.
-        uint32_t HostID;
+        bool isActive;
         uint32_t Lastmessage;
 
-        nlohmann::json Hostinfo;
-        nlohmann::json Gameinfo;
-        nlohmann::json Playerdata;
-        nlohmann::json Sessiondata;
+        Account_t Hostinfo;
+        std::string JSONData; // Keyed by platform, ["Steam"]["Servername"] / ["Demonware"]["SessionID"]
+        std::string Signature;
     };
 
-    // Fetch all known sessions on the LAN.
-    std::vector<std::shared_ptr<Session_t>> getNetworksessions();
+    // Manage the sessions we know of, updates in the background.
+    std::vector<Session_t *> getLANSessions();
+    std::vector<Session_t *> getWANSessions();
     Session_t *getLocalsession();
 
     // Register handlers and set up session.
     void Initialize();
 
-    // Announce the clients info if active.
-    void doFrame();
-
     // Add API handlers.
-    inline std::string __cdecl getNetworksessions(const char *)
+    inline std::string __cdecl getSessions(const char *JSONString)
     {
-        auto Array = nlohmann::json::array();
-        static std::string Result;
+        const auto Request = ParseJSON(JSONString);
+        const auto noLAN = Request.value("noLAN", false);
+        const auto noWAN = Request.value("noWAN", false);
+        const auto noSelf = Request.value("noSelf", false);
 
-        for (const auto &Session : getNetworksessions())
+        auto Object = nlohmann::json::object();
+        if (!noLAN)
         {
-            auto Object = nlohmann::json::object();
-            Object["HostID"] = Session->HostID;
-            Object["Hostinfo"] = Session->Hostinfo;
-            Object["Gameinfo"] = Session->Gameinfo;
-            Object["Playerdata"] = Session->Playerdata;
-            Object["Sessiondata"] = Session->Sessiondata;
-
-            Array += Object;
+            Object["LAN"] = nlohmann::json::array();
+            for (const auto &Session : getLANSessions())
+            {
+                Object["LAN"] += nlohmann::json::object({
+                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
+                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                    { "HostID", Session->Hostinfo.ID.Raw },
+                    { "Sessiondata", Session->JSONData },
+                    { "Signature", Session->Signature }
+                });
+            }
+        }
+        if (!noWAN)
+        {
+            Object["WAN"] = nlohmann::json::array();
+            for (const auto &Session : getWANSessions())
+            {
+                Object["WAN"] += nlohmann::json::object({
+                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
+                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                    { "HostID", Session->Hostinfo.ID.Raw },
+                    { "Sessiondata", Session->JSONData },
+                    { "Signature", Session->Signature }
+                });
+            }
+        }
+        if (!noSelf)
+        {
+            const auto Session = getLocalsession();
+            if (Session)
+            {
+                Object["Localsession"] = nlohmann::json::object({
+                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
+                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                    { "HostID", Session->Hostinfo.ID.Raw },
+                    { "Sessiondata", Session->JSONData },
+                    { "Signature", Session->Signature }
+                });
+            }
         }
 
-        Result = Array.dump(4);
-        return Result.c_str();
+        return DumpJSON(Object);
     }
-    inline std::string __cdecl getLocalsession(const char *)
+    inline std::string __cdecl updateSession(const char *JSONString)
     {
-        auto Object = nlohmann::json::object();
+        const auto Client = Clientinfo::getLocalclient();
         auto Session = getLocalsession();
-        static std::string Result;
+        Session->isActive = true;
 
-        // Sanity check, the user has not set any data yet.
-        if (Session->HostID == 0) [[unlikely]] return "{}";
+        // Ensure that the account-type is OK.
+        Session->Hostinfo = *Client;
+        Session->Hostinfo.ID.Accounttype.isServer = true;
 
-        Object["HostID"] = Session->HostID;
-        Object["Hostinfo"] = Session->Hostinfo;
-        Object["Gameinfo"] = Session->Gameinfo;
-        Object["Playerdata"] = Session->Playerdata;
-        Object["Sessiondata"] = Session->Sessiondata;
+        // Update the existing session.
+        auto Sessiondata = ParseJSON(Session->JSONData);
+        Sessiondata.update(ParseJSON(JSONString));
+        Session->JSONData = DumpJSON(Sessiondata);
 
-        const auto Plaintext = Object.dump(4);
-        if (Result != Plaintext) Result = Plaintext;
-        return Result.c_str();
+        // Sign so that others can verify the data.
+        Session->Signature = PK_RSA::Signmessage(Session->JSONData, Clientinfo::getSessionkey());
+
+        // Return the session-info in case someone wants it.
+        auto Object = nlohmann::json::object({
+            { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
+            { "Hostname", Session->Hostinfo.Username.asUTF8() },
+            { "HostID", Session->Hostinfo.ID.Raw },
+            { "Sessiondata", Session->JSONData },
+            { "Signature", Session->Signature }
+            });
+
+        return DumpJSON(Object);
     }
-    inline std::string __cdecl Terminatesession(const char *)
+    inline std::string __cdecl terminateSession(const char *)
     {
-        getLocalsession()->HostID = 0;
+        auto Session = getLocalsession();
+        Session->isActive = false;
         return "{}";
     }
-    inline std::string __cdecl Sessionupdate(const char *JSONString)
-    {
-        const auto Config = ParseJSON(JSONString);
-        auto Session = getLocalsession();
-
-        Session->Sessiondata.update(Config.value("Sessiondata", nlohmann::json::object()));
-        Session->Playerdata.update(Config.value("Playerdata", nlohmann::json::array()));
-        Session->Gameinfo.update(Config.value("Gameinfo", nlohmann::json::object()));
-        Session->Hostinfo.update(Config.value("Hostinfo", nlohmann::json::object()));
-        Session->HostID = Clientinfo::getLocalclient()->ClientID;
-
-        return "{}";
-    }
-
     inline void API_Initialize()
     {
         Initialize();
 
-        API::Registerhandler_Matchmake("getNetworksessions", getNetworksessions);
-        API::Registerhandler_Matchmake("getLocalsession", getLocalsession);
-        API::Registerhandler_Matchmake("Terminatesession", Terminatesession);
-        API::Registerhandler_Matchmake("Sessionupdate", Sessionupdate);
+        API::Registerhandler_Matchmake("getSessions", getSessions);
+        API::Registerhandler_Matchmake("updateSession", updateSession);
+        API::Registerhandler_Matchmake("terminateSession", terminateSession);
     }
 }
