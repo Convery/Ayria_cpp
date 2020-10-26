@@ -92,6 +92,10 @@ inline nlohmann::json ParseJSON(std::string_view Input)
 
     return nlohmann::json::object();
 }
+inline std::string DumpJSON(const nlohmann::json &Input)
+{
+    return Input.dump(-1, ' ', true);
+}
 
 #endif
 

@@ -146,7 +146,17 @@ namespace PK_RSA
         BN_free(Exponent);
         return Key;
     }
-    inline std::string Signmessage(std::string_view Input, RSA *Key)
+    template <typename T> inline RSA *Createkeypair(std::basic_string_view<T> Privatekey)
+    {
+        const auto Keypointer = Privatekey.data();
+        return d2i_RSAPrivateKey(NULL, (const uint8_t **)&Keypointer, (long)Privatekey.size());
+    }
+    template <typename T> inline RSA *Createkeypair(const std::basic_string<T> &Privatekey)
+    {
+        return Createkeypair(std::basic_string_view<T>(Privatekey.data(), Privatekey.size()));
+    }
+
+    template <typename T> inline std::string Signmessage(std::basic_string_view<T> Input, RSA *Key)
     {
         EVP_MD_CTX *Context = EVP_MD_CTX_create();
         EVP_PKEY *Privatekey = EVP_PKEY_new();
@@ -166,7 +176,12 @@ namespace PK_RSA
 
         return Signature;
     }
-    inline bool Verifysignature(std::string_view Input, std::string_view Signature, RSA *Key)
+    template <typename T> inline std::string Signmessage(const std::basic_string<T> &Input, RSA *Key)
+    {
+        return Signmessage(std::basic_string_view<T>(Input.data(), Input.size()), Key);
+    }
+
+    template <typename T> inline bool Verifysignature(std::basic_string_view<T> Input, std::basic_string_view<T> Signature, RSA *Key)
     {
         EVP_MD_CTX *Context = EVP_MD_CTX_create();
         EVP_PKEY *Publickey = EVP_PKEY_new();
@@ -185,8 +200,20 @@ namespace PK_RSA
         EVP_MD_CTX_destroy(Context);
         return Result;
     }
+    template <typename T> inline bool Verifysignature(const std::basic_string<T> &Input, const std::basic_string<T> &Signature, RSA *Key)
+    {
+        return Verifysignature(std::basic_string_view<T>(Input.data(), Input.size()), std::basic_string_view<T>(Signature.data(), Signature.size()), Key);
+    }
+    template <typename T> inline bool Verifysignature(const std::basic_string<T> &Input, const std::basic_string<T> &Signature, std::string_view Publickey)
+    {
+        const auto Keypointer = Publickey.data();
+        const auto Key = d2i_RSA_PUBKEY(NULL, (const uint8_t **)&Keypointer, (long)Publickey.size());
+        if (!Key) return false;
 
-    inline std::string Encrypt(std::string_view Input, RSA *Key)
+        return Verifysignature(std::basic_string_view<T>(Input.data(), Input.size()), std::basic_string_view<T>(Signature.data(), Signature.size()), Key);
+    }
+
+    template <typename T> inline std::string Encrypt(std::basic_string_view<T> Input, RSA *Key)
     {
         std::string Result; Result.resize(Input.size());
         if (Input.size() != RSA_public_encrypt((int)Input.size(), (const uint8_t *)Input.data(),
@@ -195,7 +222,7 @@ namespace PK_RSA
 
         return Result;
     }
-    inline std::string Decrypt(std::string_view Input, RSA *Key)
+    template <typename T> inline std::string Decrypt(std::basic_string_view<T> Input, RSA *Key)
     {
         std::string Result; Result.resize(Input.size());
         if (Input.size() != RSA_private_decrypt((int)Input.size(), (const uint8_t *)Input.data(),
@@ -204,7 +231,7 @@ namespace PK_RSA
 
         return Result;
     }
-    inline std::string Encrypt(std::string_view Input, std::string_view Publickey)
+    template <typename T> inline std::string Encrypt(std::basic_string_view<T> Input, std::string_view Publickey)
     {
         const auto Keypointer = Publickey.data();
         const auto Key = d2i_RSA_PUBKEY(NULL, (const uint8_t **)&Keypointer, (long)Publickey.size());
@@ -212,13 +239,30 @@ namespace PK_RSA
 
         return Encrypt(Input, Key);
     }
-    inline std::string Decrypt(std::string_view Input, std::string_view Privatekey)
+    template <typename T> inline std::string Decrypt(std::basic_string_view<T> Input, std::string_view Privatekey)
     {
         const auto Keypointer = Privatekey.data();
         const auto Key = d2i_RSAPrivateKey(NULL, (const uint8_t **)&Keypointer, (long)Privatekey.size());
         if (!Key) return "";    // WTF?
 
         return Decrypt(Input, Key);
+    }
+
+    template <typename T> inline std::string Encrypt(const std::basic_string<T> &Input, RSA *Key)
+    {
+        return Encrypt(std::basic_string_view<T>(Input.data(), Input.size()), Key);
+    }
+    template <typename T> inline std::string Decrypt(const std::basic_string<T> &Input, RSA *Key)
+    {
+        return Decrypt(std::basic_string_view<T>(Input.data(), Input.size()), Key);
+    }
+    template <typename T> inline std::string Encrypt(const std::basic_string<T> &Input, std::string_view Publickey)
+    {
+        return Encrypt(std::basic_string_view<T>(Input.data(), Input.size()), Publickey);
+    }
+    template <typename T> inline std::string Decrypt(const std::basic_string<T> &Input, std::string_view Privatekey)
+    {
+        return Decrypt(std::basic_string_view<T>(Input.data(), Input.size()), Privatekey);
     }
 
     inline std::string getPublickey(RSA *Key)
