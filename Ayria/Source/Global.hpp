@@ -323,9 +323,9 @@ struct Ayriamodule_t
     static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };
 
     // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
-    void(__cdecl *addConsolemessage)(const wchar_t *String, unsigned int Colour);
-    void(__cdecl *addConsolecommand)(const wchar_t *Name, const void *Callback);
-    void(__cdecl *execCommandline)(const wchar_t *String);
+    void(__cdecl *addConsolemessage)(const void *String, unsigned int Length, unsigned int Colour);
+    void(__cdecl *addConsolecommand)(const void *Name, unsigned int Length, const void *Callback);
+    void(__cdecl *execCommandline)(const void *String, unsigned int Length);
 
     // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
     void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
