@@ -14,6 +14,7 @@ namespace Backend
     std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
     std::unordered_map<uint16_t, Multicast_t> Networkgroups;
     static uint32_t RandomID;
+    FD_SET Activesockets;
 
     void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback)
     {
@@ -61,6 +62,7 @@ namespace Backend
         // Make a unique identifier for later.
         if (!RandomID) RandomID = Hash::FNV1_32(GetTickCount64() ^ Sendersocket);
         Networkgroups[Port] = { Sendersocket, Receiversocket, Multicast };
+        FD_SET(Receiversocket, &Activesockets);
 
         // TODO(tcn): Error checking.
         if (Error) [[unlikely]] { assert(false); }
@@ -70,18 +72,31 @@ namespace Backend
     using Message_t = struct { uint32_t RandomID, Messagetype; char Payload[1]; };
 
     // Poll the internal socket(s).
-    void Updatenetworking()
+    void __cdecl Updatenetworking()
     {
-        constexpr auto Buffersize = 4096;
-        char Buffer[Buffersize];
+        constexpr timeval Defaulttimeout{ NULL, 10000 };
+        const auto Count{ Activesockets.fd_count + 1 };
+        constexpr auto Buffersizelimit = 4096;
+        FD_SET ReadFD{ Activesockets };
+        auto Timeout{ Defaulttimeout };
 
+        // Check for data on the active sockets.
+        if (!select(Count, &ReadFD, NULL, NULL, &Timeout)) [[likely]] return;
+
+        // Poll each available socket.
         for (const auto &[_, Group] : Networkgroups)
         {
+            // Is any data available?
+            const auto Buffersize = recvfrom(Group.Receiversocket, nullptr, Buffersizelimit, MSG_PEEK, nullptr, nullptr);
+            if (Buffersize < static_cast<int>(sizeof(uint64_t))) [[likely]] continue;
+
+            // Stack allocation, up to 4096 bytes.
+            const auto Buffer = alloca(Buffersize);
             sockaddr_in Sender{ AF_INET };
             int Size{ sizeof(Sender) };
 
             // MSVC has some issue that casts the int to unsigned without warning; even with /Wall.
-            const auto Packetlength = recvfrom(Group.Receiversocket, Buffer, Buffersize, 0, (sockaddr *)&Sender, &Size);
+            const auto Packetlength = recvfrom(Group.Receiversocket, (char *)Buffer, Buffersize, MSG_PEEK, (sockaddr *)&Sender, &Size);
             if (Packetlength < static_cast<int>(sizeof(uint64_t))) continue;
 
             // Clearer codes, should be optimized away.
