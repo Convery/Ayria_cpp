@@ -23,6 +23,9 @@ namespace Backend
     void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback);
     void Joinmessagegroup(uint16_t Port, uint32_t Address = Multicastaddress);
 
+    // Add a recurring task to the worker thread.
+    void Enqueuetask(uint32_t Period, void(__cdecl *Callback)());
+
     // Poll the internal socket(s).
     void Updatenetworking();
 

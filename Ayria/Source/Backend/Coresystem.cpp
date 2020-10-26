@@ -9,6 +9,15 @@
 
 namespace Backend
 {
+    using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
+    std::vector<Task_t> Backgroundtasks;
+
+    // Add a recurring task to the worker thread.
+    void Enqueuetask(uint32_t Period, void(__cdecl *Callback)())
+    {
+        Backgroundtasks.push_back({ 0, Period, Callback });
+    }
+
     static DWORD __stdcall Graphicsthread(void *)
     {
         // UI-thread, boost our priority.
@@ -73,8 +82,17 @@ namespace Backend
         {
             // Notify the subsystems about a new frame.
             Matchmaking::doFrame();
-            Clientinfo::doFrame();
             Updatenetworking();
+
+            const auto Currenttime = time(NULL);
+            for (auto &Task : Backgroundtasks)
+            {
+                if ((Task.Last + Task.Period) > Currenttime) [[unlikely]]
+                {
+                    Task.Last = Currenttime;
+                    Task.Callback();
+                }
+            }
 
             // TODO(tcn): Get async-job requests and process them here.
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
