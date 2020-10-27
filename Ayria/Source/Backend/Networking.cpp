@@ -88,20 +88,17 @@ namespace Backend
         // Check for data on the active sockets.
         if (!select(Count, &ReadFD, NULL, NULL, &Timeout)) [[likely]] return;
 
+        // Stack allocate as we have data.
+        const auto Buffer = alloca(Buffersizelimit);
+
         // Poll each available socket.
         for (const auto &[_, Group] : Networkgroups)
         {
-            // Is any data available?
-            const auto Buffersize = recvfrom(Group.Receiversocket, nullptr, Buffersizelimit, MSG_PEEK, nullptr, nullptr);
-            if (Buffersize < static_cast<int>(sizeof(uint64_t))) [[likely]] continue;
-
-            // Stack allocation, up to 4096 bytes.
-            const auto Buffer = alloca(Buffersize);
             sockaddr_in Sender{ AF_INET };
             int Size{ sizeof(Sender) };
 
             // MSVC has some issue that casts the int to unsigned without warning; even with /Wall.
-            const auto Packetlength = recvfrom(Group.Receiversocket, (char *)Buffer, Buffersize, MSG_PEEK, (sockaddr *)&Sender, &Size);
+            const auto Packetlength = recvfrom(Group.Receiversocket, (char *)Buffer, Buffersizelimit, NULL, (sockaddr *)&Sender, &Size);
             if (Packetlength < static_cast<int>(sizeof(uint64_t))) continue;
 
             // Clearer codes, should be optimized away.

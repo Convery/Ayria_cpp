@@ -50,7 +50,6 @@ namespace Localnetworking
     FD_SET Activesockets{};
     uint16_t Backendport{};
     size_t Listensocket{};
-    bool Shouldquit{};
 
     // Resolve the hostname and return a unique address if proxied.
     Proxyserver_t *getProxyserver(std::string_view Hostname)
@@ -120,15 +119,36 @@ namespace Localnetworking
         }
     }
 
+    // Helper for debug-builds.
+    inline void setThreadname(std::string_view Name)
+    {
+        if constexpr (Build::isDebug)
+        {
+            #pragma pack(push, 8)
+            using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+            #pragma pack(pop)
+
+            __try
+            {
+                THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF };
+                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+    }
+
     // Poll all sockets in the background.
-    void Pollsockets()
+    DWORD __stdcall Pollsockets(void *)
     {
         // ~100 FPS in-case someone proxies game-data.
         constexpr timeval Defaulttimeout{ NULL, 10000 };
-        char Buffer[8192];
+        constexpr uint32_t Buffersizelimit = 4096;
+        char Buffer[Buffersizelimit];
+
+        // Name the thread for easier debugging.
+        setThreadname("Localnetworking_Mainthread");
 
         // Sleeps through select().
-        while (!Shouldquit)
+        while (true)
         {
             // Let's not poll when we don't have any sockets.
             if (Activesockets.fd_count == 0)
@@ -148,7 +168,7 @@ namespace Localnetworking
             for (const auto &[Socket, Server] : Serversockets)
             {
                 if (!FD_ISSET(Socket, &WriteFD)) continue;
-                uint32_t Datasize{ 8192 };
+                uint32_t Datasize{ Buffersizelimit };
 
                 if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
                 {
@@ -157,7 +177,7 @@ namespace Localnetworking
                     {
                         if (Instance == Server)
                         {
-                            send(Localsocket, Buffer, Datasize, NULL);
+                            send(Localsocket, (char *)Buffer, Datasize, NULL);
                         }
                     }
                 }
@@ -167,7 +187,7 @@ namespace Localnetworking
             LOOP: for (const auto &[Socket, Server] : Serversockets)
             {
                 if (!FD_ISSET(Socket, &ReadFD)) continue;
-                const auto Size = recv(Socket, Buffer, 8192, 0);
+                const auto Size = recv(Socket, Buffer, Buffersizelimit, NULL);
 
                 // Broken connection.
                 if (Size <= 0)
@@ -196,6 +216,8 @@ namespace Localnetworking
                 }
             }
         }
+
+        return 0;
     }
 
     // Initialize the server backend.
@@ -221,24 +243,7 @@ namespace Localnetworking
 
         // Notify the developer and spawn the server.
         Debugprint(va("Spawning localnet backend on %u", ntohs(Backendport)));
-        std::atexit([]() { Shouldquit = true; });
-        std::thread([]()
-        {
-            // Name the thread for easier debugging.
-            {
-                #pragma pack(push, 8)
-                using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
-                #pragma pack(pop)
-
-                __try
-                {
-                    THREADNAME_INFO Info{ 0x1000, "Localnetworking_Mainthread", 0xFFFFFFFF };
-                    RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
-                } __except (EXCEPTION_EXECUTE_HANDLER) {}
-            }
-
-            Pollsockets();
-        }).detach();
+        CreateThread(NULL, NULL, Pollsockets, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 
         // Load all plugins from disk.
         for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))
