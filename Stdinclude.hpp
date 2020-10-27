@@ -85,5 +85,87 @@
 #include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
 
+// Ayria modules used throughout the projects.
+// Exports as struct for easier plugin initialization.
+struct Ayriamodule_t
+{
+    HMODULE Modulehandle{};
+    typedef union
+    {
+        uint8_t Raw;
+        struct
+        {
+            uint8_t
+                isModerator : 1,
+                isPrivate : 1,
+                isAdmin : 1,
+                MAX : 1;
+        };
+    } Securityflags_t;
+    typedef union
+    {
+        uint64_t Raw;
+        struct
+        {
+            // Security flags are only set by the server.
+            Securityflags_t Accountsecurity;
+            uint8_t Internal;
+            union
+            {
+                uint16_t Creationdate;
+                struct
+                {
+                    uint16_t
+                        Year : 8,
+                        Month : 4,
+                        Day : 4;
+                };
+            };
+            uint32_t AccountID;
+        };
+    } AccountID_t;
+
+    // Create a functionID from the name of the service.
+    static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };
+
+    // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
+    void(__cdecl *addConsolemessage)(const void *String, unsigned int Length, unsigned int Colour);
+    void(__cdecl *addConsolecommand)(const void *Name, unsigned int Length, const void *Callback);
+    void(__cdecl *execCommandline)(const void *String, unsigned int Length);
+
+    // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
+    void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
+
+    // FunctionID = FNV1_32("Service name"); ID 0 / Invalid = List all available.
+    const char *(__cdecl *API_Client)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Social)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Network)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Matchmake)(uint32_t FunctionID, const char *JSONString);
+    const char *(__cdecl *API_Fileshare)(uint32_t FunctionID, const char *JSONString);
+
+    Ayriamodule_t()
+    {
+        #if defined(NDEBUG)
+        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        #else
+        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+        #endif
+        assert(Modulehandle);
+
+        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
+        Import(addConsolemessage);
+        Import(addConsolecommand);
+        Import(execCommandline);
+        Import(addNetworklistener);
+        Import(API_Client);
+        Import(API_Social);
+        Import(API_Network);
+        Import(API_Matchmake);
+        Import(API_Fileshare);
+        #undef Import
+    }
+};
+extern Ayriamodule_t Ayria;
+
 // Extensions to the language.
 using namespace std::string_literals;

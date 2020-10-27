@@ -35,28 +35,6 @@ namespace Clientinfo
     void Initialize_client();
     void Initialize_crypto();
 
-    // Helpers for creating AccountIDs.
-    inline AccountID_t Createaccount(Accountflags_t Type)
-    {
-        AccountID_t Client{};
-
-        const auto Time = time(NULL); const auto UTC = gmtime(&Time);
-        Client.Creationdate = (UTC->tm_year << 8) | (UTC->tm_mon << 4) | (UTC->tm_mday - 1);
-        Client.AccountID = getLocalclient()->ID.AccountID;
-        Client.Accounttype = Type;
-        return Client;
-    }
-    inline AccountID_t Createserver()
-    {
-        Accountflags_t Flags{}; Flags.isServer = true;
-        return Createaccount(Flags);
-    }
-    inline AccountID_t Creategroup()
-    {
-        Accountflags_t Flags{}; Flags.isGroup = true;
-        return Createaccount(Flags);
-    }
-
     // JSON API handlers.
     inline std::string __cdecl Accountinfo(const char *)
     {
@@ -81,12 +59,46 @@ namespace Clientinfo
 
         return DumpJSON(Array);
     }
+    inline std::string __cdecl getClient(const char *JSONString)
+    {
+        const auto Localnetwork = *getNetworkclients();
+        const auto Request = ParseJSON(JSONString);
+        auto Object = nlohmann::json::object();
+
+        if (Request.contains("UserID"))
+        {
+            const uint32_t UserID = Request["UserID"];
+            for (const auto &Client : Localnetwork)
+            {
+                if (Client.AccountID.AccountID == UserID)
+                {
+                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
+                    break;
+                }
+            }
+        }
+        if (Object.empty() && Request.contains("Username"))
+        {
+            const std::u8string Username = Request["Username"];
+            for (const auto &Client : Localnetwork)
+            {
+                if (Client.Username == Username)
+                {
+                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
+                    break;
+                }
+            }
+        }
+
+        return DumpJSON(Object);
+    }
     inline void API_Initialize()
     {
         Initialize_client();
         Initialize_crypto();
 
         API::Registerhandler_Client("Accountinfo", Accountinfo);
-        API::Registerhandler_Network("LANClients", LANClients);
+        API::Registerhandler_Client("LANClients", LANClients);
+        API::Registerhandler_Client("getClient", getClient);
     }
 }
