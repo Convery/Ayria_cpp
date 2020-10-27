@@ -90,7 +90,7 @@ namespace Steam
                 Steam.Ayrialocale = u8"english"s;
                 Steam.XUID = 0x1100001DEADC0DEULL;
 
-                if (const auto Callback = Ayria.API_Client)
+                if (const auto Callback = Ayria.API_Client) [[likely]]
                 {
                     const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
                     const auto AccountID = Object.value("AccountID", 0xDEADC0DE);
@@ -181,6 +181,7 @@ namespace Steam
         {
             Callbacks::Runcallbacks();
             Matchmaking::doFrame();
+            Social::doFrame();
         }
         EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
         {

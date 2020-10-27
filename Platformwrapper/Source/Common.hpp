@@ -10,58 +10,11 @@
 // Helper to create 'classes' when needed.
 using Fakeclass_t = struct { void *VTABLE[70]; };
 
-// Exports as struct for easier plugin initialization.
-struct Ayriamodule_t
-{
-    HMODULE Modulehandle{};
-
-    // Create a functionID from the name of the service.
-    static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };
-
-    // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
-    void(__cdecl *addConsolemessage)(const void *String, unsigned int Length, unsigned int Colour);
-    void(__cdecl *addConsolecommand)(const void *Name, unsigned int Length, const void *Callback);
-    void(__cdecl *execCommandline)(const void *String, unsigned int Length);
-
-    // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
-    void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
-
-    // FunctionID = FNV1_32("Service name"); ID 0 / Invalid = List all available.
-    const char *(__cdecl *API_Client)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Social)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Network)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Matchmake)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Fileshare)(uint32_t FunctionID, const char *JSONString);
-
-    Ayriamodule_t()
-    {
-        #if defined(NDEBUG)
-        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
-        #else
-        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
-        #endif
-        assert(Modulehandle);
-
-        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
-        Import(addConsolemessage);
-        Import(addConsolecommand);
-        Import(execCommandline);
-        Import(addNetworklistener);
-        Import(API_Client);
-        Import(API_Social);
-        Import(API_Network);
-        Import(API_Matchmake);
-        Import(API_Fileshare);
-        #undef Import
-    }
-};
-extern Ayriamodule_t Ayria;
-
-// Common functionality.
+// Common functionality for interfacing with Ayria.
+#define Parse(x) x = Object.value(#x, decltype(x)());
+#define Dump(x) Object[#x] = x;
 namespace Matchmaking
 {
-    #define Parse(x) x = Object.value(#x, decltype(x)());
-    #define Dump(x) Object[#x] = x;
     struct Playerpart_t
     {
         uint32_t PlayerID;
@@ -163,8 +116,6 @@ namespace Matchmaking
             return Object;
         }
     };
-    #undef Parse
-    #undef Dump
 
     // Manage the sessions we know of, updates in the background.
     std::vector<Session_t *> getLANSessions();
@@ -175,3 +126,47 @@ namespace Matchmaking
     void Invalidatesession();
     void doFrame();
 }
+namespace Social
+{
+    using Relationflags_t = union
+    {
+        uint32_t Raw;
+        struct
+        {
+            uint32_t
+                isFriend : 1,
+                isBlocked : 1,
+                isFollower : 1,
+                isGroupmember : 1,
+                AYA_RESERVED1 : 1,
+                AYA_RESERVED2 : 1,
+                AYA_RESERVED3 : 1;
+        };
+    };
+    struct Relation_t
+    {
+        uint32_t UserID;
+        Relationflags_t Flags;
+        std::u8string Username;
+
+        Relation_t() = default;
+        Relation_t(const nlohmann::json &Object)
+        {
+            Parse(UserID); Parse(Username);
+            Flags.Raw = Object.value("Flags", uint32_t());
+        }
+        Relation_t(std::string_view JSONString) : Relation_t(ParseJSON(JSONString)) {}
+    };
+
+    // Manage the relations we know of, updates in the background.
+    bool addRelation(uint32_t UserID, std::u8string Username = {}, Relationflags_t Flags = {});
+    void removeRelation(uint32_t UserID, const std::u8string &Username = u8"");
+    void blockUser(uint32_t UserID, const std::u8string &Username = u8"");
+
+    using Userinfo_t = std::pair<uint32_t, std::u8string>;
+    Userinfo_t getUser(uint32_t UserID, std::u8string Username = {});
+    std::vector<Relation_t *> getFriends();
+    void doFrame();
+}
+#undef Parse
+#undef Dump
