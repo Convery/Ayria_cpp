@@ -55,16 +55,16 @@ namespace Steam
         }
         CSteamID GetLobbyByIndex(int iLobby)
         {
-            const auto Serverlist = Matchmaking::getNetworkservers();
-            if (Serverlist->size() < iLobby) return k_steamIDNil;
+            const auto Serverlist = Matchmaking::getLANSessions();
+            if (Serverlist.size() < iLobby) return k_steamIDNil;
 
-            return CSteamID(Serverlist->at(iLobby).HostID, 1, k_EAccountTypeGameServer);
+            return CSteamID(Serverlist.at(iLobby)->HostID, 1, k_EAccountTypeGameServer);
         }
         void CreateLobby0(uint64_t ulGameID, bool bPrivate)
         {
             auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["isPrivate"] = bPrivate;
-            Matchmaking::Update();
+            Session->Steam.isPrivate = bPrivate;
+            Matchmaking::Invalidatesession();
         }
         void JoinLobby0(CSteamID steamIDLobby)
         {
@@ -82,21 +82,21 @@ namespace Steam
         int GetNumLobbyMembers(CSteamID steamIDLobby)
         {
             const auto HostID = steamIDLobby.GetAccountID();
-            for (const auto &Session : *Matchmaking::getNetworkservers())
-                if (HostID == Session.HostID)
-                    return int(Session.Playerdata.size());
+            for (const auto &Session : Matchmaking::getLANSessions())
+                if (HostID == Session->HostID)
+                    return int(Session->Players.size());
 
             return 0;
         }
         CSteamID GetLobbyMemberByIndex(CSteamID steamIDLobby, int iMember)
         {
             const auto HostID = steamIDLobby.GetAccountID();
-            for (const auto &Session : *Matchmaking::getNetworkservers())
+            for (const auto &Session : Matchmaking::getLANSessions())
             {
-                if (HostID == Session.HostID)
+                if (HostID == Session->HostID)
                 {
-                    if (iMember > Session.Playerdata.size()) return k_steamIDNil;
-                    return CSteamID(Session.Playerdata.at(iMember).value("PlayerID", uint32_t()), 1, k_EAccountTypeIndividual);
+                    if (iMember > Session->Players.size()) return k_steamIDNil;
+                    return CSteamID(Session->Players.at(iMember).PlayerID, 1, k_EAccountTypeIndividual);
                 }
             }
 
@@ -109,17 +109,17 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 static std::string Result;
-                Result = Matchmaking::getLocalsession()->Sessiondata.value(pchKey, "").c_str();
+                Result = Matchmaking::getLocalsession()->Steam.Keyvalues.value(pchKey, "").c_str();
                 return Result.c_str();
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
                         static std::string Result;
-                        Result = Session.Sessiondata.value(pchKey, "");
+                        Result = Session->Steam.Keyvalues.value(pchKey, "");
                         return Result.c_str();
                     }
                 }
@@ -133,8 +133,8 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
-                Matchmaking::getLocalsession()->Sessiondata[pchKey] = pchValue;
-                Matchmaking::Update();
+                Matchmaking::getLocalsession()->Steam.Keyvalues[pchKey] = pchValue;
+                Matchmaking::Invalidatesession();
             }
         }
         const char *GetLobbyMemberData(CSteamID steamIDLobby, CSteamID steamIDUser, const char *pchKey)
@@ -144,30 +144,26 @@ namespace Steam
 
             if (HostID == Steam.XUID.GetAccountID())
             {
-                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                for (auto &Item : Matchmaking::getLocalsession()->Players)
                 {
-                    if (Item.value("PlayerID", uint32_t()) == UserID)
+                    if(Item.PlayerID == UserID)
                     {
-                        static std::string Result;
-                        Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
-                        return Result.c_str();
+                        return Item.Gamedata.value(pchKey, "").c_str();
                     }
                 }
                 return "";
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
-                        for (const auto &Item : Session.Playerdata)
+                        for (const auto &Item : Session->Players)
                         {
-                            if (Item.value("PlayerID", uint32_t()) == UserID)
+                            if (Item.PlayerID == UserID)
                             {
-                                static std::string Result;
-                                Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
-                                return Result.c_str();
+                                return Item.Gamedata.value(pchKey, "").c_str();
                             }
                         }
 
@@ -187,17 +183,16 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
-                for (auto &Player : Matchmaking::getLocalsession()->Playerdata)
+                for (auto &Player : Matchmaking::getLocalsession()->Players)
                 {
-                    if (Player.value("PlayerID", uint32_t()) == UserID)
+                    if (Player.PlayerID == UserID)
                     {
-                        if (!Player.contains("Steamdata")) Player["Steamdata"] = nlohmann::json::object();
-                        Player["Steamdata"][pchKey] = pchValue;
+                        Player.Gamedata[pchKey] = pchValue;
                         break;
                     }
                 }
 
-                Matchmaking::Update();
+                Matchmaking::Invalidatesession();
             }
         }
         void ChangeLobbyAdmin(CSteamID steamIDLobby, CSteamID steamIDNewAdmin)
@@ -211,22 +206,20 @@ namespace Steam
 
             if (HostID == Steam.XUID.GetAccountID())
             {
-                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                for (const auto &Item : Matchmaking::getLocalsession()->Players)
                 {
-                    const auto ID = Item.value("PlayerID", uint32_t());
-                    if (ID) Users.push_back(ID);
+                    Users.push_back(Item.PlayerID);
                 }
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
-                        for (const auto &Item : Session.Playerdata)
+                        for (const auto &Item : Session->Players)
                         {
-                            const auto ID = Item.value("PlayerID", uint32_t());
-                            if (ID) Users.push_back(ID);
+                            Users.push_back(Item.PlayerID);
                         }
 
                         break;
@@ -234,36 +227,45 @@ namespace Steam
                 }
             }
 
-            const std::string Safestring((const char *)pvMsgBody, cubMsgBody);
-            if (const auto Callback = Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social) [[likely]]
             {
-                auto Object = nlohmann::json::object();
-                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
-                Object["Message"] = Safestring;
-                Object["Clients"] = Users;
-
-                Callback(Ayria.toFunctionID("SendIM"), Object.dump().c_str());
+                const auto Payload = nlohmann::json::object({ { "Type", Hash::FNV1_32("Steamlobbychat")},
+                    { "Body", std::string((const char *)pvMsgBody, cubMsgBody) },
+                    { "GroupID", steamIDLobby.GetAccountID()} });
+                const auto Object = nlohmann::json::object({ { "Targets", Users}, { "Message", Payload.dump() } });
+                const auto Result = Callback(Ayria.toFunctionID("Sendmessage"), DumpJSON(Object).c_str());
+                return !!std::strstr(Result, "OK");
             }
 
             return true;
         }
-        int GetLobbyChatEntry(CSteamID steamIDLobby, int iChatID, CSteamID *pSteamIDUser, void *pvData, int cubData, uint32_t  *peChatEntryType)
+        int GetLobbyChatEntry(CSteamID steamIDLobby, int iChatID, CSteamID *pSteamIDUser, void *pvData, int cubData, uint32_t *peChatEntryType)
         {
-            if (const auto Callback = Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social) [[likely]]
             {
-                auto Object = nlohmann::json::object();
-                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
-                Object["Offset"] = iChatID;
-                Object["Count"] = 1;
+                const auto Result = Callback(Ayria.toFunctionID("Readmessages"), nullptr);
+                const auto LobbyID = steamIDLobby.GetAccountID();
+                const auto Array = ParseJSON(Result);
 
-                const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
-                const auto Value = Result.empty() ? nlohmann::json::object() : Result.at(0);
-                if (!Value.contains("Message")) return 0;
+                for (const auto &Message : Array)
+                {
+                    const auto Payload = ParseJSON(Message.value("Message", std::string()));
+                    const auto GroupID = Payload.value("GroupID", uint32_t());
+                    const auto Type = Payload.value("Type", uint32_t());
 
-                *peChatEntryType = Value.value("Type", 0);
-                pSteamIDUser->Set(Value.value("Sender", 0), 1, k_EAccountTypeIndividual);
-                std::strncpy((char *)pvData, Value["Message"].get<std::string>().c_str(), cubData);
-                return (int)std::strlen((char *)pvData);
+                    // Skip to relevant group messages.
+                    if (Hash::FNV1_32("Steamlobbychat") != Type) continue;
+                    if (GroupID != LobbyID) continue;
+                    if (iChatID--) continue;
+
+                    const auto Body = Payload.value("Body", std::string());
+                    const auto Size = std::min(Body.size(), size_t(cubData));
+                    std::memcpy(pvData, Body.data(), Size);
+
+                    const auto Sender = Message.value("Source", uint64_t());
+                    *pSteamIDUser = CSteamID(uint32_t(Sender & 0xFFFFFFFF), 1, k_EAccountTypeIndividual);
+                    return int(Size);
+                }
             }
 
             return 0;
@@ -331,8 +333,8 @@ namespace Steam
         {
             if (steamIDLobby.GetAccountID() == Steam.XUID.GetAccountID())
             {
-                Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
-                Matchmaking::Update();
+                Matchmaking::getLocalsession()->Steam.Maxplayers = cMaxMembers;
+                Matchmaking::Invalidatesession();
                 return true;
             }
 
@@ -342,10 +344,10 @@ namespace Steam
         {
             const auto HostID = steamIDLobby.GetAccountID();
 
-            for (const auto &Session : *Matchmaking::getNetworkservers())
+            for (const auto &Session : Matchmaking::getLANSessions())
             {
-                if (Session.HostID == HostID)
-                    return Session.Gameinfo.value("Maxplayers", 6);
+                if (Session->HostID == HostID)
+                    return Session->Steam.Maxplayers;
             }
 
             return 6;
@@ -374,7 +376,7 @@ namespace Steam
             Infoprint(va("Creating a lobby of type %d.", eLobbyType));
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
 
-            Matchmaking::Update();
+            Matchmaking::Invalidatesession();
             return RequestID;
         }
         uint64_t JoinLobby1(CSteamID steamIDLobby) const
@@ -419,8 +421,8 @@ namespace Steam
             Infoprint(va("Creating a lobby of type %d for %d players.", eLobbyType, cMaxMembers));
             Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
 
-            Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
-            Matchmaking::Update();
+            Matchmaking::getLocalsession()->Steam.Maxplayers = cMaxMembers;
+            Matchmaking::Invalidatesession();
             return RequestID;
         }
         int GetLobbyDataCount(CSteamID steamIDLobby)

@@ -19,7 +19,7 @@ namespace Matchmaking
     {
         uint32_t PlayerID;
         std::u8string Playername;
-        nlohmann::json::object_t Gamedata;
+        nlohmann::json Gamedata;
 
         Playerpart_t() = default;
         Playerpart_t(const nlohmann::json &Object)
@@ -49,7 +49,7 @@ namespace Matchmaking
         std::u8string Mapname, Gametype, Gametags, Gamemod;
 
         bool isLAN, isPrivate, isDedicated;
-        nlohmann::json::object_t Keyvalues;
+        nlohmann::json Keyvalues;
 
         Steampart_t() = default;
         Steampart_t(const nlohmann::json &Object)

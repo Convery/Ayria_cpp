@@ -127,13 +127,16 @@ namespace Steam
 
                 for (const auto &Message : Array)
                 {
+                    const auto Payload = ParseJSON(Message.value("Message", std::string()));
+                    const auto Type = Payload.value("Type", uint32_t());
+
+                    // Skip group messages.
+                    if (Hash::FNV1_32("Steamlobbychat") == Type) continue;
+
                     // Skip to offset.
                     if (iChatID--) continue;
 
-                    const auto Payload = ParseJSON(Message.value("Message", std::string()));
                     const auto Body = Payload.value("Body", std::string());
-                    const auto Type = Payload.value("Type", uint32_t());
-
                     const auto Size = std::min(Body.size(), size_t(cubData));
                     std::memcpy(pvData, Body.data(), Size);
                     *peFriendMsgType = Type;
