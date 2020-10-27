@@ -38,15 +38,15 @@ namespace Steam
                           bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
 
             auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Region"] = pRegionName;
-            Session->Gameinfo["Maxplayers"] = nMaxReportedClients;
-            Session->Gameinfo["Productname"] = pProductName;
-            Session->Gameinfo["Productdesc"] = pGameDescription;
-            Session->Hostinfo["Protocol"] = nProtocolVersion;
-            Session->Hostinfo["isDedicated"] = bDedicatedServer;
-            Session->Hostinfo["isPrivate"] = bPasswordProtected;
+            Session->Steam.Productdesc = Encoding::toUTF8(pGameDescription);
+            Session->Steam.Productname = Encoding::toUTF8(pProductName);
+            Session->Steam.Region = Encoding::toUTF8(pRegionName);
+            Session->Steam.Maxplayers = nMaxReportedClients;
+            Session->Steam.isDedicated = bDedicatedServer;
+            Session->Steam.isPrivate = bPasswordProtected;
+            Session->Steam.Protocol = nProtocolVersion;
 
-            Matchmaking::Update();
+            Matchmaking::Invalidatesession();
         }
         void ClearAllKeyValues()
         {
@@ -54,8 +54,8 @@ namespace Steam
         }
         void SetKeyValue(const char *pKey, const char *pValue) const
         {
-            Matchmaking::getLocalsession()->Sessiondata[pKey] = pValue;
-            Matchmaking::Update();
+            Matchmaking::getLocalsession()->Steam.Keyvalues[pKey] = pValue;
+            Matchmaking::Invalidatesession();
         }
         void NotifyShutdown()
         {
