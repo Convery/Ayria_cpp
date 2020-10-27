@@ -49,6 +49,7 @@ namespace Matchmaking
         std::u8string Mapname, Gametype, Gametags, Gamemod;
 
         bool isLAN, isPrivate, isDedicated;
+        nlohmann::json::object_t Keyvalues;
 
         Steampart_t() = default;
         Steampart_t(const nlohmann::json &Object)
@@ -65,6 +66,7 @@ namespace Matchmaking
             Parse(Mapname); Parse(Gametype); Parse(Gametags); Parse(Gamemod);
 
             Parse(isLAN); Parse(isPrivate); Parse(isDedicated);
+            Parse(Keyvalues);
         }
         Steampart_t(std::string_view JSONString) : Steampart_t(ParseJSON(JSONString)) {}
 
@@ -83,6 +85,7 @@ namespace Matchmaking
             Dump(Mapname); Dump(Gametype); Dump(Gametags); Dump(Gamemod);
 
             Dump(isLAN); Dump(isPrivate); Dump(isDedicated);
+            Dump(Keyvalues);
             return Object;
         }
     };

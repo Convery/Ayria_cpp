@@ -21,13 +21,13 @@ namespace Steam
     static nlohmann::json *pAppdata{}, sAppdata{};
     static nlohmann::json *getAppdata()
     {
-        if (Appdata) return Appdata;
+        if (pAppdata) return pAppdata;
 
         const auto Filename = va(L"./Ayria/Assets/Steam/Appinfo_%u.json", Steam.ApplicationID);
         const auto Filebuffer = FS::Readfile<char>(Filename);
         sAppdata = ParseJSON(Filebuffer);
         pAppdata = &sAppdata;
-        return Appdata;
+        return pAppdata;
     }
 
     struct SteamApps
