@@ -68,7 +68,7 @@ namespace Social
             const auto Result = Callback(Ayria.toFunctionID("getClient"), DumpJSON(Request).c_str());
             const auto Object = ParseJSON(Result);
 
-            return { Object.value("AccountID", uint64_t()) & 0xFFFFFFFF, Object.value("Username", std::u8string()) };
+            return { uint32_t(Object.value("AccountID", uint64_t()) & 0xFFFFFFFF), Object.value("Username", std::u8string()) };
         }
 
         return {};
