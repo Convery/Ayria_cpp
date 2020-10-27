@@ -62,7 +62,7 @@ namespace Social
     }
 
     // Add API handlers.
-    inline std::string __cdecl removeFriend(const char *JSONString)
+    inline std::string __cdecl removeRelation(const char *JSONString)
     {
         const auto Object = ParseJSON(JSONString);
         const auto UserID = Object.value("UserID", uint32_t());
@@ -74,7 +74,7 @@ namespace Social
         Relations::Remove(UserID, Username);
         return "{ \"Status\": \"OK\" }";
     }
-    inline std::string __cdecl addFriend(const char *JSONString)
+    inline std::string __cdecl addRelation(const char *JSONString)
     {
         const auto Object = ParseJSON(JSONString);
         const auto Flags = Object.value("Flags", uint32_t());
@@ -84,8 +84,7 @@ namespace Social
         // We need an ID, the username is optional.
         if (UserID == 0) [[unlikely]] return "{ \"Status\": \"Error\" }";
 
-        Relationflags_t Internal{ Flags }; Internal.isFriend = true;
-        Relations::Add(UserID, Username, Internal.Raw);
+        Relations::Add(UserID, Username, Flags);
         return "{ \"Status\": \"OK\" }";
     }
     inline std::string __cdecl blockUser(const char *JSONString)
@@ -110,7 +109,7 @@ namespace Social
             const Relationflags_t Internal{ Flags };
             if (Internal.isFriend)
             {
-                Array += { { "Username", Username }, { "UserID", ID }, { "Flags", Flags }};
+                Array += { { "Username", Username }, { "UserID", ID }, { "Flags", Flags } };
             }
         }
 
@@ -126,7 +125,11 @@ namespace Social
         auto SenderIDs = Object.value("SenderIDs", std::vector<uint32_t>());
 
         std::vector<Message_t *> Messages;
-        if (Starttime + Endtime == 0)
+        if (Object.empty())
+        {
+            Messages = Messaging::Read::All();
+        }
+        else if (Starttime + Endtime == 0)
         {
             SenderIDs.push_back(SenderID);
             Messages = Messaging::Read::bySenders(SenderIDs);
@@ -180,10 +183,10 @@ namespace Social
 
     inline void API_Initialize()
     {
-        API::Registerhandler_Social("addFriend", addFriend);
         API::Registerhandler_Social("blockUser", blockUser);
+        API::Registerhandler_Social("addRelation", addRelation);
         API::Registerhandler_Social("Friendslist", Friendslist);
-        API::Registerhandler_Social("removeFriend", removeFriend);
+        API::Registerhandler_Social("removeRelation", removeRelation);
 
         API::Registerhandler_Social("Sendmessage", Sendmessage);
         API::Registerhandler_Social("Readmessages", Readmessages);
