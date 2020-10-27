@@ -153,9 +153,9 @@ namespace Plugins
     void Initialize()
     {
         // Load all plugins from disk.
-        for (const auto &Item : FS::Findfiles("./Ayria/Plugins", Build::is64bit ? "64" : "32"))
+        for (const auto &Item : FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"))
         {
-            if (const auto Module = LoadLibraryA(("./Ayria/Plugins/"s + Item).c_str()))
+            if (const auto Module = LoadLibraryW((L"./Ayria/Plugins/"s + Item).c_str()))
             {
                 Pluginhandles.insert(Module);
             }
