@@ -37,7 +37,7 @@ namespace Matchmaking
     };
     struct Steampart_t
     {
-        uint16_t Gameport, Queryport, Spectatorport;
+        uint16_t Authport, Gameport, Queryport, Spectatorport;
 
         uint32_t ApplicationID, IPAddress, Protocol;
         uint32_t Versionint, Serverflags, Spawncount;
@@ -54,7 +54,7 @@ namespace Matchmaking
         Steampart_t() = default;
         Steampart_t(const nlohmann::json &Object)
         {
-            Parse(Gameport); Parse(Queryport); Parse(Spectatorport);
+            Parse(Authport); Parse(Gameport); Parse(Queryport); Parse(Spectatorport);
 
             Parse(ApplicationID); Parse(IPAddress); Parse(Protocol);
             Parse(Versionint); Parse(Serverflags); Parse(Spawncount);
@@ -73,7 +73,7 @@ namespace Matchmaking
         nlohmann::json toJSON()
         {
             auto Object = nlohmann::json::object();
-            Dump(Gameport); Dump(Queryport); Dump(Spectatorport);
+            Dump(Authport); Dump(Gameport); Dump(Queryport); Dump(Spectatorport);
 
             Dump(ApplicationID); Dump(IPAddress); Dump(Protocol);
             Dump(Versionint); Dump(Serverflags); Dump(Spawncount);

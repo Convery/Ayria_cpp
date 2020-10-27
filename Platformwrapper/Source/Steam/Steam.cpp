@@ -230,18 +230,18 @@ namespace Steam
 
                     // New session for the server.
                     auto Session = Matchmaking::getLocalsession();
-                    Session->Hostinfo["Authport"] = usPort;
-                    Session->Hostinfo["Gameport"] = usGamePort;
-                    Session->Hostinfo["Queryport"] = usQueryPort;
-                    Session->Hostinfo["Spectatorport"] = usSpectatorPort;
-                    Session->Gameinfo["Gamemod"] = pchGameDir;
-                    Session->Hostinfo["IPAddress"] = unIP;
+                    Session->Steam.Gamemod = Encoding::toUTF8(pchGameDir);
+                    Session->Steam.Spectatorport = usSpectatorPort;
+                    Session->Steam.Queryport = usQueryPort;
+                    Session->Steam.Gameport = usGamePort;
+                    Session->Steam.Authport = usPort;
+                    Session->Steam.IPAddress = unIP;
 
                     uint32_t a{}, b{}, c{}, d{};
                     std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Hostinfo["Versionint"] = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Hostinfo["Versionstring"] = pchVersionString;
-                    Matchmaking::Update();
+                    Session->Steam.Versionint = d + (c * 10) + (b * 100) + (a * 1000);
+                    Session->Steam.Versionstring = Encoding::toUTF8(pchVersionString);
+                    Matchmaking::Invalidatesession();
                 }
                 if (Version == 11 || Version == 12)
                 {
@@ -255,16 +255,16 @@ namespace Steam
 
                     // New session for the server.
                     auto Session = Matchmaking::getLocalsession();
-                    Session->Hostinfo["Authport"] = usPort;
-                    Session->Hostinfo["Gameport"] = usGamePort;
-                    Session->Hostinfo["Queryport"] = usQueryPort;
-                    Session->Hostinfo["IPAddress"] = unIP;
+                    Session->Steam.Queryport = usQueryPort;
+                    Session->Steam.Gameport = usGamePort;
+                    Session->Steam.Authport = usPort;
+                    Session->Steam.IPAddress = unIP;
 
                     uint32_t a{}, b{}, c{}, d{};
                     std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Hostinfo["Versionint"] = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Hostinfo["Versionstring"] = pchVersionString;
-                    Matchmaking::Update();
+                    Session->Steam.Versionint = d + (c * 10) + (b * 100) + (a * 1000);
+                    Session->Steam.Versionstring = Encoding::toUTF8(pchVersionString);
+                    Matchmaking::Invalidatesession();
                 }
 
                 va_end(Args);
