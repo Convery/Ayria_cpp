@@ -49,7 +49,7 @@ namespace Matchmaking
             const auto Currenthash{ Hash::FNV1_32(String) };
             if (Currenthash != Lasthash)
             {
-                if (const auto Callback = Ayria.API_Matchmake)
+                if (const auto Callback = Ayria.API_Matchmake) [[likely]]
                 {
                     Callback(Ayria.toFunctionID("updateSession"), String.c_str());
                 }
@@ -63,7 +63,7 @@ namespace Matchmaking
         const auto Currentclock{ GetTickCount64() };
         if (Currentclock - Lastupdate > 5000)
         {
-            if (const auto Callback = Ayria.API_Matchmake)
+            if (const auto Callback = Ayria.API_Matchmake) [[likely]]
             {
                 const auto Result = Callback(Ayria.toFunctionID("getSessions"), nullptr);
                 const auto Object = ParseJSON(Result);
