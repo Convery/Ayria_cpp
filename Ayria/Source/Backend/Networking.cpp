@@ -13,6 +13,7 @@ namespace Backend
 
     std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
     std::unordered_map<uint16_t, Multicast_t> Networkgroups;
+    std::unordered_set<uint32_t> Blacklist;
     static uint32_t RandomID;
     FD_SET Activesockets;
 
@@ -67,6 +68,10 @@ namespace Backend
         // TODO(tcn): Error checking.
         if (Error) [[unlikely]] { assert(false); }
     }
+    void Blockclient(uint32_t NodeID)
+    {
+        Blacklist.insert(NodeID);
+    }
 
     // Just for clearer codes..
     using Message_t = struct { uint32_t RandomID, Messagetype; char Payload[1]; };
@@ -104,6 +109,9 @@ namespace Backend
 
             // To ensure that we don't process our own packets.
             if (Packet->RandomID == RandomID) [[likely]] continue;
+
+            // Blocked clients shouldn't be processed.
+            if (Blacklist.contains(Packet->RandomID)) [[unlikely]] continue;
 
             // Do we even care for this message?
             if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())

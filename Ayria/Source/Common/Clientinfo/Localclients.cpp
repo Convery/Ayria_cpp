@@ -57,6 +57,20 @@ namespace Clientinfo
 
         // MSVC does not like custom unordered_set shared across translation-units -.-'
         std::erase_if(Networkclients, [&](const auto &Item) { return Item.NodeID == NodeID; });
+
+        // Verify their relation to us.
+        for (const auto &Relation : *Social::Relations::Get())
+        {
+            if (Social::Relationflags_t{ Relation.Flags }.isBlocked) [[unlikely]]
+            {
+                if (Relation.AccountID == Newclient.AccountID.AccountID) [[unlikely]]
+                {
+                    Backend::Blockclient(NodeID);
+                    return;
+                }
+            }
+        }
+
         Networkclients.push_back(std::move(Newclient));
     }
 

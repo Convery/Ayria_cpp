@@ -72,15 +72,14 @@ namespace Clientinfo
     inline std::string __cdecl LANClients(const char *)
     {
         const auto Localnetwork = *getNetworkclients();
-        auto Object = nlohmann::json::object();
+        auto Array = nlohmann::json::array();
 
         for (const auto &Client : Localnetwork)
         {
-            Object["Username"] = Client.Username;
-            Object["AccountID"] = Client.AccountID.Raw;
+            Array += { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
         }
 
-        return DumpJSON(Object);
+        return DumpJSON(Array);
     }
     inline void API_Initialize()
     {
