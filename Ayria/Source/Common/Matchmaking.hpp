@@ -83,11 +83,10 @@ namespace Matchmaking
     {
         const auto Client = Clientinfo::getLocalclient();
         auto Session = getLocalsession();
-        Session->isActive = true;
 
-        // Ensure that the account-type is OK.
+        // Ensure that the host is initialized.
         Session->Hostinfo = *Client;
-        Session->Hostinfo.ID.Accounttype.isServer = true;
+        Session->isActive = true;
 
         // Update the existing session.
         auto Sessiondata = ParseJSON(Session->JSONData);

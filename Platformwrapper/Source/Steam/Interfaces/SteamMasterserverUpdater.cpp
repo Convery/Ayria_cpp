@@ -59,9 +59,9 @@ namespace Steam
         }
         void NotifyShutdown()
         {
-            if (const auto Callback = Ayria.API_Matchmake)
+            if (const auto Callback = Ayria.API_Matchmake) [[likely]]
             {
-                Callback(Ayria.toFunctionID("Terminatesession"), nullptr);
+                Callback(Ayria.toFunctionID("terminateSession"), nullptr);
             }
         }
         bool WasRestartRequested()
