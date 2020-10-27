@@ -16,7 +16,7 @@ namespace Matchmaking
         uint32_t Lastmessage;
 
         Account_t Hostinfo;
-        std::string JSONData; // Keyed by platform, ["Steam"]["Servername"] / ["Demonware"]["SessionID"]
+        std::string JSONData;
         std::string Signature;
     };
 
@@ -46,8 +46,7 @@ namespace Matchmaking
                     { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
                     { "Hostname", Session->Hostinfo.Username.asUTF8() },
                     { "HostID", Session->Hostinfo.ID.Raw },
-                    { "Sessiondata", Session->JSONData },
-                    { "Signature", Session->Signature }
+                    { "Sessiondata", Session->JSONData }
                 });
             }
         }
@@ -60,8 +59,7 @@ namespace Matchmaking
                     { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
                     { "Hostname", Session->Hostinfo.Username.asUTF8() },
                     { "HostID", Session->Hostinfo.ID.Raw },
-                    { "Sessiondata", Session->JSONData },
-                    { "Signature", Session->Signature }
+                    { "Sessiondata", Session->JSONData }
                 });
             }
         }
@@ -74,8 +72,7 @@ namespace Matchmaking
                     { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
                     { "Hostname", Session->Hostinfo.Username.asUTF8() },
                     { "HostID", Session->Hostinfo.ID.Raw },
-                    { "Sessiondata", Session->JSONData },
-                    { "Signature", Session->Signature }
+                    { "Sessiondata", Session->JSONData }
                 });
             }
         }
@@ -100,16 +97,8 @@ namespace Matchmaking
         // Sign so that others can verify the data.
         Session->Signature = PK_RSA::Signmessage(Session->JSONData, Clientinfo::getSessionkey());
 
-        // Return the session-info in case someone wants it.
-        auto Object = nlohmann::json::object({
-            { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
-            { "Hostname", Session->Hostinfo.Username.asUTF8() },
-            { "HostID", Session->Hostinfo.ID.Raw },
-            { "Sessiondata", Session->JSONData },
-            { "Signature", Session->Signature }
-            });
-
-        return DumpJSON(Object);
+        // Nothing returned, use getSessions for latest info.
+        return "{}";
     }
     inline std::string __cdecl terminateSession(const char *)
     {

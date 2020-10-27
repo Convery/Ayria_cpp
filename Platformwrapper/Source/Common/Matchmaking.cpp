@@ -1,90 +1,92 @@
-
-
+/*
+    Initial author: Convery (tcn@ayria.se)
+    Started: 2020-10-27
+    License: MIT
+*/
 
 #include <Stdinclude.hpp>
-#include <Common.hpp>
-#include "../Steam/Steam.hpp"
+#include "../Common.hpp"
 
 namespace Matchmaking
 {
-    std::vector<Session_t> Netservers;
-    static uint32_t Lastlocalupdate{};
-    static uint32_t Lastnetupdate{};
-    Session_t Localsession;
-    bool isDirty{};
+    std::vector<Session_t> LANSessions, WANSessions;
+    uint64_t Lasthash{}, Lastupdate{};
+    std::atomic_flag isDirty{};
+    Session_t Localsession{};
 
-    std::vector<Session_t> *getNetworkservers()
+    // Manage the sessions we know of, updates in the background.
+    std::vector<Session_t *> getLANSessions()
     {
-        const auto Currenttime = GetTickCount();
-        if ((Currenttime - Lastnetupdate) > 2000)
-        {
-            if (const auto Callback = Ayria.API_Matchmake)
-            {
-                Netservers.clear();
-                const auto Array = ParseJSON(Callback(Ayria.toFunctionID("getNetworksessions"), nullptr));
-                for (const auto &Config : Array)
-                {
-                    Session_t Session{};
-                    Session.Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
-                    Session.Playerdata = Config.value("Playerdata", nlohmann::json::object());
-                    Session.Gameinfo = Config.value("Gameinfo", nlohmann::json::object());
-                    Session.Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
-                    Session.HostID = Config.value("HostID", 0);
-                    Netservers.push_back(Session);
-                }
-            }
-
-            Lastnetupdate = Currenttime;
-        }
-
-        return &Netservers;
+        std::vector<Session_t *> Result;
+        Result.reserve(LANSessions.size());
+        for (auto it = LANSessions.begin(); it != LANSessions.end(); ++it)
+            Result.push_back(&*it);
+        return Result;
+    }
+    std::vector<Session_t *> getWANSessions()
+    {
+        std::vector<Session_t *> Result;
+        Result.reserve(WANSessions.size());
+        for (auto it = WANSessions.begin(); it != WANSessions.end(); ++it)
+            Result.push_back(&*it);
+        return Result;
     }
     Session_t *getLocalsession()
     {
-        // Ensure that we don't update in the middle of a frame.
-        if (isDirty) [[likely]] return &Localsession;
-
-        const auto Currenttime = GetTickCount();
-        if ((Currenttime - Lastlocalupdate) > 2000)
-        {
-            if (const auto Callback = Ayria.API_Matchmake)
-            {
-                const auto Config = ParseJSON(Callback(Ayria.toFunctionID("getLocalsession"), nullptr));
-                Localsession.Playerdata = Config.value("Playerdata", nlohmann::json::object());
-                Localsession.Sessiondata = Config.value("Sessiondata", nlohmann::json::object());
-                Localsession.Gameinfo = Config.value("Gameinfo", nlohmann::json::object());
-                Localsession.Hostinfo = Config.value("Hostinfo", nlohmann::json::object());
-                Localsession.HostID = Config.value("HostID", 0);
-            }
-
-            Lastlocalupdate = Currenttime;
-        }
-
         return &Localsession;
     }
 
+    // Notify the backend about our session changing.
+    void Invalidatesession()
+    {
+        isDirty.test_and_set();
+    }
     void doFrame()
     {
-        if (!isDirty) [[likely]] return;
-
-        auto Object = nlohmann::json::object();
-        Object["Hostinfo"] = Localsession.Hostinfo;
-        Object["Gameinfo"] = Localsession.Gameinfo;
-        Object["Playerdata"] = Localsession.Playerdata;
-        Object["Sessiondata"] = Localsession.Sessiondata;
-
-        const auto Plaintext = Object.dump();
-        if (const auto Callback = Ayria.API_Matchmake)
+        if (isDirty.test())
         {
-            Callback(Ayria.toFunctionID("Sessionupdate"), Object.dump().c_str());
+            const auto String{ DumpJSON(Localsession.toJSON()) };
+            const auto Currenthash{ Hash::FNV1_32(String) };
+            if (Currenthash != Lasthash)
+            {
+                if (const auto Callback = Ayria.API_Matchmake)
+                {
+                    Callback(Ayria.toFunctionID("updateSession"), String.c_str());
+                }
+
+                Lasthash = Currenthash;
+            }
+
+            isDirty.clear();
         }
 
-        isDirty = false;
-    }
-    void Update()
-    {
-        isDirty = true;
+        const auto Currentclock{ GetTickCount64() };
+        if (Currentclock - Lastupdate > 5000)
+        {
+            if (const auto Callback = Ayria.API_Matchmake)
+            {
+                const auto Result = Callback(Ayria.toFunctionID("getSessions"), nullptr);
+                const auto Object = ParseJSON(Result);
+
+                if (Object.contains("LAN"))
+                {
+                    LANSessions.clear();
+                    for (const auto &Session : Object["LAN"])
+                        LANSessions.push_back(Session_t(Session));
+                }
+                if (Object.contains("WAN"))
+                {
+                    WANSessions.clear();
+                    for (const auto &Session : Object["WAN"])
+                        WANSessions.push_back(Session_t(Session));
+                }
+                if (Object.contains("Localsession"))
+                {
+                    Localsession = Session_t(Object["Localsession"]);
+                }
+            }
+
+            Lastupdate = Currentclock;
+        }
     }
 }
-
-
