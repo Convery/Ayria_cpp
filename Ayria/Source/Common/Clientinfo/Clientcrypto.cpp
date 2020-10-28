@@ -148,7 +148,6 @@ namespace Clientinfo
     // Initialize the subsystems.
     void Initialize_crypto()
     {
-        getHardwarekey(); getSessionkey();
         Backend::Registermessagehandler(Hash::FNV1_32("Syncpublickeys"), Keysharehandler);
     }
 }
