@@ -7,56 +7,69 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-// Get motherboard-ID or volume-ID as fallback.
-static inline std::string getSerial()
+// Get motherboard-ID, system UUID, and volume-ID.
+static inline std::string getHWID()
 {
-    const auto Size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    const auto Buffer = std::make_unique<char[]>(Size);
-    GetSystemFirmwareTable('RSMB', 0, Buffer.get(), Size);
+    std::string MOBOSerial, SystemUUID;
+    DWORD VolumeID{};
 
-    const auto Version = *(WORD *)(Buffer.get() + 1);
-    const auto Tablelength = *(DWORD *)(Buffer.get() + 4);
-    auto Table = std::string_view(Buffer.get() + 8, Tablelength);
+    // Volume information.
+    GetVolumeInformationA("C:\\", nullptr, 0, &VolumeID, nullptr, nullptr, nullptr, NULL);
 
-    if (Version == 0 || Version >= 0x0200)
+    // SMBIOS information.
     {
+        const auto Size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
+        const auto Buffer = std::make_unique<char8_t[]>(Size);
+        GetSystemFirmwareTable('RSMB', 0, Buffer.get(), Size);
+
+        const auto Version_major = *(uint8_t *)(Buffer.get() + 1);
+        const auto Tablelength = *(DWORD *)(Buffer.get() + 4);
+        auto Table = std::u8string_view(Buffer.get() + 8, Tablelength);
+
         #define Consume(x) *(x *)Table.data(); Table.remove_prefix(sizeof(x));
-        while (!Table.empty())
+        if (Version_major == 0 || Version_major >= 2)
         {
-            const auto Type = Consume(uint8_t);
-            const auto Length = Consume(uint8_t);
-            const auto Handle = Consume(uint16_t);
-
-            // EOF marker.
-            if (Type == 127) break;
-
-            // Only interested in the motherboard.
-            if (Type != 2)
+            while (!Table.empty())
             {
-                Table.remove_prefix(Length);
+                const auto Type = Consume(uint8_t);
+                const auto Length = Consume(uint8_t);
+                const auto Handle = Consume(uint16_t);
+
+                if (Type == 1)
+                {
+                    SystemUUID.reserve(16);
+                    for (size_t i = 0; i < 16; ++i)
+                        SystemUUID.append(va("%02X", Table[4 + i]));
+
+                    Table.remove_prefix(Length);
+                }
+                else if (Type == 2)
+                {
+                    const auto Index = *(uint8_t *)(Table.data() + 3);
+                    Table.remove_prefix(Length);
+
+                    for (uint8_t i = 1; i < Index; ++i)
+                        Table.remove_prefix(std::strlen((char *)Table.data()) + 1);
+
+                    MOBOSerial = std::string((char *)Table.data());
+                }
+                else Table.remove_prefix(Length);
+
+                // Have all the information we want.
+                if (!MOBOSerial.empty() && !SystemUUID.empty()) break;
+
+                // Skip to next entry.
                 while (!Table.empty())
                 {
                     const auto Value = Consume(uint16_t);
                     if (Value == 0) break;
                 }
             }
-            else
-            {
-                const auto Index = *(uint8_t *)(Table.data() + 3);
-                Table.remove_prefix(Length);
-
-                for (uint8_t i = 1; i < Index; ++i)
-                    Table.remove_prefix(std::strlen(Table.data()) + 1);
-
-                return std::string(Table.data());
-            }
         }
         #undef Consume
     }
 
-    DWORD Serialnumber{};
-    GetVolumeInformationA("C:\\", nullptr, 0, &Serialnumber, nullptr, nullptr, nullptr, NULL);
-    return Hash::Tiger192(&Serialnumber, sizeof(DWORD));
+    return va("%u:%s:%s", VolumeID, MOBOSerial.c_str(), SystemUUID.c_str());
 }
 
 namespace Clientinfo
@@ -115,8 +128,8 @@ namespace Clientinfo
     {
         if (Hardwarekey.empty()) [[unlikely]]
         {
-            const auto Serial = getSerial();
-            Hardwarekey = Hash::Tiger192(Serial.data(), Serial.size());
+            const auto HWID = getHWID();
+            Hardwarekey = Hash::Tiger192(HWID.data(), HWID.size());
         }
 
         return Hardwarekey;
