@@ -34,7 +34,7 @@ namespace Logging
         char Buffer[16]{};
         const auto Now{ std::time(nullptr) };
         std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
-        const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.data(), Message.size());
+        const auto Formatted = va("[%c][%-8s] %*s\n", Prefix, Buffer, Message.size(), Message.data());
         const auto Encoded = Encoding::toUTF8(Formatted);
 
         // Output.
@@ -47,7 +47,7 @@ namespace Logging
         char Buffer[16]{};
         const auto Now{ std::time(nullptr) };
         std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
-        const auto Formatted = va(L"[%c][%-8s] %*ls\n", Prefix, Buffer, Message.data(), Message.size());
+        const auto Formatted = va(L"[%c][%-8s] %*ls\n", Prefix, Buffer, Message.size(), Message.data());
         const auto Encoded = Encoding::toUTF8(Formatted);
 
         // Output.
