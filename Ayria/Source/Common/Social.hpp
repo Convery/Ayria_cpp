@@ -124,20 +124,16 @@ namespace Social
         const auto Starttime = Object.value("Starttime", uint32_t());
         auto SenderIDs = Object.value("SenderIDs", std::vector<uint32_t>());
 
-        std::vector<Message_t *> Messages;
-        if (Object.empty())
+        const auto Messages = [&]()
         {
-            Messages = Messaging::Read::All();
-        }
-        else if (Starttime + Endtime == 0)
-        {
-            SenderIDs.push_back(SenderID);
-            Messages = Messaging::Read::bySenders(SenderIDs);
-        }
-        else
-        {
-            Messages = Messaging::Read::byTime(Starttime, Endtime, SenderID);
-        }
+            if (Object.empty()) return Messaging::Read::All();
+            else if (Starttime + Endtime != 0) return Messaging::Read::byTime(Starttime, Endtime, SenderID);
+            else
+            {
+                SenderIDs.push_back(SenderID);
+                return Messaging::Read::bySenders(SenderIDs);
+            }
+        }();
 
         auto Array = nlohmann::json::array();
         for (const auto Pointer : Messages)

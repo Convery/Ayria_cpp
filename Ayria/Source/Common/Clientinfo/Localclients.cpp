@@ -24,7 +24,7 @@ namespace Clientinfo
                 return true;
         return false;
     }
-    std::vector<Networkclient_t> Hack;
+
     const std::vector<Networkclient_t> *getNetworkclients()
     {
         return &Networkclients;
