@@ -43,8 +43,8 @@ struct Overlay_t
     std::vector<Element_t> Elements;
     vec2_t Position, Size;
     bool Ctrl{}, Shift{};
+    bool Forcerepaint{};
     HWND Windowhandle;
-    bool Forcerepaint;
 
     static LRESULT __stdcall Windowproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
@@ -321,9 +321,8 @@ struct Overlay_t
         if (NULL == RegisterClassExA(&Windowclass)) assert(false);
 
         // Generic overlay style.
-        DWORD Style = WS_POPUP | CS_BYTEALIGNWINDOW;
-        DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
-        if constexpr (Build::isDebug) Style |= WS_BORDER;
+        const DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
+        const DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
 
         // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
         if (!CreateWindowExA(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,

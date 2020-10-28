@@ -66,7 +66,7 @@ namespace Backend
                 }
             }
 
-            // For reference, my workstations E5 hits 200FPS while laptops i5 gets 50FPS. Cap to 60.
+            // Cap the FPS to ~60, as we only render if dirty we can get thousands of FPS.
             std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
         }
 

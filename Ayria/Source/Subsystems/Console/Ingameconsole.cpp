@@ -29,7 +29,7 @@ namespace Console
                     vec2_t Wantedsize{ Newsize.x, Newsize.y - Inputheight };
                     if (Wantedsize != This->Size)
                     {
-                        Eventcount++;
+                        ++Eventcount;
                         This->Size = Wantedsize;
                         This->Surface = Consoleoverlay->Createsurface(This->Size, &This->Surface);
                     }
@@ -41,7 +41,6 @@ namespace Console
                 if (!isVisible) [[likely]] return;
 
                 const auto Events = Eventcount.load();
-
                 if (Events)
                 {
                     // Default font-size should be ~20.
@@ -49,14 +48,10 @@ namespace Console
                     const auto Lines = Console::getLoglines(Linecount, L"");
 
                     auto Renderer = Graphics(This->Surface);
-                    Renderer.Clear(This->Size);
+                    Renderer.Quad({}, This->Size).Solid(Color_t(39, 38, 35));
+                    Renderer.Path({}, { This->Size.x, 0 }).Outline(1, Color_t(0xBE, 0x90, 00));
 
-                    vec2_t Position{ 20, 5 }, Size{ This->Size.x - 40, This->Size.y };
-                    Renderer.Quad(Position, Size).Solid(Color_t(39, 38, 35));
-                    Renderer.Path(Position, { Position.x + Size.x, Position.y }).Outline(1, Color_t(0xBE, 0x90, 00));
-
-                    Position.x += 10; Position.y += 5;
-
+                    vec2_t Position{10, 5};
                     for (const auto &Item : Lines)
                     {
                         if (Item.first.empty()) continue;
@@ -89,7 +84,7 @@ namespace Console
                 if (Elapsed > 1)
                 {
                     Caretstate ^= true;
-                    Eventcount++;
+                    ++Eventcount;
                     Elapsed = 0;
                 }
 
@@ -99,14 +94,10 @@ namespace Console
                     // Split the string so we can have a caret.
                     const std::wstring Output = Inputline.substr(0, Cursorpos) +
                         (Caretstate ? L'|' : L' ') + Inputline.substr(Cursorpos);
+
                     auto Renderer = Graphics(This->Surface);
-                    Renderer.Clear(This->Size);
-
-                    vec2_t Position{ 20, 0 }, Size{ This->Size.x - 40, This->Size.y };
-                    Renderer.Quad(Position, Size).Filled(1, Color_t(0xBE, 0x90, 00), Color_t(39, 38, 35));
-
-                    Position.x += 10; Position.y += 5;
-                    Renderer.Text(Color_t(127, 150, 62)).Opaque(Position, Output, Color_t(39, 38, 35));
+                    Renderer.Quad({}, This->Size).Filled(1, Color_t(0xBE, 0x90, 00), Color_t(39, 38, 35));
+                    Renderer.Text(Color_t(127, 150, 62)).Opaque({10, 5}, Output, Color_t(39, 38, 35));
 
                     This->Repainted = true;
                     Eventcount -= Events;
@@ -118,13 +109,13 @@ namespace Console
                 {
                     assert(std::holds_alternative<vec2_t>(Data));
                     const auto Newsize = std::get<vec2_t>(Data);
-                    const vec2_t Wantedsize{ Newsize.x, Inputheight };
                     const vec3_t Position{ 0, Newsize.y - Inputheight, 0 };
+                    const vec2_t Wantedsize{ Newsize.x, Inputheight - isExtended * 2 };
 
                     if (This->Position != Position) This->Position = { 0, Newsize.y - Inputheight, 0 };
                     if (This->Size != Wantedsize)
                     {
-                        Eventcount++;
+                        ++Eventcount;
                         This->Size = Wantedsize;
                         This->Surface = Consoleoverlay->Createsurface(This->Size, &This->Surface);
                     }
@@ -141,7 +132,7 @@ namespace Console
                         return;
 
                     Inputline.insert(Cursorpos, 1, Letter);
-                    Eventcount++;
+                    ++Eventcount;
                     Cursorpos++;
                     return;
                 }
@@ -151,7 +142,7 @@ namespace Console
                     if (Cursorpos)
                     {
                         Inputline.erase(Cursorpos - 1, 1);
-                        Eventcount++;
+                        ++Eventcount;
                         Cursorpos--;
                     }
                     return;
@@ -160,7 +151,7 @@ namespace Console
                 if (Flags.doDelete)
                 {
                     Inputline.erase(Cursorpos, 1);
-                    Eventcount++;
+                    ++Eventcount;
                     return;
                 }
 
@@ -168,7 +159,7 @@ namespace Console
                 {
                     Inputline.clear();
                     Cursorpos = 0;
-                    Eventcount++;
+                    ++Eventcount;
                     return;
                 }
 
@@ -184,7 +175,7 @@ namespace Console
                                 {
                                     Inputline.insert(Cursorpos, String);
                                     Cursorpos = Inputline.size();
-                                    Eventcount++;
+                                    ++Eventcount;
                                 }
                             }
 
@@ -202,10 +193,10 @@ namespace Console
                     Lastcommand = Inputline;
                     Inputline.clear();
                     Cursorpos = 0;
-                    Eventcount++;
+                    ++Eventcount;
 
                     // Notify the output that there's a new line.
-                    Overlay::Outputarea::Eventcount++;
+                    ++Overlay::Outputarea::Eventcount;
                     return;
                 }
 
@@ -225,7 +216,7 @@ namespace Console
                     {
                         std::swap(Lastcommand, Inputline);
                         Cursorpos = Inputline.size();
-                        Eventcount++;
+                        ++Eventcount;
                         return;
                     }
 
@@ -234,7 +225,7 @@ namespace Console
                     {
                         const auto Offset = Keycode == VK_LEFT ? -1 : 1;
                         Cursorpos = std::clamp(int32_t(Cursorpos + Offset), int32_t(), int32_t(Inputline.size()));
-                        Eventcount++;
+                        ++Eventcount;
                         return;
                     }
                 }
@@ -262,7 +253,6 @@ namespace Console
                         if (GetAsyncKeyState(VK_SHIFT) & 1U << 15)
                         {
                             const auto Newsize = Consoleoverlay->Size.y * (isExtended ? -0.5f : 1);
-                            Consoleoverlay->setWindowsize({0, Newsize}, true);
                             isExtended ^= true;
                         }
                         else
@@ -289,8 +279,8 @@ namespace Console
                 const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
                 if (Lastmessage != Hash) [[unlikely]]
                 {
-                    Outputarea::Eventcount++;
-                    Inputarea::Eventcount++;
+                    ++Outputarea::Eventcount;
+                    ++Inputarea::Eventcount;
                     Lastmessage = Hash;
                 }
 
@@ -300,8 +290,8 @@ namespace Console
                     RECT Windowarea{};
                     GetWindowRect(Lastfocus, &Windowarea);
 
-                    vec2_t Wantedsize{ Windowarea.right - Windowarea.left, Windowarea.bottom - Windowarea.top };
-                    const vec2_t Position{ Windowarea.left, Windowarea.top + 45 };
+                    vec2_t Wantedsize{ Windowarea.right - Windowarea.left - 40, Windowarea.bottom - Windowarea.top - 45 };
+                    const vec2_t Position{ Windowarea.left + 20, Windowarea.top + 45 };
                     Wantedsize.y *= isExtended ? 0.6f : 0.3f;
 
                     if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
