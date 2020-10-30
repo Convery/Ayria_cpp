@@ -7,11 +7,6 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-namespace Logging
-{
-    extern void Print(const char Prefix, std::string_view Message);
-}
-
 struct Debugmutex
 {
     std::thread::id Currentowner{};
@@ -25,7 +20,7 @@ struct Debugmutex
     {
         if (Currentowner == std::this_thread::get_id())
         {
-            Errorprint(va("Debugmutex: Recursive lock by thread %u!", Currentowner));
+            Errorprint(va("Debugmutex: Recursive lock by thread %u!", Currentowner).c_str());
             volatile size_t Meep = 0; *(size_t *)Meep = 0xDEAD;
         }
 
@@ -35,7 +30,7 @@ struct Debugmutex
         }
         else
         {
-            Errorprint(va("Debugmutex: Timeout, locked by %u!", Currentowner));
+            Errorprint(va("Debugmutex: Timeout, locked by %u!", Currentowner).c_str());
             volatile size_t Meep = 0; *(size_t *)Meep = 0xF00D;
         }
     }

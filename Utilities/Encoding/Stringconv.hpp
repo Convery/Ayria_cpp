@@ -142,6 +142,10 @@ namespace Encoding
 
         return Result;
     }
+    [[nodiscard]] inline std::u8string toUTF8(std::u8string_view Input)
+    {
+        return std::u8string(Input.data(), Input.size());
+    }
 
     [[nodiscard]] inline std::wstring toWide(std::string_view Input)
     {

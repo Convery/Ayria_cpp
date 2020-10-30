@@ -29,6 +29,19 @@ namespace Logging
     void toFile(std::string_view Filename, std::u8string_view Message);
 
     // Formatted standard printing.
+    inline void Print(const char Prefix, const char *Message)
+    {
+        char Buffer[16]{};
+        const auto Now{ std::time(nullptr) };
+        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
+        const auto Formatted = va("[%c][%-8s] %s\n", Prefix, Buffer, Message);
+        const auto Encoded = Encoding::toUTF8(Formatted);
+
+        // Output.
+        toFile(Logfile, Encoded);
+        toConsole(Encoded);
+        toStream(Encoded);
+    }
     inline void Print(const char Prefix, std::string_view Message)
     {
         char Buffer[16]{};
@@ -74,7 +87,7 @@ namespace Logging
     inline void Clearlog()
     {
         #if defined(_WIN32)
-        // We use UTF88 for the output, always.
+        // We use UTF8 for the output, always.
         SetConsoleOutputCP(CP_UTF8);
         #endif
 

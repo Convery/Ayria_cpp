@@ -55,6 +55,7 @@ namespace Build
 }
 
 // Information logging.
+namespace Logging { extern void Print(const char Prefix, const char *Message); }
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)
