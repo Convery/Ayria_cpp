@@ -216,7 +216,7 @@ namespace PK_RSA
     template <typename T> inline std::string Encrypt(std::basic_string_view<T> Input, RSA *Key)
     {
         std::string Result; Result.resize(Input.size());
-        if (Input.size() != RSA_public_encrypt((int)Input.size(), (const uint8_t *)Input.data(),
+        if ((int)Input.size() != RSA_public_encrypt((int)Input.size(), (const uint8_t *)Input.data(),
                                                (uint8_t *)Result.data(), Key, RSA_NO_PADDING))
             return "";
 
@@ -225,7 +225,7 @@ namespace PK_RSA
     template <typename T> inline std::string Decrypt(std::basic_string_view<T> Input, RSA *Key)
     {
         std::string Result; Result.resize(Input.size());
-        if (Input.size() != RSA_private_decrypt((int)Input.size(), (const uint8_t *)Input.data(),
+        if ((int)Input.size() != RSA_private_decrypt((int)Input.size(), (const uint8_t *)Input.data(),
                                                 (uint8_t *)Result.data(), Key, RSA_NO_PADDING))
             return "";
 

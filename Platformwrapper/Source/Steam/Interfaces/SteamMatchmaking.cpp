@@ -56,7 +56,7 @@ namespace Steam
         CSteamID GetLobbyByIndex(int iLobby)
         {
             const auto Serverlist = Matchmaking::getLANSessions();
-            if (Serverlist.size() < iLobby) return k_steamIDNil;
+            if ((int)Serverlist.size() < iLobby) return k_steamIDNil;
 
             return CSteamID(Serverlist.at(iLobby)->HostID, 1, k_EAccountTypeGameServer);
         }
@@ -95,7 +95,7 @@ namespace Steam
             {
                 if (HostID == Session->HostID)
                 {
-                    if (iMember > Session->Players.size()) return k_steamIDNil;
+                    if (iMember > (int)Session->Players.size()) return k_steamIDNil;
                     return CSteamID(Session->Players.at(iMember).PlayerID, 1, k_EAccountTypeIndividual);
                 }
             }
