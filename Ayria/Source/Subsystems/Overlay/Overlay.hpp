@@ -241,10 +241,10 @@ struct Overlay_t
             Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
 
             MSG Message;
-            while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
+            while (PeekMessageW(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
             {
                 TranslateMessage(&Message);
-                DispatchMessageA(&Message);
+                DispatchMessageW(&Message);
             }
         }
 
@@ -312,20 +312,20 @@ struct Overlay_t
     explicit Overlay_t(vec2_t _Position, vec2_t _Size) : Position(_Position)
     {
         // Register the overlay class.
-        WNDCLASSEXA Windowclass{};
+        WNDCLASSEXW Windowclass{};
         Windowclass.lpfnWndProc = Windowproc;
-        Windowclass.cbSize = sizeof(WNDCLASSEXA);
-        Windowclass.lpszClassName = "Ayria_Overlay";
+        Windowclass.cbSize = sizeof(WNDCLASSEXW);
+        Windowclass.lpszClassName = L"Ayria_Overlay";
         Windowclass.cbWndExtra = sizeof(Overlay_t *);
         Windowclass.hbrBackground = CreateSolidBrush(Clearcolor);
-        if (NULL == RegisterClassExA(&Windowclass)) assert(false);
+        if (NULL == RegisterClassExW(&Windowclass)) assert(false);
 
         // Generic overlay style.
         const DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
         const DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
 
         // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
-        if (!CreateWindowExA(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,
+        if (!CreateWindowExW(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,
             0, 0, NULL, NULL, NULL, this)) assert(false);
 
         // To keep static-analysis happy. Is set via Windowproc.
