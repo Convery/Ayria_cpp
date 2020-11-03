@@ -38,6 +38,8 @@ struct Element_t
     void(__cdecl *onTick)(Element_t *This, float Deltatime);
     void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
 };
+
+template <bool Animated = false>
 struct Overlay_t
 {
     std::vector<Element_t> Elements;
@@ -263,16 +265,26 @@ struct Overlay_t
         if (IsWindowVisible(Windowhandle))
         {
             // Before doing any work, verify that we have to update.
-            if (!Forcerepaint)
+            if (!Forcerepaint &&
+                !std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
+                [](const auto &Element) { return Element.Repainted; })) [[unlikely]]
             {
-                if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
-                    [](const auto &Element) { return Element.Repainted; })) return;
+                return;
             }
             Forcerepaint = false;
 
+            // Redraw the whole area.
             PAINTSTRUCT State;
-            InvalidateRect(Windowhandle, NULL, FALSE);
-            const auto Device = BeginPaint(Windowhandle, &State);
+            InvalidateRect(Windowhandle, nullptr, TRUE);
+            HDC Device = BeginPaint(Windowhandle, &State);
+
+            // Animated overlays need to draw to a separate DC, ~15% performance hit.
+            if constexpr (Animated)
+            {
+                const auto Memory = CreateCompatibleDC(Device);
+                SelectObject(Memory, CreateCompatibleBitmap(Memory, Size.x, Size.y));
+                Device = Memory;
+            }
 
             // Ensure that the device is 'clean'.
             SelectObject(Device, GetStockObject(DC_PEN));
@@ -302,6 +314,13 @@ struct Overlay_t
                     BitBlt(Device, Element.Position.x, Element.Position.y,
                         Element.Size.x, Element.Size.y, Element.Surface, 0, 0, SRCCOPY);
                 }
+            }
+
+            // Animated overlays need to draw to a separate DC, ~15% performance hit.
+            if constexpr (Animated)
+            {
+                BitBlt(State.hdc, 0, 0, Size.x, Size.y, Device, 0, 0, SRCCOPY);
+                ReleaseDC(Windowhandle, Device);
             }
 
             // Cleanup.

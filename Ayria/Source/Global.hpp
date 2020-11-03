@@ -18,20 +18,13 @@
 struct bfloat16_t
 {
     uint16_t Value{};
-
     using FP = union { uint32_t I; float F; };
-    static bfloat16_t Truncate(float Input)
-    {
-        if (std::fabs(Input) < std::numeric_limits<float>::min())
-            return uint16_t(std::signbit(Input) ? 0x8000 : 0);
 
-        return uint16_t((*(uint32_t *)&Input) & 0xFFFF);
-    }
     static constexpr bfloat16_t Round(float Input)
     {
         FP Value; Value.F = Input;
 
-        // Special cases.
+        // Special cases, min-max.
         if ((Value.I & 0xFF800000) == 0) return uint16_t(0);
         if ((Value.I & 0xFF800000) == 0x80000000) return uint16_t(0x8000);
 
@@ -40,14 +33,13 @@ struct bfloat16_t
     }
 
     constexpr bfloat16_t() = default;
+    template<typename T> constexpr operator T() const { FP Output; Output.I = Value << 16; return T(Output.F); }
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T>, T>>
     constexpr bfloat16_t(T Input)
     {
         if constexpr (std::is_same_v<T, uint16_t>) Value = Input;
-        else if constexpr (std::is_floating_point_v<T>) *this = Round(Input);
         else *this = Round(float(Input));
     }
-    template<typename T> constexpr operator T() const { FP Output; Output.I = Value << 16; return T(Output.F); }
 
     constexpr bool operator!=(const bfloat16_t &Right) const { return !operator==(Right); }
     constexpr bool operator==(const bfloat16_t &Right) const { return Value == Right.Value; }
@@ -189,6 +181,7 @@ struct Color_t : rgb_t
     constexpr operator COLORREF() const { return r | (g << 8U) | (b << 16U); }
 };
 
+using AccountID_t = Ayriamodule_t::AccountID_t;
 using Eventflags_t = union
 {
     union
@@ -229,12 +222,11 @@ using Eventflags_t = union
         };
     };
 };
-using AccountID_t = Ayriamodule_t::AccountID_t;
 using Account_t = struct
 {
     AccountID_t ID;
-    String_t Locale;
-    String_t Username;
+    std::u8string Locale;
+    std::u8string Username;
 };
 
 #pragma pack(pop)

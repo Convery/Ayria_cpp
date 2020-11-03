@@ -28,7 +28,7 @@ namespace Backend
 
         // Initialize the subsystems.
         // TODO(tcn): Initialize pluginmenu.
-        Overlay_t Ingameconsole({}, {});
+        Overlay_t<> Ingameconsole({}, {});
         Console::Overlay::Createconsole(&Ingameconsole);
 
         // Optional console for developers, runs its own thread.
