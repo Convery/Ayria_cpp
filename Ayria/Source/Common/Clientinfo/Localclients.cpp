@@ -9,7 +9,7 @@
 
 namespace Clientinfo
 {
-    Account_t Localclient{ 0xDEADC0DE, "English"s, "Ayria"s };
+    Account_t Localclient{ {.AccountID = 0xDEADC0DE }, u8"English"s, u8"Ayria"s };
     std::vector<Networkclient_t> Networkclients;
 
     // Client core information.
@@ -47,7 +47,7 @@ namespace Clientinfo
     static void __cdecl Discoveryhandler(uint32_t NodeID, const char *JSONString)
     {
         Networkclient_t Newclient{ NodeID };
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto AccountID = Object.value("AccountID", uint64_t());
         const auto Username = Object.value("Username", std::u8string());
 
@@ -77,18 +77,18 @@ namespace Clientinfo
     // Initialize the subsystems.
     void Initialize_client()
     {
-        if (const auto Filebuffer = FS::Readfile("./Ayria/Clientinfo.json"); !Filebuffer.empty())
+        if (const auto Filebuffer = FS::Readfile<char>("./Ayria/Clientinfo.json"); !Filebuffer.empty())
         {
-            const auto Object = ParseJSON(B2S(Filebuffer));
+            const auto Object = JSON::Parse(Filebuffer);
             const auto Locale = Object.value("Locale", std::u8string());
             const auto Username = Object.value("Username", std::u8string());
-            const auto AccountID = Object.value("AccountID", Localclient.ID.Raw);
+            const auto AccountID = Object.value("AccountID", Localclient.ID.AccountID);
 
             // Warn the user about bad configurations.
-            if (!Object.contains("ClientID") || !Object.contains("Username"))
+            if (!Object.contains("AccountID") || !Object.contains("Username"))
                 Warningprint("./Ayria/Clientinfo.json is misconfigured. Missing UserID or Username.");
 
-            Localclient.ID.Raw = AccountID;
+            Localclient.ID.AccountID = AccountID;
             if (!Locale.empty()) Localclient.Locale = Locale;
             if (!Username.empty()) Localclient.Username = Username;
         }

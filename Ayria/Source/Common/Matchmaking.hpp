@@ -31,36 +31,34 @@ namespace Matchmaking
     // Add API handlers.
     inline std::string __cdecl getSessions(const char *JSONString)
     {
-        const auto Request = ParseJSON(JSONString);
+        const auto Request = JSON::Parse(JSONString);
         const auto noLAN = Request.value("noLAN", false);
         const auto noWAN = Request.value("noWAN", false);
         const auto noSelf = Request.value("noSelf", false);
 
-        auto Object = nlohmann::json::object();
+        JSON::Object_t Object;
         if (!noLAN)
         {
-            Object["LAN"] = nlohmann::json::array();
             for (const auto &Session : getLANSessions())
             {
-                Object["LAN"] += nlohmann::json::object({
-                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
-                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                Object["LAN"].get<JSON::Array_t>().push_back(JSON::Object_t({
+                    { "Hostlocale", Encoding::toNarrow(Session->Hostinfo.Locale) },
+                    { "Hostname", Encoding::toNarrow(Session->Hostinfo.Username) },
                     { "HostID", Session->Hostinfo.ID.Raw },
                     { "Sessiondata", Session->JSONData }
-                });
+                }));
             }
         }
         if (!noWAN)
         {
-            Object["WAN"] = nlohmann::json::array();
             for (const auto &Session : getWANSessions())
             {
-                Object["WAN"] += nlohmann::json::object({
-                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
-                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                Object["WAN"].get<JSON::Array_t>().push_back(JSON::Object_t({
+                    { "Hostlocale", Encoding::toNarrow(Session->Hostinfo.Locale) },
+                    { "Hostname", Encoding::toNarrow(Session->Hostinfo.Username) },
                     { "HostID", Session->Hostinfo.ID.Raw },
                     { "Sessiondata", Session->JSONData }
-                });
+                }));
             }
         }
         if (!noSelf)
@@ -68,16 +66,16 @@ namespace Matchmaking
             const auto Session = getLocalsession();
             if (Session)
             {
-                Object["Localsession"] = nlohmann::json::object({
-                    { "Hostlocale", Session->Hostinfo.Locale.asUTF8() },
-                    { "Hostname", Session->Hostinfo.Username.asUTF8() },
+                Object["Localsession"] = JSON::Object_t({
+                    { "Hostlocale", Encoding::toNarrow(Session->Hostinfo.Locale) },
+                        { "Hostname", Encoding::toNarrow(Session->Hostinfo.Username) },
                     { "HostID", Session->Hostinfo.ID.Raw },
                     { "Sessiondata", Session->JSONData }
                 });
             }
         }
 
-        return DumpJSON(Object);
+        return JSON::Dump(Object);
     }
     inline std::string __cdecl updateSession(const char *JSONString)
     {
@@ -89,9 +87,9 @@ namespace Matchmaking
         Session->isActive = true;
 
         // Update the existing session.
-        auto Sessiondata = ParseJSON(Session->JSONData);
-        Sessiondata.update(ParseJSON(JSONString));
-        Session->JSONData = DumpJSON(Sessiondata);
+        auto Sessiondata = JSON::Parse(Session->JSONData);
+        Sessiondata.update(JSON::Parse(JSONString));
+        Session->JSONData = JSON::Dump(Sessiondata);
 
         // Sign so that others can verify the data.
         Session->Signature = PK_RSA::Signmessage(Session->JSONData, Clientinfo::getSessionkey());

@@ -45,14 +45,14 @@ namespace Matchmaking
 
         if (Localsession.isActive) [[unlikely]]
         {
-            auto Object = nlohmann::json::object({
-                { "Hostlocale", Localsession.Hostinfo.Locale.asUTF8() },
-                { "Hostname", Localsession.Hostinfo.Username.asUTF8() },
+            const auto Object = JSON::Object_t({
+                { "Hostlocale", Encoding::toNarrow(Localsession.Hostinfo.Locale) },
+                { "Hostname", Encoding::toNarrow(Localsession.Hostinfo.Username) },
                 { "HostID", Localsession.Hostinfo.ID.Raw },
                 { "Sessiondata", Localsession.JSONData },
                 { "Signature", Localsession.Signature }
             });
-            Backend::Sendmessage(Hash::FNV1_32("Sessionupdate"), DumpJSON(Object), Backend::Matchmakeport);
+            Backend::Sendmessage(Hash::FNV1_32("Sessionupdate"), JSON::Dump(Object), Backend::Matchmakeport);
         }
     }
     void __cdecl LANUpdatehandler(uint32_t NodeID, const char *JSONString)
@@ -64,7 +64,7 @@ namespace Matchmaking
         const auto Publickey = Clientinfo::getPublickey(Client->AccountID.AccountID);
         if (Publickey.empty()) return;
 
-        const auto Request = ParseJSON(JSONString);
+        const auto Request = JSON::Parse(JSONString);
         Session_t Session{ true, uint32_t(time(NULL)) };
         Session.Signature = Request.value("Signature", std::string());
         Session.Hostinfo.ID.Raw = Request.value("HostID", uint64_t());

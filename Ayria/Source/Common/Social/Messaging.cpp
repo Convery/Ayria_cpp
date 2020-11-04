@@ -61,11 +61,8 @@ namespace Social
                 if (!Clientinfo::isClientonline(ClientID)) return false;
 
                 // Simple identifier, more options can be added to message.
-                auto Object = nlohmann::json::object();
-                Object["Target"] = ClientID;
-                Object["Message"] = Message;
-
-                Backend::Sendmessage(Hash::FNV1_32("MSG_toClient"), DumpJSON(Object));
+                const auto Object = JSON::Object_t({ {"Target", ClientID }, {"Message", Message} });
+                Backend::Sendmessage(Hash::FNV1_32("MSG_toClient"), JSON::Dump(Object));
                 return true;
             }
             bool toClientencrypted(uint32_t ClientID, std::u8string_view Message)
@@ -75,11 +72,9 @@ namespace Social
                 if (Publickey.empty()) return false;
 
                 // Simple identifier, more options can be added to message.
-                auto Object = nlohmann::json::object();
-                Object["Target"] = ClientID;
-                Object["Message"] = PK_RSA::Encrypt(Message, Base64::Decode(Publickey));
-
-                Backend::Sendmessage(Hash::FNV1_32("MSG_toClient_enc"), DumpJSON(Object));
+                const auto Object = JSON::Object_t({ {"Target", ClientID },
+                    {"Message", PK_RSA::Encrypt(Message, Base64::Decode(Publickey))} });
+                Backend::Sendmessage(Hash::FNV1_32("MSG_toClient_enc"), JSON::Dump(Object));
                 return true;
             }
             bool Broadcast(std::vector<uint32_t> ClientIDs, std::u8string_view Message)
@@ -89,11 +84,8 @@ namespace Social
                 if (ClientIDs.empty()) return false;
 
                 // Simple identifier, more options can be added to message.
-                auto Object = nlohmann::json::object();
-                Object["Targets"] = ClientIDs;
-                Object["Message"] = Message;
-
-                Backend::Sendmessage(Hash::FNV1_32("MSG_Broadcast"), DumpJSON(Object));
+                const auto Object = JSON::Object_t({ {"Targets", ClientIDs }, {"Message", Message} });
+                Backend::Sendmessage(Hash::FNV1_32("MSG_Broadcast"), JSON::Dump(Object));
                 return true;
             }
         }
@@ -110,7 +102,7 @@ namespace Social
             const auto Client = Clientinfo::getNetworkclient(NodeID);
             if (!Client) [[unlikely]] return;
 
-            const auto Request = ParseJSON(JSONString);
+            const auto Request = JSON::Parse(JSONString);
             const auto Target = Request.value("Target", uint32_t());
             const auto Message = Request.value("Message", std::u8string());
             auto Targets = Request.value("Targets", std::vector<uint32_t>());
@@ -128,7 +120,7 @@ namespace Social
             const auto Client = Clientinfo::getNetworkclient(NodeID);
             if (!Client) [[unlikely]] return;
 
-            const auto Request = ParseJSON(JSONString);
+            const auto Request = JSON::Parse(JSONString);
             const auto Target = Request.value("Target", uint32_t());
             const auto Message = Request.value("Message", std::u8string());
 

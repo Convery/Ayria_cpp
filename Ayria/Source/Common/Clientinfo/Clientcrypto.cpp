@@ -96,12 +96,12 @@ namespace Clientinfo
         if (!Client || Client->AccountID.Raw == 0) [[unlikely]]
             return; // WTF?
 
-        const auto Request = ParseJSON(JSONString);
+        const auto Request = JSON::Parse(JSONString);
         const auto Publickey = Request.value("Publickey", std::string());
         const auto Wantedclients = Request.value("Wantedkeys", std::vector<uint32_t>());
 
         if (Publickey.empty()) [[unlikely]] return; // WTF?
-        Publickeys[Client->AccountID.AccountID] = Request["Publickey"];
+        Publickeys[Client->AccountID.AccountID] = Publickey;
 
         const auto Localclient = Clientinfo::getLocalclient();
         for (const auto &wClient : Wantedclients)

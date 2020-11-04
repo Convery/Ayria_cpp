@@ -49,17 +49,17 @@ namespace Social
         // Disk management.
         void Load(std::wstring_view Path)
         {
-            const auto Filebuffer = FS::Readfile(Path);
+            const auto Filebuffer = FS::Readfile<char>(Path);
             if (Filebuffer.empty()) return;
 
-            const auto Array = ParseJSON((char *)Filebuffer.c_str());
-            if (!Array.is_array())
+            const auto Array = JSON::Parse(Filebuffer.c_str());
+            if (Array.Type != JSON::Array)
             {
                 Warningprint("Relations.json is malformed, check FAQ or delete it.");
                 return;
             }
 
-            for (const auto &Object : Array)
+            for (const auto &Object : Array.get<JSON::Array_t>())
             {
                 Relation_t Relation;
                 Relation.Flags = Object.value("Flags", uint32_t());

@@ -57,9 +57,7 @@ namespace Backend
     {
         do
         {
-            if (!JSONString) break;
-
-            const auto Object = ParseJSON(JSONString);
+            const auto Object = JSON::Parse(JSONString);
             if (!Object.contains("Messagetype")) break;
             if (!Object.contains("Message")) break;
 
@@ -75,11 +73,11 @@ namespace Backend
         {
             if (!JSONString) break;
 
-            const auto Object = ParseJSON(JSONString);
+            const auto Object = JSON::Parse(JSONString);
             if (!Object.contains("Address")) break;
             if (!Object.contains("Port")) break;
 
-            Joinmessagegroup(Object["Port"], inet_addr(Object["Address"].get<std::string>().c_str()));
+            Joinmessagegroup(Object["Port"], inet_addr(Object["Address"]));
         } while (false);
 
         return "{}";
