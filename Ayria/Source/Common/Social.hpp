@@ -54,7 +54,7 @@ namespace Social
     {
         void Add(uint32_t UserID, std::u8string_view Username, uint32_t Relationflags);
         void Remove(uint32_t UserID, std::u8string_view Username);
-        const std::vector<Relation_t> *Get();
+        std::vector<Relation_t *> Get();
 
         // Disk management.
         void Load(std::wstring_view Path = L"./Ayria/Relations.json"s);
@@ -104,8 +104,9 @@ namespace Social
     inline std::string __cdecl Friendslist(const char *)
     {
         auto Array = JSON::Array_t();
-        for (const auto &[ID, Username, Flags] : *Relations::Get())
+        for (const auto &Relation : Relations::Get())
         {
+            const auto &[ID, Username, Flags] = *Relation;
             const Relationflags_t Internal{ Flags };
             if (Internal.isFriend)
             {

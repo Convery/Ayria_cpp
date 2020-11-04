@@ -23,10 +23,10 @@ namespace API
     #define Export(x)                                                                                           \
         extern "C" EXPORT_ATTR const char *__cdecl API_ ##x(uint32_t FunctionID, const char *JSONString)        \
         { if (FunctionID == 0 || !Functionhandlers_ ##x.contains(FunctionID))                                   \
-            { static std::string Result; auto Array = nlohmann::json::array();                                  \
+            { static std::string Result; JSON::Array_t Array;                                                   \
               for (const auto &[ID, Name] : Functionnames_ ##x)                                                 \
-                    Array += { { "FunctionID", ID }, { "Functionname", Name } };                                \
-              Result = Array.dump(4); return Result.c_str(); }                                                  \
+                    Array.push_back(JSON::Object_t({ { "FunctionID", ID }, { "Functionname", Name } }));        \
+              Result = JSON::Dump(Array); return Result.c_str(); }                                              \
           Functionresults_ ##x[FunctionID] = Functionhandlers_ ##x[FunctionID](JSONString ? JSONString : "{}"); \
           return Functionresults_ ##x[FunctionID].c_str(); }                                                    \
 

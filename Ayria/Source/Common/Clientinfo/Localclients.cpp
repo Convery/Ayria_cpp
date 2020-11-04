@@ -59,11 +59,11 @@ namespace Clientinfo
         std::erase_if(Networkclients, [&](const auto &Item) { return Item.NodeID == NodeID; });
 
         // Verify their relation to us.
-        for (const auto &Relation : *Social::Relations::Get())
+        for (const auto &Relation : Social::Relations::Get())
         {
-            if (Social::Relationflags_t{ Relation.Flags }.isBlocked) [[unlikely]]
+            if (Social::Relationflags_t{ Relation->Flags }.isBlocked) [[unlikely]]
             {
-                if (Relation.AccountID == Newclient.AccountID.AccountID) [[unlikely]]
+                if (Relation->AccountID == Newclient.AccountID.AccountID) [[unlikely]]
                 {
                     Backend::Blockclient(NodeID);
                     return;

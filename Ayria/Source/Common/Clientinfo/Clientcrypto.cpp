@@ -84,11 +84,11 @@ namespace Clientinfo
         // No need to request keys we already have.
         std::erase_if(Clients, [](const auto &ID) { return Publickeys.contains(ID); });
 
-        auto Object = nlohmann::json::object();
+        JSON::Object_t Object;
         Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(getSessionkey()));
         Object["Wantedkeys"] = Clients;
 
-        Backend::Sendmessage(Hash::FNV1_32("Syncpublickeys"), Object.dump());
+        Backend::Sendmessage(Hash::FNV1_32("Syncpublickeys"), JSON::Dump(Object));
     }
     void __cdecl Keysharehandler(uint32_t NodeID, const char *JSONString)
     {

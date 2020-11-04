@@ -6,7 +6,6 @@ License: MIT
 
 #pragma once
 #include <cstdint>
-#include <string_view>
 #include "Stringconv.hpp"
 #include "Variadicstring.hpp"
 
@@ -225,7 +224,7 @@ namespace Encoding
 
     [[nodiscard]] inline std::wstring toWide(std::string_view Input)
     {
-        const auto Size = std::mbstowcs(NULL, Input.data(), 0);
+        const auto Size = std::mbstowcs(nullptr, Input.data(), 0);
         std::wstring Result(Size, 0);
         std::mbstowcs(Result.data(), Input.data(), Size);
         return Result;
@@ -233,7 +232,7 @@ namespace Encoding
     [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
     {
         std::string Result(Input.size(), 0);
-        auto Pointer = Result.data();
+        const auto Pointer = Result.data();
 
         for (size_t i = 0; i < Input.size(); ++i)
         {
