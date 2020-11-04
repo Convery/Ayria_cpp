@@ -84,11 +84,11 @@ namespace Clientinfo
         // No need to request keys we already have.
         std::erase_if(Clients, [](const auto &ID) { return Publickeys.contains(ID); });
 
-        auto Object = nlohmann::json::object();
+        JSON::Object_t Object;
         Object["Publickey"] = Base64::Encode(PK_RSA::getPublickey(getSessionkey()));
         Object["Wantedkeys"] = Clients;
 
-        Backend::Sendmessage(Hash::FNV1_32("Syncpublickeys"), Object.dump());
+        Backend::Sendmessage(Hash::FNV1_32("Syncpublickeys"), JSON::Dump(Object));
     }
     void __cdecl Keysharehandler(uint32_t NodeID, const char *JSONString)
     {
@@ -96,12 +96,12 @@ namespace Clientinfo
         if (!Client || Client->AccountID.Raw == 0) [[unlikely]]
             return; // WTF?
 
-        const auto Request = ParseJSON(JSONString);
+        const auto Request = JSON::Parse(JSONString);
         const auto Publickey = Request.value("Publickey", std::string());
         const auto Wantedclients = Request.value("Wantedkeys", std::vector<uint32_t>());
 
         if (Publickey.empty()) [[unlikely]] return; // WTF?
-        Publickeys[Client->AccountID.AccountID] = Request["Publickey"];
+        Publickeys[Client->AccountID.AccountID] = Publickey;
 
         const auto Localclient = Clientinfo::getLocalclient();
         for (const auto &wClient : Wantedclients)
@@ -148,7 +148,6 @@ namespace Clientinfo
     // Initialize the subsystems.
     void Initialize_crypto()
     {
-        getHardwarekey(); getSessionkey();
         Backend::Registermessagehandler(Hash::FNV1_32("Syncpublickeys"), Keysharehandler);
     }
 }

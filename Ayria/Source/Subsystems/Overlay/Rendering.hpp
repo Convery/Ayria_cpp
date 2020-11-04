@@ -159,7 +159,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
         explicit Quad_t(HDC Context, vec2_t Position, vec2_t Size, uint8_t Rounding) : Devicecontext(Context),
-            Radius(Rounding), Dimensions{ Position.x, Position.y, Position.x + Size.x - 1, Position.y + Size.y - 1 } {}
+            Radius(Rounding), Dimensions{ Position.x, Position.y, Position.x + Size.x, Position.y + Size.y } {}
     };
     struct Text_t
     {

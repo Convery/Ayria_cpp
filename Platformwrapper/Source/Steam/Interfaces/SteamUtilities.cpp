@@ -142,8 +142,8 @@ namespace Steam
         const char *GetSteamUILanguage()
         {
             Traceprint();
-            static const auto Locale = Steam.Locale.asASCII();
-            return Locale.c_str();
+            static const auto Locale = Steam.Steamlocale.asUTF8();
+            return (char *)Locale.c_str();
         }
         bool IsSteamRunningInVR()
         {

@@ -38,13 +38,15 @@ struct Element_t
     void(__cdecl *onTick)(Element_t *This, float Deltatime);
     void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
 };
+
+template <bool Animated = false>
 struct Overlay_t
 {
     std::vector<Element_t> Elements;
     vec2_t Position, Size;
     bool Ctrl{}, Shift{};
+    bool Forcerepaint{};
     HWND Windowhandle;
-    bool Forcerepaint;
 
     static LRESULT __stdcall Windowproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
     {
@@ -241,10 +243,10 @@ struct Overlay_t
             Ctrl = GetKeyState(VK_CONTROL) & (1 << 15);
 
             MSG Message;
-            while (PeekMessageA(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
+            while (PeekMessageW(&Message, Windowhandle, NULL, NULL, PM_REMOVE))
             {
                 TranslateMessage(&Message);
-                DispatchMessageA(&Message);
+                DispatchMessageW(&Message);
             }
         }
 
@@ -263,16 +265,27 @@ struct Overlay_t
         if (IsWindowVisible(Windowhandle))
         {
             // Before doing any work, verify that we have to update.
-            if (!Forcerepaint)
+            if (!Forcerepaint &&
+                !std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
+                [](const auto &Element) { return Element.Repainted; })) [[unlikely]]
             {
-                if (!std::any_of(std::execution::par_unseq, Elements.begin(), Elements.end(),
-                    [](const auto &Element) { return Element.Repainted; })) return;
+                return;
             }
             Forcerepaint = false;
 
+            // Redraw the whole area.
             PAINTSTRUCT State;
-            InvalidateRect(Windowhandle, NULL, FALSE);
-            const auto Device = BeginPaint(Windowhandle, &State);
+            InvalidateRect(Windowhandle, nullptr, FALSE);
+            HDC Device = BeginPaint(Windowhandle, &State);
+
+            // Animated overlays need to draw to a separate DC, ~15% performance hit.
+            if constexpr (Animated)
+            {
+                const auto Memory = CreateCompatibleDC(Device);
+                SelectObject(Memory, CreateCompatibleBitmap(Memory, Size.x, Size.y));
+                Graphics(Memory).Clear(Size);
+                Device = Memory;
+            }
 
             // Ensure that the device is 'clean'.
             SelectObject(Device, GetStockObject(DC_PEN));
@@ -304,6 +317,13 @@ struct Overlay_t
                 }
             }
 
+            // Animated overlays need to draw to a separate DC, ~15% performance hit.
+            if constexpr (Animated)
+            {
+                BitBlt(State.hdc, 0, 0, Size.x, Size.y, Device, 0, 0, SRCCOPY);
+                ReleaseDC(Windowhandle, Device);
+            }
+
             // Cleanup.
             EndPaint(Windowhandle, &State);
         }
@@ -312,21 +332,20 @@ struct Overlay_t
     explicit Overlay_t(vec2_t _Position, vec2_t _Size) : Position(_Position)
     {
         // Register the overlay class.
-        WNDCLASSEXA Windowclass{};
+        WNDCLASSEXW Windowclass{};
         Windowclass.lpfnWndProc = Windowproc;
-        Windowclass.cbSize = sizeof(WNDCLASSEXA);
-        Windowclass.lpszClassName = "Ayria_Overlay";
+        Windowclass.cbSize = sizeof(WNDCLASSEXW);
+        Windowclass.lpszClassName = L"Ayria_Overlay";
         Windowclass.cbWndExtra = sizeof(Overlay_t *);
         Windowclass.hbrBackground = CreateSolidBrush(Clearcolor);
-        if (NULL == RegisterClassExA(&Windowclass)) assert(false);
+        if (NULL == RegisterClassExW(&Windowclass)) assert(false);
 
         // Generic overlay style.
-        DWORD Style = WS_POPUP | CS_BYTEALIGNWINDOW;
-        DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
-        if constexpr (Build::isDebug) Style |= WS_BORDER;
+        const DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
+        const DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
 
         // Topmost, optionally transparent, no icon on the taskbar, zero size so it's not shown.
-        if (!CreateWindowExA(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,
+        if (!CreateWindowExW(StyleEx, Windowclass.lpszClassName, NULL, Style, Position.x, Position.y,
             0, 0, NULL, NULL, NULL, this)) assert(false);
 
         // To keep static-analysis happy. Is set via Windowproc.

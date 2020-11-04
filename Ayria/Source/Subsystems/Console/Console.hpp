@@ -44,7 +44,7 @@ namespace Console
     // Ingame console.
     namespace Overlay
     {
-        void Createconsole(Overlay_t *Parent);
+        void Createconsole(Overlay_t<false> *Parent);
     }
 
     // Add common commands.

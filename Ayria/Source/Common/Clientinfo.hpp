@@ -35,52 +35,62 @@ namespace Clientinfo
     void Initialize_client();
     void Initialize_crypto();
 
-    // Helpers for creating AccountIDs.
-    inline AccountID_t Createaccount(Accountflags_t Type)
-    {
-        AccountID_t Client{};
-
-        const auto Time = time(NULL); const auto UTC = gmtime(&Time);
-        Client.Creationdate = (UTC->tm_year << 8) | (UTC->tm_mon << 4) | (UTC->tm_mday - 1);
-        Client.AccountID = getLocalclient()->ID.AccountID;
-        Client.Accounttype = Type;
-        return Client;
-    }
-    inline AccountID_t Createserver()
-    {
-        Accountflags_t Flags{}; Flags.isServer = true;
-        return Createaccount(Flags);
-    }
-    inline AccountID_t Creategroup()
-    {
-        Accountflags_t Flags{}; Flags.isGroup = true;
-        return Createaccount(Flags);
-    }
-
     // JSON API handlers.
     inline std::string __cdecl Accountinfo(const char *)
     {
         const auto Localclient = getLocalclient();
 
-        auto Object = nlohmann::json::object();
+        JSON::Object_t Object;
         Object["AccountID"] = Localclient->ID.Raw;
-        Object["Locale"] = Localclient->Locale.asUTF8();
-        Object["Username"] = Localclient->Username.asUTF8();
+        Object["Locale"] = Encoding::toNarrow(Localclient->Locale);
+        Object["Username"] = Encoding::toNarrow(Localclient->Username);
 
-        return DumpJSON(Object);
+        return JSON::Dump(Object);
     }
     inline std::string __cdecl LANClients(const char *)
     {
         const auto Localnetwork = *getNetworkclients();
-        auto Object = nlohmann::json::object();
+        JSON::Array_t Array;
 
         for (const auto &Client : Localnetwork)
         {
-            Object["Username"] = Client.Username;
-            Object["AccountID"] = Client.AccountID.Raw;
+            Array.push_back(JSON::Object_t({ { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } }));
         }
 
-        return DumpJSON(Object);
+        return JSON::Dump(Array);
+    }
+    inline std::string __cdecl getClient(const char *JSONString)
+    {
+        const auto Localnetwork = *getNetworkclients();
+        const auto Request = JSON::Parse(JSONString);
+        JSON::Object_t Object;
+
+        if (Request.contains("UserID"))
+        {
+            const uint32_t UserID = Request["UserID"];
+            for (const auto &Client : Localnetwork)
+            {
+                if (Client.AccountID.AccountID == UserID)
+                {
+                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
+                    break;
+                }
+            }
+        }
+        if (Object.empty() && Request.contains("Username"))
+        {
+            const std::u8string Username = Request["Username"];
+            for (const auto &Client : Localnetwork)
+            {
+                if (Client.Username == Username)
+                {
+                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
+                    break;
+                }
+            }
+        }
+
+        return JSON::Dump(Object);
     }
     inline void API_Initialize()
     {
@@ -88,6 +98,7 @@ namespace Clientinfo
         Initialize_crypto();
 
         API::Registerhandler_Client("Accountinfo", Accountinfo);
-        API::Registerhandler_Network("LANClients", LANClients);
+        API::Registerhandler_Client("LANClients", LANClients);
+        API::Registerhandler_Client("getClient", getClient);
     }
 }

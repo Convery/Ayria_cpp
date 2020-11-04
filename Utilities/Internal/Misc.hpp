@@ -80,22 +80,3 @@ struct Range
 
 #pragma endregion
 
-// Safer nlohmann parsing.
-#if defined HAS_NLOHMANN
-inline nlohmann::json ParseJSON(std::string_view Input)
-{
-    try
-    {
-        return nlohmann::json::parse(Input.data(), nullptr, true, true);
-    }
-    catch (...) {}
-
-    return nlohmann::json::object();
-}
-inline std::string DumpJSON(const nlohmann::json &Input)
-{
-    return Input.dump(-1, ' ', true);
-}
-
-#endif
-

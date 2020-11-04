@@ -26,6 +26,9 @@ namespace Backend
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)());
 
+    // Prevent packets from being processed.
+    void Blockclient(uint32_t NodeID);
+
     // Poll the internal socket(s).
     void Updatenetworking();
 
@@ -54,9 +57,7 @@ namespace Backend
     {
         do
         {
-            if (!JSONString) break;
-
-            const auto Object = ParseJSON(JSONString);
+            const auto Object = JSON::Parse(JSONString);
             if (!Object.contains("Messagetype")) break;
             if (!Object.contains("Message")) break;
 
@@ -72,11 +73,11 @@ namespace Backend
         {
             if (!JSONString) break;
 
-            const auto Object = ParseJSON(JSONString);
+            const auto Object = JSON::Parse(JSONString);
             if (!Object.contains("Address")) break;
             if (!Object.contains("Port")) break;
 
-            Joinmessagegroup(Object["Port"], inet_addr(Object["Address"].get<std::string>().c_str()));
+            Joinmessagegroup(Object["Port"], inet_addr(Object["Address"]));
         } while (false);
 
         return "{}";

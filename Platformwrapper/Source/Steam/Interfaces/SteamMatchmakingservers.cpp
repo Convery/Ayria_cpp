@@ -95,33 +95,32 @@ namespace Steam
         Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer) const
         {
             auto Serialized = new Callbacks::gameserveritem_t();
-            auto Servers = *Matchmaking::getNetworkservers();
+            const auto Servers = Matchmaking::getLANSessions();
 
-            if (Servers.size() <= size_t(iServer)) return 0;
-            auto Server = &Servers[iServer];
+            if (Servers.size() <= size_t(iServer)) return nullptr;
+            const auto Server = Servers[iServer];
 
             // Address in host-order.
-            Serialized->m_NetAdr.m_unIP = Server->Hostinfo.value("IPAddress", 0);
-            Serialized->m_NetAdr.m_usQueryPort = Server->Hostinfo.value("Queryport", 0);
-            Serialized->m_NetAdr.m_usConnectionPort = Server->Hostinfo.value("Gameport", 0);
+            Serialized->m_NetAdr.m_unIP = Server->Steam.IPAddress;
+            Serialized->m_NetAdr.m_usQueryPort = Server->Steam.Queryport;
+            Serialized->m_NetAdr.m_usConnectionPort = Server->Steam.Gameport;
 
             // String-properties.
-            std::strncpy(Serialized->m_szGameDescription, Server->Gameinfo.value("Productdesc", "").c_str(), 64);
-            std::strncpy(Serialized->m_szGameDir, Server->Hostinfo.value("Gamemod", "").c_str(), 32);
-            std::strncpy(Serialized->m_szServerName, Server->Hostinfo.value("Servername", "").c_str(), 64);
-            std::strncpy(Serialized->m_szGameTags, Server->Gameinfo.value("Gametags", "").c_str(), 128);
-            std::strncpy(Serialized->m_szMap, Server->Gameinfo.value("Mapname", "").c_str(), 32);
+            std::strncpy(Serialized->m_szGameDescription, (char *)Server->Steam.Productdesc.c_str(), 64);
+            std::strncpy(Serialized->m_szGameDir, (char *)Server->Steam.Gamemod.c_str(), 32);
+            std::strncpy(Serialized->m_szServerName, (char *)Server->Steam.Servername.c_str(), 64);
+            std::strncpy(Serialized->m_szGameTags, (char *)Server->Steam.Gametags.c_str(), 128);
+            std::strncpy(Serialized->m_szMap, (char *)Server->Steam.Mapname.c_str(), 32);
 
-            // TODO(tcn): Get some real information.
-            Serialized->m_bSecure = Serialized->m_bPassword = Server->Hostinfo.value("isSecure", false);
             Serialized->m_steamID = CSteamID(Server->HostID, 1, k_EAccountTypeGameServer);
-            Serialized->m_nServerVersion = Server->Hostinfo.value("Versionint", 1001);
-            Serialized->m_bPassword = Server->Hostinfo.value("isPrivate", false);
+            Serialized->m_nServerVersion = Server->Steam.Versionint;
+            Serialized->m_bPassword = Server->Steam.isPrivate;
+            Serialized->m_bSecure = Server->Steam.isPrivate;
 
-            Serialized->m_nAppID = Server->Hostinfo.value("AppID", Steam.ApplicationID);
-            Serialized->m_nPlayers = Server->Gameinfo.value("Currentplayers", 0);
-            Serialized->m_nBotPlayers = Server->Gameinfo.value("Botplayers", 0);
-            Serialized->m_nMaxPlayers = Server->Gameinfo.value("Maxplayers", 0);
+            Serialized->m_nAppID = Server->Steam.ApplicationID;
+            Serialized->m_nPlayers = Server->Steam.Currentplayers;
+            Serialized->m_nBotPlayers = Server->Steam.Botplayers;
+            Serialized->m_nMaxPlayers = Server->Steam.Maxplayers;
             Serialized->m_bHadSuccessfulResponse = true;
             Serialized->m_bDoNotRefresh = false;
             Serialized->m_ulTimeLastPlayed = 0;
@@ -135,7 +134,7 @@ namespace Steam
         int GetServerCount(uint32_t eType)
         {
             // Complete the listing as we did it in the background.
-            const auto Servers = *Matchmaking::getNetworkservers();
+            const auto Servers = Matchmaking::getLANSessions();
             for(int i = 0; i < int(Servers.size()); ++i)
             {
                 if (Responsecallback1) Responsecallback1->ServerResponded(i);

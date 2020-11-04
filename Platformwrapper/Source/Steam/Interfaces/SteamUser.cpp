@@ -213,7 +213,7 @@ namespace Steam
         bool SetLanguage(const char *pchLanguage)
         {
             Traceprint();
-            Steam.Locale = std::string(pchLanguage);
+            Steam.Steamlocale = std::string(pchLanguage);
             return true;
         }
         void TrackAppUsageEvent0(CGameID gameID, uint32_t eAppUsageEvent, const char *pchExtraInfo = "")

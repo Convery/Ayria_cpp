@@ -116,7 +116,7 @@ namespace FS
             std::FILE *Filehandle = std::fopen(Path.data(), "rb");
             if (!Filehandle) return {};
 
-            const auto Buffer = std::make_unique<uint8_t[]>(Size);
+            const auto Buffer = std::make_unique<T[]>(Size);
             std::fread(Buffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
@@ -132,7 +132,7 @@ namespace FS
             #endif
             if (!Filehandle) return {};
 
-            const auto Buffer = std::make_unique<uint8_t[]>(Size);
+            const auto Buffer = std::make_unique<T[]>(Size);
             std::fread(Buffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
@@ -144,15 +144,15 @@ namespace FS
     [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
     {
         const auto Size = Filesize(Path);
-        if (Size > 4096) return Internal::Readfile_large(Path, Size);
-        else return Internal::Readfile_small(Path, Size);
+        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
+        else return Internal::Readfile_small<T>(Path, Size);
     }
     template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
     [[nodiscard]] inline std::basic_string<T> Readfile(std::wstring_view Path)
     {
         const auto Size = Filesize(Path);
-        if (Size > 4096) return Internal::Readfile_large(Path, Size);
-        else return Internal::Readfile_small(Path, Size);
+        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
+        else return Internal::Readfile_small<T>(Path, Size);
     }
 
     template<typename T>

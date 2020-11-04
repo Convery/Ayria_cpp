@@ -54,7 +54,7 @@ namespace Social
     {
         void Add(uint32_t UserID, std::u8string_view Username, uint32_t Relationflags);
         void Remove(uint32_t UserID, std::u8string_view Username);
-        const std::vector<Relation_t> *Get();
+        std::vector<Relation_t *> Get();
 
         // Disk management.
         void Load(std::wstring_view Path = L"./Ayria/Relations.json"s);
@@ -62,9 +62,9 @@ namespace Social
     }
 
     // Add API handlers.
-    inline std::string __cdecl removeFriend(const char *JSONString)
+    inline std::string __cdecl removeRelation(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto UserID = Object.value("UserID", uint32_t());
         const auto Username = Object.value("Username", std::u8string());
 
@@ -74,9 +74,9 @@ namespace Social
         Relations::Remove(UserID, Username);
         return "{ \"Status\": \"OK\" }";
     }
-    inline std::string __cdecl addFriend(const char *JSONString)
+    inline std::string __cdecl addRelation(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto Flags = Object.value("Flags", uint32_t());
         const auto UserID = Object.value("UserID", uint32_t());
         const auto Username = Object.value("Username", std::u8string());
@@ -84,13 +84,12 @@ namespace Social
         // We need an ID, the username is optional.
         if (UserID == 0) [[unlikely]] return "{ \"Status\": \"Error\" }";
 
-        Relationflags_t Internal{ Flags }; Internal.isFriend = true;
-        Relations::Add(UserID, Username, Internal.Raw);
+        Relations::Add(UserID, Username, Flags);
         return "{ \"Status\": \"OK\" }";
     }
     inline std::string __cdecl blockUser(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto Flags = Object.value("Flags", uint32_t());
         const auto UserID = Object.value("UserID", uint32_t());
         const auto Username = Object.value("Username", std::u8string());
@@ -104,50 +103,51 @@ namespace Social
     }
     inline std::string __cdecl Friendslist(const char *)
     {
-        auto Array = nlohmann::json::array();
-        for (const auto &[ID, Username, Flags] : *Relations::Get())
+        auto Array = JSON::Array_t();
+        for (const auto &Relation : Relations::Get())
         {
+            const auto &[ID, Username, Flags] = *Relation;
             const Relationflags_t Internal{ Flags };
             if (Internal.isFriend)
             {
-                Array += { { "Username", Username }, { "UserID", ID }, { "Flags", Flags }};
+                Array.push_back(JSON::Object_t({ { "Username", Username }, { "UserID", ID }, { "Flags", Flags } }));
             }
         }
 
-        return DumpJSON(Array);
+        return JSON::Dump(Array);
     }
 
     inline std::string __cdecl Readmessages(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto Endtime = Object.value("Endtime", uint32_t());
         const auto SenderID = Object.value("SenderID", uint32_t());
         const auto Starttime = Object.value("Starttime", uint32_t());
         auto SenderIDs = Object.value("SenderIDs", std::vector<uint32_t>());
 
-        std::vector<Message_t *> Messages;
-        if (Starttime + Endtime == 0)
+        const auto Messages = [&]()
         {
-            SenderIDs.push_back(SenderID);
-            Messages = Messaging::Read::bySenders(SenderIDs);
-        }
-        else
-        {
-            Messages = Messaging::Read::byTime(Starttime, Endtime, SenderID);
-        }
+            if (Object.empty()) return Messaging::Read::All();
+            else if (Starttime + Endtime != 0) return Messaging::Read::byTime(Starttime, Endtime, SenderID);
+            else
+            {
+                SenderIDs.push_back(SenderID);
+                return Messaging::Read::bySenders(SenderIDs);
+            }
+        }();
 
-        auto Array = nlohmann::json::array();
+        JSON::Array_t Array;
         for (const auto Pointer : Messages)
         {
             const auto &[Timestamp, Source, Message] = *Pointer;
-            Array += { { "Timestamp", Timestamp }, { "Source", Source.Raw }, { "Message", Message } };
+            Array.push_back(JSON::Object_t({ { "Timestamp", Timestamp }, { "Source", Source.Raw }, { "Message", Message } }));
         }
 
-        return DumpJSON(Array);
+        return JSON::Dump(Array);
     }
     inline std::string __cdecl Sendmessage(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto Target = Object.value("Target", uint32_t());
         const auto Message = Object.value("Message", std::u8string());
         auto Targets = Object.value("Targets", std::vector<uint32_t>());
@@ -168,7 +168,7 @@ namespace Social
     }
     inline std::string __cdecl Sendmessage_enc(const char *JSONString)
     {
-        const auto Object = ParseJSON(JSONString);
+        const auto Object = JSON::Parse(JSONString);
         const auto Target = Object.value("Target", uint32_t());
         const auto Message = Object.value("Message", std::u8string());
 
@@ -180,10 +180,10 @@ namespace Social
 
     inline void API_Initialize()
     {
-        API::Registerhandler_Social("addFriend", addFriend);
         API::Registerhandler_Social("blockUser", blockUser);
+        API::Registerhandler_Social("addRelation", addRelation);
         API::Registerhandler_Social("Friendslist", Friendslist);
-        API::Registerhandler_Social("removeFriend", removeFriend);
+        API::Registerhandler_Social("removeRelation", removeRelation);
 
         API::Registerhandler_Social("Sendmessage", Sendmessage);
         API::Registerhandler_Social("Readmessages", Readmessages);
