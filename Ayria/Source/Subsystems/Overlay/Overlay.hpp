@@ -275,7 +275,7 @@ struct Overlay_t
 
             // Redraw the whole area.
             PAINTSTRUCT State;
-            InvalidateRect(Windowhandle, nullptr, TRUE);
+            InvalidateRect(Windowhandle, nullptr, FALSE);
             HDC Device = BeginPaint(Windowhandle, &State);
 
             // Animated overlays need to draw to a separate DC, ~15% performance hit.
@@ -283,6 +283,7 @@ struct Overlay_t
             {
                 const auto Memory = CreateCompatibleDC(Device);
                 SelectObject(Memory, CreateCompatibleBitmap(Memory, Size.x, Size.y));
+                Graphics(Memory).Clear(Size);
                 Device = Memory;
             }
 

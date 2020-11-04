@@ -263,10 +263,10 @@ namespace API
 #include <Backend/Backend.hpp>
 
 // Subsystems that depend on the datatypes.
+#include <Subsystems/Pluginloader/Pluginloader.hpp>
+#include <Subsystems/Overlay/Rendering.hpp>
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
-#include <Subsystems/Overlay/Rendering.hpp>
-#include <Subsystems/Pluginloader/Pluginloader.hpp>
 
 // Common functionality.
 #include <Common/Social.hpp>

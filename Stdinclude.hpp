@@ -63,6 +63,9 @@
 // Third-party includes, usually included via VCPKG.
 #include "Thirdparty.hpp"
 
+// Extensions to the language.
+using namespace std::literals;
+
 // Global utilities.
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
@@ -71,6 +74,7 @@
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
+#include <Utilities/Encoding/JSON.hpp>
 #include <Utilities/Encoding/Stringconv.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 #include <Utilities/Hacking/Branchless.hpp>
@@ -166,6 +170,3 @@ struct Ayriamodule_t
     }
 };
 extern Ayriamodule_t Ayria;
-
-// Extensions to the language.
-using namespace std::string_literals;

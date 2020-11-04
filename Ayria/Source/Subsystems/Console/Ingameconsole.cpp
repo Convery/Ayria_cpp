@@ -12,7 +12,7 @@ namespace Console
     namespace Overlay
     {
         constexpr uint8_t Inputheight{ 30 };
-        Overlay_t *Consoleoverlay;
+        Overlay_t<> *Consoleoverlay;
         bool isExtended{};
         bool isVisible{};
 
@@ -322,7 +322,7 @@ namespace Console
         }
 
         // Show auto-creates a console if needed.
-        void Createconsole(Overlay_t *Parent)
+        void Createconsole(Overlay_t<> *Parent)
         {
             assert(Parent);
             Consoleoverlay = Parent;
