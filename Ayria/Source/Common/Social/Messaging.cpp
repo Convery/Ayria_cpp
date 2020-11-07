@@ -58,7 +58,7 @@ namespace Social
             bool toClient(uint32_t ClientID, std::u8string_view Message)
             {
                 // We currently have no way of communicating with offline clients.
-                if (!Clientinfo::isClientonline(ClientID)) return false;
+                if (!Clientinfo::isOnline(ClientID)) return false;
 
                 // Simple identifier, more options can be added to message.
                 const auto Object = JSON::Object_t({ {"Target", ClientID }, {"Message", Message} });
@@ -68,19 +68,19 @@ namespace Social
             bool toClientencrypted(uint32_t ClientID, std::u8string_view Message)
             {
                 // Key-request is automatically issued if missing, try again later.
-                const auto Publickey = Clientinfo::getPublickey(ClientID);
-                if (Publickey.empty()) return false;
+                const auto Client = Clientinfo::getClient(ClientID);
+                if (!Client->B64Publickey) return false;
 
                 // Simple identifier, more options can be added to message.
                 const auto Object = JSON::Object_t({ {"Target", ClientID },
-                    {"Message", PK_RSA::Encrypt(Message, Base64::Decode(Publickey))} });
+                    {"Message", PK_RSA::Encrypt(Message, Base64::Decode(Client->B64Publickey))} });
                 Backend::Sendmessage(Hash::FNV1_32("MSG_toClient_enc"), JSON::Dump(Object));
                 return true;
             }
             bool Broadcast(std::vector<uint32_t> ClientIDs, std::u8string_view Message)
             {
                 // Remove offline clients from the list.
-                std::erase_if(ClientIDs, [&](const auto &Item) { return !Clientinfo::isClientonline(Item); });
+                std::erase_if(ClientIDs, [&](const auto &Item) { return !Clientinfo::isOnline(Item); });
                 if (ClientIDs.empty()) return false;
 
                 // Simple identifier, more options can be added to message.
@@ -108,7 +108,7 @@ namespace Social
             auto Targets = Request.value("Targets", std::vector<uint32_t>());
             Targets.push_back(Target);
 
-            const auto Self = Clientinfo::getLocalclient();
+            const auto Self = Userinfo::getAccount();
             if (std::any_of(Targets.cbegin(), Targets.cend(), [&](const auto &ID) { return ID == Self->ID.AccountID; }))
             {
                 if (!Message.empty())
@@ -124,11 +124,11 @@ namespace Social
             const auto Target = Request.value("Target", uint32_t());
             const auto Message = Request.value("Message", std::u8string());
 
-            const auto Self = Clientinfo::getLocalclient();
+            const auto Self = Userinfo::getAccount();
             if (Target == Self->ID.AccountID)
             {
-                const auto Key = Clientinfo::getSessionkey();
-                const auto Decrypted = PK_RSA::Decrypt(Message, Key);
+                const auto Key = Userinfo::getB64Privatekey();
+                const auto Decrypted = PK_RSA::Decrypt(Message, Base64::Decode(Key));
                 if (!Decrypted.empty())
                     Messages.push_back({ (uint32_t)time(NULL), Client->AccountID,
                         std::u8string((char8_t*)Decrypted.data(), Decrypted.size()) });

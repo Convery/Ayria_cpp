@@ -79,7 +79,7 @@ namespace Matchmaking
     }
     inline std::string __cdecl updateSession(const char *JSONString)
     {
-        const auto Client = Clientinfo::getLocalclient();
+        const auto Client = Userinfo::getAccount();
         auto Session = getLocalsession();
 
         // Ensure that the host is initialized.
@@ -92,14 +92,15 @@ namespace Matchmaking
         Session->JSONData = JSON::Dump(Sessiondata);
 
         // Sign so that others can verify the data.
-        Session->Signature = PK_RSA::Signmessage(Session->JSONData, Clientinfo::getSessionkey());
+        const auto Key = Base64::Decode(Userinfo::getB64Privatekey());
+        Session->Signature = PK_RSA::Signature_t(Key).Signmessage(Session->JSONData);
 
         // Nothing returned, use getSessions for latest info.
         return "{}";
     }
     inline std::string __cdecl terminateSession(const char *)
     {
-        auto Session = getLocalsession();
+        const auto Session = getLocalsession();
         Session->isActive = false;
         return "{}";
     }

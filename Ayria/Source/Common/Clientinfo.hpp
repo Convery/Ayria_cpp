@@ -7,98 +7,64 @@
 #pragma once
 #include <Stdinclude.hpp>
 
+namespace Userinfo
+{
+    std::string_view getB64HardwareID();
+    std::string_view getB64Privatekey();
+    std::string_view getB64Sharedkey();
+    Account_t *getAccount();
+    void Initialize();
+
+    // API export.
+    std::string __cdecl Accountinfo(const char *);
+}
+
 namespace Clientinfo
 {
-    #pragma region Datatypes
     #pragma pack(push, 1)
-    struct Networkclient_t
+    struct Client_t
     {
-        uint32_t NodeID;    // Ephemeral identifier.
         AccountID_t AccountID;
-        char8_t Username[32];
+        uint32_t NetworkID; // Ephemeral identifier.
+        const char *B64Publickey;
+        const char8_t *Username;
     };
     #pragma pack(pop)
-    #pragma endregion
 
-    // Client core information.
-    Account_t *getLocalclient();
-    bool isClientonline(uint32_t ClientID);
-    const std::vector<Networkclient_t> *getNetworkclients();
-    const Networkclient_t *getNetworkclient(uint32_t NodeID);
+    // Client information.
+    const Client_t *getNetworkclient(uint32_t NetworkID);
+    std::vector<const Client_t *> getNetworkclients();
+    const Client_t *getClient(uint32_t ClientID);
+    bool isOnline(uint32_t ClientID);
+    void Initialize();
 
-    // Client crypto information.
-    std::string_view getPublickey(uint32_t ClientID);
-    std::string_view getHardwarekey();
-    RSA *getSessionkey();
-
-    // Initialize the subsystems.
-    void Initialize_client();
-    void Initialize_crypto();
-
-    // JSON API handlers.
-    inline std::string __cdecl Accountinfo(const char *)
+    // JSON API.
+    inline std::string __cdecl getClients(const char *)
     {
-        const auto Localclient = getLocalclient();
-
-        JSON::Object_t Object;
-        Object["AccountID"] = Localclient->ID.Raw;
-        Object["Locale"] = Encoding::toNarrow(Localclient->Locale);
-        Object["Username"] = Encoding::toNarrow(Localclient->Username);
-
-        return JSON::Dump(Object);
-    }
-    inline std::string __cdecl LANClients(const char *)
-    {
-        const auto Localnetwork = *getNetworkclients();
         JSON::Array_t Array;
 
-        for (const auto &Client : Localnetwork)
+        const auto Clients = getNetworkclients();
+        Array.reserve(Clients.size());
+
+        for (const auto &Client : Clients)
         {
-            Array.push_back(JSON::Object_t({ { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } }));
+            Array.push_back(JSON::Object_t(
+            {
+                { "AccountID", Client->AccountID.Raw },
+                { "Username", Client->Username },
+                { "Sharedkey", Client->B64Publickey }
+            }));
         }
 
         return JSON::Dump(Array);
     }
-    inline std::string __cdecl getClient(const char *JSONString)
-    {
-        const auto Localnetwork = *getNetworkclients();
-        const auto Request = JSON::Parse(JSONString);
-        JSON::Object_t Object;
 
-        if (Request.contains("UserID"))
-        {
-            const uint32_t UserID = Request["UserID"];
-            for (const auto &Client : Localnetwork)
-            {
-                if (Client.AccountID.AccountID == UserID)
-                {
-                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
-                    break;
-                }
-            }
-        }
-        if (Object.empty() && Request.contains("Username"))
-        {
-            const std::u8string Username = Request["Username"];
-            for (const auto &Client : Localnetwork)
-            {
-                if (Client.Username == Username)
-                {
-                    Object = { { "Username", Client.Username }, { "AccountID", Client.AccountID.Raw } };
-                    break;
-                }
-            }
-        }
-
-        return JSON::Dump(Object);
-    }
     inline void API_Initialize()
     {
-        Initialize_client();
-        Initialize_crypto();
+        Clientinfo::Initialize();
+        Userinfo::Initialize();
 
-        API::Registerhandler_Client("Accountinfo", Accountinfo);
-        API::Registerhandler_Client("LANClients", LANClients);
-        API::Registerhandler_Client("getClient", getClient);
+        API::Registerhandler_Client("Accountinfo", Userinfo::Accountinfo);
+        API::Registerhandler_Client("getClients", getClients);
     }
 }

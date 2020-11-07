@@ -14,9 +14,108 @@ License: MIT
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
+#include <string>
 
 namespace AES
 {
+    // Helper to avoid recreating states.
+    struct AES_t
+    {
+        std::u8string Key, IV, Buffer;
+        EVP_CIPHER_CTX *Context;
+
+        explicit AES_t(std::u8string_view Cryptokey, std::u8string_view Initialvector)
+            : Key(Cryptokey), IV(Initialvector), Context(EVP_CIPHER_CTX_new()) {};
+        explicit AES_t(const void *Cryptokey, size_t Keylength, const void *Initialvector, size_t IVLength)
+            : Key((char8_t *)Cryptokey, Keylength), IV((char8_t *)Initialvector, IVLength), Context(EVP_CIPHER_CTX_new()) {};
+        ~AES_t()
+        {
+            EVP_CIPHER_CTX_free(Context);
+            std::memset(IV.data(), 0xCC, IV.size());
+            std::memset(Key.data(), 0xCC, Key.size());
+            std::memset(Buffer.data(), 0xCC, Buffer.size());
+        }
+
+        void Update(std::u8string_view Cryptokey, std::u8string_view Initialvector)
+        {
+            if (!Cryptokey.empty()) Key = Cryptokey;
+            if (!Initialvector.empty()) IV = Initialvector;
+        }
+        void Update(const void *Cryptokey, size_t Keylength, const void *Initialvector, size_t IVLength)
+        {
+            if (Keylength && Cryptokey) Key = { (char8_t *)Cryptokey, Keylength };
+            if (IVLength && Initialvector) IV = { (char8_t *)Initialvector, IVLength };
+        }
+
+        std::u8string_view Encrypt_128(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Encryptionlength = 0;
+
+            EVP_EncryptInit_ex(Context, EVP_aes_128_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_EncryptUpdate(Context, (uint8_t *)Buffer.data(), &Encryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_EncryptFinal_ex(Context, (uint8_t *)Buffer.data() + Encryptionlength, &Encryptionlength);
+
+            return std::u8string_view(Buffer.data(), Encryptionlength);
+        }
+        std::u8string_view Encrypt_192(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Encryptionlength = 0;
+
+            EVP_EncryptInit_ex(Context, EVP_aes_192_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_EncryptUpdate(Context, (uint8_t *)Buffer.data(), &Encryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_EncryptFinal_ex(Context, (uint8_t *)Buffer.data() + Encryptionlength, &Encryptionlength);
+
+            return std::u8string_view(Buffer.data(), Encryptionlength);
+        }
+        std::u8string_view Encrypt_256(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Encryptionlength = 0;
+
+            EVP_EncryptInit_ex(Context, EVP_aes_256_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_EncryptUpdate(Context, (uint8_t *)Buffer.data(), &Encryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_EncryptFinal_ex(Context, (uint8_t *)Buffer.data() + Encryptionlength, &Encryptionlength);
+
+            return std::u8string_view(Buffer.data(), Encryptionlength);
+        }
+
+        std::u8string_view Decrypt_128(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Decryptionlength = 0;
+
+            EVP_DecryptInit_ex(Context, EVP_aes_128_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_DecryptUpdate(Context, (uint8_t *)Buffer.data(), &Decryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_DecryptFinal_ex(Context, (uint8_t *)Buffer.data() + Decryptionlength, &Decryptionlength);
+
+            return std::u8string_view(Buffer.data(), Decryptionlength);
+        }
+        std::u8string_view Decrypt_192(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Decryptionlength = 0;
+
+            EVP_DecryptInit_ex(Context, EVP_aes_192_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_DecryptUpdate(Context, (uint8_t *)Buffer.data(), &Decryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_DecryptFinal_ex(Context, (uint8_t *)Buffer.data() + Decryptionlength, &Decryptionlength);
+
+            return std::u8string_view(Buffer.data(), Decryptionlength);
+        }
+        std::u8string_view Decrypt_256(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Decryptionlength = 0;
+
+            EVP_DecryptInit_ex(Context, EVP_aes_256_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_DecryptUpdate(Context, (uint8_t *)Buffer.data(), &Decryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_DecryptFinal_ex(Context, (uint8_t *)Buffer.data() + Decryptionlength, &Decryptionlength);
+
+            return std::u8string_view(Buffer.data(), Decryptionlength);
+        }
+    };
+
     inline std::string Encrypt(const void *Input, const size_t Length, const void *Key, const void *Initialvector)
     {
         const auto Buffer = std::make_unique<uint8_t[]>(Length + 32);
@@ -47,6 +146,59 @@ namespace AES
 
 namespace DES3
 {
+    // Helpter to avoid recreating states.
+    struct DES3_t
+    {
+        std::u8string Key, IV, Buffer;
+        EVP_CIPHER_CTX *Context;
+
+        explicit DES3_t(std::u8string_view Cryptokey, std::u8string_view Initialvector)
+            : Key(Cryptokey), IV(Initialvector), Context(EVP_CIPHER_CTX_new()) {};
+        explicit DES3_t(const void *Cryptokey, size_t Keylength, const void *Initialvector, size_t IVLength)
+            : Key((char8_t *)Cryptokey, Keylength), IV((char8_t *)Initialvector, IVLength), Context(EVP_CIPHER_CTX_new()) {};
+        ~DES3_t()
+        {
+            EVP_CIPHER_CTX_free(Context);
+            std::memset(IV.data(), 0xCC, IV.size());
+            std::memset(Key.data(), 0xCC, Key.size());
+            std::memset(Buffer.data(), 0xCC, Buffer.size());
+        }
+
+        void Update(std::u8string_view Cryptokey, std::u8string_view Initialvector)
+        {
+            if (!Cryptokey.empty()) Key = Cryptokey;
+            if (!Initialvector.empty()) IV = Initialvector;
+        }
+        void Update(const void *Cryptokey, size_t Keylength, const void *Initialvector, size_t IVLength)
+        {
+            if (Keylength && Cryptokey) Key = { (char8_t *)Cryptokey, Keylength };
+            if (IVLength && Initialvector) IV = { (char8_t *)Initialvector, IVLength };
+        }
+
+        std::u8string_view Encrypt(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Encryptionlength = 0;
+
+            EVP_EncryptInit_ex(Context, EVP_des_ede3_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_EncryptUpdate(Context, (uint8_t *)Buffer.data(), &Encryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_EncryptFinal_ex(Context, (uint8_t *)Buffer.data() + Encryptionlength, &Encryptionlength);
+
+            return std::u8string_view(Buffer.data(), Encryptionlength);
+        }
+        std::u8string_view Decrypt(const void *Input, size_t Length)
+        {
+            Buffer.resize(Length + 32);
+            int Decryptionlength = 0;
+
+            EVP_DecryptInit_ex(Context, EVP_des_ede3_cbc(), nullptr, (uint8_t *)Key.data(), (uint8_t *)IV.data());
+            EVP_DecryptUpdate(Context, (uint8_t *)Buffer.data(), &Decryptionlength, (uint8_t *)Input, static_cast<int>(Length));
+            EVP_DecryptFinal_ex(Context, (uint8_t *)Buffer.data() + Decryptionlength, &Decryptionlength);
+
+            return std::u8string_view(Buffer.data(), Decryptionlength);
+        }
+    };
+
     inline std::string Encrypt(const void *Input, const size_t Length, const void *Key, const void *Initialvector)
     {
         const auto Buffer = std::make_unique<uint8_t[]>(Length + 32);
@@ -133,6 +285,117 @@ namespace Hash
 
 namespace PK_RSA
 {
+    // Helper to manage signatures.
+    struct Signature_t
+    {
+        RSA *Keypair;
+
+        explicit Signature_t(int Size = 2048)
+        {
+            const auto Key = RSA_new();
+            const auto Exponent = BN_new();
+            do
+            {
+                if (1 != BN_set_word(Exponent, 65537)) break;
+                if (1 != RSA_generate_key_ex(Key, Size, Exponent, nullptr)) break;
+            } while (false);
+
+            BN_free(Exponent);
+            Keypair = Key;
+        }
+        template <typename T> explicit Signature_t(std::basic_string_view<T> Privatekey)
+        {
+            const auto Keypointer = Privatekey.data();
+            Keypair = d2i_RSAPrivateKey(NULL, (const uint8_t **)&Keypointer, (long)Privatekey.size());
+        }
+        template <typename T> explicit Signature_t(const std::basic_string<T> &Privatekey)
+        {
+            const auto Keypointer = Privatekey.data();
+            Keypair = d2i_RSAPrivateKey(NULL, (const uint8_t **)&Keypointer, (long)Privatekey.size());
+        }
+
+        template <typename T> std::basic_string<T> Signmessage(std::basic_string_view<T> Input)
+        {
+            EVP_MD_CTX *Context = EVP_MD_CTX_create();
+            EVP_PKEY *Privatekey = EVP_PKEY_new();
+            EVP_PKEY_assign_RSA(Privatekey, Keypair);
+
+            EVP_PKEY_CTX *pkeyCtx;
+            EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Privatekey);
+            EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
+            EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
+            EVP_DigestSignUpdate(Context, Input.data(), Input.size());
+
+            size_t Signaturelength{};
+            EVP_DigestSignFinal(Context, nullptr, &Signaturelength);
+            std::basic_string<T> Signature{}; Signature.resize(Signaturelength);
+            EVP_DigestSignFinal(Context, (unsigned char *)Signature.data(), &Signaturelength);
+            EVP_MD_CTX_destroy(Context);
+
+            return Signature;
+        }
+        template <typename T> std::basic_string<T> Signmessage(const std::basic_string<T> &Input)
+        {
+            EVP_MD_CTX *Context = EVP_MD_CTX_create();
+            EVP_PKEY *Privatekey = EVP_PKEY_new();
+            EVP_PKEY_assign_RSA(Privatekey, Keypair);
+
+            EVP_PKEY_CTX *pkeyCtx;
+            EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Privatekey);
+            EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
+            EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
+            EVP_DigestSignUpdate(Context, Input.data(), Input.size());
+
+            size_t Signaturelength{};
+            EVP_DigestSignFinal(Context, nullptr, &Signaturelength);
+            std::basic_string<T> Signature{}; Signature.resize(Signaturelength);
+            EVP_DigestSignFinal(Context, (unsigned char *)Signature.data(), &Signaturelength);
+            EVP_MD_CTX_destroy(Context);
+
+            return Signature;
+        }
+
+        template <typename T> bool Verifysignature(std::basic_string_view<T> Input, std::basic_string_view<T> Signature)
+        {
+            EVP_MD_CTX *Context = EVP_MD_CTX_create();
+            EVP_PKEY *Publickey = EVP_PKEY_new();
+            EVP_PKEY_assign_RSA(Publickey, Keypair);
+
+            EVP_PKEY_CTX *pkeyCtx;
+            EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+            EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
+            EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
+
+            EVP_DigestVerifyInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+            EVP_DigestVerifyUpdate(Context, Input.data(), Input.size());
+
+            const auto Result = 1 == EVP_DigestVerifyFinal(Context, (uint8_t *)Signature.data(), Signature.size());
+
+            EVP_MD_CTX_destroy(Context);
+            return Result;
+        }
+        template <typename T> bool Verifysignature(const std::basic_string<T> &Input, const std::basic_string<T> &Signature)
+        {
+            EVP_MD_CTX *Context = EVP_MD_CTX_create();
+            EVP_PKEY *Publickey = EVP_PKEY_new();
+            EVP_PKEY_assign_RSA(Publickey, Keypair);
+
+            EVP_PKEY_CTX *pkeyCtx;
+            EVP_DigestSignInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+            EVP_PKEY_CTX_set_rsa_padding(pkeyCtx, RSA_PKCS1_PSS_PADDING);
+            EVP_PKEY_CTX_set_rsa_pss_saltlen(pkeyCtx, 0);
+
+            EVP_DigestVerifyInit(Context, &pkeyCtx, EVP_sha256(), nullptr, Publickey);
+            EVP_DigestVerifyUpdate(Context, Input.data(), Input.size());
+
+            const auto Result = 1 == EVP_DigestVerifyFinal(Context, (uint8_t *)Signature.data(), Signature.size());
+
+            EVP_MD_CTX_destroy(Context);
+            return Result;
+        }
+
+    };
+
     inline RSA *Createkeypair(int Size = 2048)
     {
         const auto Key = RSA_new();
