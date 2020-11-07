@@ -9,13 +9,13 @@
 #include <Global.hpp>
 #include <variant>
 
-inline HDC Createsurface(vec2_t Size, HDC Parent)
+inline HDC Createsurface(vec2f Size, HDC Parent)
 {
     const auto Context = CreateCompatibleDC(Parent);
     SelectObject(Context, CreateCompatibleBitmap(Parent, Size.x, Size.y));
     return Context;
 }
-inline HDC Recreatesurface(vec2_t Size, HDC Context)
+inline HDC Recreatesurface(vec2f Size, HDC Context)
 {
     auto Bitmap = CreateCompatibleBitmap(Context, Size.x, Size.y);
     DeleteObject(SelectObject(Context, Bitmap));
@@ -30,20 +30,20 @@ struct Element_t
 {
     HDC Surface;                // Bitmap to BitBlt and draw to, update Repainted on write.
     Eventflags_t Wantedevents;  // Matched in Overlay::Broadcastevent
-    vec3_t Position;            // Z only used for rendering-order.
+    vec3f Position;            // Z only used for rendering-order.
     bool Repainted;             // Should be atomic_flag, but we need to sort elements.
     COLORREF Mask;              // NULL = unused.
-    vec2_t Size;
+    vec2f Size;
 
     void(__cdecl *onTick)(Element_t *This, float Deltatime);
-    void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data);
+    void(__cdecl *onEvent)(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2f, wchar_t> Data);
 };
 
 template <bool Animated = false>
 struct Overlay_t
 {
     std::vector<Element_t> Elements;
-    vec2_t Position, Size;
+    vec2f Position, Size;
     bool Ctrl{}, Shift{};
     bool Forcerepaint{};
     HWND Windowhandle;
@@ -66,7 +66,7 @@ struct Overlay_t
         if (This) return This->Eventhandler(Message, wParam, lParam);
         return DefWindowProcA(Windowhandle, Message, wParam, lParam);
     }
-    void Broadcastevent(Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+    void Broadcastevent(Eventflags_t Flags, std::variant<uint32_t, vec2f, wchar_t> Data)
     {
         std::for_each(std::execution::par_unseq, Elements.begin(), Elements.end(), [=](Element_t &Element)
         {
@@ -171,13 +171,13 @@ struct Overlay_t
                 Flags.Mousedown |= Message == WM_MBUTTONDOWN;
                 Flags.Mouseup = !Flags.Mousedown;
 
-                Broadcastevent(Flags, vec2_t(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+                Broadcastevent(Flags, vec2f(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
                 return NULL;
             }
             case WM_MOUSEMOVE:
             {
                 Flags.Mousemove = true;
-                Broadcastevent(Flags, vec2_t(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+                Broadcastevent(Flags, vec2f(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
                 return NULL;
             }
 
@@ -188,12 +188,12 @@ struct Overlay_t
         return DefWindowProcA(Windowhandle, Message, wParam, lParam);
     }
 
-    void setWindowposition(vec2_t XY, bool Delta = false)
+    void setWindowposition(vec2f XY, bool Delta = false)
     {
         if (Delta) XY += Position;
         SetWindowPos(Windowhandle, NULL, XY.x, XY.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
     }
-    void setWindowsize(vec2_t WH, bool Delta = false)
+    void setWindowsize(vec2f WH, bool Delta = false)
     {
         if (Delta) WH += Size;
         SetWindowPos(Windowhandle, NULL, Position.x, Position.y, WH.x, WH.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
@@ -225,7 +225,7 @@ struct Overlay_t
             return a.Position.y > b.Position.y;
         });
     }
-    HDC Createsurface(vec2_t eSize, HDC *Previous = nullptr)
+    HDC Createsurface(vec2f eSize, HDC *Previous = nullptr)
     {
         const auto Device = GetDC(Windowhandle);
         const auto Context = Previous ? *Previous : CreateCompatibleDC(Device);
@@ -329,7 +329,7 @@ struct Overlay_t
         }
     }
 
-    explicit Overlay_t(vec2_t _Position, vec2_t _Size) : Position(_Position)
+    explicit Overlay_t(vec2f _Position, vec2f _Size) : Position(_Position)
     {
         // Register the overlay class.
         WNDCLASSEXW Windowclass{};
@@ -375,7 +375,7 @@ inline HFONT getDefaultfont()
 }
 
 // TODO(tcn): Add image loading from disk / resource.
-inline HBITMAP Createimage(vec2_t Dimensions, uint32_t Size, const void *Data)
+inline HBITMAP Createimage(vec2f Dimensions, uint32_t Size, const void *Data)
 {
     assert(Dimensions.x); assert(Dimensions.y); assert(Size); assert(Data);
     const auto Pixelsize{ Size / int(Dimensions.x * Dimensions.y) };
@@ -400,7 +400,7 @@ inline HBITMAP Createimage(vec2_t Dimensions, uint32_t Size, const void *Data)
 
     return Bitmap;
 }
-inline HBITMAP Createmask(HDC Devicecontext, vec2_t Size, COLORREF Transparancykey)
+inline HBITMAP Createmask(HDC Devicecontext, vec2f Size, COLORREF Transparancykey)
 {
     const auto Bitmap = CreateBitmap(int(Size.x), int(Size.y), 1, 1, NULL);
     const auto Device = CreateCompatibleDC(Devicecontext);
@@ -470,9 +470,9 @@ template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
 #endif
 
 // Find windows not associated with our threads.
-inline std::vector<std::pair<HWND, vec4_t>> Findwindows()
+inline std::vector<std::pair<HWND, vec4f>> Findwindows()
 {
-    std::vector<std::pair<HWND, vec4_t>> Results;
+    std::vector<std::pair<HWND, vec4f>> Results;
 
     EnumWindows([](HWND Handle, LPARAM pResults) -> BOOL
     {
@@ -484,8 +484,8 @@ inline std::vector<std::pair<HWND, vec4_t>> Findwindows()
             RECT Window{};
             if (GetWindowRect(Handle, &Window))
             {
-                const vec4_t Temp(Window.right, Window.left, Window.bottom, Window.top);
-                auto Results = (std::vector<std::pair<HWND, vec4_t>> *)pResults;
+                const vec4f Temp(Window.right, Window.left, Window.bottom, Window.top);
+                auto Results = (std::vector<std::pair<HWND, vec4f>> *)pResults;
                 Results->push_back(std::make_pair(Handle, Temp));
             }
         }
@@ -495,9 +495,9 @@ inline std::vector<std::pair<HWND, vec4_t>> Findwindows()
 
     return Results;
 }
-inline std::pair<HWND, vec4_t> Largestwindow()
+inline std::pair<HWND, vec4f> Largestwindow()
 {
-    std::pair<HWND, vec4_t> Result;
+    std::pair<HWND, vec4f> Result;
 
     EnumWindows([](HWND Handle, LPARAM pResult) -> BOOL
     {
@@ -509,8 +509,8 @@ inline std::pair<HWND, vec4_t> Largestwindow()
             RECT Window{};
             if (GetWindowRect(Handle, &Window))
             {
-                const vec4_t Temp(Window.right, Window.left, Window.bottom, Window.top);
-                auto Result = (std::pair<HWND, vec4_t> *)pResult;
+                const vec4f Temp(Window.right, Window.left, Window.bottom, Window.top);
+                auto Result = (std::pair<HWND, vec4f> *)pResult;
 
                 if (Result->second > Temp) *Result = std::make_pair(Handle, Temp);
             }

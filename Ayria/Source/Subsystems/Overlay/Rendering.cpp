@@ -117,7 +117,7 @@ namespace gInternal
     void Mesh_t::Outline(uint8_t Linewidth)
     {
         TRIVERTEX Lastvertex = Vertices[0];
-        std::vector<vec2_t> Points;
+        std::vector<vec2f> Points;
         Points.reserve(Vertexcount);
 
         // Find solid lines.
@@ -204,7 +204,7 @@ namespace gInternal
     }
     void Quad_t::Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background) { assert(false); }
 
-    vec2_t Text_t::getTextsize(std::wstring_view String)
+    vec2f Text_t::getTextsize(std::wstring_view String)
     {
         SIZE Textsize;
         SelectObject(Devicecontext, Font);
@@ -214,13 +214,13 @@ namespace gInternal
 
         return {};
     }
-    void Text_t::Transparent(vec2_t Position, std::wstring_view String)
+    void Text_t::Transparent(vec2f Position, std::wstring_view String)
     {
         SelectObject(Devicecontext, Font);
         SetTextColor(Devicecontext, Color);
         ExtTextOutW(Devicecontext, Position.x, Position.y, ETO_NUMERICSLATIN, NULL, String.data(), (UINT)String.size(), NULL);
     }
-    void Text_t::Opaque(vec2_t Position, std::wstring_view String, COLORREF Background)
+    void Text_t::Opaque(vec2f Position, std::wstring_view String, COLORREF Background)
     {
         SelectObject(Devicecontext, Font);
         SetTextColor(Devicecontext, Color);

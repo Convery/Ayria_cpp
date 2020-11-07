@@ -12,14 +12,14 @@
 struct Texture2D
 {
     HBITMAP Internalbitmap;
-    vec2_t Internalsize;
+    vec2f Internalsize;
 
     // Windows wants to use BGR for bitmaps, probably some Win16 reasoning.
     static void RGBA_SwapRB(size_t Size, void *Data);
     static void RGB_SwapRB(size_t Size, void *Data);
 
     explicit Texture2D(std::string_view Filepath);
-    explicit Texture2D(vec2_t Dimensions, size_t Size, const void *Data) : Internalsize(Dimensions)
+    explicit Texture2D(vec2f Dimensions, size_t Size, const void *Data) : Internalsize(Dimensions)
     {
         assert(Dimensions.x); assert(Dimensions.y); assert(Size); assert(Data);
         const short Pixelsize{ Size / (Dimensions.x * Dimensions.y) };
@@ -50,8 +50,8 @@ namespace gInternal
 {
     struct Arc_t
     {
-        vec2_t Focalpoint0, Focalpoint1;
-        vec4_t Boundingbox;
+        vec2f Focalpoint0, Focalpoint1;
+        vec4f Boundingbox;
         HDC Devicecontext;
 
         void Solid(COLORREF Color);
@@ -60,7 +60,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, COLORREF Background);
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
-        explicit Arc_t(HDC Context, vec2_t Position, vec2_t Angles, uint8_t Rounding) : Devicecontext(Context),
+        explicit Arc_t(HDC Context, vec2f Position, vec2f Angles, uint8_t Rounding) : Devicecontext(Context),
             Boundingbox{ Position.x - Rounding, Position.y - Rounding, Position.x + Rounding, Position.y + Rounding }
         {
             Focalpoint0.x = Position.x + Rounding * std::cosf(float((Angles.x + Angles.y) * std::numbers::pi / 180.0f));
@@ -71,8 +71,8 @@ namespace gInternal
     };
     struct Ellipse_t
     {
-        vec4_t Dimensions;
         HDC Devicecontext;
+        vec4f Dimensions;
 
         void Solid(COLORREF Color);
         void Solid(Texture2D Texture);
@@ -80,7 +80,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, COLORREF Background);
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
-        explicit Ellipse_t(HDC Context, vec2_t Position, vec2_t Size) : Devicecontext(Context),
+        explicit Ellipse_t(HDC Context, vec2f Position, vec2f Size) : Devicecontext(Context),
             Dimensions{ Position.x, Position.y, Position.x + Size.x, Position.y + Size.y } {}
     };
     struct Mesh_t
@@ -126,7 +126,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, COLORREF Background);
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
-        explicit Path_t(HDC Context, std::vector<vec2_t> vPoints) : Devicecontext(Context)
+        explicit Path_t(HDC Context, std::vector<vec2f> vPoints) : Devicecontext(Context)
         {
             Points = std::make_unique<POINT[]>(vPoints.size());
             Pointcount = (uint32_t)vPoints.size();
@@ -137,7 +137,7 @@ namespace gInternal
                 Points[i].y = vPoints[i].y;
             }
         }
-        explicit Path_t(HDC Context, vec2_t Startvec, vec2_t Endvec) : Devicecontext(Context)
+        explicit Path_t(HDC Context, vec2f Startvec, vec2f Endvec) : Devicecontext(Context)
         {
             Points = std::make_unique<POINT[]>(2);
             Pointcount = 2;
@@ -148,8 +148,8 @@ namespace gInternal
     };
     struct Quad_t
     {
-        vec4_t Dimensions;
         HDC Devicecontext;
+        vec4f Dimensions;
         uint8_t Radius;
 
         void Solid(COLORREF Color);
@@ -158,7 +158,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, COLORREF Background);
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
-        explicit Quad_t(HDC Context, vec2_t Position, vec2_t Size, uint8_t Rounding) : Devicecontext(Context),
+        explicit Quad_t(HDC Context, vec2f Position, vec2f Size, uint8_t Rounding) : Devicecontext(Context),
             Radius(Rounding), Dimensions{ Position.x, Position.y, Position.x + Size.x, Position.y + Size.y } {}
     };
     struct Text_t
@@ -167,9 +167,9 @@ namespace gInternal
         COLORREF Color;
         HFONT Font;
 
-        vec2_t getTextsize(std::wstring_view String);
-        void Transparent(vec2_t Position, std::wstring_view String);
-        void Opaque(vec2_t Position, std::wstring_view String, COLORREF Background);
+        vec2f getTextsize(std::wstring_view String);
+        void Transparent(vec2f Position, std::wstring_view String);
+        void Opaque(vec2f Position, std::wstring_view String, COLORREF Background);
 
         static HFONT getDefaultfont();
         static HFONT Createfont(std::string_view Name, int8_t Fontsize);
@@ -186,44 +186,44 @@ struct Graphics
     HDC Devicecontext;
 
     explicit Graphics(HDC Context) : Devicecontext(Context) {}
-    explicit Graphics(HDC Context, vec4_t Boundingbox) : Devicecontext(Context)
+    explicit Graphics(HDC Context, vec4f Boundingbox) : Devicecontext(Context)
     {
         SelectClipRgn(Devicecontext, CreateRectRgn(Boundingbox.x, Boundingbox.y, Boundingbox.z, Boundingbox.w));
     }
 
     // Helper to clear the context.
-    void Clear(vec2_t Size)
+    void Clear(vec2f Size) const
     {
         SetBkColor(Devicecontext, Clearcolor);
         const RECT Clientarea{ 0, 0, Size.x, Size.y };
         ExtTextOutW(Devicecontext, 0, 0, ETO_OPAQUE, &Clientarea, NULL, 0, NULL);
     }
 
-    gInternal::Text_t Text(COLORREF Textcolor, HFONT Fonthandle)
+    gInternal::Text_t Text(COLORREF Textcolor, HFONT Fonthandle) const
     {
         return gInternal::Text_t(Devicecontext, Textcolor, Fonthandle);
     }
-    gInternal::Ellipse_t Ellipse(vec2_t Position, vec2_t Size)
+    gInternal::Ellipse_t Ellipse(vec2f Position, vec2f Size) const
     {
         return gInternal::Ellipse_t(Devicecontext, Position, Size);
     }
-    gInternal::Path_t Path(vec2_t Startvec, vec2_t Endvec)
+    gInternal::Path_t Path(vec2f Startvec, vec2f Endvec) const
     {
         return gInternal::Path_t(Devicecontext, Startvec, Endvec);
     }
-    gInternal::Arc_t Arc(vec2_t Position, vec2_t Angles, uint8_t Rounding)
+    gInternal::Arc_t Arc(vec2f Position, vec2f Angles, uint8_t Rounding) const
     {
         return gInternal::Arc_t(Devicecontext, Position, Angles, Rounding);
     }
-    gInternal::Quad_t Quad(vec2_t Position, vec2_t Size, uint8_t Rounding = 0)
+    gInternal::Quad_t Quad(vec2f Position, vec2f Size, uint8_t Rounding = 0) const
     {
         return gInternal::Quad_t(Devicecontext, Position, Size, Rounding);
     }
-    gInternal::Mesh_t Mesh(std::vector<POINT> Points, std::vector<COLORREF> Colors)
+    gInternal::Mesh_t Mesh(std::vector<POINT> Points, std::vector<COLORREF> Colors) const
     {
         return gInternal::Mesh_t(Devicecontext, Points, Colors);
     }
-    gInternal::Text_t Text(COLORREF Textcolor) { return gInternal::Text_t(Devicecontext, Textcolor); }
-    gInternal::Path_t Path(std::vector<vec2_t> Points) { return gInternal::Path_t(Devicecontext, Points); }
+    gInternal::Text_t Text(COLORREF Textcolor) const { return gInternal::Text_t(Devicecontext, Textcolor); }
+    gInternal::Path_t Path(std::vector<vec2f> Points) const { return gInternal::Path_t(Devicecontext, Points); }
 };
 #pragma pack(pop)

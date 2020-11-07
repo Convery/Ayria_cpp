@@ -16,7 +16,7 @@ namespace Console
         // Each window needs a unique ID, because reasons.
         constexpr size_t InputID = 1, BufferID = 2;
         static HWND Consolehandle, Inputhandle, Bufferhandle;
-        static vec2_t Windowsize;
+        static vec2f Windowsize;
         static WNDPROC oldLine;
         static bool isVisible{};
 
@@ -75,7 +75,7 @@ namespace Console
             RECT Windowrect{ 0, 0, 820, 450 };
             AdjustWindowRect(&Windowrect, Style, FALSE);
 
-            const vec2_t Position{ (Width - 150) / 2, (Height - 450) / 2 };
+            const vec2f Position{ (Width - 150) / 2, (Height - 450) / 2 };
             Windowsize = { Windowrect.right - Windowrect.left + 1,  Windowrect.bottom - Windowrect.top + 1 };
 
             Consolehandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"Console", Style,

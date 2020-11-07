@@ -19,14 +19,14 @@ namespace Console
         namespace Outputarea
         {
             std::atomic<int32_t> Eventcount{};
-            void __cdecl onEvent(Element_t* This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            void __cdecl onEvent(Element_t* This, Eventflags_t Flags, std::variant<uint32_t, vec2f, wchar_t> Data)
             {
                 if (Flags.onWindowchange)
                 {
-                    assert(std::holds_alternative<vec2_t>(Data));
-                    const auto Newsize = std::get<vec2_t>(Data);
+                    assert(std::holds_alternative<vec2f>(Data));
+                    const auto Newsize = std::get<vec2f>(Data);
 
-                    vec2_t Wantedsize{ Newsize.x, Newsize.y - Inputheight };
+                    vec2f Wantedsize{ Newsize.x, Newsize.y - Inputheight };
                     if (Wantedsize != This->Size)
                     {
                         ++Eventcount;
@@ -51,7 +51,7 @@ namespace Console
                     Renderer.Quad({}, This->Size).Solid(Color_t(39, 38, 35));
                     Renderer.Path({}, { This->Size.x, 0 }).Outline(1, Color_t(0xBE, 0x90, 00));
 
-                    vec2_t Position{10, 5};
+                    vec2f Position{10, 5};
                     for (const auto &Item : Lines)
                     {
                         if (Item.first.empty()) continue;
@@ -103,14 +103,14 @@ namespace Console
                     Eventcount -= Events;
                 }
             }
-            void __cdecl onEvent(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            void __cdecl onEvent(Element_t *This, Eventflags_t Flags, std::variant<uint32_t, vec2f, wchar_t> Data)
             {
                 if (Flags.onWindowchange)
                 {
-                    assert(std::holds_alternative<vec2_t>(Data));
-                    const auto Newsize = std::get<vec2_t>(Data);
-                    const vec3_t Position{ 0, Newsize.y - Inputheight, 0 };
-                    const vec2_t Wantedsize{ Newsize.x, Inputheight - isExtended * 2 };
+                    assert(std::holds_alternative<vec2f>(Data));
+                    const auto Newsize = std::get<vec2f>(Data);
+                    const vec3f Position{ 0, Newsize.y - Inputheight, 0 };
+                    const vec2f Wantedsize{ Newsize.x, Inputheight - isExtended * 2 };
 
                     if (This->Position != Position) This->Position = { 0, Newsize.y - Inputheight, 0 };
                     if (This->Size != Wantedsize)
@@ -290,8 +290,8 @@ namespace Console
                     RECT Windowarea{};
                     GetWindowRect(Lastfocus, &Windowarea);
 
-                    vec2_t Wantedsize{ Windowarea.right - Windowarea.left - 40, Windowarea.bottom - Windowarea.top - 45 };
-                    const vec2_t Position{ Windowarea.left + 20, Windowarea.top + 45 };
+                    vec2f Wantedsize{ Windowarea.right - Windowarea.left - 40, Windowarea.bottom - Windowarea.top - 45 };
+                    const vec2f Position{ Windowarea.left + 20, Windowarea.top + 45 };
                     Wantedsize.y *= isExtended ? 0.6f : 0.3f;
 
                     if (Consoleoverlay->Position != Position) Consoleoverlay->setWindowposition(Position);
@@ -300,7 +300,7 @@ namespace Console
                     Previousmove = Currenttick;
                 }
             }
-            void __cdecl onEvent(Element_t *, Eventflags_t Flags, std::variant<uint32_t, vec2_t, wchar_t> Data)
+            void __cdecl onEvent(Element_t *, Eventflags_t Flags, std::variant<uint32_t, vec2f, wchar_t> Data)
             {
                 // We spend most ticks invisible.
                 if (!isVisible) [[likely]] return;
@@ -309,8 +309,8 @@ namespace Console
                 // Hackery for Windows sometimes not activating the overlay.
                 if (Flags.Mousedown)
                 {
-                    assert(std::holds_alternative<vec2_t>(Data));
-                    const auto Position = std::get<vec2_t>(Data);
+                    assert(std::holds_alternative<vec2f>(Data));
+                    const auto Position = std::get<vec2f>(Data);
                     if (Position.x < 0 || Position.y < 0) return;
 
                     if (Position.x <= Consoleoverlay->Size.x && Position.y <= Consoleoverlay->Size.y)

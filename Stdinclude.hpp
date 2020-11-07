@@ -23,9 +23,7 @@
 #include <cassert>
 #include <cstdint>
 #include <numbers>
-#include <variant>
 #include <atomic>
-#include <bitset>
 #include <chrono>
 #include <cstdio>
 #include <memory>
@@ -67,6 +65,7 @@
 using namespace std::literals;
 
 // Global utilities.
+#include <Utilities/Datatypes.hpp>
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
