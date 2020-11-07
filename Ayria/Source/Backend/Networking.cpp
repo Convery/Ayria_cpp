@@ -11,17 +11,12 @@ namespace Backend
 {
     using Multicast_t = struct { size_t Sendersocket, Receiversocket; sockaddr_in Address; };
 
-    std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
-    std::unordered_map<uint16_t, Multicast_t> Networkgroups;
-    std::unordered_set<uint32_t> Blacklist;
+    static std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
+    static std::unordered_map<uint16_t, Multicast_t> Networkgroups;
+    static std::unordered_set<uint32_t> Blacklist;
+    static FD_SET Activesockets;
     static uint32_t RandomID;
-    FD_SET Activesockets;
 
-    void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback)
-    {
-        assert(Callback);
-        Callbacks[MessageID].insert(Callback);
-    }
     void Sendmessage(uint32_t Messagetype, std::string_view JSONString, uint16_t Port)
     {
         std::string Encoded;
@@ -38,19 +33,23 @@ namespace Backend
         const auto &[Sendersocket, _, Multicast] = Networkgroups[Port];
         sendto(Sendersocket, Encoded.data(), (int)Encoded.size(), 0, (sockaddr *)&Multicast, sizeof(Multicast));
     }
+    void Registermessagehandler(uint32_t MessageID, Messagecallback_t Callback)
+    {
+        assert(Callback);
+        Callbacks[MessageID].insert(Callback);
+    }
     void Joinmessagegroup(uint16_t Port, uint32_t Address)
     {
         WSADATA WSAData;
         uint32_t Error{ 0 };
         constexpr uint32_t Argument{ 1 };
-        size_t Sendersocket, Receiversocket;
         sockaddr_in Localhost{ AF_INET, htons(Port), {{.S_addr = htonl(INADDR_ANY)}} };
         const sockaddr_in Multicast{ AF_INET, htons(Port), {{.S_addr = htonl(Address)}} };
 
         // We only need WS 1.1, no need for more.
         (void)WSAStartup(MAKEWORD(1, 1), &WSAData);
-        Sendersocket = socket(AF_INET, SOCK_DGRAM, 0);
-        Receiversocket = socket(AF_INET, SOCK_DGRAM, 0);
+        const auto Sendersocket{ socket(AF_INET, SOCK_DGRAM, 0) };
+        const auto Receiversocket{ socket(AF_INET, SOCK_DGRAM, 0) };
         Error |= ioctlsocket(Sendersocket, FIONBIO, (u_long *)&Argument);
         Error |= ioctlsocket(Receiversocket, FIONBIO, (u_long *)&Argument);
 
@@ -86,7 +85,7 @@ namespace Backend
         auto Timeout{ Defaulttimeout };
 
         // Check for data on the active sockets.
-        if (!select(Count, &ReadFD, NULL, NULL, &Timeout)) [[likely]] return;
+        if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]] return;
 
         // Stack allocate as we have data.
         const auto Buffer = alloca(Buffersizelimit);
@@ -114,7 +113,7 @@ namespace Backend
             if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
             {
                 // All messages should be base64.
-                const auto Decoded = Base64::Decode({ Packet->Payload, size_t(Packetlength - sizeof(uint64_t)) });
+                const auto Decoded = Base64::Decode({ Packet->Payload, static_cast<size_t>(Packetlength - sizeof(uint64_t)) });
 
                 // May have multiple listeners for the same messageID.
                 for (const auto Callback : Result->second)
@@ -129,7 +128,7 @@ namespace Backend
     namespace API
     {
         // using Messagecallback_t = void(__cdecl *)(uint32_t NodeID, const char *JSONString);
-        extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, void *Callback)
+        extern "C" EXPORT_ATTR void __cdecl addNetworklistener(uint32_t MessageID, const void *Callback)
         {
             Registermessagehandler(MessageID, (Messagecallback_t)Callback);
         }
