@@ -115,13 +115,28 @@ namespace Userinfo
 
     void Initialize()
     {
-        const auto Existingkey = getenv("AYRIA_CLIENTPK");
         HardwareID = Base64::Encode(getHWID());
+        const char *Existingkey{};
+
+        #if defined (_WIN32)
+        char Buffer[512]{};
+        DWORD Size{ 512 };
+        HKEY Registrykey;
+
+        if (ERROR_SUCCESS == RegOpenKeyA(HKEY_CURRENT_USER, "Environment", &Registrykey))
+        {
+            if (ERROR_SUCCESS == RegQueryValueExA(Registrykey, "AYRIA_CLIENTPK", nullptr, nullptr, (LPBYTE)Buffer, &Size))
+                Existingkey = Buffer;
+            RegCloseKey(Registrykey);
+        }
+        #else
+        Existingkey = std::getenv("AYRIA_CLIENTPK");
+        #endif
 
         if (Existingkey)
         {
             Privatekey = Existingkey;
-            Sharedkey = PK_RSA::getPublickey(PK_RSA::Createkeypair(Base64::Decode(Privatekey)));
+            Sharedkey = Base64::Encode(PK_RSA::getPublickey(PK_RSA::Createkeypair(Base64::Decode(Privatekey))));
         }
         else
         {
@@ -130,11 +145,15 @@ namespace Userinfo
             Sharedkey = Base64::Encode(PK_RSA::getPublickey(Keypair));
             Privatekey = Base64::Encode(PK_RSA::getPrivatekey(Keypair));
 
-            #if defined (_WIN32)
-            system(("SETX AYRIA_CLIENTPK "s + Privatekey).c_str());
-            #else
-            system(("SETENV AYRIA_CLIENTPK "s + Privatekey).c_str());
-            #endif
+            // We do not want to wait for the system to finish.
+            std::thread([]()
+            {
+                #if defined (_WIN32)
+                system(("SETX AYRIA_CLIENTPK "s + Privatekey).c_str());
+                #else
+                system(("SETENV AYRIA_CLIENTPK "s + Privatekey).c_str());
+                #endif
+            }).detach();
         }
 
         // Set the account from disk-data for offline sessions.
