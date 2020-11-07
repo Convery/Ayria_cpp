@@ -10,13 +10,11 @@
 extern "C"
 {
     // Callbacks from the Bootstrapper module. All of these are optional, see /Docs/ for usage examples.
-    EXPORT_ATTR bool __cdecl onEvent(const void *, uint32_t) { return false; }  // User-defined, returns if the event was handled.
-    EXPORT_ATTR void __cdecl onReload(const void *) {}                          // User-defined, called by devs for hotpatching plugins.
     EXPORT_ATTR void __cdecl onInitialized(bool) {}                             // Do .data edits in this callback.
     EXPORT_ATTR void __cdecl onStartup(bool) {}                                 // Do .text edits in this callback.
 
     // Callbacks from the Localnetworking module when enabled.
-    EXPORT_ATTR IServer * __cdecl Createserver(const char *Hostname) { (void)Hostname; return nullptr; }
+    EXPORT_ATTR IServer * __cdecl Createserver(const char *) { return nullptr; }
 }
 
 // Entrypoint when loaded as a shared library.
