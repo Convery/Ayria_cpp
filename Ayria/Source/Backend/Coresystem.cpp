@@ -18,6 +18,32 @@ namespace Backend
         Backgroundtasks.push_back({ 0, Period, Callback });
     }
 
+    // TODO(tcn): Investigate if we can merge these threads.
+    static DWORD __stdcall Backgroundthread(void *)
+    {
+        // Name this thread for easier debugging.
+        setThreadname("Ayria_Background");
+
+        // Main loop, runs until the application terminates or DLL unloads.
+        while (true)
+        {
+            // Notify the subsystems about a new frame.
+            const auto Currenttime = GetTickCount();
+            for (auto &Task : Backgroundtasks)
+            {
+                if ((Task.Last + Task.Period) < Currenttime) [[unlikely]]
+                {
+                    Task.Last = Currenttime;
+                    Task.Callback();
+                }
+            }
+
+            // Most tasks run with periods in seconds.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        return 0;
+    }
     static DWORD __stdcall Graphicsthread(void *)
     {
         // UI-thread, boost our priority.
@@ -68,31 +94,6 @@ namespace Backend
 
             // Cap the FPS to ~60, as we only render if dirty we can get thousands of FPS.
             std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
-        }
-
-        return 0;
-    }
-    static DWORD __stdcall Backgroundthread(void *)
-    {
-        // Name this thread for easier debugging.
-        setThreadname("Ayria_Background");
-
-        // Main loop, runs until the application terminates or DLL unloads.
-        while (true)
-        {
-            // Notify the subsystems about a new frame.
-            const auto Currenttime = time(NULL);
-            for (auto &Task : Backgroundtasks)
-            {
-                if ((Task.Last + Task.Period) < Currenttime) [[unlikely]]
-                {
-                    Task.Last = Currenttime;
-                    Task.Callback();
-                }
-            }
-
-            // Most tasks run with periods in seconds.
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         return 0;
