@@ -53,10 +53,10 @@ struct Color_t : rgb_t
     constexpr operator RGBQUAD() const { return { b, g, r, a }; }
     constexpr operator COLORREF() const { return r | (g << 8U) | (b << 16U); }
 };
+
 // NOTE(tcn): Windows gets confused if Alpha != NULL.
 constexpr COLORREF Clearcolor{ 0x00FFFFFF };
 
-using AccountID_t = Ayriamodule_t::AccountID_t;
 using Eventflags_t = union
 {
     union
@@ -97,12 +97,6 @@ using Eventflags_t = union
         };
     };
 };
-using Account_t = struct
-{
-    AccountID_t ID;
-    std::u8string Locale;
-    std::u8string Username;
-};
 
 #pragma pack(pop)
 #pragma endregion
@@ -134,6 +128,25 @@ namespace API
 #include <Subsystems/Overlay/Rendering.hpp>
 #include <Subsystems/Overlay/Overlay.hpp>
 #include <Subsystems/Console/Console.hpp>
+
+// Common datatypes.
+#pragma pack(push, 1)
+using Accountflags_t = Ayriamodule_t::Accountflags_t;
+using AyriaID_t = Ayriamodule_t::AyriaID_t;
+struct Client_t
+{
+    AyriaID_t UserID;
+    uint32_t NetworkID; // Ephemeral identifier.
+    const char *B64Sharedkey;
+    const char8_t *Username;
+};
+using Account_t = struct
+{
+    std::u8string Username;
+    std::u8string Locale;
+    AyriaID_t ID;
+};
+#pragma pack(pop)
 
 // Common functionality.
 #include <Common/Social.hpp>

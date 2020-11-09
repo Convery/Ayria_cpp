@@ -18,11 +18,11 @@ namespace Clientinfo
     bool isOnline(uint32_t ClientID)
     {
         if (std::any_of(std::execution::par_unseq, LANClients.begin(), LANClients.end(),
-            [ClientID](const Client_t &Client) { return ClientID == Client.AccountID.AccountID; }))
+            [ClientID](const Client_t &Client) { return ClientID == Client.UserID.AccountID; }))
             return true;
 
         if (std::any_of(std::execution::par_unseq, WANClients.begin(), WANClients.end(),
-            [ClientID](const Client_t &Client) { return ClientID == Client.AccountID.AccountID; }))
+            [ClientID](const Client_t &Client) { return ClientID == Client.UserID.AccountID; }))
             return true;
 
         return false;
@@ -30,7 +30,7 @@ namespace Clientinfo
     const Client_t *getClient(uint32_t ClientID)
     {
         for (const auto &Client : getNetworkclients())
-            if (Client->AccountID.AccountID == ClientID)
+            if (Client->UserID.AccountID == ClientID)
                 return Client;
 
         return nullptr;
@@ -66,23 +66,23 @@ namespace Clientinfo
     {
         Client_t Newclient{ 0, NodeID };
         const auto Object = JSON::Parse(JSONString);
-        const auto AccountID = Object.value("AccountID", uint64_t());
+        const auto UserID = Object.value("UserID", uint64_t());
         const auto Username = Object.value("Username", std::u8string());
         const auto Sharedkey = Object.value("Sharedkey", std::string());
 
         // WTF?
-        if (!AccountID || Username.empty()) return;
+        if (!UserID || Username.empty()) return;
 
-        Newclient.B64Publickey = Sharedkeys.emplace(Newclient.AccountID.AccountID, Sharedkey).first->second.c_str();
-        Newclient.Username = Usernames.emplace(Newclient.AccountID.AccountID, Username).first->second.c_str();
-        Newclient.AccountID.Raw = AccountID;
+        Newclient.B64Sharedkey = Sharedkeys.emplace(Newclient.UserID.AccountID, Sharedkey).first->second.c_str();
+        Newclient.Username = Usernames.emplace(Newclient.UserID.AccountID, Username).first->second.c_str();
+        Newclient.UserID.Raw = UserID;
 
         // Check if the client is blocked.
-        for (const auto &Relation : Social::Relations::Get())
+        for (const auto &Relation : Social::Relationships::All())
         {
-            if (Social::Relationflags_t{ Relation->Flags }.isBlocked) [[unlikely]]
+            if (Relation->UserID == Newclient.UserID.AccountID) [[unlikely]]
             {
-                if (Relation->AccountID == Newclient.AccountID.AccountID)
+                if (Relation->Flags.isBlocked) [[unlikely]]
                 {
                     Backend::Blockclient(NodeID);
                     return;

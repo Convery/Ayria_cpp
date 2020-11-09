@@ -21,16 +21,6 @@ namespace Userinfo
 
 namespace Clientinfo
 {
-    #pragma pack(push, 1)
-    struct Client_t
-    {
-        AccountID_t AccountID;
-        uint32_t NetworkID; // Ephemeral identifier.
-        const char *B64Publickey;
-        const char8_t *Username;
-    };
-    #pragma pack(pop)
-
     // Client information.
     const Client_t *getNetworkclient(uint32_t NetworkID);
     std::vector<const Client_t *> getNetworkclients();
@@ -50,9 +40,9 @@ namespace Clientinfo
         {
             Array.push_back(JSON::Object_t(
             {
-                { "AccountID", Client->AccountID.Raw },
-                { "Username", Client->Username },
-                { "Sharedkey", Client->B64Publickey }
+                { "Sharedkey", Client->B64Sharedkey },
+                { "UserID", Client->UserID.Raw },
+                { "Username", Client->Username }
             }));
         }
 

@@ -93,9 +93,9 @@ namespace Userinfo
     std::string __cdecl Accountinfo(const char *)
     {
         JSON::Object_t Object;
-        Object["Locale"] = Account.Locale;
         Object["Privatekey"] = Privatekey;
-        Object["AccountID"] = Account.ID.Raw;
+        Object["Locale"] = Account.Locale;
+        Object["UserID"] = Account.ID.Raw;
         Object["Username"] = Account.Username;
 
         return JSON::Dump(Object);
@@ -107,7 +107,7 @@ namespace Userinfo
         JSON::Object_t Object;
         Object["Sharedkey"] = Sharedkey;
         Object["Locale"] = Account.Locale;
-        Object["AccountID"] = Account.ID.Raw;
+        Object["UserID"] = Account.ID.Raw;
         Object["Username"] = Account.Username;
 
         Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), JSON::Dump(Object));
@@ -158,7 +158,7 @@ namespace Userinfo
 
         // Set the account from disk-data for offline sessions.
         const auto Object = JSON::Parse(FS::Readfile<char>("./Ayria/Clientinfo.json"));
-        Account.ID.AccountID = Object.value("AccountID", uint32_t(0xDEADC0DE));
+        Account.ID.AccountID = Object.value("UserID", static_cast<uint32_t>(0xDEADC0DE));
         Account.Username = Object.value("Username", u8"Ayria"s);
         Account.Locale = Object.value("Locale", u8"English"s);
 

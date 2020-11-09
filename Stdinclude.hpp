@@ -20,6 +20,7 @@
 #include <functional>
 #include <algorithm>
 #include <execution>
+#include <optional>
 #include <cassert>
 #include <cstdint>
 #include <numbers>
@@ -88,45 +89,52 @@ using namespace std::literals;
 #include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
 
-// Ayria modules used throughout the projects.
+// Ayria module used throughout the projects.
 // Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
     HMODULE Modulehandle{};
+
+    // For use with the APIs.
+    typedef union
+    {
+        uint64_t Raw;
+        struct
+        {
+            uint32_t AccountID;
+            uint16_t Creationdate;
+            uint8_t Accountflags;
+            uint8_t Stateflags;
+        };
+    } AyriaID_t;
     typedef union
     {
         uint8_t Raw;
         struct
         {
             uint8_t
-                isModerator : 1,
-                isPrivate : 1,
                 isAdmin : 1,
-                MAX : 1;
+                isGroup : 1,
+                isServer : 1,
+                isPrivate : 1,
+                isModerator : 1,
+                AYA_RESERVED1 : 1,
+                AYA_RESERVED2 : 1,
+                AYA_RESERVED3 : 1;
         };
-    } Securityflags_t;
+    } Accountflags_t;
     typedef union
     {
-        uint64_t Raw;
+        uint8_t Raw;
         struct
         {
-            // Security flags are only set by the server.
-            Securityflags_t Accountsecurity;
-            uint8_t Internal;
-            union
-            {
-                uint16_t Creationdate;
-                struct
-                {
-                    uint16_t
-                        Year : 8,
-                        Month : 4,
-                        Day : 4;
-                };
-            };
-            uint32_t AccountID;
+            uint8_t
+                isIngame : 1,
+                isHosting : 1,
+
+                MAX : 1;
         };
-    } AccountID_t;
+    } Stateflags_t;
 
     // Create a functionID from the name of the service.
     static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };

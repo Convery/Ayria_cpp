@@ -140,8 +140,10 @@ namespace JSON
         }
         bool empty() const
         {
-            if (Type != Object) return true;
-            return asPtr(Object_t)->empty();
+            if (Type == String) return asPtr(std::u8string)->empty();
+            if (Type == Object) return asPtr(Object_t)->empty();
+            if (Type == Array) return asPtr(Array_t)->empty();
+            return true;
         }
 
         //

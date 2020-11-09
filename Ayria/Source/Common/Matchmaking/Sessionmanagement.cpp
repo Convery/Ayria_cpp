@@ -58,7 +58,7 @@ namespace Matchmaking
     void __cdecl LANUpdatehandler(uint32_t NodeID, const char *JSONString)
     {
         const auto Client = Clientinfo::getNetworkclient(NodeID);
-        if (!Client || Client->AccountID.Raw == 0 || !Client->B64Publickey) [[unlikely]]
+        if (!Client || Client->UserID.Raw == 0 || !Client->B64Sharedkey) [[unlikely]]
             return; // WTF?
 
         const auto Request = JSON::Parse(JSONString);
@@ -75,7 +75,7 @@ namespace Matchmaking
         if (Session.JSONData.empty()) return;
 
         // Session-data has been modified or damaged.
-        if (!PK_RSA::Verifysignature(Session.JSONData, Session.Signature, Base64::Decode(Client->B64Publickey)))
+        if (!PK_RSA::Verifysignature(Session.JSONData, Session.Signature, Base64::Decode(Client->B64Sharedkey)))
             return;
 
         std::erase_if(LANSessions, [&](const auto &Item)
