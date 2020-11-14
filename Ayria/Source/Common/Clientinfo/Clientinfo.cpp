@@ -15,22 +15,30 @@ namespace Clientinfo
     bool hasDirtyclients{ true };
 
     // Client information.
-    bool isOnline(uint32_t ClientID)
+    bool isOnline(AyriaID_t ClientID)
+    {
+        return isOnline(ClientID.AccountID);
+    }
+    bool isOnline(uint32_t AccountID)
     {
         if (std::any_of(std::execution::par_unseq, LANClients.begin(), LANClients.end(),
-            [ClientID](const Client_t &Client) { return ClientID == Client.UserID.AccountID; }))
+            [AccountID](const Client_t &Client) { return AccountID == Client.UserID.AccountID; }))
             return true;
 
         if (std::any_of(std::execution::par_unseq, WANClients.begin(), WANClients.end(),
-            [ClientID](const Client_t &Client) { return ClientID == Client.UserID.AccountID; }))
+            [AccountID](const Client_t &Client) { return AccountID == Client.UserID.AccountID; }))
             return true;
 
         return false;
     }
-    const Client_t *getClient(uint32_t ClientID)
+    const Client_t *getClient(AyriaID_t ClientID)
+    {
+        return getClient(ClientID.AccountID);
+    }
+    const Client_t *getClient(uint32_t AccountID)
     {
         for (const auto &Client : getNetworkclients())
-            if (Client->UserID.AccountID == ClientID)
+            if (Client->UserID.AccountID == AccountID)
                 return Client;
 
         return nullptr;

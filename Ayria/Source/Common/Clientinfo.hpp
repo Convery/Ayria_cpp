@@ -24,8 +24,10 @@ namespace Clientinfo
     // Client information.
     const Client_t *getNetworkclient(uint32_t NetworkID);
     std::vector<const Client_t *> getNetworkclients();
-    const Client_t *getClient(uint32_t ClientID);
-    bool isOnline(uint32_t ClientID);
+    const Client_t *getClient(AyriaID_t ClientID);
+    const Client_t *getClient(uint32_t AccountID);
+    bool isOnline(AyriaID_t ClientID);
+    bool isOnline(uint32_t AccountID);
     void Initialize();
 
     // JSON API.
