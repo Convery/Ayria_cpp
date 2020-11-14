@@ -11,10 +11,9 @@ namespace Social::Messages
 {
     static std::vector<Message_t> Grouppending, Publicpending, Privatepending;
     static std::vector<Message_t> Usermessages, Groupmessages;
-    static std::vector<const Message_t *> Allmessages;
-    bool hasDirtymessages{ true };
 
-    static JSON::Object_t toObject(const Message_t &Message)
+    // Helpers.
+    JSON::Object_t toObject(const Message_t &Message)
     {
         return JSON::Object_t({
             { "Timestamp", Message.Timestamp },
@@ -23,7 +22,7 @@ namespace Social::Messages
             { "Message", Message.Message}
             });
     }
-    static Message_t toMessage(const JSON::Value_t &Object)
+    Message_t toMessage(const JSON::Value_t &Object)
     {
         Message_t Newmessage;
         Newmessage.Message = Object.value("Message", std::u8string());
@@ -33,70 +32,70 @@ namespace Social::Messages
         return Newmessage;
     }
 
-    namespace Read
+    // std::optional was being a pain on MSVC, so pointers it is.
+    std::vector<const Message_t *> Read(const std::pair<uint32_t, uint32_t> *Timeframe,
+        const std::vector<uint64_t> *Source,
+        const uint64_t *GroupID)
     {
-        std::vector<const Message_t *> All()
+        // Apparently this mess is easier for the compiler to reason about..
+        #pragma region Avert_thine_eyes
+
+        const auto byTime = [Start = Timeframe->first, Stop = Timeframe->second](const auto &Item) -> bool
         {
-            if (!hasDirtymessages) [[likely]]
-                return Allmessages;
-
-            Allmessages.clear();
-            Allmessages.reserve(Usermessages.size() + Groupmessages.size());
-
-            for (auto it = Usermessages.cbegin(); it != Usermessages.cend(); ++it)
-                Allmessages.push_back(&*it);
-
-            for (auto it = Groupmessages.cbegin(); it != Groupmessages.cend(); ++it)
-                Allmessages.push_back(&*it);
-
-            hasDirtymessages = false;
-            return Allmessages;
-        }
-        std::vector<const Message_t *> New(uint32_t Lasttime)
+            return Item.Timestamp < Start || Item.Timestamp > Stop;
+        };
+        const auto byGroup = [ID = *GroupID](const auto &Item) -> bool
         {
-            auto Messages = All();
-            std::erase_if(Messages, [Lasttime](const Message_t *Message) { return Message->Timestamp <= Lasttime; });
-            return Messages;
-        }
-        std::vector<const Message_t *> Filtered(std::optional<std::pair<uint32_t, uint32_t>> Timeframe,
-            std::optional<std::vector<uint32_t>> Source,
-            std::optional<AyriaID_t> GroupID)
+            return Item.Target.Raw == ID;
+        };
+        const auto bySender = [Source](const auto &Item) -> bool
         {
-            auto Messages = All();
-
-            if (Timeframe.has_value())
+            return std::ranges::any_of(*Source, [ID = Item.Target](const auto &lItem)
             {
-                const auto &[Start, Stop] = Timeframe.value();
-                std::erase_if(Messages, [Start](const Message_t *Message) { return Message->Timestamp <= Start; });
-                std::erase_if(Messages, [Stop](const Message_t *Message) { return Message->Timestamp >= Stop; });
+                return lItem == ID.Raw;
+            });
+        };
+        const auto toVector = []<typename T>(T View)
+        {
+            std::vector<const std::ranges::range_value_t<T> *> Vec;
+
+            if constexpr (std::ranges::sized_range<T>)
+            {
+                Vec.reserve(std::ranges::size(View));
             }
 
-            if (GroupID.has_value())
-            {
-                const auto ID = GroupID.value();
-                std::erase_if(Messages, [ID](const Message_t *Message) { return Message->Target.Raw != ID.Raw; });
-            }
+            for (auto it = View.begin(); it != View.end(); ++it)
+                Vec.push_back(&*it);
 
-            if (Source.has_value())
-            {
-                for (const auto &ID : Source.value())
-                {
-                    std::erase_if(Messages, [ID](const Message_t *Message) { return Message->Source.AccountID != ID; });
-                }
-            }
+            return Vec;
+        };
 
-            return Messages;
+        if (GroupID) [[unlikely]]
+        {
+            if (!Timeframe) return toVector(Groupmessages | std::views::filter(byGroup));
+            return toVector(Groupmessages | std::views::filter(byGroup) | std::views::filter(byTime));
         }
+
+        if (Source) [[likely]]
+        {
+            if (!Timeframe) return toVector(Usermessages | std::views::filter(bySender));
+            return toVector(Usermessages | std::views::filter(bySender) | std::views::filter(byTime));
+        }
+
+        if (!Timeframe) return toVector(Usermessages | std::views::filter([](const auto &) { return true; }));
+        return toVector(Usermessages | std::views::filter(byTime));
+        #pragma endregion
     }
+
     namespace Send
     {
-        void toGroup(uint32_t GroupID, std::u8string_view Message)
+        void toGroup(AyriaID_t GroupID, std::u8string_view Message)
         {
-            const Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID.Raw, GroupID, Message.data() };
+            const Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID, GroupID, Message.data() };
 
             const auto Memberships = Groups::getSubscriptions();
             if (std::any_of(Memberships.begin(), Memberships.end(),
-                [&](const AyriaID_t &ID) { return ID.AccountID == GroupID; }))
+            [&](const AyriaID_t &ID) { return ID.Raw == GroupID.Raw; })) [[likely]]
             {
                 Backend::Sendmessage(Hash::FNV1_32("Groupmessage"), JSON::Dump(toObject(lMessage)));
             }
@@ -105,11 +104,11 @@ namespace Social::Messages
                 Grouppending.push_back(lMessage);
             }
         }
-        void toClient(uint32_t ClientID, std::u8string_view Message)
+        void toClient(AyriaID_t ClientID, std::u8string_view Message)
         {
-            const Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID.Raw, ClientID, Message.data() };
+            const Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID, ClientID, Message.data() };
 
-            if (Clientinfo::isOnline(ClientID))
+            if (Clientinfo::isOnline(ClientID.AccountID)) [[likely]]
             {
                 Backend::Sendmessage(Hash::FNV1_32("Publicmessage"), JSON::Dump(toObject(lMessage)));
             }
@@ -118,13 +117,13 @@ namespace Social::Messages
                 Publicpending.push_back(lMessage);
             }
         }
-        void toClientencrypted(uint32_t ClientID, std::u8string_view Message)
+        void toClientencrypted(AyriaID_t ClientID, std::u8string_view Message)
         {
-            Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID.Raw, ClientID, Message.data() };
+            Message_t lMessage{ uint32_t(time(NULL)), Userinfo::getAccount()->ID, ClientID, Message.data() };
 
-            if (const auto Client = Clientinfo::getClient(ClientID))
+            if (const auto Client = Clientinfo::getClient(ClientID.AccountID)) [[likely]]
             {
-                if (Client->B64Sharedkey)
+                if (Client->B64Sharedkey) [[likely]]
                 {
                     lMessage.Message = Encoding::toUTF8(PK_RSA::Encrypt(Message, Base64::Decode(Client->B64Sharedkey)));
                     Backend::Sendmessage(Hash::FNV1_32("Privatemessage"), JSON::Dump(toObject(lMessage)));
@@ -137,8 +136,61 @@ namespace Social::Messages
         }
     }
 
+    // Try to send messages.
+    static void __cdecl Processpending()
+    {
+        // No work needed. Yey.
+        if (Grouppending.empty() && Publicpending.empty() && Privatepending.empty()) [[likely]]
+            return;
+
+        if (!Grouppending.empty())
+        {
+            const auto Memberships = Groups::getSubscriptions();
+            std::erase_if(Grouppending, [&Memberships](const auto &Message)
+            {
+                if (std::any_of(Memberships.begin(), Memberships.end(),
+                [&](const AyriaID_t &ID) { return ID.Raw == Message.Target.Raw; })) [[unlikely]]
+                {
+                    Backend::Sendmessage(Hash::FNV1_32("Groupmessage"), JSON::Dump(toObject(Message)));
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        if (!Publicpending.empty())
+        {
+            std::erase_if(Publicpending, [](const auto &Message)
+            {
+                if (Clientinfo::isOnline(Message.Target.AccountID)) [[unlikely]]
+                {
+                    Backend::Sendmessage(Hash::FNV1_32("Publicmessage"), JSON::Dump(toObject(Message)));
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        if (!Privatepending.empty())
+        {
+            std::erase_if(Publicpending, [](auto &Message)
+            {
+                if (const auto Client = Clientinfo::getClient(Message.Target.AccountID)) [[unlikely]]
+                {
+                    if (Client->B64Sharedkey) [[likely]]
+                    {
+                        Message.Message = Encoding::toUTF8(PK_RSA::Encrypt(Message.Message, Base64::Decode(Client->B64Sharedkey)));
+                        Backend::Sendmessage(Hash::FNV1_32("Privatemessage"), JSON::Dump(toObject(Message)));
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
+    }
+
     // API-handlers.
-    static void __cdecl Grouphandler(uint32_t NodeID, const char *JSONString)
+    static void __cdecl Grouphandler(uint32_t, const char *JSONString)
     {
         const auto Message = toMessage(JSON::Parse(JSONString));
         const auto Memberships = Groups::getSubscriptions();
@@ -147,10 +199,9 @@ namespace Social::Messages
             [&](const AyriaID_t &ID) { return ID.Raw== Message.Target.Raw; }))
         {
             Groupmessages.push_back(Message);
-            hasDirtymessages = true;
         }
     }
-    static void __cdecl Publichandler(uint32_t NodeID, const char *JSONString)
+    static void __cdecl Publichandler(uint32_t, const char *JSONString)
     {
         const auto Message = toMessage(JSON::Parse(JSONString));
 
@@ -158,9 +209,8 @@ namespace Social::Messages
             return;
 
         Usermessages.push_back(Message);
-        hasDirtymessages = true;
     }
-    static void __cdecl Privatehandler(uint32_t NodeID, const char *JSONString)
+    static void __cdecl Privatehandler(uint32_t, const char *JSONString)
     {
         auto Message = toMessage(JSON::Parse(JSONString));
 
@@ -170,7 +220,6 @@ namespace Social::Messages
         const auto PK = Base64::Decode(Userinfo::getB64Privatekey());
         Message.Message = Encoding::toUTF8(PK_RSA::Decrypt(Message.Message, PK));
         Usermessages.push_back(Message);
-        hasDirtymessages = true;
     }
 
     // Add the message-handlers and load messages from disk.
@@ -219,10 +268,10 @@ namespace Social::Messages
         {
             // No work needed. Yey.
             if (Grouppending.empty() && Publicpending.empty() && Privatepending.empty())
-                {
-                    std::remove("./Ayria/Messagequeue.json");
-                    return;
-                }
+            {
+                std::remove("./Ayria/Messagequeue.json");
+                return;
+            }
 
             JSON::Object_t Pending;
             if (!Grouppending.empty())
@@ -260,5 +309,8 @@ namespace Social::Messages
         Backend::Registermessagehandler(Hash::FNV1_32("Groupmessage"), Grouphandler);
         Backend::Registermessagehandler(Hash::FNV1_32("Publicmessage"), Publichandler);
         Backend::Registermessagehandler(Hash::FNV1_32("Privatemessage"), Privatehandler);
+
+        // Periodically try to send any pending messages.
+        Backend::Enqueuetask(30000, Processpending);
     }
 }
