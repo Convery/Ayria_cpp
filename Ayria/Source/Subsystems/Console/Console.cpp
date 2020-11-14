@@ -16,7 +16,7 @@ namespace Console
     #pragma region Consoleoutput
     Spinlock Writelock;
     constexpr size_t Logsize = 256;
-    std::array<Logline_t, Logsize> Rawbuffer;
+    std::array<Logline_t, Logsize> Rawbuffer{};
     nonstd::ring_span<Logline_t> Consolelog { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
 
     // Threadsafe injection of strings into the global log.

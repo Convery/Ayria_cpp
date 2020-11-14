@@ -280,7 +280,6 @@ namespace Console
                 if (Lastmessage != Hash) [[unlikely]]
                 {
                     ++Outputarea::Eventcount;
-                    ++Inputarea::Eventcount;
                     Lastmessage = Hash;
                 }
 
