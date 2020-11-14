@@ -11,16 +11,18 @@ namespace Social::Groups
 {
     using Groupinfo_t = struct { std::unordered_set<AyriaID_t, decltype(FNV::Hash), decltype(FNV::Equal)> Members; uint8_t Memberlimit; };
     static std::unordered_map<AyriaID_t, Groupinfo_t, decltype(FNV::Hash), decltype(FNV::Equal)> LANGroups, WANGroups;
-    static Groupinfo_t Localgroup;
+    static std::vector<AyriaID_t> Joinrequests;
+    static Groupinfo_t Localgroup{};
+    static AyriaID_t LocalID{};
 
     // Send an update once in a while.
     static void Sendupdate()
     {
-        if (Localgroup.Members.size() == 0) [[likely]] return;
+        if (LocalID.Raw == 0) [[likely]] return;
 
         const JSON::Object_t Request({
+            { "GroupID", LocalID.Raw },
             { "Memberlimit", Localgroup.Memberlimit },
-            { "GroupID", Userinfo::getAccount()->ID.Raw },
             { "Members", JSON::Array_t(Localgroup.Members.begin(), Localgroup.Members.end()) }
             });
 
@@ -31,23 +33,26 @@ namespace Social::Groups
     {
         // TODO(tcn): Fetch data from a global tracker.
         (void)Memberlimit;
-        return {};
+        return LocalID;
     }
-    void Createlocal(uint8_t Memberlimit)
+    AyriaID_t Createlocal(uint8_t Memberlimit)
     {
         Localgroup = { { Userinfo::getAccount()->ID }, Memberlimit };
+        LocalID = Userinfo::getAccount()->ID;
         Sendupdate();
+        return LocalID;
     }
     void Destroygroup()
     {
         Localgroup.Members.clear();
+        LocalID.Raw = 0;
 
         // TODO(tcn): Notify a remote server.
     }
 
     bool Subscribe(AyriaID_t GroupID)
     {
-        if (((Accountflags_t *)&GroupID.Accountflags)->isGroup)
+        if (Accountflags_t{ .Raw = GroupID.Accountflags }.isGroup)
         {
             if (!LANGroups.contains(GroupID) || LANGroups[GroupID].Memberlimit <= LANGroups[GroupID].Members.size())
                 return false;
@@ -67,7 +72,7 @@ namespace Social::Groups
     }
     bool Unsubscribe(AyriaID_t GroupID)
     {
-        if (((Accountflags_t *)&GroupID.Accountflags)->isGroup)
+        if (Accountflags_t{ .Raw = GroupID.Accountflags }.isGroup)
         {
             if (!LANGroups.contains(GroupID) || LANGroups[GroupID].Memberlimit <= LANGroups[GroupID].Members.size())
                 return false;
@@ -115,30 +120,38 @@ namespace Social::Groups
         return {};
     }
 
-    // Push and
+    // Manage the local group.
+    void addUser(AyriaID_t UserID)
+    {
+        std::erase_if(Joinrequests, [UserID](const auto &ID) { return ID.Raw == UserID.Raw; });
+        Localgroup.Members.insert(UserID);
+        Sendupdate();
+    }
+    void removeUser(AyriaID_t UserID)
+    {
+        Localgroup.Members.erase(UserID);
+        Sendupdate();
+    }
+    const std::vector<AyriaID_t> *getRequests()
+    {
+        return &Joinrequests;
+    }
+
+    // Network messages, TODO(tcn): poll remote servers.
     static void __cdecl Subscriptionhandler(uint32_t NodeID, const char *JSONString)
     {
-        if (Localgroup.Members.size() == 0) [[likely]] return;
+        if (LocalID.Raw == 0) [[likely]] return;
 
         const auto Request = JSON::Parse(JSONString);
-        const auto Join = Request.value("Join", bool());
         const auto GroupID = Request.value("GroupID", uint64_t());
 
-        if (GroupID == Userinfo::getAccount()->ID.Raw) [[unlikely]]
+        if (AyriaID_t{ .Raw = GroupID }.AccountID == Userinfo::getAccount()->ID.AccountID) [[unlikely]]
         {
             if (const auto Client = Clientinfo::getNetworkclient(NodeID)) [[likely]]
             {
-                if (Join)
-                {
-                    Localgroup.Members.insert(Client->UserID);
-                }
-                else
-                {
-                    Localgroup.Members.erase(Client->UserID);
-                }
+                if (!Request.value("Join", false)) removeUser(Client->UserID);
+                else Joinrequests.push_back(Client->UserID);
             }
-
-            Sendupdate();
         }
     }
     static void __cdecl Updatehandler(uint32_t NodeID, const char *JSONString)
