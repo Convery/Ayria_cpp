@@ -28,7 +28,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Force static runtime, warnings, and override default flags.
     foreach(Flag
-            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO
             CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE)
         string(REGEX REPLACE "/W[0-4]" "/W4" ${Flag} "${${Flag}}")
         string(REPLACE "/GR " "/GR- " ${Flag} "${${Flag}}")
@@ -70,7 +70,7 @@ add_subdirectory(Utilities)
 add_subdirectory(Ayria)
 add_subdirectory(Injector)
 add_subdirectory(Localnetworking)
-add_subdirectory(Platformwrapper)
-
-# Examples.
+#add_subdirectory(Platformwrapper)
+#
+## Examples.
 add_subdirectory(Plugintemplate)
