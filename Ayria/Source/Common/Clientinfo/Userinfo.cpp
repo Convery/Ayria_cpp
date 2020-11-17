@@ -157,12 +157,15 @@ namespace Userinfo
         }
 
         // Set the account from disk-data for offline sessions.
-        const auto Object = JSON::Parse(FS::Readfile<char>("./Ayria/Clientinfo.json"));
-        Account.ID.AccountID = Object.value("UserID", static_cast<uint32_t>(0xDEADC0DE));
+        const auto Object = JSON::Parse(FS::Readfile<char>("./Ayria/Config.json"));
+        Account.ID.AccountID = Object.value("UserID", uint32_t(0xDEADC0DE));
         Account.Username = Object.value("Username", u8"Ayria"s);
         Account.Locale = Object.value("Locale", u8"English"s);
 
         // TODO(tcn): If we are logged in, get global account-data.
+
+        // Create a directory for the client.
+        std::filesystem::create_directories("./Ayria/Storage/" + va("%08X", Account.ID.AccountID));
 
         // Register a background event.
         Backend::Enqueuetask(5000, Sendclientinfo);
