@@ -105,19 +105,19 @@ namespace Hash
     }
 
     // Wrappers for runtime hashing of strings, and C++ 20 compile-time std::strings.
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string<T> &String)
     {
         return FNV1_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const std::basic_string<T> &String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const std::basic_string<T> &String)
     {
         return FNV1a_32(String.data(), String.size() & 0xFFFFFFFF);
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const std::basic_string<T> String)
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const std::basic_string<T> &String)
     {
         return FNV1a_64(String.data(), String.size());
     }
@@ -140,9 +140,9 @@ namespace Hash
 
     // Wrappers for random types.
     template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(T Value) { return FNV1_32(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_64(T Value) { return FNV1_64(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(T Value) { return FNV1_64(&Value, sizeof(Value)); }
     template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(T Value) { return FNV1a_32(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_64(T Value) { return FNV1a_64(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(T Value) { return FNV1a_64(&Value, sizeof(Value)); }
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.
