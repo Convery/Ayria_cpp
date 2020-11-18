@@ -20,21 +20,23 @@
 #include <functional>
 #include <algorithm>
 #include <execution>
-#include <optional>
 #include <cassert>
 #include <cstdint>
 #include <numbers>
 #include <atomic>
+#include <bitset>
 #include <chrono>
 #include <cstdio>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <thread>
 #include <vector>
-#include <tuple>
 #include <array>
 #include <mutex>
 #include <queue>
+#include <tuple>
+#include <span>
 #include <any>
 
 // Platform-specific libraries.
@@ -71,6 +73,7 @@ using namespace std::literals;
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
+#include <Utilities/Crypto/WWHash.hpp>
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
@@ -113,14 +116,14 @@ struct Ayriamodule_t
         struct
         {
             uint8_t
+                isClan : 1,
                 isAdmin : 1,
                 isGroup : 1,
                 isServer : 1,
                 isPrivate : 1,
                 isModerator : 1,
                 AYA_RESERVED1 : 1,
-                AYA_RESERVED2 : 1,
-                AYA_RESERVED3 : 1;
+                AYA_RESERVED2 : 1;
         };
     } Accountflags_t;
     typedef union

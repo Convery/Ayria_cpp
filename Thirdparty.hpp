@@ -10,7 +10,7 @@
 #pragma once
 #pragma warning(push, 0)
 
-// Nlhohmann modern JSON parsing library.
+// NLhohmann modern JSON parsing library.
 #if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
 #define HAS_NLOHMANN
@@ -68,11 +68,23 @@
 #include <vectorclass/vectorclass.h>
 #endif
 
+// Alternative JSON parser.
 #if __has_include(<simdjson.h>)
 #define SIMDJSON_NO_PORTABILITY_WARNING
 #define HAS_SIMDJSON
 #include <simdjson.h>
 #pragma comment(lib, "simdjson.lib")
 #endif
+
+// NOTE(tcn): Removed due to libtorrent adding 12MB in release mode.
+//#if __has_include(<libtorrent/session.hpp>)
+//#define HAS_LIBTORRENT
+//#define TORRENT_NO_DEPRECATE
+//#define TORRENT_USE_OPENSSL
+//
+//#pragma comment(lib, "torrent-rasterbar.lib")
+//#pragma comment(lib, "Iphlpapi.lib")
+//#pragma comment(lib, "Dbghelp.lib")
+//#endif
 
 #pragma warning(pop)
