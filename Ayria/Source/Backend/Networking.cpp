@@ -21,13 +21,30 @@ namespace Backend
     {
         std::string Encoded;
 
-        // Pre-allocate storage for the message rather than trusting STL.
-        Encoded.reserve((((JSONString.size() + 2) / 3) * 4) + sizeof(uint64_t));
-
         // Windows does not like partial messages, so prefix the buffer with ID and type.
-        Encoded.append((char *)&RandomID, sizeof(RandomID));
-        Encoded.append((char *)&Messagetype, sizeof(Messagetype));
-        Encoded.append(Base64::isValid(JSONString) ? JSONString : Base64::Encode(JSONString));
+        if (Base64::isValid(JSONString)) [[unlikely]]
+        {
+            const auto Size = LZ4_compressBound(JSONString.size());
+
+            Encoded.reserve(Size + sizeof(uint64_t));
+            Encoded.append((char *)&RandomID, sizeof(RandomID));
+            Encoded.append((char *)&Messagetype, sizeof(Messagetype));
+            Encoded.resize(Size + sizeof(uint64_t));
+
+            LZ4_compress_default(JSONString.data(), Encoded.data() + sizeof(uint64_t), JSONString.size(), Size);
+        }
+        else
+        {
+            const auto String = Base64::Encode(JSONString);
+            const auto Size = LZ4_compressBound(String.size());
+
+            Encoded.reserve(Size + sizeof(uint64_t));
+            Encoded.append((char *)&RandomID, sizeof(RandomID));
+            Encoded.append((char *)&Messagetype, sizeof(Messagetype));
+            Encoded.resize(Size + sizeof(uint64_t));
+
+            LZ4_compress_default(String.data(), Encoded.data() + sizeof(uint64_t), String.size(), Size);
+        }
 
         // Non-blocking send.
         const auto &[Sendersocket, _, Multicast] = Networkgroups[Port];
@@ -112,13 +129,18 @@ namespace Backend
             // Do we even care for this message?
             if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
             {
-                // All messages should be base64.
-                const auto Decoded = Base64::Decode({ Packet->Payload, static_cast<size_t>(Packetlength - sizeof(uint64_t)) });
+                // All messages should be LZ4 compressed.
+                const auto Decodebuffer = std::make_shared<char[]>(Packetlength * 3);
+                const auto Decodesize = LZ4_decompress_safe(Packet->Payload, Decodebuffer.get(), Packetlength - sizeof(uint64_t), Packetlength * 3);
+                if (Decodesize < 0) [[unlikely]] continue;
+
+                // All messages should be base64, inplace decode zero-terminates.
+                const auto Decoded = Base64::Decode_inplace(Decodebuffer.get(), Decodesize);
 
                 // May have multiple listeners for the same messageID.
                 for (const auto Callback : Result->second)
                 {
-                    Callback(Packet->RandomID, Decoded.c_str());
+                    Callback(Packet->RandomID, Decoded.data());
                 }
             }
         }
