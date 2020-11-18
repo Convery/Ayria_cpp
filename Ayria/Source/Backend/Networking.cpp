@@ -127,7 +127,7 @@ namespace Backend
             if (Blacklist.contains(Packet->RandomID)) [[unlikely]] continue;
 
             // Do we even care for this message?
-            if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end())
+            if (const auto Result = Callbacks.find(Packet->Messagetype); Result != Callbacks.end()) [[likely]]
             {
                 // All messages should be LZ4 compressed.
                 const auto Decodebuffer = std::make_shared<char[]>(Packetlength * 3);

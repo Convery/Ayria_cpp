@@ -85,6 +85,31 @@ namespace Base64
         return Result;
     }
 
+    // No need for extra allocations.
+    [[nodiscard]] inline std::string_view Decode_inplace(char *Input, size_t Length)
+    {
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (size_t i = 0; i < Length; ++i)
+        {
+            if (Input[i] == '=') continue;
+
+            Accumulator = (Accumulator << 6) | Internal::Reversetable[static_cast<uint8_t>(Input[i])];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Input[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
+            }
+        }
+
+        Input[Outputposition] = '\0';
+        return { Input, Outputposition };
+    }
+
     [[nodiscard]] inline Blob Encode(Blob_view Input)
     {
         Blob Result((((Input.size() + 2) / 3) * 4), '=');
