@@ -11,8 +11,10 @@ namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
     std::unordered_map<std::string_view, void *> Originalfunctions;
+    std::unordered_map<size_t, sockaddr_in> Directedconnections;
     std::unordered_map<size_t, sockaddr_in> Connections;
     std::unordered_map<size_t, sockaddr_in> Bindings;
+    std::unordered_set<size_t> Datagramsockets;
 
     // Utility functionality.
     inline std::string getAddress(const struct sockaddr *Sockaddr)
@@ -34,7 +36,17 @@ namespace Winsock
         if (const auto Proxyserver = Localnetworking::getProxyserver((sockaddr_in *)Name))
         {
             Debugprint("Connecting to proxied server: "s + Proxyserver->Hostname);
-            Localnetworking::Connectserver(Socket, Proxyserver->Instance);
+
+            // For some edge-cases devs call connect on a datagram socket and we need to proxy.
+            if (Datagramsockets.contains(Socket)) [[unlikely]]
+            {
+                sendto(Socket, "", 0, NULL, Name, Namelength);
+                Directedconnections[Socket] = *(sockaddr_in *)Name;
+            }
+            else
+            {
+                Localnetworking::Connectserver(Socket, Proxyserver->Instance);
+            }
             return 0;
         }
 
@@ -74,7 +86,7 @@ namespace Winsock
         // We don't allow binding to internal addresses, just localhost.
         if (0 == std::memcmp(Readableaddress.c_str(), "192.168.", 8) || 0 == std::memcmp(Readableaddress.c_str(), "10.", 3))
         {
-            if(Name->sa_family == AF_INET) ((sockaddr_in *)Name)->sin_addr.s_addr = INADDR_LOOPBACK;
+            if (Name->sa_family == AF_INET) ((sockaddr_in *)Name)->sin_addr.s_addr = INADDR_LOOPBACK;
         }
 
         const auto Result = Calloriginal(bind)(Socket, Name, Namelength);
@@ -124,8 +136,8 @@ namespace Winsock
                 //if (Bindings[Socket].sin_port != Item.second.sin_port) continue;
                 if (Bindings[Socket].sin_addr.s_addr && !FNV::Equal(Bindings[Socket].sin_addr, Item.second.sin_addr)) continue;
 
-                *Fromlength = sizeof(SOCKADDR_IN);
-                *((sockaddr_in *)From) = Item.second;
+                if (Fromlength) *Fromlength = sizeof(SOCKADDR_IN);
+                if (From)*((sockaddr_in *)From) = Item.second;
                 return recv(Item.first, Buffer, Length, 0);
             }
         }
@@ -170,25 +182,53 @@ namespace Winsock
         return lResult;
     }
 
-    // For debugging only.
-    #if !defined(NDEBUG)
+    // Hackery to support directed connections.
+    int __stdcall Send(size_t Socket, const char *Buffer, int Length, int Flags)
+    {
+        if (!Datagramsockets.contains(Socket)) [[likely]] return Calloriginal(send)(Socket, Buffer, Length, Flags);
+        return Sendto(Socket, Buffer, Length, Flags, (sockaddr *)&Directedconnections[Socket], sizeof(sockaddr_in));
+    }
+    int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
+    {
+        if (!Datagramsockets.contains(Socket)) [[likely]] return Calloriginal(recv)(Socket, Buffer, Length, Flags);
+        return Receivefrom(Socket, Buffer, Length, Flags, nullptr, nullptr);
+    }
+
+    // Mainly for debug-logging.
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
         const auto Result = Calloriginal(socket)(Family, Type, Protocol);
 
         Debugprint(va("Creating a %s socket for %s over %s protocol (ID 0x%X)",
-                   [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }().c_str(),
-                   [&]() { if (Type == SOCK_STREAM) return "streaming"s; if (Type == SOCK_DGRAM) return "datagrams"s; return va("%u", Type); }().c_str(),
-                   [&]()
+        [&]()
         {
-            switch (Protocol)
-            {
-                // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
-                case IPPROTO_IP: return "Any"s; case IPPROTO_ICMP: return "ICMP"s; case IPPROTO_TCP: return "TCP"s; case IPPROTO_UDP: return "UDP"s;
-                case /*NSPROTO_IPX*/ 1000: return "IPX"s; case /*NSPROTO_SPX*/ 1256: return "SPX"s; case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
-                default: return va("%u", Protocol);
-            }
-        }().c_str(), Result));
+            if (Family == AF_INET) return "IPv4"s;
+            if (Family == AF_INET6) return "IPv6"s;
+            if (Family == AF_IPX) return "IPX "s;
+            return va("%u", Family);
+        }().c_str(),
+        [&]()
+        {
+            if (Type == SOCK_STREAM) return "streaming"s;
+            if (Type == SOCK_DGRAM) return "datagrams"s;
+            return va("%u", Type);
+        }().c_str(),
+        [&]()
+        {
+             switch (Protocol)
+             {
+                 // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
+                 case IPPROTO_IP: return "Any"s;
+                 case IPPROTO_ICMP: return "ICMP"s;
+                 case IPPROTO_TCP: return "TCP"s;
+                 case IPPROTO_UDP: return "UDP"s;
+                 case /*NSPROTO_IPX*/ 1000: return "IPX"s;
+                 case /*NSPROTO_SPX*/ 1256: return "SPX"s;
+                 case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
+                 default: return va("%u", Protocol);
+             }
+        }().c_str(),
+        Result));
 
         /*
             TODO(tcn):
@@ -197,9 +237,11 @@ namespace Winsock
             It was a very popular protocol in older games for LAN-play.
         */
 
+        // For some edge-cases devs call connect on a datagram socket and we need to track that.
+        if (Type == SOCK_DGRAM) Datagramsockets.insert(Result);
+
         return Result;
     }
-    #endif
 }
 
 namespace Localnetworking
@@ -232,12 +274,10 @@ namespace Localnetworking
         Hook("getaddrinfo", (void *)Winsock::Getaddrinfo);
         Hook("connect", (void *)Winsock::Connectsocket);
         Hook("recvfrom", (void *)Winsock::Receivefrom);
+        Hook("socket", (void *)Winsock::Createsocket);
         Hook("sendto", (void *)Winsock::Sendto);
+        Hook("recv", (void *)Winsock::Receive);
+        Hook("send", (void *)Winsock::Send);
         Hook("bind", (void *)Winsock::Bind);
-
-        // For debugging.
-        #if !defined(NDEBUG)
-        Hook("socket", Winsock::Createsocket);
-        #endif
     }
 }

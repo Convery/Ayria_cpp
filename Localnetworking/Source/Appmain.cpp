@@ -105,12 +105,21 @@ namespace Localnetworking
     void Connectserver(size_t Clientsocket, IServer *Serverinstance)
     {
         assert(Serverinstance);
+        size_t Serversocket{};
+
+        // Accept may block.
+        std::thread([&]()
+        {
+            Serversocket = accept(Listensocket, NULL, NULL);
+        }).detach();
 
         SOCKADDR_IN Server{ AF_INET, Backendport, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        while (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
-            if (WSAEWOULDBLOCK != WSAGetLastError()) break;
+        if (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+        {
+            closesocket(Serversocket);
+            return;
+        }
 
-        const auto Serversocket = accept(Listensocket, NULL, NULL);
         if (Serversocket != INVALID_SOCKET)
         {
             Serversockets[Serversocket] = Serverinstance;
