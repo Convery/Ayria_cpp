@@ -28,6 +28,12 @@ namespace Winsock
 
         return Address;
     }
+    inline std::string getPort(const struct sockaddr *Sockaddr)
+    {
+        if (Sockaddr->sa_family == AF_INET)
+            return va("%u", ntohs(((struct sockaddr_in *)Sockaddr)->sin_port));
+        return va("%u", ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port));
+    }
 
     // Connects proxied sockets to the backend.
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
@@ -40,7 +46,6 @@ namespace Winsock
             // For some edge-cases devs call connect on a datagram socket and we need to proxy.
             if (Datagramsockets.contains(Socket)) [[unlikely]]
             {
-                sendto(Socket, "", 0, NULL, Name, Namelength);
                 Directedconnections[Socket] = *(sockaddr_in *)Name;
             }
             else
@@ -56,9 +61,9 @@ namespace Winsock
             // Debugprint may invalidate the last-error, so we had to save it.
             const auto Lasterror = WSAGetLastError();
 
-            // Our own system connects to localhost a lot, so ignore that.
-            if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
-                Debugprint("Failed to connect to: "s + getAddress(Name));
+            // Not actually a failure.
+            if (Lasterror != WSAEWOULDBLOCK)
+                Debugprint("Failed to connect to: "s + getAddress(Name) + ":" + getPort(Name));
 
             WSASetLastError(Lasterror);
             return Result;
@@ -66,7 +71,7 @@ namespace Winsock
 
         // Our own system connects to localhost a lot, so ignore that.
         if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
-            Debugprint("Connected to: "s + getAddress(Name));
+            Debugprint("Connected to: "s + getAddress(Name) + ":" + getPort(Name));
 
         return 0;
     }
