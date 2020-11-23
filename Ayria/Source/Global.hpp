@@ -150,6 +150,6 @@ using Account_t = struct
 
 // Common functionality.
 #include <Common/Social.hpp>
-#include <Common/Fileshare.hpp>
+// #include <Common/Fileshare.hpp> // Deprecated until 0.95
 #include <Common/Clientinfo.hpp>
 #include <Common/Matchmaking.hpp>
