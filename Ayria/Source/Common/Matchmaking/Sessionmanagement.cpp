@@ -52,7 +52,7 @@ namespace Matchmaking
                 { "Sessiondata", Localsession.JSONData },
                 { "Signature", Localsession.Signature }
             });
-            Backend::Sendmessage(Hash::FNV1_32("Sessionupdate"), JSON::Dump(Object), Backend::Matchmakeport);
+            Backend::Sendmessage(Hash::WW32("Sessionupdate"), JSON::Dump(Object), Backend::Matchmakeport);
         }
     }
     void __cdecl LANUpdatehandler(uint32_t NodeID, const char *JSONString)
@@ -89,6 +89,6 @@ namespace Matchmaking
     void Initialize()
     {
         Backend::Enqueuetask(5000, Sessionupdate);
-        Backend::Registermessagehandler(Hash::FNV1_32("Sessionupdate"), LANUpdatehandler);
+        Backend::Registermessagehandler(Hash::WW32("Sessionupdate"), LANUpdatehandler);
     }
 }

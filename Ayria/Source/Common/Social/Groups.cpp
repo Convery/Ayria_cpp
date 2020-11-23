@@ -26,7 +26,7 @@ namespace Social::Groups
             { "Members", JSON::Array_t(Localgroup.Members.begin(), Localgroup.Members.end()) }
             });
 
-        Backend::Sendmessage(Hash::FNV1_32("Localgroup::Update"), JSON::Dump(Request), Backend::Matchmakeport);
+        Backend::Sendmessage(Hash::WW32("Localgroup::Update"), JSON::Dump(Request), Backend::Matchmakeport);
     }
 
     AyriaID_t Createglobal(uint8_t Memberlimit)
@@ -58,7 +58,7 @@ namespace Social::Groups
                 return false;
 
             const JSON::Object_t Request({ { "GroupID", GroupID.Raw }, { "Join", true } });
-            Backend::Sendmessage(Hash::FNV1_32("Localgroup::Subscription"), JSON::Dump(Request), Backend::Matchmakeport);
+            Backend::Sendmessage(Hash::WW32("Localgroup::Subscription"), JSON::Dump(Request), Backend::Matchmakeport);
         }
         else
         {
@@ -78,7 +78,7 @@ namespace Social::Groups
                 return false;
 
             const JSON::Object_t Request({ { "GroupID", GroupID.Raw }, { "Join", false } });
-            Backend::Sendmessage(Hash::FNV1_32("Localgroup::Subscription"), JSON::Dump(Request), Backend::Matchmakeport);
+            Backend::Sendmessage(Hash::WW32("Localgroup::Subscription"), JSON::Dump(Request), Backend::Matchmakeport);
         }
         else
         {
@@ -181,7 +181,7 @@ namespace Social::Groups
         Backend::Enqueuetask(5000, Sendupdate);
 
         // Register message-handlers.
-        Backend::Registermessagehandler(Hash::FNV1_32("Localgroup::Update"), Updatehandler);
-        Backend::Registermessagehandler(Hash::FNV1_32("Localgroup::Subscription"), Subscriptionhandler);
+        Backend::Registermessagehandler(Hash::WW32("Localgroup::Update"), Updatehandler);
+        Backend::Registermessagehandler(Hash::WW32("Localgroup::Subscription"), Subscriptionhandler);
     }
 }

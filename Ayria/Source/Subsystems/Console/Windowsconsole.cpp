@@ -120,7 +120,7 @@ namespace Console
             const auto Currenttime = GetTickCount();
             if (Currenttime > (Lastupdate + 100))
             {
-                const auto Hash = Hash::FNV1_32(Console::getLoglines(1, L"")[0].first);
+                const auto Hash = Hash::WW32(Console::getLoglines(1, L"")[0].first);
 
                 if (Lastmessage != Hash) [[unlikely]]
                 {

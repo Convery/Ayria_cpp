@@ -111,7 +111,7 @@ namespace Clientinfo
     void Initialize()
     {
         // Register the messagehandler.
-        Backend::Registermessagehandler(Hash::FNV1_32("Clientdiscovery"), Discoveryhandler);
+        Backend::Registermessagehandler(Hash::WW32("Clientdiscovery"), Discoveryhandler);
 
         // Register a background event.
         Backend::Enqueuetask(5000, Discoverremote);

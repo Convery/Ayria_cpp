@@ -110,7 +110,7 @@ namespace Userinfo
         Object["UserID"] = Account.ID.Raw;
         Object["Username"] = Account.Username;
 
-        Backend::Sendmessage(Hash::FNV1_32("Clientdiscovery"), JSON::Dump(Object));
+        Backend::Sendmessage(Hash::WW32("Clientdiscovery"), JSON::Dump(Object));
     }
 
     void Initialize()

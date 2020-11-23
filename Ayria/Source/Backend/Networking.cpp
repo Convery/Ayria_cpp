@@ -77,7 +77,7 @@ namespace Backend
         Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
 
         // Make a unique identifier for later.
-        if (!RandomID) RandomID = Hash::FNV1_32(GetTickCount64() ^ Sendersocket);
+        if (!RandomID) RandomID = Hash::WW32(GetTickCount64() ^ Sendersocket);
         Networkgroups[Port] = { Sendersocket, Receiversocket, Multicast };
         FD_SET(Receiversocket, &Activesockets);
 

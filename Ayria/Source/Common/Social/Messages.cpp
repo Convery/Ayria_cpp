@@ -97,7 +97,7 @@ namespace Social::Messages
             if (std::any_of(Memberships.begin(), Memberships.end(),
             [&](const AyriaID_t &ID) { return ID.Raw == GroupID.Raw; })) [[likely]]
             {
-                Backend::Sendmessage(Hash::FNV1_32("Groupmessage"), JSON::Dump(toObject(lMessage)));
+                Backend::Sendmessage(Hash::WW32("Groupmessage"), JSON::Dump(toObject(lMessage)));
             }
             else
             {
@@ -110,7 +110,7 @@ namespace Social::Messages
 
             if (Clientinfo::isOnline(ClientID.AccountID)) [[likely]]
             {
-                Backend::Sendmessage(Hash::FNV1_32("Publicmessage"), JSON::Dump(toObject(lMessage)));
+                Backend::Sendmessage(Hash::WW32("Publicmessage"), JSON::Dump(toObject(lMessage)));
             }
             else
             {
@@ -126,7 +126,7 @@ namespace Social::Messages
                 if (Client->B64Sharedkey) [[likely]]
                 {
                     lMessage.Message = Encoding::toUTF8(PK_RSA::Encrypt(Message, Base64::Decode(Client->B64Sharedkey)));
-                    Backend::Sendmessage(Hash::FNV1_32("Privatemessage"), JSON::Dump(toObject(lMessage)));
+                    Backend::Sendmessage(Hash::WW32("Privatemessage"), JSON::Dump(toObject(lMessage)));
                 }
             }
             else
@@ -151,7 +151,7 @@ namespace Social::Messages
                 if (std::any_of(Memberships.begin(), Memberships.end(),
                 [&](const AyriaID_t &ID) { return ID.Raw == Message.Target.Raw; })) [[unlikely]]
                 {
-                    Backend::Sendmessage(Hash::FNV1_32("Groupmessage"), JSON::Dump(toObject(Message)));
+                    Backend::Sendmessage(Hash::WW32("Groupmessage"), JSON::Dump(toObject(Message)));
                     return true;
                 }
                 return false;
@@ -164,7 +164,7 @@ namespace Social::Messages
             {
                 if (Clientinfo::isOnline(Message.Target.AccountID)) [[unlikely]]
                 {
-                    Backend::Sendmessage(Hash::FNV1_32("Publicmessage"), JSON::Dump(toObject(Message)));
+                    Backend::Sendmessage(Hash::WW32("Publicmessage"), JSON::Dump(toObject(Message)));
                     return true;
                 }
                 return false;
@@ -180,7 +180,7 @@ namespace Social::Messages
                     if (Client->B64Sharedkey) [[likely]]
                     {
                         Message.Message = Encoding::toUTF8(PK_RSA::Encrypt(Message.Message, Base64::Decode(Client->B64Sharedkey)));
-                        Backend::Sendmessage(Hash::FNV1_32("Privatemessage"), JSON::Dump(toObject(Message)));
+                        Backend::Sendmessage(Hash::WW32("Privatemessage"), JSON::Dump(toObject(Message)));
                         return true;
                     }
                 }
@@ -306,9 +306,9 @@ namespace Social::Messages
         });
 
         // Register message-handlers.
-        Backend::Registermessagehandler(Hash::FNV1_32("Groupmessage"), Grouphandler);
-        Backend::Registermessagehandler(Hash::FNV1_32("Publicmessage"), Publichandler);
-        Backend::Registermessagehandler(Hash::FNV1_32("Privatemessage"), Privatehandler);
+        Backend::Registermessagehandler(Hash::WW32("Groupmessage"), Grouphandler);
+        Backend::Registermessagehandler(Hash::WW32("Publicmessage"), Publichandler);
+        Backend::Registermessagehandler(Hash::WW32("Privatemessage"), Privatehandler);
 
         // Periodically try to send any pending messages.
         Backend::Enqueuetask(30000, Processpending);

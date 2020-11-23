@@ -17,7 +17,7 @@ namespace API
 
     #define Register(x)                                                                                         \
         void Registerhandler_ ##x(std::string_view Function, Functionhandler Handler)                           \
-        { const auto FunctionID = Hash::FNV1_32(Function);                                                      \
+        { const auto FunctionID = Hash::WW32(Function);                                                      \
         Functionnames_ ##x[FunctionID] = Function; Functionhandlers_ ##x[FunctionID] = Handler; }               \
 
     #define Export(x)                                                                                           \

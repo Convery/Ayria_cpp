@@ -140,7 +140,7 @@ struct Ayriamodule_t
     } Stateflags_t;
 
     // Create a functionID from the name of the service.
-    static uint32_t toFunctionID(const char *Name) { return Hash::FNV1_32(Name); };
+    static uint32_t toFunctionID(const char *Name) { return Hash::WW32(Name); };
 
     // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
     void(__cdecl *addConsolemessage)(const void *String, unsigned int Length, unsigned int Colour);
@@ -150,7 +150,7 @@ struct Ayriamodule_t
     // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
     void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
 
-    // FunctionID = FNV1_32("Service name"); ID 0 / Invalid = List all available.
+    // FunctionID = WW32("Service name"); ID 0 / Invalid = List all available.
     const char *(__cdecl *API_Client)(uint32_t FunctionID, const char *JSONString);
     const char *(__cdecl *API_Social)(uint32_t FunctionID, const char *JSONString);
     const char *(__cdecl *API_Network)(uint32_t FunctionID, const char *JSONString);

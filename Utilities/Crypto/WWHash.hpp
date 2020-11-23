@@ -106,6 +106,14 @@ namespace Hash
     {
         return Internal::Wheathash(Input, Length & 0xFFFFFFFF, Internal::_wheatp0);
     }
+    [[nodiscard]] constexpr uint32_t WW32(const void *Input, const size_t Length)
+    {
+        return Internal::Waterhash((char *)Input, Length & 0xFFFFFFFF, Internal::_waterp0);
+    }
+    [[nodiscard]] constexpr uint64_t WW64(const void *Input, const size_t Length)
+    {
+        return Internal::Wheathash((char *)Input, Length & 0xFFFFFFFF, Internal::_wheatp0);
+    }
 
     // Compile-time hashing for null-terminated strings.
     template<size_t N> [[nodiscard]] constexpr uint32_t WW32(char const (&String)[N])
