@@ -26,6 +26,9 @@ namespace Console
     // Fetch a copy of the internal strings.
     std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter);
 
+    // Track the current filter.
+    std::wstring_view getFilter();
+
     // Add a new command to the internal list.
     void addConsolecommand(std::wstring_view Name, Callback_t Callback);
 

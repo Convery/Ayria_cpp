@@ -14,10 +14,12 @@ namespace Console
 
     // Console output.
     #pragma region Consoleoutput
-    Spinlock Writelock;
+    static Spinlock Writelock;
     constexpr size_t Logsize = 256;
-    std::array<Logline_t, Logsize> Rawbuffer{};
-    nonstd::ring_span<Logline_t> Consolelog { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
+    static std::array<Logline_t, Logsize> Rawbuffer{};
+    static nonstd::ring_span<Logline_t> Consolelog
+    { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
+    static std::wstring Currentfilter{};
 
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::wstring &Message, COLORREF Colour)
@@ -88,6 +90,12 @@ namespace Console
         return Result;
     }
 
+    // Track the current filter.
+    std::wstring_view getFilter()
+    {
+        return Currentfilter;
+    }
+
     #pragma endregion
 
     // Console input.
@@ -99,10 +107,11 @@ namespace Console
     {
         int Argc{};
 
-        // Why would you do this? =(
-        if (Commandline.empty() || Commandline[0] == L'\r' || Commandline[0] == L'\n') [[unlikely]]
-            return;
+        // Remove line-break characters.
+        while (Commandline.back() == L'\r' || Commandline.back() == L'\n')
+            Commandline.pop_back();
 
+        // Print the command to the console.
         if (logCommand)
         {
             addConsolemessage(L"> "s + Commandline, Color_t(0xD6, 0xB7, 0x49));
@@ -112,7 +121,6 @@ namespace Console
         if (const auto Argv = CommandLineToArgvW_wine(Commandline.c_str(), &Argc))
         {
             std::wstring Name(Argv[0]);
-            while (Name.back() == L'\r' || Name.back() == L'\n') Name.pop_back();
 
             // Check if we have this command.
             const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
@@ -180,6 +188,14 @@ namespace Console
         };
         addConsolecommand(L"List", List);
         addConsolecommand(L"Help", List);
+
+        static const auto Changefilter = [](int ArgC, wchar_t **ArgV)
+        {
+            if (ArgC == 1) Currentfilter = L"";
+            else Currentfilter = ArgV[1];
+        };
+        addConsolecommand(L"setFilter", Changefilter);
+        addConsolecommand(L"Filter", Changefilter);
     }
 
     // Provide a C-API for external code.

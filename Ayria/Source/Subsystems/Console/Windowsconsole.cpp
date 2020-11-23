@@ -131,7 +131,7 @@ namespace Console
                         std::wstring Concatenated;
                         Lastmessage = Hash;
 
-                        for (const auto &[String, Colour] : Console::getLoglines(999, L""))
+                        for (const auto &[String, Colour] : Console::getLoglines(999, Console::getFilter()))
                         {
                             if (String.empty()) continue;
                             Concatenated += String;

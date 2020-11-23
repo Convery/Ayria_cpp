@@ -45,7 +45,7 @@ namespace Console
                 {
                     // Default font-size should be ~20.
                     const auto Linecount = (This->Size.y - 1) / 20;
-                    const auto Lines = Console::getLoglines(Linecount, L"");
+                    const auto Lines = Console::getLoglines(Linecount, Console::getFilter());
 
                     auto Renderer = Graphics(This->Surface);
                     Renderer.Quad({}, This->Size).Solid(Color_t(39, 38, 35));
