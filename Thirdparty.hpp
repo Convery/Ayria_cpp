@@ -87,4 +87,33 @@
 //#pragma comment(lib, "Dbghelp.lib")
 //#endif
 
+// Googles extensions/alternatives to the STL.
+#if __has_include(<absl/strings/str_join.h>)
+#define HAS_ABSEIL
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
+#include <absl/container/node_hash_map.h>
+#include <absl/container/node_hash_set.h>
+#include <absl/random/random.h>
+#include <absl/strings/str_format.h>
+#include <absl/strings/str_split.h>
+#include <absl/strings/str_cat.h>
+#include <absl/strings/str_join.h>
+#include <absl/strings/strip.h>
+#include <absl/strings/escaping.h>
+#include <absl/synchronization/mutex.h>
+#include <absl/container/inlined_vector.h>
+
+#pragma comment(lib, "absl_base.lib")
+#pragma comment(lib, "absl_city.lib")
+#pragma comment(lib, "absl_hash.lib")
+#pragma comment(lib, "absl_hashtablez_sampler.lib")
+#pragma comment(lib, "absl_raw_hash_set.lib")
+#pragma comment(lib, "absl_str_format_internal.lib")
+#pragma comment(lib, "absl_strings.lib")
+#pragma comment(lib, "absl_synchronization.lib")
+#pragma comment(lib, "absl_raw_logging_internal.lib")
+#else
+#pragma message ("Ayria 0.9 relies on Abseil, remember to update VCPKG.")
+#endif
 #pragma warning(pop)

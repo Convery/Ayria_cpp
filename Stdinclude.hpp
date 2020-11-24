@@ -142,10 +142,11 @@ struct Ayriamodule_t
     // Create a functionID from the name of the service.
     static uint32_t toFunctionID(const char *Name) { return Hash::WW32(Name); };
 
-    // using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
-    void(__cdecl *addConsolemessage)(const void *String, unsigned int Length, unsigned int Colour);
-    void(__cdecl *addConsolecommand)(const void *Name, unsigned int Length, const void *Callback);
-    void(__cdecl *execCommandline)(const void *String, unsigned int Length);
+    // UTF8 escaped ASCII strings.
+    // using Callback_t = void(__cdecl *)(int Argc, const char **Argv);
+    void(__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
+    void(__cdecl *addConsolecommand)(const char *Name, unsigned int Length, const void *Callback);
+    void(__cdecl *execCommandline)(const char *String, unsigned int Length);
 
     // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
     void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);

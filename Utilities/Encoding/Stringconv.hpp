@@ -6,7 +6,7 @@
 
 #pragma once
 #include <cstdint>
-#include "Stringconv.hpp"
+#include <charconv>
 #include "Variadicstring.hpp"
 
 namespace Encoding
@@ -50,14 +50,14 @@ namespace Encoding
             do
             {
                 // 8-bit.
-                if (Codepoint < 0x80)
+                if (Codepoint < 0x80) [[likely]]
                 {
                     Result.push_back(static_cast<uint8_t>(Codepoint));
                     break;
                 }
 
                 // 11-bit.
-                if (Codepoint < 0x800)
+                if (Codepoint < 0x800) [[likely]]
                 {
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x7C0) >> 6) | 0xC0));
                     Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
@@ -113,7 +113,8 @@ namespace Encoding
 
         inline size_t Strlen(std::u8string_view Input)
         {
-            if (isASCII(Input)) return Input.size();
+            if (isASCII(Input)) [[likely]]
+                return Input.size();
 
             size_t Size{};
             for (const auto &Byte : Input)
@@ -183,7 +184,8 @@ namespace Encoding
             Input.remove_prefix(Point + 2);
 
             // U+0000
-            const auto Codepoint = std::strtol((char *)Input.data(), nullptr, 16);
+            Codepoint_t Codepoint{};
+            std::from_chars(Input.data(), Input.data() + 4, Codepoint, 16);
             Input.remove_prefix(4);
 
             // 32 bit code.
@@ -193,7 +195,8 @@ namespace Encoding
             }
             else
             {
-                if (!Extendedpoint) Result.append(UTF8::toUTF8Chars(Codepoint));
+                if (!Extendedpoint) [[likely]]
+                    Result.append(UTF8::toUTF8Chars(Codepoint));
                 else
                 {
                     Extendedpoint += Codepoint;
@@ -231,14 +234,14 @@ namespace Encoding
             const auto Controlbyte = Input[i++];
 
             // 8-bit.
-            if ((Controlbyte & 0x80) == 0)
+            if ((Controlbyte & 0x80) == 0) [[likely]]
             {
                 Result.push_back(static_cast<wchar_t>(Controlbyte));
                 continue;
             }
 
             // 11-bit.
-            if ((Controlbyte & 0xE0) == 0xC0)
+            if ((Controlbyte & 0xE0) == 0xC0) [[likely]]
             {
                 const auto Databyte = Input[i++];
                 Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x1F) << 6) | (Databyte & 0x3F)));
@@ -246,7 +249,7 @@ namespace Encoding
             }
 
             // 16-bit.
-            if ((Controlbyte & 0xF0) == 0xE0)
+            if ((Controlbyte & 0xF0) == 0xE0) [[likely]]
             {
                 const auto Databyte = Input[i++];
                 const auto Extrabyte = Input[i++];
@@ -306,14 +309,16 @@ namespace Encoding
     }
     [[nodiscard]] inline std::string toNarrow(std::u8string_view Input)
     {
-        if (UTF8::isASCII(Input)) return std::string(Input.begin(), Input.end());
+        if (UTF8::isASCII(Input)) [[likely]]
+            return std::string(Input.begin(), Input.end());
 
         std::string Result;
         Result.reserve(Input.size() * sizeof(wchar_t));
 
         for (const auto &Char : toWide(Input))
         {
-            if (Char < 0x80) Result.push_back(Char & 0x7F);
+            if (Char < 0x80) [[likely]]
+                Result.push_back(Char & 0x7F);
             else
             {
                 if constexpr (sizeof(wchar_t) == 2)

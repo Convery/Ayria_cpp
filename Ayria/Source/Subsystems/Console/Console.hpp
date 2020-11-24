@@ -10,18 +10,12 @@
 
 namespace Console
 {
-    using Callback_t = void(__cdecl *)(int Argc, wchar_t **Argv);
+    // UTF8 escaped ASCII strings.
+    using Callback_t = void(__cdecl *)(int Argc, const char **Argv);
     using Logline_t = std::pair<std::wstring, COLORREF>;
-    using Consoleinput_t = struct
-    {
-        std::wstring Lastcommand;
-        std::wstring Inputline;
-        size_t Eventcount;
-        size_t Cursorpos;
-    };
 
     // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::wstring &Message, COLORREF Colour);
+    void addConsolemessage(const std::string &Message, COLORREF Colour);
 
     // Fetch a copy of the internal strings.
     std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter);
@@ -30,10 +24,10 @@ namespace Console
     std::wstring_view getFilter();
 
     // Add a new command to the internal list.
-    void addConsolecommand(std::wstring_view Name, Callback_t Callback);
+    void addConsolecommand(std::string_view Name, Callback_t Callback);
 
     // Evaluate the string, optionally add to the history.
-    void execCommandline(std::wstring Commandline, bool logCommand = true);
+    void execCommandline(std::string_view Commandline, bool logCommand = true);
 
     // Quake-style console.
     namespace Windows

@@ -26,7 +26,7 @@ namespace Console
                     assert(std::holds_alternative<vec2f>(Data));
                     const auto Newsize = std::get<vec2f>(Data);
 
-                    vec2f Wantedsize{ Newsize.x, Newsize.y - Inputheight };
+                    const vec2f Wantedsize{ Newsize.x, Newsize.y - Inputheight };
                     if (Wantedsize != This->Size)
                     {
                         ++Eventcount;
@@ -47,7 +47,7 @@ namespace Console
                     const auto Linecount = (This->Size.y - 1) / 20;
                     const auto Lines = Console::getLoglines(Linecount, Console::getFilter());
 
-                    auto Renderer = Graphics(This->Surface);
+                    const auto Renderer = Graphics(This->Surface);
                     Renderer.Quad({}, This->Size).Solid(Color_t(39, 38, 35));
                     Renderer.Path({}, { This->Size.x, 0 }).Outline(1, Color_t(0xBE, 0x90, 00));
 
@@ -81,7 +81,7 @@ namespace Console
 
                 // Blink the caret.
                 Elapsed += Deltatime;
-                if (Elapsed > 1)
+                if (Elapsed > 1.0f)
                 {
                     Caretstate ^= true;
                     ++Eventcount;
@@ -95,7 +95,7 @@ namespace Console
                     const std::wstring Output = Inputline.substr(0, Cursorpos) +
                         (Caretstate ? L'|' : L' ') + Inputline.substr(Cursorpos);
 
-                    auto Renderer = Graphics(This->Surface);
+                    const auto Renderer = Graphics(This->Surface);
                     Renderer.Quad({}, This->Size).Filled(1, Color_t(0xBE, 0x90, 00), Color_t(39, 38, 35));
                     Renderer.Text(Color_t(127, 150, 62)).Opaque({10, 5}, Output, Color_t(39, 38, 35));
 
@@ -189,7 +189,7 @@ namespace Console
 
                 if (Flags.doEnter)
                 {
-                    Console::execCommandline(Inputline, true);
+                    Console::execCommandline(Encoding::toNarrow(Inputline), true);
                     Lastcommand = Inputline;
                     Inputline.clear();
                     Cursorpos = 0;
@@ -252,7 +252,7 @@ namespace Console
                     {
                         if (GetAsyncKeyState(VK_SHIFT) & 1U << 15)
                         {
-                            const auto Newsize = Consoleoverlay->Size.y * (isExtended ? -0.5f : 1);
+                            const auto Newsize = Consoleoverlay->Size.y * (isExtended ? -0.5f : 1.0f);
                             isExtended ^= true;
                         }
                         else
@@ -310,7 +310,7 @@ namespace Console
                 {
                     assert(std::holds_alternative<vec2f>(Data));
                     const auto Position = std::get<vec2f>(Data);
-                    if (Position.x < 0 || Position.y < 0) return;
+                    if (Position.x < 0.0f || Position.y < 0.0f) return;
 
                     if (Position.x <= Consoleoverlay->Size.x && Position.y <= Consoleoverlay->Size.y)
                     {

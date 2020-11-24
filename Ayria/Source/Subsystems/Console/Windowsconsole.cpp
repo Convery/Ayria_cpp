@@ -28,7 +28,7 @@ namespace Console
                 wchar_t Input[1024]{};
                 GetWindowTextW(Inputhandle, Input, 1024);
                 SetWindowTextW(Inputhandle, L"");
-                Console::execCommandline(Input);
+                Console::execCommandline(Encoding::toNarrow(Input));
                 return 0;
             }
             if (Message == WM_CHAR)
