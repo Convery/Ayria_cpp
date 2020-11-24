@@ -259,101 +259,90 @@ namespace JSON
 
     inline Value_t Parse(std::string_view JSONString)
     {
-        Object_t Result;
+        Value_t Result{};
 
         // Implementation dependent.
         if (!JSONString.empty())
         {
             #if defined(HAS_SIMDJSON)
             static simdjson::dom::parser Parser;
-            simdjson::dom::object Object;
-
-            if (!Parser.parse(JSONString).get(Object))
+            const std::function<Value_t(const simdjson::dom::element &)>
+                Parse = [&Parse](const simdjson::dom::element &Item) -> Value_t
             {
-                for (const auto &[Key, Value] : Object)
+                switch (Item.type())
                 {
-                    const std::function<Value_t(const simdjson::dom::element &)>
-                        Parse = [&Parse](const simdjson::dom::element &Item) -> Value_t
+                    case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string());
+                    case simdjson::dom::element_type::DOUBLE: return Item.get_double().first;
+                    case simdjson::dom::element_type::UINT64: return Item.get_uint64().first;
+                    case simdjson::dom::element_type::INT64: return Item.get_int64().first;
+                    case simdjson::dom::element_type::BOOL: return Item.get_bool().first;
+
+                    case simdjson::dom::element_type::OBJECT:
                     {
-                        switch (Item.type())
+                        Object_t Object; Object.reserve(Item.get_object().size());
+                        for (const auto &[Key, Value] : Item.get_object())
                         {
-                            case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string());
-                            case simdjson::dom::element_type::DOUBLE: return Item.get_double().first;
-                            case simdjson::dom::element_type::UINT64: return Item.get_uint64().first;
-                            case simdjson::dom::element_type::INT64: return Item.get_int64().first;
-                            case simdjson::dom::element_type::BOOL: return Item.get_bool().first;
-
-                            case simdjson::dom::element_type::OBJECT:
-                            {
-                                Object_t Object; Object.reserve(Item.get_object().size());
-                                for (const auto &[Key, Value] : Item.get_object())
-                                {
-                                    Object.emplace(Key, Parse(Value));
-                                }
-                                return Object;
-                            }
-                            case simdjson::dom::element_type::ARRAY:
-                            {
-                                Array_t Array; Array.reserve(Item.get_array().size());
-                                for (const auto &Subitem : Item.get_array())
-                                {
-                                    Array.push_back(Parse(Subitem));
-                                }
-                                return Array;
-                            }
-
-                            case simdjson::dom::element_type::NULL_VALUE: return {};
+                            Object.emplace(Key, Parse(Value));
                         }
+                        return Object;
+                    }
+                    case simdjson::dom::element_type::ARRAY:
+                    {
+                        Array_t Array; Array.reserve(Item.get_array().size());
+                        for (const auto &Subitem : Item.get_array())
+                        {
+                            Array.push_back(Parse(Subitem));
+                        }
+                        return Array;
+                    }
 
-                        // WTF??
-                        assert(false);
-                        return {};
-                    };
-
-                    Result.emplace(Key, Parse(Value));
+                    case simdjson::dom::element_type::NULL_VALUE: return {};
                 }
-            }
+
+                // WTF??
+                assert(false);
+                return {};
+            };
+
+            Result = Parse(Parser.parse(JSONString));
 
             #elif defined(HAS_NLOHMANN)
+            const std::function<Value_t(const nlohmann::json &)>
+                Parse = [&Parse](const nlohmann::json &Item) -> Value_t
+            {
+                if (Item.is_string()) return Encoding::toUTF8(Item.get<std::string>());
+                if (Item.is_number_float()) return Item.get<double>();
+                if (Item.is_number_unsigned()) return Item.get<uint64_t>();
+                if (Item.is_number_integer()) return Item.get<int64_t>();
+                if (Item.is_boolean()) return Item.get<bool>();
+                if (Item.is_object())
+                {
+                    Object_t Object; Object.reserve(Item.size());
+                    for (const auto &[Key, Value] : Item.items())
+                    {
+                        Object.emplace(Key, Parse(Value));
+                    }
+                    return Object;
+                }
+                if (Item.is_array())
+                {
+                    Array_t Array; Array.reserve(Item.size());
+                    for (const auto &Subitem : Item)
+                    {
+                        Array.push_back(Parse(Subitem));
+                    }
+                    return Array;
+                }
+
+                // WTF??
+                assert(false);
+                return {};
+            };
+
             try
             {
-                const auto Object = nlohmann::json::parse(JSONString.data(), nullptr, true, true);
-                for (const auto &[Key, Value] : Object.items())
-                {
-                    const std::function<Value_t(const nlohmann::json &)>
-                        Parse = [&Parse](const nlohmann::json &Item) -> Value_t
-                    {
-                        if (Item.is_string()) return Encoding::toUTF8(Item.get<std::string>());
-                        if (Item.is_number_float()) return Item.get<double>();
-                        if (Item.is_number_unsigned()) return Item.get<uint64_t>();
-                        if (Item.is_number_integer()) return Item.get<int64_t>();
-                        if (Item.is_boolean()) return Item.get<bool>();
-                        if (Item.is_object())
-                        {
-                            Object_t Object; Object.reserve(Item.size());
-                            for (const auto &[Key, Value] : Item.items())
-                            {
-                                Object.emplace(Key, Parse(Value));
-                            }
-                            return Object;
-                        }
-                        if (Item.is_array())
-                        {
-                            Array_t Array; Array.reserve(Item.size());
-                            for (const auto &Subitem : Item)
-                            {
-                                Array.push_back(Parse(Subitem));
-                            }
-                            return Array;
-                        }
-
-                        // WTF??
-                        assert(false);
-                        return {};
-                    };
-
-                    Result.emplace(Key, Parse(Value));
-                }
+                Result = Parse(nlohmann::json::parse(JSONString.data(), nullptr, true, true));
+            }
             } catch (const std::exception &e)
             {
                 (void)e; Debugprint(e.what());

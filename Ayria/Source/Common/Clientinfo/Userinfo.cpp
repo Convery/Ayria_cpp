@@ -164,9 +164,6 @@ namespace Userinfo
 
         // TODO(tcn): If we are logged in, get global account-data.
 
-        // Create a directory for the client.
-        std::filesystem::create_directories("./Ayria/Storage/" + va("%08X", Account.ID.AccountID));
-
         // Register a background event.
         Backend::Enqueuetask(5000, Sendclientinfo);
     }

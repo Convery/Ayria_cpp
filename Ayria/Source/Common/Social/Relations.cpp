@@ -67,16 +67,19 @@ namespace Social::Relationships
         // Save the relations when app is closed.
         std::atexit([]()
         {
-            JSON::Array_t Output;
-            for (const auto &Relation : Relations)
+            if (!Relations.empty())
             {
-                Output.push_back(JSON::Object_t({
-                    { "UserID", Relation.UserID },
-                    { "Flags", Relation.Flags.Raw },
-                    { "Username", Relation.Username }
-                    }));
+                JSON::Array_t Output;
+                for (const auto &Relation : Relations)
+                {
+                    Output.push_back(JSON::Object_t({
+                        { "UserID", Relation.UserID },
+                        { "Flags", Relation.Flags.Raw },
+                        { "Username", Relation.Username }
+                        }));
+                }
+                FS::Writefile(L"./Ayria/Relations.json", JSON::Dump(Output));
             }
-            FS::Writefile(L"./Ayria/Relations.json", JSON::Dump(Output));
         });
     }
 }
