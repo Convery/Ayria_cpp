@@ -46,9 +46,10 @@ namespace Logging
         {
             if (const auto Address = GetProcAddress(Console, "addConsolemessage"))
             {
-                // ASCII or UTF8 string.
-                reinterpret_cast<void(__cdecl *)(const void *, unsigned int, unsigned int)>
-                    (Address)(Message.data(), (unsigned int)Message.size(), 0);
+                // UTF8 escaped ASCII strings.
+                const auto ASCII = Encoding::toNarrow(Message);
+                reinterpret_cast<void(__cdecl *)(const char *, unsigned int, unsigned int)>
+                    (Address)(ASCII.c_str(), (unsigned int)Message.size(), 0);
             }
         }
     }

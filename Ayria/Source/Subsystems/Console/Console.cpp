@@ -21,21 +21,19 @@ namespace Console
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::string &Message, COLORREF Colour)
     {
-        std::string_view Input(Message);
-
         // Scan for keywords to detect a colour if not specified.
         if (Colour == 0)
         {
             Colour = [&]()
             {
                 // Common keywords.
-                if (std::strstr(Input.data(), "[E]") || std::strstr(Input.data(), "rror")) return 0xBE282A;
-                if (std::strstr(Input.data(), "[W]") || std::strstr(Input.data(), "arning")) return 0xBEC02A;
+                if (std::strstr(Message.c_str(), "[E]") || std::strstr(Message.c_str(), "rror")) return 0xBE282A;
+                if (std::strstr(Message.c_str(), "[W]") || std::strstr(Message.c_str(), "arning")) return 0xBEC02A;
 
                 // Ayria default.
-                if (std::strstr(Input.data(), "[I]")) return 0x218FBD;
-                if (std::strstr(Input.data(), "[D]")) return 0x7F963E;
-                if (std::strstr(Input.data(), "[>]")) return 0x7F963E;
+                if (std::strstr(Message.c_str(), "[I]")) return 0x218FBD;
+                if (std::strstr(Message.c_str(), "[D]")) return 0x7F963E;
+                if (std::strstr(Message.c_str(), "[>]")) return 0x7F963E;
 
                 // Default.
                 return 0x315571;
@@ -46,21 +44,9 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        while (!Input.empty())
-        {
-            if (const auto Pos = Input.find('\n'); Pos != std::string_view::npos)
-            {
-                if (Pos != 0)
-                {
-                    Consolelog.push_back({ Encoding::toWide({Input.data(), Pos}), Colour });
-                }
-                Input.remove_prefix(Pos + 1);
-                continue;
-            }
-
-            Consolelog.push_back({ Encoding::toWide(Input), Colour });
-            break;
-        }
+        const absl::InlinedVector<std::string_view, 2> Split = absl::StrSplit(Message, '\n');
+        for(const auto &String : Split)
+            Consolelog.push_back({ Encoding::toWide(String), Colour });
     }
 
     // Fetch a copy of the internal strings.
@@ -115,7 +101,7 @@ namespace Console
 
         // Format as C-array.
         const auto Array = (const char **)alloca((Split.size() + 1) * sizeof(char *));
-        for (size_t i = 0; i < Split.size(); ++i)
+        for (size_t i = 0; i < Split.size(); i++)
             Array[i] = Split[i].c_str();
 
         // Find the function we are interested in.
