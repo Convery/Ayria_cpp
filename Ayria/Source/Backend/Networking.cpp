@@ -11,9 +11,9 @@ namespace Backend
 {
     using Multicast_t = struct { size_t Sendersocket, Receiversocket; sockaddr_in Address; };
 
-    static std::unordered_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
-    static std::unordered_map<uint16_t, Multicast_t> Networkgroups;
-    static std::unordered_set<uint32_t> Blacklist;
+    static absl::flat_hash_map<uint32_t, std::unordered_set<Messagecallback_t>> Callbacks;
+    static absl::flat_hash_map<uint16_t, Multicast_t> Networkgroups;
+    static absl::flat_hash_set<uint32_t> Blacklist;
     static FD_SET Activesockets;
     static uint32_t RandomID;
 

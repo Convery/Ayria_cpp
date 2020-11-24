@@ -11,13 +11,13 @@
 namespace API
 {
     #define Storage(x)                                                                                          \
-        std::unordered_map<uint32_t, std::string> Functionnames_ ##x;                                           \
-        std::unordered_map<uint32_t, std::string> Functionresults_ ##x;                                         \
-        std::unordered_map<uint32_t, Functionhandler> Functionhandlers_ ##x;                                    \
+        absl::flat_hash_map<uint32_t, std::string> Functionnames_ ##x;                                          \
+        absl::flat_hash_map<uint32_t, std::string> Functionresults_ ##x;                                        \
+        absl::flat_hash_map<uint32_t, Functionhandler> Functionhandlers_ ##x;                                   \
 
     #define Register(x)                                                                                         \
         void Registerhandler_ ##x(std::string_view Function, Functionhandler Handler)                           \
-        { const auto FunctionID = Hash::WW32(Function);                                                      \
+        { const auto FunctionID = Hash::WW32(Function);                                                         \
         Functionnames_ ##x[FunctionID] = Function; Functionhandlers_ ##x[FunctionID] = Handler; }               \
 
     #define Export(x)                                                                                           \

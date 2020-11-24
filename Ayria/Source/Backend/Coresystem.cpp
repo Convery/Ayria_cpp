@@ -10,7 +10,7 @@
 namespace Backend
 {
     using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
-    std::vector<Task_t> Backgroundtasks;
+    absl::InlinedVector<Task_t, 8> Backgroundtasks;
 
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)())
