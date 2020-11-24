@@ -8,8 +8,8 @@
 #include <Global.hpp>
 
 // RTTI restoration of the pen.
-std::unordered_map<int, HPEN, decltype(FNV::Hash), decltype(FNV::Equal)> Pens{};
-std::unordered_map<COLORREF, HBRUSH> Brushes{};
+absl::flat_hash_map<int, HPEN> Pens{};
+absl::flat_hash_map<COLORREF, HBRUSH> Brushes{};
 struct Pen_t
 {
     HGDIOBJ Previous;

@@ -15,7 +15,7 @@ namespace Plugins
     *(uintptr_t *)where = (uintptr_t)what; }
 
     // If TLS is not properly supported, fallback to simple hooks.
-    static std::vector<uintptr_t> OriginalTLS;
+    static absl::InlinedVector<uintptr_t, 4> OriginalTLS;
     static uint8_t EPCode[14];
     static void *EPTrampoline;
 
@@ -129,7 +129,7 @@ namespace Plugins
     }
 
     // Track the plugins for the "initialized" signal.
-    static std::unordered_set<HMODULE> Pluginhandles;
+    static absl::flat_hash_set<HMODULE> Pluginhandles;
     static bool hasInitialized = false;
 
     // Should be called from external sources.

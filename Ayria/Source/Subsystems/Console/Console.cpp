@@ -102,8 +102,12 @@ namespace Console
     // Evaluate the string, optionally add to the history.
     void execCommandline(std::string_view Commandline, bool logCommand)
     {
+        // Why would you do this?
+        if (Commandline.empty() || Commandline.front() == '\r' || Commandline.front() == '\n') [[unlikely]]
+            return;
+
         // Remove line-break characters.
-        while (Commandline.back() == L'\r' || Commandline.back() == L'\n')
+        while (Commandline.back() == '\r' || Commandline.back() == '\n')
             Commandline.remove_suffix(1);
 
         // Split into arguments.

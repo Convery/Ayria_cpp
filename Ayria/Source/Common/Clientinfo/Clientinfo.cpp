@@ -9,9 +9,9 @@
 
 namespace Clientinfo
 {
-    std::unordered_set<Client_t, decltype(FNV::Hash), decltype(FNV::Equal)> LANClients, WANClients;
-    std::unordered_map<uint32_t, std::u8string> Usernames;
-    std::unordered_map<uint32_t, std::string> Sharedkeys;
+    absl::flat_hash_set<Client_t, decltype(WW::Hash), decltype(WW::Equal)> LANClients, WANClients;
+    absl::flat_hash_map<uint32_t, std::u8string> Usernames;
+    absl::flat_hash_map<uint32_t, std::string> Sharedkeys;
     bool hasDirtyclients{ true };
 
     // Client information.

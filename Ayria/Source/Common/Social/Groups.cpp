@@ -9,8 +9,8 @@
 
 namespace Social::Groups
 {
-    using Groupinfo_t = struct { std::unordered_set<AyriaID_t, decltype(FNV::Hash), decltype(FNV::Equal)> Members; uint8_t Memberlimit; };
-    static std::unordered_map<AyriaID_t, Groupinfo_t, decltype(FNV::Hash), decltype(FNV::Equal)> LANGroups, WANGroups;
+    using Groupinfo_t = struct { std::unordered_set<AyriaID_t, decltype(WW::Hash), decltype(WW::Equal)> Members; uint8_t Memberlimit; };
+    static absl::flat_hash_map<AyriaID_t, Groupinfo_t, decltype(WW::Hash), decltype(WW::Equal)> LANGroups, WANGroups;
     static std::vector<AyriaID_t> Joinrequests;
     static Groupinfo_t Localgroup{};
     static AyriaID_t LocalID{};

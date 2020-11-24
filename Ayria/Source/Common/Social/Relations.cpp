@@ -9,7 +9,7 @@
 
 namespace Social::Relationships
 {
-    static std::unordered_set<Userrelation_t, decltype(FNV::Hash), decltype(FNV::Equal)> Relations;
+    static std::unordered_set<Userrelation_t, decltype(WW::Hash), decltype(WW::Equal)> Relations;
 
     void Remove(uint32_t UserID, std::u8string_view Username)
     {

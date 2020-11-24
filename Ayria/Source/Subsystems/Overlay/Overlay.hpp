@@ -42,7 +42,7 @@ struct Element_t
 template <bool Animated = false>
 struct Overlay_t
 {
-    std::vector<Element_t> Elements;
+    absl::InlinedVector<Element_t, 4> Elements;
     vec2f Position, Size;
     bool Ctrl{}, Shift{};
     bool Forcerepaint{};
