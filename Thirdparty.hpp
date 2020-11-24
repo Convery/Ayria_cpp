@@ -88,31 +88,82 @@
 //#endif
 
 // Googles extensions/alternatives to the STL.
-#if __has_include(<absl/strings/str_join.h>)
+#if __has_include(<absl/random/random.h>)
 #define HAS_ABSEIL
+#include <absl/container/inlined_vector.h>
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 #include <absl/container/node_hash_map.h>
 #include <absl/container/node_hash_set.h>
-#include <absl/random/random.h>
+#include <absl/synchronization/mutex.h>
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_split.h>
-#include <absl/strings/str_cat.h>
 #include <absl/strings/str_join.h>
-#include <absl/strings/strip.h>
-#include <absl/strings/escaping.h>
-#include <absl/synchronization/mutex.h>
-#include <absl/container/inlined_vector.h>
+#include <absl/strings/str_cat.h>
+#include <absl/random/random.h>
 
+// NOTE(tcn): Can't be arsed to update these, so just ls | grep all and let the linker figure it out.
+#pragma comment(lib, "absl_bad_any_cast_impl.lib")
+#pragma comment(lib, "absl_bad_optional_access.lib")
+#pragma comment(lib, "absl_bad_variant_access.lib")
 #pragma comment(lib, "absl_base.lib")
 #pragma comment(lib, "absl_city.lib")
+#pragma comment(lib, "absl_civil_time.lib")
+#pragma comment(lib, "absl_cord.lib")
+#pragma comment(lib, "absl_debugging_internal.lib")
+#pragma comment(lib, "absl_demangle_internal.lib")
+#pragma comment(lib, "absl_examine_stack.lib")
+#pragma comment(lib, "absl_exponential_biased.lib")
+#pragma comment(lib, "absl_failure_signal_handler.lib")
+#pragma comment(lib, "absl_flags.lib")
+#pragma comment(lib, "absl_flags_commandlineflag.lib")
+#pragma comment(lib, "absl_flags_commandlineflag_internal.lib")
+#pragma comment(lib, "absl_flags_config.lib")
+#pragma comment(lib, "absl_flags_internal.lib")
+#pragma comment(lib, "absl_flags_marshalling.lib")
+#pragma comment(lib, "absl_flags_parse.lib")
+#pragma comment(lib, "absl_flags_private_handle_accessor.lib")
+#pragma comment(lib, "absl_flags_program_name.lib")
+#pragma comment(lib, "absl_flags_reflection.lib")
+#pragma comment(lib, "absl_flags_usage.lib")
+#pragma comment(lib, "absl_flags_usage_internal.lib")
+#pragma comment(lib, "absl_graphcycles_internal.lib")
 #pragma comment(lib, "absl_hash.lib")
 #pragma comment(lib, "absl_hashtablez_sampler.lib")
+#pragma comment(lib, "absl_int128.lib")
+#pragma comment(lib, "absl_leak_check.lib")
+#pragma comment(lib, "absl_leak_check_disable.lib")
+#pragma comment(lib, "absl_log_severity.lib")
+#pragma comment(lib, "absl_malloc_internal.lib")
+#pragma comment(lib, "absl_periodic_sampler.lib")
+#pragma comment(lib, "absl_random_distributions.lib")
+#pragma comment(lib, "absl_random_internal_distribution_test_util.lib")
+#pragma comment(lib, "absl_random_internal_platform.lib")
+#pragma comment(lib, "absl_random_internal_pool_urbg.lib")
+#pragma comment(lib, "absl_random_internal_randen.lib")
+#pragma comment(lib, "absl_random_internal_randen_hwaes.lib")
+#pragma comment(lib, "absl_random_internal_randen_hwaes_impl.lib")
+#pragma comment(lib, "absl_random_internal_randen_slow.lib")
+#pragma comment(lib, "absl_random_internal_seed_material.lib")
+#pragma comment(lib, "absl_random_seed_gen_exception.lib")
+#pragma comment(lib, "absl_random_seed_sequences.lib")
 #pragma comment(lib, "absl_raw_hash_set.lib")
-#pragma comment(lib, "absl_str_format_internal.lib")
-#pragma comment(lib, "absl_strings.lib")
-#pragma comment(lib, "absl_synchronization.lib")
 #pragma comment(lib, "absl_raw_logging_internal.lib")
+#pragma comment(lib, "absl_scoped_set_env.lib")
+#pragma comment(lib, "absl_spinlock_wait.lib")
+#pragma comment(lib, "absl_stacktrace.lib")
+#pragma comment(lib, "absl_status.lib")
+#pragma comment(lib, "absl_statusor.lib")
+#pragma comment(lib, "absl_strerror.lib")
+#pragma comment(lib, "absl_strings.lib")
+#pragma comment(lib, "absl_strings_internal.lib")
+#pragma comment(lib, "absl_str_format_internal.lib")
+#pragma comment(lib, "absl_symbolize.lib")
+#pragma comment(lib, "absl_synchronization.lib")
+#pragma comment(lib, "absl_throw_delegate.lib")
+#pragma comment(lib, "absl_time.lib")
+#pragma comment(lib, "absl_time_zone.lib")
+
 #else
 #pragma message ("Ayria 0.9 relies on Abseil, remember to update VCPKG.")
 #endif

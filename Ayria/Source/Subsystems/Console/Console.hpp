@@ -15,7 +15,7 @@ namespace Console
     using Logline_t = std::pair<std::wstring, COLORREF>;
 
     // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::string &Message, COLORREF Colour);
+    void addConsolemessage(const std::string &Message, Color_t Colour);
 
     // Fetch a copy of the internal strings.
     std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter);

@@ -25,8 +25,8 @@ namespace Console
                 {
                     assert(std::holds_alternative<vec2f>(Data));
                     const auto Newsize = std::get<vec2f>(Data);
-
                     const vec2f Wantedsize{ Newsize.x, Newsize.y - Inputheight };
+
                     if (Wantedsize != This->Size)
                     {
                         ++Eventcount;
@@ -44,14 +44,14 @@ namespace Console
                 if (Events)
                 {
                     // Default font-size should be ~20.
-                    const auto Linecount = (This->Size.y - 1) / 20;
+                    const auto Linecount = This->Size.y / 20 + isExtended;
                     const auto Lines = Console::getLoglines(Linecount, Console::getFilter());
 
                     const auto Renderer = Graphics(This->Surface);
                     Renderer.Quad({}, This->Size).Solid(Color_t(39, 38, 35));
                     Renderer.Path({}, { This->Size.x, 0 }).Outline(1, Color_t(0xBE, 0x90, 00));
 
-                    vec2f Position{10, 5};
+                    vec2f Position{ 10, 4 };
                     for (const auto &Item : Lines)
                     {
                         if (Item.first.empty()) continue;

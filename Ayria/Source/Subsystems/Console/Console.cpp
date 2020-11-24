@@ -19,20 +19,20 @@ namespace Console
     static std::wstring Currentfilter{};
 
     // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::string &Message, COLORREF Colour)
+    void addConsolemessage(const std::string &Message, Color_t Colour)
     {
         // Scan for keywords to detect a colour if not specified.
         if (Colour == 0)
         {
-            Colour = [&]()
+            Colour = [&]() -> uint32_t
             {
                 // Common keywords.
                 if (std::strstr(Message.c_str(), "[E]") || std::strstr(Message.c_str(), "rror")) return 0xBE282A;
-                if (std::strstr(Message.c_str(), "[W]") || std::strstr(Message.c_str(), "arning")) return 0xBEC02A;
+                if (std::strstr(Message.c_str(), "[W]") || std::strstr(Message.c_str(), "arning")) return 0x2AC0BE;
 
                 // Ayria default.
-                if (std::strstr(Message.c_str(), "[I]")) return 0x218FBD;
-                if (std::strstr(Message.c_str(), "[D]")) return 0x7F963E;
+                if (std::strstr(Message.c_str(), "[I]")) return 0xBD8F21;
+                if (std::strstr(Message.c_str(), "[D]")) return 0x3E967F;
                 if (std::strstr(Message.c_str(), "[>]")) return 0x7F963E;
 
                 // Default.
@@ -44,9 +44,9 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        const absl::InlinedVector<std::string_view, 2> Split = absl::StrSplit(Message, '\n');
-        for(const auto &String : Split)
-            Consolelog.push_back({ Encoding::toWide(String), Colour });
+        for (const auto &String : absl::StrSplit(Message, '\n'))
+            if (!String.empty())
+                Consolelog.push_back({ Encoding::toWide(String), Colour });
     }
 
     // Fetch a copy of the internal strings.
@@ -166,8 +166,8 @@ namespace Console
                 if (Index % 4 == 0) Commands += "\n";
             }
 
-            addConsolemessage("Available commands:", 0x218FBD);
-            addConsolemessage(Commands, 0x315571);
+            addConsolemessage("Available commands:", 0xBD8F21U);
+            addConsolemessage(Commands, 0x715531U);
         };
         addConsolecommand("List", List);
         addConsolecommand("Help", List);
@@ -194,7 +194,7 @@ namespace Console
         extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Length, unsigned int Colour)
         {
             assert(String);
-            Console::addConsolemessage({String, Length }, Colour);
+            Console::addConsolemessage({String, Length }, uint32_t(Colour));
         }
         extern "C" EXPORT_ATTR void __cdecl execCommandline(const char *String, unsigned int Length)
         {
