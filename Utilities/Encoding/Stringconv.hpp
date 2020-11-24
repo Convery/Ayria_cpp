@@ -1,7 +1,7 @@
 /*
-Initial author: Convery (tcn@ayria.se)
-Started: 2020-09-23
-License: MIT
+    Initial author: Convery (tcn@ayria.se)
+    Started: 2020-09-23
+    License: MIT
 */
 
 #pragma once
@@ -222,26 +222,6 @@ namespace Encoding
         return std::u8string(Input.data(), Input.size());
     }
 
-    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
-    {
-        const auto Size = std::mbstowcs(nullptr, Input.data(), 0);
-        std::wstring Result(Size, 0);
-        std::mbstowcs(Result.data(), Input.data(), Size);
-        return Result;
-    }
-    [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
-    {
-        std::string Result(Input.size(), 0);
-        const auto Pointer = Result.data();
-
-        for (size_t i = 0; i < Input.size(); ++i)
-        {
-            Pointer[i] = Input[i] > 0x7F ? '?' : static_cast<char>(Input[i] & 0x7F);
-        }
-
-        return Result;
-    }
-
     [[nodiscard]] inline std::wstring toWide(std::u8string_view Input)
     {
         std::wstring Result{}; Result.reserve(Input.size());
@@ -344,5 +324,14 @@ namespace Encoding
         }
 
         return Result;
+    }
+
+    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
+    {
+        return toWide(toUTF8(Input));
+    }
+    [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
+    {
+        return toNarrow(toUTF8(Input));
     }
 }
