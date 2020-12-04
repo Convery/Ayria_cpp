@@ -11,100 +11,98 @@
 
 int wmain(int Argc, wchar_t **Argv)
 {
-    PROCESS_INFORMATION Processinfo{};
+    PROCESS_INFORMATION Processinfo;
     STARTUPINFOW Startupinfo{};
-    wchar_t Basemodule[512]{};
 
-    // Sanity-checking.
-    if (Argc < 2)
+    std::wstring Commandline;
+    bool okVersion{};
+    bool okConfig{};
+
+    // Sanity-checking the config and target.
+    do
     {
-        std::wprintf(L"Missing commandline. Usage: Injector**.exe \"app.exe\"\n");
-        return 1;
-    }
+        if (Argc >= 1 && std::wcsstr(Argv[0], L"Injector")) { Argc--; Argv++; }
+        if (Argc < 1) { std::wprintf(L"Missing command-line. Usage: Injector**.exe \"app.exe\"\n"); break; }
 
-    // Find if the executable matches our configuration.
-    if(const auto Filehandle = _wfopen(!!std::wcsstr(Argv[0], L"Injector") ? Argv[1] : Argv[0], L"rb"))
-    {
-        char PEBuffer[sizeof(IMAGE_NT_HEADERS)]{};
-        const auto NTHeader = (PIMAGE_NT_HEADERS)PEBuffer;
-        const auto DOSHeader = (PIMAGE_DOS_HEADER)PEBuffer;
-
-        do
+        // Find if the executable matches our configuration.
+        if (const auto Filehandle = _wfopen(Argv[0], L"rb"))
         {
-            // Sanity-checking.
-            if(!std::fread(PEBuffer, sizeof(IMAGE_DOS_HEADER), 1, Filehandle) || DOSHeader->e_magic != IMAGE_DOS_SIGNATURE)
+            char PEBuffer[sizeof(IMAGE_NT_HEADERS)]{};
+            const auto NTHeader = reinterpret_cast<PIMAGE_NT_HEADERS>(PEBuffer);
+            const auto DOSHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(PEBuffer);
+
+            do
             {
-                std::wprintf(L"Invalid PE-executable provided. Exiting.\n");
-                break;
-            }
-
-            // Move to the header.
-            std::fseek(Filehandle, DOSHeader->e_lfanew, SEEK_SET);
-
-            // Sanity-checking.
-            if(!std::fread(PEBuffer, sizeof(IMAGE_NT_HEADERS), 1, Filehandle) || NTHeader->Signature != IMAGE_NT_SIGNATURE)
-            {
-                std::wprintf(L"Invalid PE-executable provided. Exiting.\n");
-                break;
-            }
-        } while(false);
-        std::fclose(Filehandle);
-
-        // Do we need to switch bootstrapper?
-        if(NTHeader->FileHeader.Machine != WORD(sizeof(void *) == sizeof(uint64_t) ? IMAGE_FILE_MACHINE_AMD64 : IMAGE_FILE_MACHINE_I386))
-        {
-            std::wprintf(L"Switching injector version.\n");
-
-            if(!std::wcsstr(Argv[0], L"Injector"))
-            {
-                const auto Injector = sizeof(void *) == sizeof(uint64_t) ? L"\\Injector32.exe " : L"\\Injector64.exe ";
-                if(CreateProcessW(Injector, GetCommandLineW(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
+                if (!std::fread(PEBuffer, sizeof(IMAGE_DOS_HEADER), 1, Filehandle) || DOSHeader->e_magic != IMAGE_DOS_SIGNATURE)
                 {
-                    WaitForSingleObject(Processinfo.hProcess, INFINITE);
+                    std::wprintf(L"Invalid PE-executable provided. Exiting.\n");
+                    break;
                 }
-            }
-            else
-            {
-                // Apparently we are allowed to modify the command-line in wide mode..
-                std::wmemcpy(std::wcsstr(GetCommandLineW(), L".exe") - 2, sizeof(void *) == sizeof(uint64_t) ? L"32" : L"64", 2);
-                if(CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
+                std::fseek(Filehandle, DOSHeader->e_lfanew, SEEK_SET);
+                if (!std::fread(PEBuffer, sizeof(IMAGE_NT_HEADERS), 1, Filehandle) || NTHeader->Signature != IMAGE_NT_SIGNATURE)
                 {
-                    WaitForSingleObject(Processinfo.hProcess, INFINITE);
+                    std::wprintf(L"Invalid PE-executable provided. Exiting.\n");
+                    break;
                 }
-            }
 
-            return 0;
+                // TODO(tcn): If we ever support managed executables, check the .NET segments.
+                okVersion = NTHeader->FileHeader.Machine == WORD(Build::is64bit ? IMAGE_FILE_MACHINE_AMD64 : IMAGE_FILE_MACHINE_I386);
+
+            } while (false);
+
+            std::fclose(Filehandle);
         }
+
+        // All checks passed.
+        okConfig = true;
+    } while (false);
+
+    // Nothing we can do about bad configs.
+    if (!okConfig) return 3;
+
+    // Create a new commandline.
+    for (int i = 0; i < Argc; ++i)
+    {
+        Commandline += L" ";
+        Commandline += Argv[i];
     }
 
-    std::wstring Commandline = GetCommandLineW();
-    Commandline.erase(0, Commandline.find(L".exe") + 6);
+    // Switch version of the injector.
+    if (!okVersion)
+    {
+        const auto Injector = Build::is64bit ? L"Injector32.exe" : L"Injector64.exe";
+
+        std::wprintf(L"Switching injector version.\n");
+        if (CreateProcessW(Injector, (LPWSTR)Commandline.c_str(), NULL, NULL, NULL, NULL, NULL, NULL, &Startupinfo, &Processinfo))
+        {
+            WaitForSingleObject(Processinfo.hProcess, INFINITE);
+        }
+
+        return 0;
+    }
 
     // Spawn the application and inject.
-    if(CreateProcessW(NULL, (wchar_t *)Commandline.c_str(), NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, NULL, &Startupinfo, &Processinfo))
+    if (CreateProcessW(NULL, (LPWSTR)Commandline.c_str(), NULL, NULL, NULL, CREATE_SUSPENDED | DETACHED_PROCESS, NULL, NULL, &Startupinfo, &Processinfo))
     {
-        GetModuleFileNameW(NULL, Basemodule, 512);
-        std::wstring Modulepath = Basemodule;
+        wchar_t CWD[512]{}; GetCurrentDirectoryW(512, CWD);
+        const auto Modulepath = std::wstring(CWD) + (Build::is64bit ? L"\\Bootstrapper64.dll"s : L"\\Bootstrapper32.dll"s);
+        const auto Remotealloc = VirtualAllocEx(Processinfo.hProcess, NULL, Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        const auto Remotestring = WriteProcessMemory(Processinfo.hProcess, Remotealloc, Modulepath.c_str(), Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), NULL);
 
-        Modulepath = Modulepath.substr(0, Modulepath.find_last_of(L'\\'));
-        Modulepath += sizeof(void *) == sizeof(uint64_t) ? L"\\Bootstrapper64.dll" : L"\\Bootstrapper32.dll";
-        const auto Remotestring = VirtualAllocEx(Processinfo.hProcess, NULL, Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
-        if (!Remotestring)
+        if (!Remotealloc || !Remotestring)
         {
             std::wprintf(L"Could allocate the library string. Error: %u\n", GetLastError());
-            return 1;
+            TerminateProcess(Processinfo.hProcess, 3);
+            return 3;
         }
 
-        const auto Libraryaddress = GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
-        WriteProcessMemory(Processinfo.hProcess, Remotestring, Modulepath.c_str(), Modulepath.size() * sizeof(wchar_t) + sizeof(wchar_t), NULL);
-        const auto Result = CreateRemoteThread(Processinfo.hProcess, NULL, NULL, LPTHREAD_START_ROUTINE(Libraryaddress), Remotestring, NULL, NULL);
-
-        if(Result == NULL)
+        const auto Libraryaddress = GetProcAddress(LoadLibraryW(L"kernel32.dll"), "LoadLibraryW");
+        const auto Result = CreateRemoteThread(Processinfo.hProcess, NULL, NULL, LPTHREAD_START_ROUTINE(Libraryaddress), Remotealloc, NULL, NULL);
+        if (Result == NULL)
         {
             std::wprintf(L"Could not create thread. Error: %u\n", GetLastError());
-            TerminateProcess(Processinfo.hProcess, 0xDEADC0DE);
-            return 1;
+            TerminateProcess(Processinfo.hProcess, 3);
+            return 3;
         }
         else
         {
@@ -115,7 +113,7 @@ int wmain(int Argc, wchar_t **Argv)
     else
     {
         std::wprintf(L"Could not create process. Error: %u\n", GetLastError());
-        return 1;
+        return 3;
     }
 
     return 0;
