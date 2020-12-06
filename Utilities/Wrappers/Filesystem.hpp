@@ -54,11 +54,10 @@ namespace FS
                 const auto FD = _open(Path.data(), 0x800, 0);
                 if (FD == -1) return {};
 
-                const auto Handle = CreateFileMappingA((HANDLE)_get_osfhandle(FD), NULL,
-                                                       PAGE_READONLY, 0, Size & 0xFFFFFFFF, NULL);
+                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
                 if (!Handle) return {};
 
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_COPY | FILE_MAP_READ, 0, 0, Size & 0xFFFFFFFF);
+                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
                 if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
 
                 std::basic_string<T> Filebuffer(Size, 0);
@@ -92,11 +91,10 @@ namespace FS
                 const auto FD = _wopen(Path.data(), 0x800, 0);
                 if (FD == -1) return {};
 
-                const auto Handle = CreateFileMappingA((HANDLE)_get_osfhandle(FD), NULL,
-                                                       PAGE_READONLY, 0, Size & 0xFFFFFFFF, NULL);
+                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
                 if (!Handle) return {};
 
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_COPY | FILE_MAP_READ, 0, 0, Size & 0xFFFFFFFF);
+                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
                 if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
 
                 std::basic_string<T> Filebuffer(Size, 0);
