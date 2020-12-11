@@ -19,6 +19,13 @@ namespace Hash
         constexpr uint64_t _waterp0 = 0xa0761d65ull, _waterp1 = 0xe7037ed1ull, _waterp2 = 0x8ebc6af1ull;
         constexpr uint64_t _waterp3 = 0x589965cdull, _waterp4 = 0x1d8e4e27ull, _waterp5 = 0xeb44accbull;
 
+        constexpr size_t Strlen(const char *Input)
+        {
+            size_t Length = 0;
+            while (*Input++) Length++;
+            return Length;
+        }
+
         template<size_t N> constexpr uint64_t ROT(const char *p)
         {
             uint64_t Result{};
@@ -123,6 +130,14 @@ namespace Hash
     template<size_t N> [[nodiscard]] constexpr uint64_t WW64(char const (&String)[N])
     {
         return WW64(String, N - 1);
+    }
+    [[nodiscard]] constexpr uint32_t WW32(const char *Input)
+    {
+        return WW32(Input, Internal::Strlen(Input));
+    }
+    [[nodiscard]] constexpr uint32_t WW64(const char *Input)
+    {
+        return WW64(Input, Internal::Strlen(Input));
     }
 
     // Wrappers for runtime hashing of strings, and C++ 20 compile-time std::strings.

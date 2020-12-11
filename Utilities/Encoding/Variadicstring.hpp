@@ -10,11 +10,11 @@
 #include <memory>
 #include <string_view>
 
-template<typename ... Args> constexpr [[nodiscard]] std::string va(std::string_view Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, Args ...args)
 {
     return absl::StrFormat(Format, args ...);
 }
-template<typename ... Args> constexpr [[nodiscard]] std::string va(const char *Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Args ...args)
 {
     return absl::StrFormat(Format, args ...);
 }
