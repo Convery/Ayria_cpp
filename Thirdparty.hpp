@@ -163,6 +163,7 @@
 #pragma comment(lib, "absl_throw_delegate.lib")
 #pragma comment(lib, "absl_time.lib")
 #pragma comment(lib, "absl_time_zone.lib")
+#pragma comment(lib, "absl_wyhash.lib")
 
 #else
 #pragma message ("Ayria 0.9 relies on Abseil, remember to update VCPKG.")
