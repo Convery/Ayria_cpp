@@ -19,13 +19,6 @@ namespace Hash
         constexpr uint64_t _waterp0 = 0xa0761d65ull, _waterp1 = 0xe7037ed1ull, _waterp2 = 0x8ebc6af1ull;
         constexpr uint64_t _waterp3 = 0x589965cdull, _waterp4 = 0x1d8e4e27ull, _waterp5 = 0xeb44accbull;
 
-        constexpr size_t Strlen(const char *Input)
-        {
-            size_t Length = 0;
-            while (*Input++) Length++;
-            return Length;
-        }
-
         template<size_t N> constexpr uint64_t ROT(const char *p)
         {
             uint64_t Result{};
@@ -39,14 +32,20 @@ namespace Hash
             const uint64_t Tmp{ A * B };
             return Tmp - (Tmp >> 32);
         }
-
-        constexpr inline uint64_t Wheathash(const char *key, uint32_t len, uint64_t seed)
+        constexpr size_t Strlen(const char *Input)
         {
-            for (uint32_t i = 0; i + 16 <= len; i += 16, key += 16)
+            size_t Length = 0;
+            while (*Input++) Length++;
+            return Length;
+        }
+
+        constexpr inline uint64_t Wheathash(const char *key, size_t len, uint64_t seed)
+        {
+            for (size_t i = 0; i + 16 <= len; i += 16, key += 16)
             {
                 seed = Process(
-                    Process(ROT<32>(key) ^ _wheatp1, ROT<32>(key + 4) ^ _wheatp2) + seed,
-                    Process(ROT<32>(key + 8) ^ _wheatp3, ROT<32>(key + 12) ^ _wheatp4));
+                       Process(ROT<32>(key) ^ _wheatp1, ROT<32>(key + 4) ^ _wheatp2) + seed,
+                       Process(ROT<32>(key + 8) ^ _wheatp3, ROT<32>(key + 12) ^ _wheatp4));
             }
 
             seed += _wheatp5;
@@ -71,13 +70,13 @@ namespace Hash
             seed = (seed ^ seed << 16) * (len ^ _wheatp0);
             return seed - (seed >> 31) + (seed << 33);
         }
-        constexpr inline uint32_t Waterhash(const char *key, uint32_t len, uint64_t seed)
+        constexpr inline uint32_t Waterhash(const char *key, size_t len, uint64_t seed)
         {
-            for (uint32_t i = 0; i + 16 <= len; i += 16, key += 16)
+            for (size_t i = 0; i + 16 <= len; i += 16, key += 16)
             {
                 seed = Process(
-                    Process(ROT<32>(key) ^ _waterp1, ROT<32>(key + 4) ^ _waterp2) + seed,
-                    Process(ROT<32>(key + 8) ^ _waterp3, ROT<32>(key + 12) ^ _waterp4));
+                       Process(ROT<32>(key) ^ _waterp1, ROT<32>(key + 4) ^ _waterp2) + seed,
+                       Process(ROT<32>(key + 8) ^ _waterp3, ROT<32>(key + 12) ^ _waterp4));
             }
 
             seed += _waterp5;
@@ -107,19 +106,19 @@ namespace Hash
     // Compile-time hashing for fixed-length datablocks.
     [[nodiscard]] constexpr uint32_t WW32(const char *Input, const size_t Length)
     {
-        return Internal::Waterhash(Input, Length & 0xFFFFFFFF, Internal::_waterp0);
+        return Internal::Waterhash(Input, Length, Internal::_waterp0);
     }
     [[nodiscard]] constexpr uint64_t WW64(const char *Input, const size_t Length)
     {
-        return Internal::Wheathash(Input, Length & 0xFFFFFFFF, Internal::_wheatp0);
+        return Internal::Wheathash(Input, Length, Internal::_wheatp0);
     }
     [[nodiscard]] constexpr uint32_t WW32(const void *Input, const size_t Length)
     {
-        return Internal::Waterhash((char *)Input, Length & 0xFFFFFFFF, Internal::_waterp0);
+        return Internal::Waterhash((const char *)Input, Length, Internal::_waterp0);
     }
     [[nodiscard]] constexpr uint64_t WW64(const void *Input, const size_t Length)
     {
-        return Internal::Wheathash((char *)Input, Length & 0xFFFFFFFF, Internal::_wheatp0);
+        return Internal::Wheathash((const char *)Input, Length, Internal::_wheatp0);
     }
 
     // Compile-time hashing for null-terminated strings.
@@ -135,7 +134,7 @@ namespace Hash
     {
         return WW32(Input, Internal::Strlen(Input));
     }
-    [[nodiscard]] constexpr uint32_t WW64(const char *Input)
+    [[nodiscard]] constexpr uint64_t WW64(const char *Input)
     {
         return WW64(Input, Internal::Strlen(Input));
     }
