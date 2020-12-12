@@ -19,26 +19,26 @@ SIMDJSON treats all but the largest ints as signed.
 #pragma warning(disable: 4702)
 namespace JSON
 {
-    using Type_t = enum { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
+    enum class Type_t { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
     using Object_t = absl::flat_hash_map<std::string, struct Value_t>;
     using Array_t = std::vector<struct Value_t>;
 
     // Helper for type deduction.
     template<typename T> constexpr Type_t toType()
     {
-        if constexpr (std::is_same_v<T, std::u8string>) return String;
-        if constexpr (std::is_same_v<T, Object_t>) return Object;
-        if constexpr (std::is_same_v<T, Array_t>) return Array;
-        if constexpr (std::is_floating_point_v<T>) return Float;
+        if constexpr (std::is_same_v<T, std::u8string>) return Type_t::String;
+        if constexpr (std::is_same_v<T, Object_t>) return Type_t::Object;
+        if constexpr (std::is_floating_point_v<T>) return Type_t::Float;
+        if constexpr (std::is_same_v<T, Array_t>) return Type_t::Array;
         if constexpr (std::is_integral_v<T>)
         {
             if constexpr (std::is_signed_v<T>)
-                return Signedint;
-            return Unsignedint;
+                return Type_t::Signedint;
+            return Type_t::Unsignedint;
         }
-        if constexpr (std::is_same_v<T, bool>) return Bool;
+        if constexpr (std::is_same_v<T, bool>) return Type_t::Bool;
 
-        return Null;
+        return Type_t::Null;
     }
 
     // Generic value wrapper.
@@ -53,15 +53,14 @@ namespace JSON
         {
             switch (Type)
             {
+                case Type_t::String: return va("\"%s\"", Encoding::toNarrow(*asPtr(std::u8string)).c_str());
+                case Type_t::Unsignedint: return va("%llu", *asPtr(uint64_t));
+                case Type_t::Signedint: return va("%lli", *asPtr(int64_t));
+                case Type_t::Bool: return *asPtr(bool) ? "true" : "false";
+                case Type_t::Float: return va("%f", *asPtr(double));
+                case Type_t::Null: return "null";
 
-                case String: return va("\"%s\"", Encoding::toNarrow(*asPtr(std::u8string)).c_str());
-                case Unsignedint: return va("%llu", *asPtr(uint64_t));
-                case Signedint: return va("%lli", *asPtr(int64_t));
-                case Bool: return *asPtr(bool) ? "true" : "false";
-                case Float: return va("%f", *asPtr(double));
-                case Null: return "null";
-
-                case Object:
+                case Type_t::Object:
                 {
                     std::string Result{ "{" };
                     for (const auto &[lKey, lValue] : *asPtr(Object_t))
@@ -74,7 +73,7 @@ namespace JSON
                     Result.append("}");
                     return Result;
                 }
-                case Array:
+                case Type_t::Array:
                 {
                     std::string Result{ "[" };
                     for (const auto &lValue : *asPtr(Array_t))
@@ -94,7 +93,7 @@ namespace JSON
         //
         bool update(const Value_t &Input)
         {
-            if (Type == Null)
+            if (Type == Type_t::Null)
             {
                 *this = Input;
                 return true;
@@ -105,15 +104,15 @@ namespace JSON
 
             switch (Input.Type)
             {
-                case Unsignedint: *this = Input; break;
-                case Signedint: *this = Input; break;
-                case String: *this = Input; break;
-                case Array: *this = Input; break;
-                case Float: *this = Input; break;
-                case Bool: *this = Input; break;
-                case Null: break;
+                case Type_t::Unsignedint: *this = Input; break;
+                case Type_t::Signedint: *this = Input; break;
+                case Type_t::String: *this = Input; break;
+                case Type_t::Array: *this = Input; break;
+                case Type_t::Float: *this = Input; break;
+                case Type_t::Bool: *this = Input; break;
+                case Type_t::Null: break;
 
-                case Object:
+                case Type_t::Object:
                 {
                     const auto Delta = std::static_pointer_cast<Object_t>(Input.Value);
                     const auto Current = asPtr(Object_t);
@@ -135,14 +134,14 @@ namespace JSON
         //
         bool contains(std::string_view Key) const
         {
-            if (Type != Object) return false;
+            if (Type != Type_t::Object) return false;
             return asPtr(Object_t)->contains(Key.data());
         }
         bool empty() const
         {
-            if (Type == String) return asPtr(std::u8string)->empty();
-            if (Type == Object) return asPtr(Object_t)->empty();
-            if (Type == Array) return asPtr(Array_t)->empty();
+            if (Type == Type_t::String) return asPtr(std::u8string)->empty();
+            if (Type == Type_t::Object) return asPtr(Object_t)->empty();
+            if (Type == Type_t::Array) return asPtr(Array_t)->empty();
             return true;
         }
 
@@ -150,9 +149,17 @@ namespace JSON
         template<typename T> T value(std::string_view Key, T Defaultvalue) const
         {
             if constexpr (!std::is_convertible_v<Value_t, T>) return Defaultvalue;
-            if (Type != Object) return Defaultvalue;
+            if (Type != Type_t::Object) return Defaultvalue;
 
             if (!asPtr(Object_t)->contains(Key.data())) return Defaultvalue;
+            return asPtr(Object_t)->at(Key.data());
+        }
+        template<typename T> T value(std::string_view Key) const
+        {
+            if constexpr (!std::is_convertible_v<Value_t, T>) return {};
+            if (Type != Type_t::Object) return {};
+
+            if (!asPtr(Object_t)->contains(Key.data())) return {};
             return asPtr(Object_t)->at(Key.data());
         }
 
@@ -161,13 +168,13 @@ namespace JSON
         {
             switch (Type)
             {
-                case Object: if constexpr (std::is_same_v<T, Object_t>) return *asPtr(Object_t);
-                case Unsignedint: if constexpr (std::is_integral_v<T>) return *asPtr(uint64_t);
-                case Float: if constexpr (std::is_floating_point_v<T>) return *asPtr(double);
-                case Array: if constexpr (std::is_same_v<T, Array_t>) return *asPtr(Array_t);
-                case Signedint: if constexpr (std::is_integral_v<T>) return *asPtr(int64_t);
-                case Bool: if constexpr (std::is_same_v<T, bool>) return *asPtr(bool);
-                case String:
+                case Type_t::Object: if constexpr (std::is_same_v<T, Object_t>) return *asPtr(Object_t);
+                case Type_t::Unsignedint: if constexpr (std::is_integral_v<T>) return *asPtr(uint64_t);
+                case Type_t::Float: if constexpr (std::is_floating_point_v<T>) return *asPtr(double);
+                case Type_t::Array: if constexpr (std::is_same_v<T, Array_t>) return *asPtr(Array_t);
+                case Type_t::Signedint: if constexpr (std::is_integral_v<T>) return *asPtr(int64_t);
+                case Type_t::Bool: if constexpr (std::is_same_v<T, bool>) return *asPtr(bool);
+                case Type_t::String:
                 {
                     if constexpr (Internal::isDerived<T, std::basic_string>{} ||
                         Internal::isDerived<T, std::basic_string_view>{})
@@ -187,7 +194,7 @@ namespace JSON
         }
         template<typename T> T &get()
         {
-            if (Type == Null) *this = Value_t(T());
+            if (Type == Type_t::Null) *this = Value_t(T());
             return *asPtr(T);
         };
         template<typename T> T get() const
@@ -202,8 +209,8 @@ namespace JSON
         }
         Value_t &operator[](std::string_view Key)
         {
-            if (Type == Null) *this = Object_t();
-            if (Type != Object) return *this;
+            if (Type == Type_t::Null) *this = Object_t();
+            if (Type != Type_t::Object) return *this;
             return asPtr(Object_t)->at(Key.data());
         }
 
@@ -246,7 +253,7 @@ namespace JSON
                     Value = std::make_shared<Array_t>(std::move(Array));
                 }
 
-                assert(Type != Null);
+                assert(Type != Type_t::Null);
             }
         }
         Value_t() = default;
