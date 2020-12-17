@@ -133,7 +133,6 @@ namespace Encoding
             return Input.size();
         }
 
-
         inline std::u8string::iterator at(std::u8string &Input, size_t Index)
         {
             for (auto it = Input.begin(); it != Input.end();)
@@ -340,3 +339,98 @@ namespace Encoding
         return toNarrow(toUTF8(Input));
     }
 }
+
+
+#if defined(HAS_ABSEIL)
+[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, char Needle)
+{
+    return absl::StrSplit(String, absl::ByChar(Needle));
+}
+[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, std::string_view Needle)
+{
+    return absl::StrSplit(String, absl::ByAnyChar(Needle));
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, char Needle)
+{
+    return absl::StrSplit(String, absl::ByChar(Needle));
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, std::string_view Needle)
+{
+    return absl::StrSplit(String, absl::ByAnyChar(Needle));
+}
+#else
+[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, char Needle)
+{
+    std::vector<std::string_view> Result;
+    Result.reserve(8);
+
+    while (!String.empty())
+    {
+        const auto Substring = String.substr(0, String.find_first_of(Needle));
+        String.remove_prefix(Substring.size() + 1);
+        Result.push_back(std::move(Substring));
+    }
+
+    return Result;
+}
+[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, std::string_view Needle)
+{
+    std::vector<std::string_view> Result;
+    Result.reserve(8);
+
+    while (!String.empty())
+    {
+        Inlinedvector<size_t, 8> Offsets;
+        for (const auto Char : Needle)
+        {
+            const auto Pos = String.find_first_of(Char);
+            if (Pos >= 0) Offsets.push_back(Pos);
+        }
+        std::sort(Offsets.begin(), Offsets.end());
+
+        const auto Offset = Offsets.empty() ? -1 : Offsets.front();
+        const auto Substring = String.substr(0, Offset);
+        String.remove_prefix(Substring.size() + 1);
+        Result.push_back(std::move(Substring));
+    }
+
+    return Result;
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, char Needle)
+{
+    std::vector<std::string> Result;
+    Result.reserve(8);
+
+    while (!String.empty())
+    {
+        const auto Substring = String.substr(0, String.find_first_of(Needle));
+        String.remove_prefix(Substring.size() + 1);
+        Result.push_back(std::move(Substring));
+    }
+
+    return Result;
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, std::string_view Needle)
+{
+    std::vector<std::string> Result;
+    Result.reserve(8);
+
+    while (!String.empty())
+    {
+        Inlinedvector<size_t, 8> Offsets;
+        for (const auto Char : Needle)
+        {
+            const auto Pos = String.find_first_of(Char);
+            if (Pos >= 0) Offsets.push_back(Pos);
+        }
+        std::sort(Offsets.begin(), Offsets.end());
+
+        const auto Offset = Offsets.empty() ? -1 : Offsets.front();
+        const auto Substring = String.substr(0, Offset);
+        String.remove_prefix(Substring.size() + 1);
+        Result.push_back(std::move(Substring));
+    }
+
+    return Result;
+}
+#endif
