@@ -20,7 +20,7 @@ SIMDJSON treats all but the largest ints as signed.
 namespace JSON
 {
     enum class Type_t { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
-    using Object_t = absl::flat_hash_map<std::string, struct Value_t>;
+    using Object_t = std::unordered_map<std::string, struct Value_t>;
     using Array_t = std::vector<struct Value_t>;
 
     // Helper for type deduction.

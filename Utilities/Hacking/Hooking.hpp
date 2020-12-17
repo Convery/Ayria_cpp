@@ -286,7 +286,7 @@ namespace Hooking
     inline void *Stomphook(void *Target, void *Replacement)
     {
         return reinterpret_cast<void*>(Stomphook(reinterpret_cast<std::uintptr_t>(Target),
-            reinterpret_cast<std::uintptr_t>(Replacement)));
+                                                 reinterpret_cast<std::uintptr_t>(Replacement)));
     }
     inline void *Stomphook(std::uintptr_t Target, void *Replacement)
     {
