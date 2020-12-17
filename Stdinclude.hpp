@@ -27,6 +27,7 @@
 #include <bitset>
 #include <chrono>
 #include <cstdio>
+#include <future>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -47,8 +48,6 @@
 #include <Windows.h>
 #include <intrin.h>
 #include <direct.h>
-#undef min
-#undef max
 #else
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -80,7 +79,6 @@ using namespace std::literals;
 #include <Utilities/Encoding/JSON.hpp>
 #include <Utilities/Encoding/Stringconv.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
-#include <Utilities/Hacking/Branchless.hpp>
 #include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>
@@ -91,6 +89,7 @@ using namespace std::literals;
 #include <Utilities/Internal/Misc.hpp>
 #include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
+#include <Utilities/Internal/Ringbuffer.hpp>
 
 // Ayria module used throughout the projects.
 // Exports as struct for easier plugin initialization.
@@ -101,15 +100,27 @@ struct Ayriamodule_t
     // For use with the APIs.
     typedef union
     {
-        uint64_t Raw;
+        uint64_t AccountID;
         struct
         {
-            uint32_t AccountID;
-            uint16_t Creationdate;
-            uint8_t Accountflags;
+            uint32_t UserID;
             uint8_t Stateflags;
+            uint8_t Accountflags;
+            uint16_t Creationdate;
         };
     } AyriaID_t;
+    typedef union
+    {
+        uint8_t Raw;
+        struct
+        {
+            uint8_t
+                isIngame : 1,
+                isHosting : 1,
+
+                MAX : 1;
+        };
+    } Stateflags_t;
     typedef union
     {
         uint8_t Raw;
@@ -126,37 +137,12 @@ struct Ayriamodule_t
                 AYA_RESERVED2 : 1;
         };
     } Accountflags_t;
-    typedef union
-    {
-        uint8_t Raw;
-        struct
-        {
-            uint8_t
-                isIngame : 1,
-                isHosting : 1,
-
-                MAX : 1;
-        };
-    } Stateflags_t;
-
-    // Create a functionID from the name of the service.
-    static uint32_t toFunctionID(const char *Name) { return Hash::WW32(Name); };
 
     // UTF8 escaped ASCII strings.
-    // using Callback_t = void(__cdecl *)(int Argc, const char **Argv);
     void(__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
-    void(__cdecl *addConsolecommand)(const char *Name, unsigned int Length, const void *Callback);
-    void(__cdecl *execCommandline)(const char *String, unsigned int Length);
 
-    // using Messagecallback_t = void(__cdecl *)(const char *JSONString);
-    void(__cdecl *addNetworklistener)(uint32_t MessageID, void *Callback);
-
-    // FunctionID = WW32("Service name"); ID 0 / Invalid = List all available.
-    const char *(__cdecl *API_Client)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Social)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Network)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Matchmake)(uint32_t FunctionID, const char *JSONString);
-    const char *(__cdecl *API_Fileshare)(uint32_t FunctionID, const char *JSONString);
+    // Call the exported JSON functions, pass NULL as function to list all.
+    const char (__cdecl *JSONAPI)(const char *Function, const char *JSONString);
 
     Ayriamodule_t()
     {
@@ -169,14 +155,7 @@ struct Ayriamodule_t
 
         #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
         Import(addConsolemessage);
-        Import(addConsolecommand);
-        Import(execCommandline);
-        Import(addNetworklistener);
-        Import(API_Client);
-        Import(API_Social);
-        Import(API_Network);
-        Import(API_Matchmake);
-        Import(API_Fileshare);
+        Import(JSONAPI);
         #undef Import
     }
 };

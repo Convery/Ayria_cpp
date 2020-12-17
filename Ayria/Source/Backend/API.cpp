@@ -31,7 +31,7 @@ namespace Backend::API
 
         return Functionresults.at(Hash).c_str();
     }
-    extern "C" EXPORT_ATTR const char *__cdecl CallAPI(const char *Function, const char *JSONString)
+    extern "C" EXPORT_ATTR const char *__cdecl JSONAPI(const char *Function, const char *JSONString)
     {
         assert(Function); assert(JSONString);
         const auto Hash = Hash::WW32(Function);

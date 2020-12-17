@@ -145,6 +145,27 @@ namespace Console
     }
     #pragma endregion
 
+    // API exports.
+    static std::string __cdecl addCommand(const char *JSONString)
+    {
+        const auto Request = JSON::Parse(JSONString);
+        const auto Command = Request.value<std::string>("Command");
+        const auto Callback = Request.value<size_t>("Callback");
+
+        if (Callback && !Command.empty())
+            addConsolecommand(Command, Callback_t(Callback));
+
+        return "{}";
+    }
+    static std::string __cdecl execCommand(const char *JSONString)
+    {
+        const auto Request = JSON::Parse(JSONString);
+        const auto Commandline = Request.value<std::string>("Commandline");
+
+        execCommandline(Commandline, false);
+        return "{}";
+    }
+
     // Add common commands.
     void Initializebackend()
     {
@@ -182,27 +203,19 @@ namespace Console
         };
         addConsolecommand("setFilter", Changefilter);
         addConsolecommand("Filter", Changefilter);
+
+        Backend::API::addHandler("Console::addCommand", addCommand);
+        Backend::API::addHandler("Console::Exec", execCommand);
     }
 
     // Provide a C-API for external code.
     namespace API
     {
         // UTF8 escaped ASCII strings.
-        // using Callback_t = void(__cdecl *)(int Argc, const char **Argv);
-        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, unsigned int Length, const void *Callback)
-        {
-            assert(Name); assert(Callback);
-            Console::addConsolecommand({ Name, Length }, (Callback_t)Callback);
-        }
         extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Length, unsigned int Colour)
         {
             assert(String);
             Console::addConsolemessage({String, Length }, uint32_t(Colour));
-        }
-        extern "C" EXPORT_ATTR void __cdecl execCommandline(const char *String, unsigned int Length)
-        {
-            assert(String);
-            Console::execCommandline({ String, Length }, false);
         }
     }
 }
