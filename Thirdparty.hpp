@@ -16,11 +16,6 @@
 #define HAS_NLOHMANN
 #endif
 
-// Generic ring-buffer implementation.
-#if __has_include(<nonstd/ring_span.hpp>)
-#include <nonstd/ring_span.hpp>
-#endif
-
 // LZ4 - Fast compression library.
 #if __has_include(<lz4.h>)
 #include <lz4.h>
@@ -165,7 +160,36 @@
 #pragma comment(lib, "absl_time_zone.lib")
 #pragma comment(lib, "absl_wyhash.lib")
 
+template <class K, class V,
+          class Hash = absl::container_internal::hash_default_hash<K>,
+          class Eq = absl::container_internal::hash_default_eq<K>>
+using Hashmap = absl::flat_hash_map<K, V, Hash, Eq>;
+
+template <class Key, class Value,
+          class Hash = absl::container_internal::hash_default_hash<Key>,
+          class Eq = absl::container_internal::hash_default_eq<Key>>
+using Nodemap = absl::node_hash_map<Key, Value, Hash, Eq>;
+
+template <class T, class Hash = absl::container_internal::hash_default_hash<T>,
+          class Eq = absl::container_internal::hash_default_eq<T>>
+using Hashset = absl::flat_hash_set<T, Hash, Eq>;
+
+template<typename T, size_t N>
+using Inlinedvector = absl::InlinedVector<T, N>;
+
 #else
-#pragma message ("Ayria 0.9 relies on Abseil, remember to update VCPKG.")
+
+template <class _Kty, class _Ty, class _Hasher = std::hash<_Kty>, class _Keyeq = std::equal_to<_Kty>>
+using Hashmap = std::unordered_map<_Kty, _Ty, _Hasher, _Keyeq>;
+
+template <class _Kty, class _Ty, class _Hasher = std::hash<_Kty>, class _Keyeq = std::equal_to<_Kty>>
+using Nodemap = std::unordered_map<_Kty, _Ty, _Hasher, _Keyeq>;
+
+template <class _Kty, class _Hasher = std::hash<_Kty>, class _Keyeq = std::equal_to<_Kty>>
+using Hashset = std::unordered_set<_Kty, _Hasher, _Keyeq>;
+
+template <class _Ty, size_t N>
+using Inlinedvector = std::vector<_Ty>;
+
 #endif
 #pragma warning(pop)
