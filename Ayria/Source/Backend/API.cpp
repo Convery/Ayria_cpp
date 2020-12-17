@@ -7,36 +7,51 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-// C-exports, JSON in and JSON out.
-namespace API
+namespace Backend::API
 {
-    #define Storage(x)                                                                                          \
-        absl::flat_hash_map<uint32_t, std::string> Functionnames_ ##x;                                          \
-        absl::flat_hash_map<uint32_t, std::string> Functionresults_ ##x;                                        \
-        absl::flat_hash_map<uint32_t, Functionhandler> Functionhandlers_ ##x;                                   \
+    static Hashmap<uint32_t, std::string> Functionresults{};
+    static Hashmap<uint32_t, Callback_t> Functionhandlers{};
+    static Hashmap<uint32_t, std::string> Functionnames{};
 
-    #define Register(x)                                                                                         \
-        void Registerhandler_ ##x(std::string_view Function, Functionhandler Handler)                           \
-        { const auto FunctionID = Hash::WW32(Function);                                                         \
-        Functionnames_ ##x[FunctionID] = Function; Functionhandlers_ ##x[FunctionID] = Handler; }               \
+    void addHandler(const char *Function, Callback_t Callback)
+    {
+        assert(Function);  assert(Callback);
+        const auto Hash = Hash::WW32(Function);
+        Functionnames.emplace(Hash, Function);
+        Functionhandlers.emplace(Hash, Callback);
+    }
+    const char *callHandler(const char *Function, const char *JSONString)
+    {
+        assert(Function); assert(JSONString);
+        const auto Hash = Hash::WW32(Function);
 
-    #define Export(x)                                                                                           \
-        extern "C" EXPORT_ATTR const char *__cdecl API_ ##x(uint32_t FunctionID, const char *JSONString)        \
-        { if (FunctionID == 0 || !Functionhandlers_ ##x.contains(FunctionID))                                   \
-            { static std::string Result; JSON::Array_t Array;                                                   \
-              for (const auto &[ID, Name] : Functionnames_ ##x)                                                 \
-                    Array.push_back(JSON::Object_t({ { "FunctionID", ID }, { "Functionname", Name } }));        \
-              Result = JSON::Dump(Array); return Result.c_str(); }                                              \
-          Functionresults_ ##x[FunctionID] = Functionhandlers_ ##x[FunctionID](JSONString ? JSONString : "{}"); \
-          return Functionresults_ ##x[FunctionID].c_str(); }                                                    \
+        const auto Result = Functionhandlers.at(Hash)(JSONString);
+        if (Hash::WW32(Result) != Hash::WW32(Functionresults.at(Hash)))
+            Functionresults.emplace(Hash, Result);
 
-    Storage(Client); Register(Client); Export(Client);
-    Storage(Social); Register(Social); Export(Social);
-    Storage(Network); Register(Network); Export(Network);
-    Storage(Matchmake); Register(Matchmake); Export(Matchmake);
-    Storage(Fileshare); Register(Fileshare); Export(Fileshare);
+        return Functionresults.at(Hash).c_str();
+    }
+    extern "C" EXPORT_ATTR const char *__cdecl CallAPI(const char *Function, const char *JSONString)
+    {
+        assert(Function); assert(JSONString);
+        const auto Hash = Hash::WW32(Function);
 
-    #undef Export
-    #undef Storage
-    #undef Register
+        if (!JSONString) [[unlikely]] JSONString = "";
+        if (!Function || !Functionhandlers.contains(Hash)) [[unlikely]]
+        {
+            // Return a list of the available functions.
+            JSON::Array_t Array; Array.reserve(Functionnames.size());
+            for (const auto &[Key, Value] : Functionnames)
+                Array.push_back(Value);
+
+            Functionresults.emplace(0, JSON::Dump(Array));
+            return Functionresults.at(0).c_str();
+        }
+
+        const auto Result = Functionhandlers.at(Hash)(JSONString);
+        if (Hash::WW32(Result) != Hash::WW32(Functionresults.at(Hash)))
+            Functionresults.emplace(Hash, Result);
+
+        return Functionresults.at(Hash).c_str();
+    }
 }

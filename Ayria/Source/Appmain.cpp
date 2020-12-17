@@ -7,6 +7,9 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
+// Global system information.
+Globalstate_t Global{};
+
 // Some applications do not handle exceptions well.
 static LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Context)
 {

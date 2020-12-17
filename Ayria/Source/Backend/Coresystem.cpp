@@ -10,7 +10,7 @@
 namespace Backend
 {
     using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
-    absl::InlinedVector<Task_t, 8> Backgroundtasks;
+    static Inlinedvector<Task_t, 8> Backgroundtasks{};
 
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)())
@@ -19,7 +19,7 @@ namespace Backend
     }
 
     // TODO(tcn): Investigate if we can merge these threads.
-    static DWORD __stdcall Backgroundthread(void *)
+    [[noreturn]] static DWORD __stdcall Backgroundthread(void *)
     {
         // Name this thread for easier debugging.
         setThreadname("Ayria_Background");
@@ -41,10 +41,8 @@ namespace Backend
             // Most tasks run with periods in seconds.
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-
-        return 0;
     }
-    static DWORD __stdcall Graphicsthread(void *)
+    [[noreturn]] static DWORD __stdcall Graphicsthread(void *)
     {
         // UI-thread, boost our priority.
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
@@ -52,13 +50,18 @@ namespace Backend
         // Name this thread for easier debugging.
         setThreadname("Ayria_Graphics");
 
+        // Disable DPI scaling on Windows 10.
+        if (const auto Callback = GetProcAddress(LoadLibraryA("User32.dll"), "SetThreadDpiAwarenessContext"))
+            reinterpret_cast<size_t (__stdcall *)(size_t)>(Callback)(size_t(-2));
+
         // Initialize the subsystems.
         // TODO(tcn): Initialize pluginmenu.
         Overlay_t<> Ingameconsole({}, {});
         Console::Overlay::Createconsole(&Ingameconsole);
 
-        // Optional console for developers, runs its own thread.
-        if (std::strstr(GetCommandLineA(), "-DEVCON")) Console::Windows::Createconsole(GetModuleHandleW((NULL)));
+        // Optional console for developers.
+        if (std::strstr(GetCommandLineA(), "-DEVCON"))
+            Console::Windows::Createconsole(GetModuleHandleW(NULL));
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
@@ -95,8 +98,6 @@ namespace Backend
             // Cap the FPS to ~60, as we only render if dirty we can get thousands of FPS.
             std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
         }
-
-        return 0;
     }
 
     // Initialize the system.
@@ -106,19 +107,11 @@ namespace Backend
         _mm_setcsr(_mm_getcsr() | 0x8040); // _MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON
 
         // Initialize subsystems that plugins may need.
-        Matchmaking::API_Initialize();
-        Clientinfo::API_Initialize();
-        Backend::API_Initialize();
-        Social::API_Initialize();
-
-        // Backend background tasks.
-        Enqueuetask(0, Updatenetworking);
-
-        // Default network groups.
-        Joinmessagegroup(Generalport);
-        Joinmessagegroup(Pluginsport);
-        Joinmessagegroup(Matchmakeport);
-        Joinmessagegroup(Fileshareport);
+        //Matchmaking::API_Initialize();
+        //Clientinfo::API_Initialize();
+        //Social::API_Initialize();
+        Fileshare::Initialize();
+        Network::Initialize();
 
         // Workers.
         CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
