@@ -8,8 +8,8 @@
 #include <Global.hpp>
 
 // RTTI restoration of the pen.
-absl::flat_hash_map<int, HPEN> Pens{};
-absl::flat_hash_map<COLORREF, HBRUSH> Brushes{};
+Hashmap<int, HPEN> Pens{};
+Hashmap<COLORREF, HBRUSH> Brushes{};
 struct Pen_t
 {
     HGDIOBJ Previous;

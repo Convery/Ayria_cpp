@@ -13,10 +13,8 @@ namespace Console
     #pragma region Consoleoutput
     static Spinlock Writelock;
     constexpr size_t Logsize = 256;
-    static std::array<Logline_t, Logsize> Rawbuffer{};
-    static nonstd::ring_span<Logline_t> Consolelog
-    { Rawbuffer.data(), Rawbuffer.data() + Logsize, Rawbuffer.data(), Logsize };
     static std::wstring Currentfilter{};
+    static Ringbuffer<Logline_t, Logsize> Consolelog{};
 
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::string &Message, Color_t Colour)
@@ -46,7 +44,7 @@ namespace Console
         // Split by newline.
         for (const auto &String : absl::StrSplit(Message, '\n'))
             if (!String.empty())
-                Consolelog.push_back({ Encoding::toWide(String), Colour });
+                Consolelog.push_back(Logline_t{ Encoding::toWide(String), Colour });
     }
 
     // Fetch a copy of the internal strings.
@@ -97,19 +95,24 @@ namespace Console
             Commandline.remove_suffix(1);
 
         // Split into arguments.
-        const absl::InlinedVector<std::string, 4> Split = absl::StrSplit(Commandline, absl::ByAnyChar("\" "));
+        bool isQuoted = false;
+        Inlinedvector<std::string, 8> Arguments{ "" };
+        for (const auto &Char : Commandline)
+            if (Char == ' ' && !isQuoted) Arguments.push_back("");
+            else if (Char == '\"') { isQuoted ^= 1; Arguments.push_back(""); }
+            else Arguments.back().push_back(Char);
 
-        // Format as C-array.
-        const auto Array = (const char **)alloca((Split.size() + 1) * sizeof(char *));
-        for (size_t i = 0; i < Split.size(); i++)
-            Array[i] = Split[i].c_str();
+        // Format as a C-array with the last pointer being null.
+        const auto Array = (const char **)alloca((Arguments.size() + 1) * sizeof(char *));
+        for (size_t i = 0; i < Arguments.size(); i++)
+            Array[i] = Arguments[i].c_str();
 
         // Find the function we are interested in.
         const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
         {
-            if (Pair.first.size() != Split[0].size()) return false;
+            if (Pair.first.size() != Arguments[0].size()) return false;
             for (size_t i = 0; i < Pair.first.size(); i++)
-                if (std::toupper(Pair.first[i]) != std::toupper(Split[0][i]))
+                if (std::toupper(Pair.first[i]) != std::toupper(Arguments[0][i]))
                     return false;
             return true;
         });
@@ -121,7 +124,7 @@ namespace Console
         }
         if (Callback != Functions.end())
         {
-            Callback->second(Split.size(), Array);
+            Callback->second((int)Arguments.size(), Array);
         }
     }
 

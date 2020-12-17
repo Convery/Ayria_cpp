@@ -42,7 +42,7 @@ struct Element_t
 template <bool Animated = false>
 struct Overlay_t
 {
-    absl::InlinedVector<Element_t, 4> Elements;
+    Inlinedvector<Element_t, 4> Elements;
     vec2f Position, Size;
     bool Ctrl{}, Shift{};
     bool Forcerepaint{};
@@ -421,10 +421,6 @@ inline HBITMAP Createmask(HDC Devicecontext, vec2f Size, COLORREF Transparancyke
 // Windows sometimes want pixels as BGRA.
 template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
 {
-    #if !defined(__AVX__)
-    #pragma message("AVX not enabled, unaligned access may cause poor performance in SwapRB().")
-    #endif
-
     // We only use 120 bits per __m128 for RGB.
     constexpr auto Pixelsize = 3 + hasAlpha;
     constexpr auto Stride = 15 + hasAlpha;
