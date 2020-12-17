@@ -99,14 +99,6 @@ using Eventflags_t = union
     };
 };
 
-struct Client_t
-{
-    uint64_t AccountID;
-    uint32_t NetworkID;
-    const char *Sharedkey;
-    const wchar_t *Username;
-};
-
 #pragma pack(pop)
 #pragma endregion
 
