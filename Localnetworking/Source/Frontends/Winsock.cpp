@@ -10,11 +10,11 @@
 namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
-    std::unordered_map<std::string_view, void *> Originalfunctions;
-    std::unordered_map<size_t, sockaddr_in> Directedconnections;
-    std::unordered_map<size_t, sockaddr_in> Connections;
-    std::unordered_map<size_t, sockaddr_in> Bindings;
-    std::unordered_set<size_t> Datagramsockets;
+    Hashmap<size_t, sockaddr_in> Directedconnections;
+    Hashmap<std::string, void *> Originalfunctions;
+    Hashmap<size_t, sockaddr_in> Connections;
+    Hashmap<size_t, sockaddr_in> Bindings;
+    Hashset<size_t> Datagramsockets;
 
     // Utility functionality.
     inline std::string getAddress(const struct sockaddr *Sockaddr)

@@ -42,10 +42,10 @@ __attribute__((constructor)) void __stdcall DllMain()
 
 namespace Localnetworking
 {
-    std::unordered_map<std::string, Proxyserver_t> Proxyservers{};
-    std::unordered_map<size_t, IServer *> Serversockets{};
-    std::vector<std::string> Hostblacklist{};
-    std::vector<size_t> Pluginhandles{};
+    Nodemap<std::string, Proxyserver_t> Proxyservers{};
+    Inlinedvector<std::string, 4> Hostblacklist{};
+    Hashmap<size_t, IServer *> Serversockets{};
+    Hashset<size_t> Pluginhandles{};
     Defaultmutex Bottleneck{};
     FD_SET Activesockets{};
     uint16_t Backendport{};
@@ -260,7 +260,7 @@ namespace Localnetworking
             if (const auto Module = LoadLibraryW(va(L"./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
                 if (!GetProcAddress(Module, "Createserver")) FreeLibrary(Module);
-                else Pluginhandles.push_back(size_t(Module));
+                else Pluginhandles.insert(size_t(Module));
             }
         }
     }
