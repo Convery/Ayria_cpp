@@ -82,7 +82,7 @@ struct vec2_t
     friend vec2_t operator-(vec2_t Left, const vec2_t &Right) { Left -= Right; return Left; }
 };
 using vec2f = vec2_t<bfloat16_t>;
-using vec2i = vec2_t<int32_t>;
+using vec2i = vec2_t<int16_t>;
 
 template <typename T>
 struct vec3_t
@@ -110,7 +110,7 @@ struct vec3_t
     friend vec3_t operator-(vec3_t Left, const vec3_t &Right) { Left -= Right; return Left; }
 };
 using vec3f = vec3_t<bfloat16_t>;
-using vec3i = vec3_t<int32_t>;
+using vec3i = vec3_t<int16_t>;
 
 template <typename T>
 struct vec4_t
@@ -143,6 +143,6 @@ struct vec4_t
     friend vec4_t operator-(vec4_t Left, const vec4_t &Right) { Left -= Right; return Left; }
 };
 using vec4f = vec4_t<bfloat16_t>;
-using vec4i = vec4_t<int32_t>;
+using vec4i = vec4_t<int16_t>;
 
 #pragma pack(pop)
