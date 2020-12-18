@@ -95,8 +95,6 @@ using namespace std::literals;
 // Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
-    HMODULE Modulehandle{};
-
     // For use with the APIs.
     typedef union
     {
@@ -138,25 +136,33 @@ struct Ayriamodule_t
         };
     } Accountflags_t;
 
-    // UTF8 escaped ASCII strings.
-    void(__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
-
     // Call the exported JSON functions, pass NULL as function to list all.
-    const char (__cdecl *JSONAPI)(const char *Function, const char *JSONString);
+    const char *(__cdecl *JSONAPI)(const char *Function, const char *JSONString);
 
+    // Callback = void(__cdecl *)(unsigned int NodeID, unsigned int Length, const char *Message)
+    void (__cdecl *addMessagehandler)(const char *Messagetype, const void *Callback);
+
+    // UTF8 escaped ASCII strings, Callback = void(__cdecl *)(int Argc, const char **Argv);
+    void (__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
+    void (__cdecl *addConsolecommand)(const char *Command, const void *Callback);
+
+    #if defined(__cplusplus)
     Ayriamodule_t()
     {
         #if defined(NDEBUG)
-        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        HMODULE Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
         #else
-        Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+        HMODULE Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
         #endif
         assert(Modulehandle);
 
         #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
+        Import(addMessagehandler);
         Import(addConsolemessage);
+        Import(addConsolecommand);
         Import(JSONAPI);
         #undef Import
     }
+    #endif
 };
 extern Ayriamodule_t Ayria;

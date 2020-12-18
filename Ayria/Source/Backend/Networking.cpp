@@ -65,15 +65,10 @@ namespace Backend::Network
     // Export functionality to the plugins.
     namespace Export
     {
-        static void __cdecl Dummycallback(uint32_t, uint32_t, const char *) {}
-        static std::string __cdecl addMessagehandler(const char *JSONString)
+        extern "C" EXPORT_ATTR void __cdecl addMessagehandler(const char *Messagetype, const void *Callback)
         {
-            const auto Request = JSON::Parse(JSONString);
-            const auto Identifier = Request.value("Identifier", std::string());
-            const auto Callbackaddress = Request.value("Callbackaddress", size_t(Dummycallback));
-
-            Network::addHandler(Identifier.c_str(), Callback_t(Callbackaddress));
-            return ""s;
+            if (!Messagetype || !Callback) return;
+            Network::addHandler(Messagetype, Callback_t(Callback));
         }
         static std::string __cdecl Sendmessage(const char *JSONString)
         {
@@ -167,7 +162,6 @@ namespace Backend::Network
 
         // Export the network to the plugins.
         API::addHandler("Network::Sendmessage", Export::Sendmessage);
-        API::addHandler("Network::addHandler", Export::addMessagehandler);
 
         Enqueuetask(0, Updatenetworking);
     }

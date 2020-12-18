@@ -146,16 +146,10 @@ namespace Console
     #pragma endregion
 
     // API exports.
-    static std::string __cdecl addCommand(const char *JSONString)
+    extern "C"  EXPORT_ATTR void __cdecl addConsolecommand(const char *Command, const void *Callback)
     {
-        const auto Request = JSON::Parse(JSONString);
-        const auto Command = Request.value<std::string>("Command");
-        const auto Callback = Request.value<size_t>("Callback");
-
-        if (Callback && !Command.empty())
-            addConsolecommand(Command, Callback_t(Callback));
-
-        return "{}";
+        if (!Command || !Callback) return;
+        addConsolecommand(std::string_view(Command), Callback_t(Callback));
     }
     static std::string __cdecl execCommand(const char *JSONString)
     {
@@ -204,7 +198,6 @@ namespace Console
         addConsolecommand("setFilter", Changefilter);
         addConsolecommand("Filter", Changefilter);
 
-        Backend::API::addHandler("Console::addCommand", addCommand);
         Backend::API::addHandler("Console::Exec", execCommand);
     }
 
