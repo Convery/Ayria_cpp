@@ -95,7 +95,7 @@ using namespace std::literals;
 // Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
-    // For use with the APIs.
+    // For parsing Account and User ID.
     typedef union
     {
         uint64_t AccountID;
@@ -106,7 +106,7 @@ struct Ayriamodule_t
             uint8_t Accountflags;
             uint16_t Creationdate;
         };
-    } AyriaID_t;
+    } AccountID_t;
     typedef union
     {
         uint8_t Raw;
@@ -114,9 +114,8 @@ struct Ayriamodule_t
         {
             uint8_t
                 isIngame : 1,
-                isHosting : 1,
-
-                MAX : 1;
+                isPrivate : 1,
+                isHosting : 1;
         };
     } Stateflags_t;
     typedef union
@@ -125,14 +124,10 @@ struct Ayriamodule_t
         struct
         {
             uint8_t
-                isClan : 1,
                 isAdmin : 1,
                 isGroup : 1,
                 isServer : 1,
-                isPrivate : 1,
-                isModerator : 1,
-                AYA_RESERVED1 : 1,
-                AYA_RESERVED2 : 1;
+                isModerator : 1;
         };
     } Accountflags_t;
 
@@ -150,13 +145,13 @@ struct Ayriamodule_t
     Ayriamodule_t()
     {
         #if defined(NDEBUG)
-        HMODULE Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
+        const auto Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
         #else
-        HMODULE Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
+        const auto Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
         #endif
         assert(Modulehandle);
 
-        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x);
+        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x)
         Import(addMessagehandler);
         Import(addConsolemessage);
         Import(addConsolecommand);
