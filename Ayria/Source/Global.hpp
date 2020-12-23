@@ -13,7 +13,7 @@
 // Global system information.
 struct Globalstate_t
 {
-    wchar_t *Username, *Locale;
+    std::unique_ptr<std::wstring> Username, Locale;
     RSA *Cryptokeys;
     bool isOnline;
 

@@ -37,8 +37,8 @@ namespace Backend
 // Callbacks for the syncing multi-casts.
 namespace Backend::Network
 {
-    // static void __cdecl Callback(unsigned int NodeID, unsigned int Length, const char *Message);
-    using Callback_t = void(__cdecl *)(unsigned int NodeID, unsigned int Length, const char *Message);
+    // static void __cdecl Callback(unsigned int NodeID, const char *Message, unsigned int Length);
+    using Callback_t = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
     void Sendmessage(const char *Identifier, std::string_view JSONString);
     void addHandler(const char *Identifier, Callback_t Callback);
 

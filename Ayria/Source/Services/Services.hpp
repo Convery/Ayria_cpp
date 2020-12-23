@@ -22,8 +22,8 @@ struct Client_t
     };
 
     uint32_t NetworkID;
-    const char *Sharedkey;
-    const wchar_t *Username;
+    const std::string *Sharedkey;
+    const std::wstring *Username;
 };
 
 namespace Clientinfo
@@ -33,8 +33,11 @@ namespace Clientinfo
 
     // Clients are split into LAN and WAN, networkIDs are for LAN.
     Client_t *getClientbyID(uint32_t NetworkID);
-    std::vector<Client_t> getRemoteclients();
-    std::vector<Client_t> getLocalclients();
+    std::vector<Client_t *> getRemoteclients();
+    std::vector<Client_t *> getLocalclients();
+
+    // If another clients crypto-key is needed, we request it.
+    void Requestcryptokeys(std::vector<uint32_t> UserIDs);
 
     // Load client-info from disk.
     void Initialize();
@@ -91,7 +94,7 @@ namespace Social
         using Message_t = struct { uint32_t Timestamp; uint64_t Source, Target; std::string B64Message; };
 
         // TODO(tcn): Move to the message module.
-        // Helpers for serialization.
+        // Helpers for serialisation.
         JSON::Object_t toObject(const Message_t &Message);
         Message_t toMessage(const JSON::Value_t &Object);
 

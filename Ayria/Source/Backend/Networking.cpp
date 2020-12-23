@@ -129,7 +129,7 @@ namespace Backend::Network
                 // May have multiple listeners for the same messageID.
                 for (const auto Callback : Result->second)
                 {
-                    Callback(Packet->RandomID, Decoded.size(), Decoded.data());
+                    Callback(Packet->RandomID, Decoded.data(), Decoded.size());
                 }
             }
         }
