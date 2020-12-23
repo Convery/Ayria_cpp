@@ -18,11 +18,11 @@ set(CMAKE_DEBUG_POSTFIX "d")
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
-    if(CMAKE_BUILD_TYPE MATCHES Release)
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /W4 /Ogsiytyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except- /arch:AVX")
+    if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/Zc:__cplusplus /permissive- /W4 /Oiytyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except-")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /utf-8 /fp:except- /arch:AVX") # /d2cgsummary
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/Zc:__cplusplus /permissive- /Gy /utf-8 /fp:except-") # /d2cgsummary
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:full /cgthreads:8")
     endif()
 
@@ -70,7 +70,7 @@ add_subdirectory(Utilities)
 add_subdirectory(Ayria)
 add_subdirectory(Injector)
 add_subdirectory(Localnetworking)
-add_subdirectory(Platformwrapper)
+#add_subdirectory(Platformwrapper)
 
 ## Examples.
-add_subdirectory(Plugintemplate)
+#add_subdirectory(Plugintemplate)

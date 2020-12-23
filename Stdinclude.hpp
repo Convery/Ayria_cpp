@@ -134,7 +134,7 @@ struct Ayriamodule_t
     // Call the exported JSON functions, pass NULL as function to list all.
     const char *(__cdecl *JSONAPI)(const char *Function, const char *JSONString);
 
-    // Callback = void(__cdecl *)(unsigned int NodeID, unsigned int Length, const char *Message)
+    // Callback = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
     void (__cdecl *addMessagehandler)(const char *Messagetype, const void *Callback);
 
     // UTF8 escaped ASCII strings, Callback = void(__cdecl *)(int Argc, const char **Argv);

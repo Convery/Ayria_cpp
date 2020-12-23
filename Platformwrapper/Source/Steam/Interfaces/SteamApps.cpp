@@ -25,7 +25,7 @@ namespace Steam
 
         const auto Filename = va(L"./Ayria/Assets/Steam/Appinfo_%u.json", Steam.ApplicationID);
         const auto Filebuffer = FS::Readfile<char>(Filename);
-        sAppdata = ParseJSON(Filebuffer);
+        if(!Filebuffer.empty()) sAppdata = ParseJSON(Filebuffer);
         pAppdata = &sAppdata;
         return pAppdata;
     }

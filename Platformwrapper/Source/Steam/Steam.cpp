@@ -71,12 +71,12 @@ namespace Steam
                 {
                     {
                         wchar_t Buffer[260]{}; long Size{ 260 };
-                        if (ERROR_SUCCESS == RegQueryValueW(Registrykey, L"InstallPath", Buffer, &Size))
+                        if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"InstallPath", nullptr, nullptr, (LPBYTE)Buffer, &Size))
                             Steam.Installpath = std::wstring(Buffer);
                     }
                     {
                         wchar_t Buffer[260]{}; long Size{ 260 };
-                        if (ERROR_SUCCESS == RegQueryValueW(Registrykey, L"Language", Buffer, &Size))
+                        if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"Language", nullptr, nullptr, (LPBYTE)Buffer, &Size))
                             Steam.Steamlocale = std::wstring(Buffer);
                     }
                     RegCloseKey(Registrykey);
