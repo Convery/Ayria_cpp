@@ -350,7 +350,7 @@ namespace JSON
             {
                 Result = Parse(nlohmann::json::parse(JSONString.data(), nullptr, true, true));
             }
-            } catch (const std::exception &e)
+            catch (const std::exception &e)
             {
                 (void)e; Debugprint(e.what());
             };

@@ -93,21 +93,21 @@ namespace Clientinfo
     {
         for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
             if (it->NetworkID == NetworkID)
-                return it;
+                return &*it;
         return nullptr;
     }
     std::vector<Client_t *> getRemoteclients()
     {
         std::vector<Client_t *> Result; Result.reserve(Remoteclients.size());
         for (auto it = Remoteclients.begin(); it != Remoteclients.end(); ++it)
-            Result.push_back(it);
+            Result.push_back(&*it);
         return Result;
     }
     std::vector<Client_t *> getLocalclients()
     {
         std::vector<Client_t *> Result; Result.reserve(Localclients.size());
         for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
-            Result.push_back(it);
+            Result.push_back(&*it);
         return Result;
     }
 

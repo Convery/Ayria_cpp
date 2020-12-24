@@ -404,8 +404,8 @@ namespace Encoding
     while (!String.empty())
     {
         const auto Substring = String.substr(0, String.find_first_of(Needle));
+        Result.push_back({ Substring.data(), Substring.size() });
         String.remove_prefix(Substring.size() + 1);
-        Result.push_back(std::move(Substring));
     }
 
     return Result;
@@ -427,8 +427,9 @@ namespace Encoding
 
         const auto Offset = Offsets.empty() ? -1 : Offsets.front();
         const auto Substring = String.substr(0, Offset);
+
+        Result.push_back({ Substring.data(), Substring.size() });
         String.remove_prefix(Substring.size() + 1);
-        Result.push_back(std::move(Substring));
     }
 
     return Result;
