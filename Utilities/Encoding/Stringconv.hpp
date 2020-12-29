@@ -370,7 +370,7 @@ namespace Encoding
         const auto Nextoffset = String.find_first_of(Needle, Currentoffset);
         Results.emplace_back(String.substr(Currentoffset, Nextoffset));
         if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset;
+        Currentoffset = Nextoffset + 1;
     } while (true);
 
     return Results;
@@ -392,7 +392,7 @@ namespace Encoding
 
         Results.emplace_back(String.substr(Currentoffset, Nextoffset));
         if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset;
+        Currentoffset = Nextoffset + 1;
     } while (true);
 
     return Results;
@@ -409,7 +409,7 @@ namespace Encoding
         const auto Substring = String.substr(Currentoffset, Nextoffset);
         Results.emplace_back(Substring.data(), Substring.size());
         if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset;
+        Currentoffset = Nextoffset + 1;
     } while (true);
 
     return Results;
@@ -432,7 +432,7 @@ namespace Encoding
         const auto Substring = String.substr(Currentoffset, Nextoffset);
         Results.emplace_back(Substring.data(), Substring.size());
         if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset;
+        Currentoffset = Nextoffset + 1;
     } while (true);
 
     return Results;
