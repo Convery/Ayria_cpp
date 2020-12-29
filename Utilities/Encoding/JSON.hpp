@@ -217,6 +217,13 @@ namespace JSON
         //
         template<typename T> Value_t(const T &Input)
         {
+            // Need to decay any pointers.
+            if constexpr (std::is_pointer_v<T>)
+            {
+                *this = Value_t(*Input);
+                return;
+            }
+
             if constexpr (std::is_same_v<T, Value_t>) *this = Input;
             else
             {
