@@ -19,127 +19,143 @@ namespace Hash
         constexpr uint64_t _waterp0 = 0xa0761d65ull, _waterp1 = 0xe7037ed1ull, _waterp2 = 0x8ebc6af1ull;
         constexpr uint64_t _waterp3 = 0x589965cdull, _waterp4 = 0x1d8e4e27ull, _waterp5 = 0xeb44accbull;
 
-        template<size_t N> constexpr uint64_t ROT(const char *p)
+        // Worlds worst strlen, but compilers get upset.
+        [[nodiscard]] constexpr size_t WWStrlen(const char *String)
+        {
+            return *String ? 1 + WWStrlen(String + 1) : 0;
+        }
+
+        template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+        constexpr uint64_t toINT64(T *p)
         {
             uint64_t Result{};
-            if constexpr (N >= 8) Result |= (uint64_t(*p++) << (64 - 8));
-            if constexpr (N >= 16) Result |= (uint64_t(*p++) << (64 - 16));
-            if constexpr (N >= 32) Result |= (uint64_t(*p++) << (64 - 32));
+
+            if constexpr (N >= 64) Result |= (uint64_t(*p++) << (N - 64));
+            if constexpr (N >= 56) Result |= (uint64_t(*p++) << (N - 56));
+            if constexpr (N >= 48) Result |= (uint64_t(*p++) << (N - 48));
+            if constexpr (N >= 40) Result |= (uint64_t(*p++) << (N - 40));
+            if constexpr (N >= 32) Result |= (uint64_t(*p++) << (N - 32));
+            if constexpr (N >= 24) Result |= (uint64_t(*p++) << (N - 24));
+            if constexpr (N >= 16) Result |= (uint64_t(*p++) << (N - 16));
+            if constexpr (N >= 8)  Result |= (uint64_t(*p++) << (N - 8));
             return Result;
         }
+
         constexpr uint64_t Process(uint64_t A, uint64_t B)
         {
             const uint64_t Tmp{ A * B };
             return Tmp - (Tmp >> 32);
         }
-        constexpr size_t Strlen(const char *Input)
-        {
-            size_t Length = 0;
-            while (*Input++) Length++;
-            return Length;
-        }
 
-        constexpr inline uint64_t Wheathash(const char *key, size_t len, uint64_t seed)
+        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        constexpr uint64_t Wheathash(T *Input, size_t Length, uint64_t Seed)
         {
-            for (size_t i = 0; i + 16 <= len; i += 16, key += 16)
+            for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
             {
-                seed = Process(
-                       Process(ROT<32>(key) ^ _wheatp1, ROT<32>(key + 4) ^ _wheatp2) + seed,
-                       Process(ROT<32>(key + 8) ^ _wheatp3, ROT<32>(key + 12) ^ _wheatp4));
+                Seed = Process(
+                    Process(toINT64<32>(Input) ^ _wheatp1, toINT64<32>(Input + 4) ^ _wheatp2) + Seed,
+                    Process(toINT64<32>(Input + 8) ^ _wheatp3, toINT64<32>(Input + 12) ^ _wheatp4));
             }
 
-            seed += _wheatp5;
-            switch (len & 15)
+            Seed += _wheatp5;
+            switch (Length & 15)
             {
-                case 1:  seed = Process(_wheatp2 ^ seed, ROT<8>(key) ^ _wheatp1); break;
-                case 2:  seed = Process(_wheatp3 ^ seed, ROT<16>(key) ^ _wheatp4); break;
-                case 3:  seed = Process(ROT<16>(key) ^ seed, ROT<8>(key + 2) ^ _wheatp2); break;
-                case 4:  seed = Process(ROT<16>(key) ^ seed, ROT<16>(key + 2) ^ _wheatp3); break;
-                case 5:  seed = Process(ROT<32>(key) ^ seed, ROT<8>(key + 4) ^ _wheatp1); break;
-                case 6:  seed = Process(ROT<32>(key) ^ seed, ROT<16>(key + 4) ^ _wheatp1); break;
-                case 7:  seed = Process(ROT<32>(key) ^ seed, (ROT<16>(key + 4) << 8 | ROT<8>(key + 6)) ^ _wheatp1); break;
-                case 8:  seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp0); break;
-                case 9:  seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed ^ _wheatp4, ROT<8>(key + 8) ^ _wheatp3); break;
-                case 10: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed, ROT<16>(key + 8) ^ _wheatp3); break;
-                case 11: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed, ((ROT<16>(key + 8) << 8) | ROT<8>(key + 10)) ^ _wheatp3); break;
-                case 12: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed ^ ROT<32>(key + 8), _wheatp4); break;
-                case 13: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<8>(key + 12)) ^ _wheatp4); break;
-                case 14: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<16>(key + 12)) ^ _wheatp4); break;
-                case 15: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _wheatp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<16>(key + 12) << 8 | ROT<8>(key + 14)) ^ _wheatp4); break;
+                case 1:  Seed = Process(_wheatp2 ^ Seed, toINT64<8>(Input) ^ _wheatp1); break;
+                case 2:  Seed = Process(_wheatp3 ^ Seed, toINT64<16>(Input) ^ _wheatp4); break;
+                case 3:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<8>(Input + 2) ^ _wheatp2); break;
+                case 4:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<16>(Input + 2) ^ _wheatp3); break;
+                case 5:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<8>(Input + 4) ^ _wheatp1); break;
+                case 6:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<16>(Input + 4) ^ _wheatp1); break;
+                case 7:  Seed = Process(toINT64<32>(Input) ^ Seed, (toINT64<16>(Input + 4) << 8 | toINT64<8>(Input + 6)) ^ _wheatp1); break;
+                case 8:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp0); break;
+                case 9:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ _wheatp4, toINT64<8>(Input + 8) ^ _wheatp3); break;
+                case 10: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, toINT64<16>(Input + 8) ^ _wheatp3); break;
+                case 11: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, ((toINT64<16>(Input + 8) << 8) | toINT64<8>(Input + 10)) ^ _wheatp3); break;
+                case 12: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), _wheatp4); break;
+                case 13: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<8>(Input + 12)) ^ _wheatp4); break;
+                case 14: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12)) ^ _wheatp4); break;
+                case 15: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12) << 8 | toINT64<8>(Input + 14)) ^ _wheatp4); break;
             }
-            seed = (seed ^ seed << 16) * (len ^ _wheatp0);
-            return seed - (seed >> 31) + (seed << 33);
+            Seed = (Seed ^ Seed << 16) * (Length ^ _wheatp0);
+            return Seed - (Seed >> 31) + (Seed << 33);
         }
-        constexpr inline uint32_t Waterhash(const char *key, size_t len, uint64_t seed)
+
+        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        constexpr uint32_t Waterhash(T *Input, size_t Length, uint64_t Seed)
         {
-            for (size_t i = 0; i + 16 <= len; i += 16, key += 16)
+            for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
             {
-                seed = Process(
-                       Process(ROT<32>(key) ^ _waterp1, ROT<32>(key + 4) ^ _waterp2) + seed,
-                       Process(ROT<32>(key + 8) ^ _waterp3, ROT<32>(key + 12) ^ _waterp4));
+                Seed = Process(
+                    Process(toINT64<32>(Input) ^ _waterp1, toINT64<32>(Input + 4) ^ _waterp2) + Seed,
+                    Process(toINT64<32>(Input + 8) ^ _waterp3, toINT64<32>(Input + 12) ^ _waterp4));
             }
 
-            seed += _waterp5;
-            switch (len & 15)
+            Seed += _waterp5;
+            switch (Length & 15)
             {
-                case 1:  seed = Process(_waterp2 ^ seed, ROT<8>(key) ^ _waterp1); break;
-                case 2:  seed = Process(_waterp3 ^ seed, ROT<16>(key) ^ _waterp4); break;
-                case 3:  seed = Process(ROT<16>(key) ^ seed, ROT<8>(key + 2) ^ _waterp2); break;
-                case 4:  seed = Process(ROT<16>(key) ^ seed, ROT<16>(key + 2) ^ _waterp3); break;
-                case 5:  seed = Process(ROT<32>(key) ^ seed, ROT<8>(key + 4) ^ _waterp1); break;
-                case 6:  seed = Process(ROT<32>(key) ^ seed, ROT<16>(key + 4) ^ _waterp1); break;
-                case 7:  seed = Process(ROT<32>(key) ^ seed, (ROT<16>(key + 4) << 8 | ROT<8>(key + 6)) ^ _waterp1); break;
-                case 8:  seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp0); break;
-                case 9:  seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed ^ _waterp4, ROT<8>(key + 8) ^ _waterp3); break;
-                case 10: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed, ROT<16>(key + 8) ^ _waterp3); break;
-                case 11: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed, ((ROT<16>(key + 8) << 8) | ROT<8>(key + 10)) ^ _waterp3); break;
-                case 12: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed ^ ROT<32>(key + 8), _waterp4); break;
-                case 13: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<8>(key + 12)) ^ _waterp4); break;
-                case 14: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<16>(key + 12)) ^ _waterp4); break;
-                case 15: seed = Process(ROT<32>(key) ^ seed, ROT<32>(key + 4) ^ _waterp2) ^ Process(seed ^ ROT<32>(key + 8), (ROT<16>(key + 12) << 8 | ROT<8>(key + 14)) ^ _waterp4); break;
+                case 1:  Seed = Process(_waterp2 ^ Seed, toINT64<8>(Input) ^ _waterp1); break;
+                case 2:  Seed = Process(_waterp3 ^ Seed, toINT64<16>(Input) ^ _waterp4); break;
+                case 3:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<8>(Input + 2) ^ _waterp2); break;
+                case 4:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<16>(Input + 2) ^ _waterp3); break;
+                case 5:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<8>(Input + 4) ^ _waterp1); break;
+                case 6:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<16>(Input + 4) ^ _waterp1); break;
+                case 7:  Seed = Process(toINT64<32>(Input) ^ Seed, ((toINT64<16>(Input + 4) << 8) | toINT64<8>(Input + 6)) ^ _waterp1); break;
+                case 8:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp0); break;
+                case 9:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed ^ _waterp4, toINT64<8>(Input + 8) ^ _waterp3); break;
+                case 10: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed, toINT64<16>(Input + 8) ^ _waterp3); break;
+                case 11: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed, ((toINT64<16>(Input + 8) << 8) | toINT64<8>(Input + 10)) ^ _waterp3); break;
+                case 12: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed ^ toINT64<32>(Input + 8), _waterp4); break;
+                case 13: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<8>(Input + 12)) ^ _waterp4); break;
+                case 14: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12)) ^ _waterp4); break;
+                case 15: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _waterp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12) << 8 | toINT64<8>(Input + 14)) ^ _waterp4); break;
             }
-            seed = (seed ^ seed << 16) * (len ^ _waterp0);
-            return (uint32_t)(seed - (seed >> 32));
+            Seed = (Seed ^ (Seed << 16)) * (Length ^ _waterp0);
+            return (uint32_t)(Seed - (Seed >> 32));
         }
+
+    }
+
+    // Compile-time hashing for literals.
+    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    [[nodiscard]] constexpr uint32_t WW32(T(&Input)[N])
+    {
+        return Internal::Waterhash(Input, N - 1, Internal::_waterp0);
+    }
+    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    [[nodiscard]] constexpr uint64_t WW64(T(&Input)[N])
+    {
+        return Internal::Wheathash(Input, N - 1, Internal::_wheatp0);
     }
 
     // Compile-time hashing for fixed-length datablocks.
-    [[nodiscard]] constexpr uint32_t WW32(const char *Input, const size_t Length)
+    [[nodiscard]] constexpr uint32_t WW32(const uint8_t *Input, size_t Length)
     {
         return Internal::Waterhash(Input, Length, Internal::_waterp0);
     }
-    [[nodiscard]] constexpr uint64_t WW64(const char *Input, const size_t Length)
+    [[nodiscard]] constexpr uint64_t WW64(const uint8_t *Input, size_t Length)
     {
         return Internal::Wheathash(Input, Length, Internal::_wheatp0);
     }
-    [[nodiscard]] constexpr uint32_t WW32(const void *Input, const size_t Length)
+
+    // Run-time hashing for fixed-length datablocks.
+    [[nodiscard]] inline uint32_t WW32(const void *Input, const size_t Length)
     {
-        return Internal::Waterhash((const char *)Input, Length, Internal::_waterp0);
+        return Internal::Waterhash((const uint8_t *)Input, Length, Internal::_waterp0);
     }
-    [[nodiscard]] constexpr uint64_t WW64(const void *Input, const size_t Length)
+    [[nodiscard]] inline uint64_t WW64(const void *Input, const size_t Length)
     {
-        return Internal::Wheathash((const char *)Input, Length, Internal::_wheatp0);
+        return Internal::Wheathash((const uint8_t *)Input, Length, Internal::_wheatp0);
     }
 
-    // Compile-time hashing for null-terminated strings.
-    template<size_t N> [[nodiscard]] constexpr uint32_t WW32(char const (&String)[N])
-    {
-        return WW32(String, N - 1);
-    }
-    template<size_t N> [[nodiscard]] constexpr uint64_t WW64(char const (&String)[N])
-    {
-        return WW64(String, N - 1);
-    }
+    // Run-time hashing for dynamic data, constexpr in C++20.
     [[nodiscard]] constexpr uint32_t WW32(const char *Input)
     {
-        return WW32(Input, Internal::Strlen(Input));
+         return Internal::Waterhash(Input, Internal::WWStrlen(Input), Internal::_waterp0);
     }
     [[nodiscard]] constexpr uint64_t WW64(const char *Input)
     {
-        return WW64(Input, Internal::Strlen(Input));
+        return Internal::Wheathash(Input, Internal::WWStrlen(Input), Internal::_wheatp0);
     }
-
-    // Wrappers for runtime hashing of strings, and C++ 20 compile-time std::strings.
     template<typename T> [[nodiscard]] constexpr uint32_t WW32(std::basic_string_view<T> String)
     {
         return WW32(String.data(), String.size());
