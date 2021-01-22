@@ -24,8 +24,8 @@ namespace Backend
 
             __try
             {
-                THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF };
-                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
+                THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF, 0 };
+                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), reinterpret_cast<ULONG_PTR *>(&Info));
             } __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
     }

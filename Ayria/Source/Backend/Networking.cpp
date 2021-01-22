@@ -18,8 +18,8 @@ namespace Backend::Network
 
     static sockaddr_in Multicast{ AF_INET, htons(Syncport), {{.S_addr = htonl(Syncaddress)}} };
     static Hashmap<uint32_t, Hashset<Callback_t>> Callbacks{};
-    static Hashset<uint32_t> Blacklist{};
     static size_t Sendersocket, Receiversocket;
+    static Hashset<uint32_t> Blacklist{};
     static uint32_t RandomID;
 
     // Callbacks for the syncing multi-casts.
@@ -120,8 +120,9 @@ namespace Backend::Network
             {
                 // All messages should be LZ4 compressed.
                 const auto Decodebuffer = std::make_unique<char[]>(Packetlength * 3);
-                const auto Decodesize = LZ4_decompress_safe(Packet->Payload, Decodebuffer.get(), Packetlength - sizeof(uint64_t), Packetlength * 3);
-                if (Decodesize < 0) [[unlikely]] continue;
+                const auto Decodesize = LZ4_decompress_safe(Packet->Payload, Decodebuffer.get(),
+                                        static_cast<int>(Packetlength - sizeof(uint64_t)), Packetlength * 3);
+                if (Decodesize <= 0) [[unlikely]] continue;
 
                 // All messages should be base64, in-place decode zero-terminates.
                 const auto Decoded = Base64::Decode_inplace(Decodebuffer.get(), Decodesize);
@@ -150,7 +151,7 @@ namespace Backend::Network
 
         // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for devs).
         const auto Request = ip_mreq{ {{.S_addr = htonl(Syncaddress)}}, {{.S_addr = htonl(INADDR_ANY)}} };
-        Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&Request, sizeof(Request));
+        Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&Request, sizeof(Request));
         Error |= setsockopt(Receiversocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
         Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
 

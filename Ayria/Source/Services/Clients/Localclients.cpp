@@ -9,7 +9,7 @@
 
 namespace Clientinfo
 {
-    Inlinedvector<Client_t, 4> Localclients, Remoteclients;
+    std::vector<Client_t> Localclients;
     Hashset<std::wstring> Clientnames;
     std::string HardwareID;
 
@@ -55,7 +55,7 @@ namespace Clientinfo
                     }
                     else if (Type == 2)
                     {
-                        const auto Index = *(uint8_t *)(Table.data() + 3);
+                        const auto Index = *(const uint8_t *)(Table.data() + 3);
                         Table.remove_prefix(Length);
 
                         for (uint8_t i = 1; i < Index; ++i)
@@ -93,21 +93,14 @@ namespace Clientinfo
     {
         for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
             if (it->NetworkID == NetworkID)
-                return it;
+                return &*it;
         return nullptr;
-    }
-    std::vector<Client_t *> getRemoteclients()
-    {
-        std::vector<Client_t *> Result; Result.reserve(Remoteclients.size());
-        for (auto it = Remoteclients.begin(); it != Remoteclients.end(); ++it)
-            Result.push_back(it);
-        return Result;
     }
     std::vector<Client_t *> getLocalclients()
     {
         std::vector<Client_t *> Result; Result.reserve(Localclients.size());
         for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
-            Result.push_back(it);
+            Result.push_back(&*it);
         return Result;
     }
 
@@ -188,6 +181,7 @@ namespace Clientinfo
 
 
         Backend::Enqueuetask(5000, Sendclientinfo);
+        Backend::Enqueuetask(30000, Updateremoteclients);
         Backend::Network::addHandler("Clientdiscovery", Discoveryhandler);
     }
 }

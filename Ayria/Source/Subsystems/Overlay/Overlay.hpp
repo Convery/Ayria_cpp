@@ -426,18 +426,11 @@ template <bool hasAlpha> void SwapRB(uint32_t Size, uint8_t *Pixeldata)
     constexpr auto Stride = 15 + hasAlpha;
     const auto Count128 = Size / Stride;
 
-    // NOTE(tcn): MSVC has issues optimizing Size % Stride, so we do it manually.
+    // NOTE(tcn): MSVC has issues detecting powers of 2..
     const auto Remaining = [=]()
     {
-        if constexpr (hasAlpha) return Size & (Stride - 1);
-        else
-        {
-            uint32_t Rem = 0;
-            for (Rem = Size; Size > Stride; Size = Rem)
-                for (Rem = 0; Size; Size >>= 4)
-                    Rem += Size & Stride;
-            return Rem == Stride ? 0 : Rem;
-        }
+        if constexpr (!hasAlpha) return Size % Stride;
+        else return Size & (Stride - 1);
     }();
 
     // Bulk operations.

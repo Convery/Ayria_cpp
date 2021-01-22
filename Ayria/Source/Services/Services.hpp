@@ -36,6 +36,9 @@ namespace Clientinfo
     std::vector<Client_t *> getRemoteclients();
     std::vector<Client_t *> getLocalclients();
 
+    // Poll a remote server for updates.
+    void Updateremoteclients();
+
     // If another clients crypto-key is needed, we request it.
     void Requestcryptokeys(std::vector<uint32_t> UserIDs);
 
