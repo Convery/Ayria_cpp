@@ -77,7 +77,7 @@ namespace Backend::Fileshare
 
         for (auto it = Mappedfiles.begin(); it != Mappedfiles.end(); ++it)
             if (Hash::WW32(Filename) == Hash::WW32(it->Filename))
-                return it;
+                return &*it;
 
         if (const auto Filebuffer = FS::Readfile(Filepath); !Filebuffer.empty())
         {
@@ -110,7 +110,7 @@ namespace Backend::Fileshare
     {
         std::vector<Fileshare_t *> Result; Result.reserve(Mappedfiles.size());
         for (auto it = Mappedfiles.begin(); it != Mappedfiles.end(); ++it)
-                Result.push_back(it);
+                Result.push_back(&*it);
         return Result;
     }
 

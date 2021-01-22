@@ -42,7 +42,7 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        for (const auto &String : absl::StrSplit(Message, '\n'))
+        for (const auto &String : Tokenizestring_s(Message, '\n'))
             if (!String.empty())
                 Consolelog.push_back(Logline_t{ Encoding::toWide(String), Colour });
     }

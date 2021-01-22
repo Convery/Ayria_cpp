@@ -179,6 +179,10 @@ namespace Clientinfo
             }).detach();
         }
 
+        // TODO(tcn): Read from disk settings.
+        Global.Locale = std::make_unique<std::wstring>(L"english");
+        Global.Username = std::make_unique<std::wstring>(L"AYRIA");
+        Global.UserID = 0xDEADC0DE;
 
         Backend::Enqueuetask(5000, Sendclientinfo);
         Backend::Enqueuetask(30000, Updateremoteclients);

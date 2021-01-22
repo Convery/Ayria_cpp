@@ -8,11 +8,12 @@
 #include <Stdinclude.hpp>
 
 template<typename T, size_t N>
-struct Ringbuffer
+class Ringbuffer
 {
     size_t Head{}, Tail{}, Size{};
     std::array<T, N> Storage{};
 
+    public:
     Ringbuffer() = default;
     ~Ringbuffer() { clear(); }
     Ringbuffer(const Ringbuffer &Right) noexcept(std::is_nothrow_copy_constructible_v<T>)
@@ -82,14 +83,37 @@ struct Ringbuffer
         Tail = ++Tail % N;
         --Size;
     }
-    template<typename U> void push_back(U &&Value)
+    void push_back(T &&Value) noexcept
     {
         if (full()) erase(Head);
-
         Storage[Head] = std::move(Value);
+
         if (full()) Tail = ++Tail % N;
         if (!full()) ++Size;
         Head = ++Head % N;
+    }
+    void push_back(const T &Value) noexcept
+    {
+        if (full()) erase(Head);
+        Storage[Head] = Value;
+
+        if (full()) Tail = ++Tail % N;
+        if (!full()) ++Size;
+        Head = ++Head % N;
+    }
+
+    template <typename... Args>
+    T &emplace_back(Args&&... args) noexcept
+    {
+        if (full()) erase(Head);
+        Storage[Head] = { args };
+        auto Result = &Storage[Head];
+
+        if (full()) Tail = ++Tail % N;
+        if (!full()) ++Size;
+        Head = ++Head % N;
+
+        return Result;
     }
 
     [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }
@@ -97,8 +121,8 @@ struct Ringbuffer
     [[nodiscard]] const T &back() const noexcept { return const_cast<Ringbuffer<T, N> *>(back)->back(); }
     [[nodiscard]] T &front() noexcept { return reinterpret_cast<T &>(Storage[Tail]); }
 
-    [[nodiscard]] T &operator[](size_t Tndex) noexcept { return reinterpret_cast<T &>(Storage[Tndex]); }
-    [[nodiscard]] const T &operator[](size_t Tndex) const noexcept { return const_cast<Ringbuffer<T, N> *>(this)->operator[](Tndex); }
+    [[nodiscard]] T &operator[](size_t Index) noexcept { return reinterpret_cast<T &>(Storage[Index]); }
+    [[nodiscard]] const T &operator[](size_t Index) const noexcept { return const_cast<Ringbuffer<T, N> *>(this)->operator[](Index); }
 
     template<typename T, size_t N, bool C>
     struct Iterator
@@ -115,47 +139,31 @@ struct Ringbuffer
         using pointer = T *;
 
         Buffer_t Storage{};
-        size_t Index, Count{};
+        size_t Index{}, Count{};
 
         Iterator() noexcept = default;
+        Iterator(Iterator &&) noexcept = default;
         Iterator(Iterator const &) noexcept = default;
         Iterator &operator=(Iterator const &) noexcept = default;
         Iterator(Buffer_t source, size_t index, size_t count) noexcept : Storage{ source }, Index{ index }, Count{ count } { }
 
-        template<bool Z = C, typename = std::enable_if<(!Z), int>>
-        [[nodiscard]] T &operator*() noexcept { return (*Storage)[Index]; }
-        template<bool Z = C, typename = std::enable_if<(Z), int>>
-        [[nodiscard]] const T &operator*() const noexcept { return (*Storage)[Index]; }
-        template<bool Z = C, typename = std::enable_if<(!Z), int>>
-        [[nodiscard]] T &operator->() noexcept { return &((*Storage)[Index]); }
-        template<bool Z = C, typename = std::enable_if<(Z), int>>
-        [[nodiscard]] const T &operator->() const noexcept { return &((*Storage)[Index]); }
+        template<typename = std::enable_if<!C>> [[nodiscard]] T &operator*() noexcept { return (*Storage)[Index]; }
+        template<typename = std::enable_if<!C>> [[nodiscard]] T *operator->() noexcept { return &(*Storage)[Index]; }
+        template<typename = std::enable_if<C>> [[nodiscard]] const T &operator*() const noexcept { return (*Storage)[Index]; }
+        template<typename = std::enable_if<C>> [[nodiscard]] const T *operator->() const noexcept { return &(*Storage)[Index]; }
 
-        bool operator!=(const Iterator &Right) const { return Index != Right.Index; };
-
+        bool operator!=(const Iterator &Right) const { return Index != Right.Index; }
         Iterator<T, N, C> &operator++() noexcept
         {
             Index = ++Index % N;
             ++Count;
             return *this;
         }
-        Iterator<T, N, C> operator++(int) noexcept
-        {
-            auto result = *this;
-            this->operator*();
-            return result;
-        }
         Iterator<T, N, C> &operator--() noexcept
         {
             Index = (Index + N - 1) % N;
             --Count;
             return *this;
-        }
-        Iterator<T, N, C> operator--(int) noexcept
-        {
-            auto result = *this;
-            this->operator*();
-            return result;
         }
 
         [[nodiscard]] size_t index() const noexcept { return Index; }
