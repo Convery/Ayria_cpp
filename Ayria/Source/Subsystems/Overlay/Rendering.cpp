@@ -126,7 +126,7 @@ namespace gInternal
             // Compare the color.
             if (0 == std::memcmp(&Vertices[i].Red, &Lastvertex.Red, sizeof(COLOR16) * 4))
             {
-                Points.push_back({ int16_t(Vertices[i].x), int16_t(Vertices[i].y) });
+                Points.emplace_back(int16_t(Vertices[i].x), int16_t(Vertices[i].y));
             }
             else
             {
@@ -135,7 +135,7 @@ namespace gInternal
 
                 Points.clear();
                 Lastvertex = Vertices[i];
-                Points.push_back({ int16_t(Vertices[i].x), int16_t(Vertices[i].y) });
+                Points.emplace_back(int16_t(Vertices[i].x), int16_t(Vertices[i].y));
             }
         }
 

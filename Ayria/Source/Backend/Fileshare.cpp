@@ -75,9 +75,9 @@ namespace Backend::Fileshare
     {
         const auto Filename = Filepath.substr(std::max(Filepath.find_last_of('/'), Filepath.find_last_of('\\')));
 
-        for (auto it = Mappedfiles.begin(); it != Mappedfiles.end(); ++it)
-            if (Hash::WW32(Filename) == Hash::WW32(it->Filename))
-                return &*it;
+        for (auto &Mappedfile : Mappedfiles)
+            if (Hash::WW32(Filename) == Hash::WW32(Mappedfile.Filename))
+                return &Mappedfile;
 
         if (const auto Filebuffer = FS::Readfile(Filepath); !Filebuffer.empty())
         {
@@ -109,8 +109,8 @@ namespace Backend::Fileshare
     std::vector<Fileshare_t *> Listshares()
     {
         std::vector<Fileshare_t *> Result; Result.reserve(Mappedfiles.size());
-        for (auto it = Mappedfiles.begin(); it != Mappedfiles.end(); ++it)
-                Result.push_back(&*it);
+        for (auto &Mappedfile : Mappedfiles)
+            Result.push_back(&Mappedfile);
         return Result;
     }
 

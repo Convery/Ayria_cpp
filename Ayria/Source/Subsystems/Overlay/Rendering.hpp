@@ -50,9 +50,9 @@ namespace gInternal
 {
     struct Arc_t
     {
-        vec2f Focalpoint0, Focalpoint1;
-        vec4f Boundingbox;
         HDC Devicecontext;
+        vec4f Boundingbox;
+        vec2f Focalpoint0, Focalpoint1;
 
         void Solid(COLORREF Color);
         void Solid(Texture2D Texture);
@@ -159,7 +159,7 @@ namespace gInternal
         void Filled(uint8_t Linewidth, COLORREF Outline, Texture2D Background);
 
         explicit Quad_t(HDC Context, vec2f Position, vec2f Size, uint8_t Rounding) : Devicecontext(Context),
-            Radius(Rounding), Dimensions{ Position.x, Position.y, Position.x + Size.x, Position.y + Size.y } {}
+            Dimensions{ Position.x, Position.y, Position.x + Size.x, Position.y + Size.y }, Radius(Rounding) {}
     };
     struct Text_t
     {

@@ -5,7 +5,7 @@
 */
 
 #include "../Localnetworking.hpp"
-#include <Ws2tcpip.h>
+#include <Ws2Tcpip.h>
 
 namespace Winsock
 {

@@ -15,8 +15,8 @@ namespace Clientinfo
     std::vector<Client_t *> getRemoteclients()
     {
         std::vector<Client_t *> Result; Result.reserve(Remoteclients.size());
-        for (auto it = Remoteclients.begin(); it != Remoteclients.end(); ++it)
-            Result.push_back(&*it);
+        for (auto &Remoteclient : Remoteclients)
+            Result.push_back(&Remoteclient);
         return Result;
     }
 

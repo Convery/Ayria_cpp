@@ -91,16 +91,16 @@ namespace Clientinfo
     // Clients are split into LAN and WAN, networkIDs are for LAN.
     Client_t *getClientbyID(uint32_t NetworkID)
     {
-        for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
-            if (it->NetworkID == NetworkID)
-                return &*it;
+        for (auto &Localclient : Localclients)
+            if (Localclient.NetworkID == NetworkID)
+                return &Localclient;
         return nullptr;
     }
     std::vector<Client_t *> getLocalclients()
     {
         std::vector<Client_t *> Result; Result.reserve(Localclients.size());
-        for (auto it = Localclients.begin(); it != Localclients.end(); ++it)
-            Result.push_back(&*it);
+        for (auto &Localclient : Localclients)
+            Result.push_back(&Localclient);
         return Result;
     }
 
@@ -127,8 +127,7 @@ namespace Clientinfo
             return;
         }
 
-        if (Localclients.end() != std::find_if(Localclients.begin(), Localclients.end(),
-                                               [=](const auto &Client) { return Client.NetworkID == NodeID; }))
+        if (Localclients.end() != std::ranges::find_if(Localclients, [=](const auto &Client) { return Client.NetworkID == NodeID; }))
         {
             Client_t New{};
             New.NetworkID = NodeID;
@@ -179,10 +178,10 @@ namespace Clientinfo
             }).detach();
         }
 
-        // TODO(tcn): Read from disk settings.
-        Global.Locale = std::make_unique<std::wstring>(L"english");
-        Global.Username = std::make_unique<std::wstring>(L"AYRIA");
-        Global.UserID = 0xDEADC0DE;
+        const auto Config = JSON::Parse(FS::Readfile<char>("./Ayria/Settings.json"));
+        Global.Username = std::make_unique<std::wstring>(Config.value("Username", L"AYRIA"s));
+        Global.Locale = std::make_unique<std::wstring>(Config.value("Locale", L"english"s));
+        Global.UserID = Config.value("UserID", 0xDEADC0DE);
 
         Backend::Enqueuetask(5000, Sendclientinfo);
         Backend::Enqueuetask(30000, Updateremoteclients);

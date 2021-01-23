@@ -85,9 +85,9 @@ namespace JSON
                     Result.append("]");
                     return Result;
                 }
-
-                default: return {};
             }
+
+            return {};
         }
 
         //
@@ -124,8 +124,6 @@ namespace JSON
 
                     break;
                 }
-                default:
-                    return false;
             }
 
             return true;

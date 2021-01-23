@@ -112,8 +112,8 @@ namespace Patternscan
         SYSTEM_INFO SI;
         GetNativeSystemInfo(&SI);
 
-        const PIMAGE_DOS_HEADER DOSHeader = (PIMAGE_DOS_HEADER)Module;
-        const PIMAGE_NT_HEADERS NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
+        const auto DOSHeader = (PIMAGE_DOS_HEADER)Module;
+        const auto NTHeader = (PIMAGE_NT_HEADERS)((std::uintptr_t)Module + DOSHeader->e_lfanew);
 
         Textsegment.first = size_t(Module) + NTHeader->OptionalHeader.BaseOfCode;
         Textsegment.second = Textsegment.first + NTHeader->OptionalHeader.SizeOfCode;

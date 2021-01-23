@@ -32,13 +32,13 @@ namespace FS
         return std::filesystem::exists(Path);
     }
 
-    [[nodiscard]] inline size_t Filesize(std::string_view Path)
+    [[nodiscard]] inline uintmax_t Filesize(std::string_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);
         return Code.value() ? 0 : Size;
     }
-    [[nodiscard]] inline size_t Filesize(std::wstring_view Path)
+    [[nodiscard]] inline uintmax_t Filesize(std::wstring_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);

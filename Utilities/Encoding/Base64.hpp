@@ -44,7 +44,7 @@ namespace Base64
 
         for (const auto &Item : Input)
         {
-            Accumulator = Accumulator << 8 | Item & 0xFF;
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
             Bits += 8;
             while (Bits >= 6)
             {
@@ -94,7 +94,7 @@ namespace Base64
 
         for (const auto &Item : Input)
         {
-            Accumulator = Accumulator << 8 | Item & 0xFF;
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
             Bits += 8;
             while (Bits >= 6)
             {
