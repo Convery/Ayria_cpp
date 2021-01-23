@@ -69,34 +69,37 @@ namespace Backend
         {
             // Track the frame-time, should be less than 33ms at worst.
             const auto Thisframe{ std::chrono::high_resolution_clock::now() };
-            const auto Deltatime = std::chrono::duration<float>(Thisframe - Lastframe).count();
+            const auto Deltatime = Thisframe - Lastframe;
             Lastframe = Thisframe;
 
             // Notify all elements about the frame.
-            Ingameconsole.doFrame(Deltatime);
+            Ingameconsole.doFrame(std::chrono::duration<float>(Deltatime).count());
             Console::Windows::doFrame();
 
             // Log frame-average every 5 seconds.
             if constexpr (Build::isDebug)
             {
-                static std::array<uint32_t, 256> Timings{};
+                static std::array<uint64_t, 256> Timings{};
                 static float Elapsedtime{};
                 static size_t Index{};
 
-                Timings[Index % 256] = 1000000 * Deltatime;
-                Elapsedtime += Deltatime;
+                Timings[Index % 256] = std::chrono::duration_cast<std::chrono::nanoseconds>(Deltatime).count();
+                Elapsedtime += std::chrono::duration<float>(Deltatime).count();
                 Index++;
 
                 if (Elapsedtime >= 5.0f)
                 {
                     const auto Sum = std::reduce(std::execution::par_unseq, Timings.begin(), Timings.end());
-                    Debugprint(va("Average framerate: %5.2f FPS %5lu us", 1000000.0 / (Sum / 256), Sum / 256));
+                    constexpr auto NPS = 1000000000.0;
+                    const auto Avg = Sum / 256;
+
+                    Debugprint(va("Average framerate: %5.2f FPS %8lu ns", double(NPS / Avg), Avg));
                     Elapsedtime = 0;
                 }
             }
 
             // Cap the FPS to ~60, as we only render if dirty we can get thousands of FPS.
-            std::this_thread::sleep_until(Lastframe + std::chrono::milliseconds(16));
+            std::this_thread::sleep_until(Thisframe + std::chrono::milliseconds(1000 / 60));
         }
     }
 
@@ -105,6 +108,9 @@ namespace Backend
     {
         // Set SSE to behave properly, MSVC seems to be missing a flag.
         _mm_setcsr(_mm_getcsr() | 0x8040); // _MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON
+
+        // As of Windows 10 update 20H2 (2004) we need to set the interrupt resolution.
+        timeBeginPeriod(1);
 
         // Initialize subsystems that plugins may need.
         //Matchmaking::API_Initialize();

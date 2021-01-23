@@ -42,10 +42,11 @@
 
 // Platform-specific libraries.
 #if defined(_WIN32)
-#include <Ws2tcpip.h>
+#include <Ws2Tcpip.h>
 #include <WinSock2.h>
-#include <Windowsx.h>
+#include <windowsx.h>
 #include <Windows.h>
+#include <timeapi.h>
 #include <intrin.h>
 #include <direct.h>
 #else

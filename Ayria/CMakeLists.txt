@@ -14,7 +14,7 @@ endif()
 
 # Platform libraries to be linked.
 if(WIN32)
-    set(PLATFORM_LIBS ws2_32 gdi32 Msimg32 Crypt32)
+    set(PLATFORM_LIBS ws2_32 gdi32 Msimg32 Crypt32 Winmm)
 else()
     set(PLATFORM_LIBS dl pthread)
 endif()
@@ -31,10 +31,10 @@ target_link_libraries(${MODULENAME} ${PLATFORM_LIBS} ${MODULE_LIBS})
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
 
 # For developers, create a host process that can be used to test Ayria.
-if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+#if ("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
     add_executable("Ayriahost" ${SOURCES})
     add_definitions(-DMODULENAME="Ayriahost")
     set_target_properties("Ayriahost" PROPERTIES PREFIX "")
     target_link_libraries("Ayriahost" ${PLATFORM_LIBS} ${MODULE_LIBS})
     set_target_properties("Ayriahost" PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
-endif()
+#endif()
