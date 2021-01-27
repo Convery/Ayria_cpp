@@ -102,6 +102,19 @@ namespace Backend
         }
     }
 
+    // Save the configuration to disk.
+    void Saveconfig()
+    {
+        JSON::Object_t Config{};
+        Config["enableExternalconsole"] = Global.enableExternalconsole;
+        Config["Username"] = std::u8string_view(Global.Username);
+        Config["Locale"] = std::u8string_view(Global.Locale);
+        Config["enableIATHooking"] = Global.enableIATHooking;
+        Config["UserID"] = Global.UserID;
+
+        FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
+    }
+
     // Initialize the system.
     void Initialize()
     {
@@ -112,15 +125,20 @@ namespace Backend
         timeBeginPeriod(1);
 
         // Initialize the global state from disk settings.
-        const auto Config = JSON::Parse(FS::Readfile<char>("./Ayria/Settings.json"));
-        Global.enableExternalconsole = Config.value<bool>("enableExternalconsole");
-        Global.useIAThooks = Config.value<bool>("useIAThooks");
-        Global.UserID = Config.value("UserID", 0xDEADC0DE);
+        {
+            const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
+            Global.enableExternalconsole = Config.value<bool>("enableExternalconsole");
+            Global.enableIATHooking = Config.value<bool>("enableIATHooking");
+            Global.UserID = Config.value("UserID", 0xDEADC0DE);
 
-        const auto Locale = Config.value("Locale", u8"english"s);
-        const auto Username = Config.value("Username", u8"AYRIA"s);
-        std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
-        std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
+            const auto Locale = Config.value("Locale", u8"english"s);
+            const auto Username = Config.value("Username", u8"AYRIA"s);
+            std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
+            std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
+
+            // Save the configuration on exit.
+            std::atexit([]() { if (Global.modifiedConfig) Saveconfig(); });
+        }
 
         // Initialize subsystems that plugins may need.
         //Matchmaking::API_Initialize();

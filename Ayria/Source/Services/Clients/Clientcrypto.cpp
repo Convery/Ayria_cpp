@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2020-12-23
+    Started: 2021-01-27
     License: MIT
 */
 
@@ -9,8 +9,7 @@
 
 namespace Clientinfo
 {
-    std::vector<Client_t> Localclients;
-    Hashset<std::wstring> Clientnames;
+    Nodemap<uint32_t, std::string> Clientkeys;
     std::string HardwareID;
 
     // Primarily used for cryptography.
@@ -82,66 +81,80 @@ namespace Clientinfo
         HardwareID = va("WIN#%u#%s#%s", VolumeID, MOBOSerial.c_str(), SystemUUID.c_str());
 
         #else
+        static_assert(false, "NIX function is not yet implemented.");
         HardwareID = va("NIX#%u#%s#%s", 0, "", "");
         #endif
 
         return HardwareID;
     }
 
-    // Clients are split into LAN and WAN, networkIDs are for LAN.
-    Client_t *getClientbyID(uint32_t NetworkID)
-    {
-        for (auto &Localclient : Localclients)
-            if (Localclient.NetworkID == NetworkID)
-                return &Localclient;
-        return nullptr;
-    }
-    std::vector<Client_t *> getLocalclients()
-    {
-        std::vector<Client_t *> Result; Result.reserve(Localclients.size());
-        for (auto &Localclient : Localclients)
-            Result.push_back(&Localclient);
-        return Result;
-    }
-
-    // Announce our presence once in a while.
-    static void __cdecl Sendclientinfo()
+    // If another clients crypto-key is needed, we request it.
+    void Requestcryptokeys(std::vector<uint32_t> UserIDs)
     {
         const auto Object = JSON::Object_t({
-            { "Username", std::u8string_view(Global.Username) },
-            { "AccountID", Global.AccountID }
+            { "Senderkey", Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys)) },
+            { "SenderID", Global.UserID },
+            { "WantedIDs", UserIDs }
         });
 
-        Backend::Network::Sendmessage("Clientdiscovery", JSON::Dump(Object));
+        if (Global.isOnline)
+        {
+            // TODO(tcn): Forward request to some remote server.
+        }
+
+        Backend::Network::Sendmessage("Keyshare", JSON::Dump(Object));
     }
-    static void __cdecl Discoveryhandler(unsigned int NodeID, const char *Message, unsigned int Length)
+
+    // Handle local clients requests.
+    static void __cdecl Keysharehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto Username = Request.value<std::wstring>("Username");
-        const auto AccountID = Request.value<uint64_t>("AccountID");
+        const auto WantedIDs = Request.value<std::vector<uint32_t> >("WantedIDs");
+        const auto Senderkey = Request.value<std::string>("Senderkey");
+        const auto SenderID = Request.value<uint32_t>("SenderID");
 
-        // Can't be arsed with clients that can't format requests.
-        if (!AccountID || Username.empty())
+        // If the other client is secretive, ignore them.
+        if (!SenderID || Senderkey.empty()) return;
+
+        // Update the clients key if they are online.
+        if (const auto Client = Clientinfo::getLocalclient(NodeID))
         {
-            Backend::Network::Blockclient(NodeID);
-            return;
+            assert(Client->UserID == SenderID);
+            Client->Sharedkey = &Clientkeys.emplace(SenderID, Senderkey).first->second;
+
+            // Developer information.
+            Debugprint(va("Updated shared key for clientID %08X", SenderID));
         }
 
-        if (Localclients.end() != std::ranges::find_if(Localclients, [=](const auto &Client) { return Client.NetworkID == NodeID; }))
+        // Check if they want our key back.
+        for (const auto &ClientID : WantedIDs)
         {
-            Client_t New{};
-            New.NetworkID = NodeID;
-            New.AccountID = AccountID;
-            New.Username = &*Clientnames.insert(Username).first;
-            Localclients.push_back(New);
+            if (ClientID == Global.UserID)
+            {
+                // Reuse the function with no wanted keys.
+                Requestcryptokeys({});
+                break;
+            }
         }
     }
 
-    // Load client-info from disk.
-    void Initialize()
+    //
+    void Initializecrypto()
     {
-        #if defined (_WIN32)
+        /*
+            NOTE(tcn):
+            We want the users to feel some sense of privacy so we provide a RSA key for message encryption.
+            This key is stored on the system for persistence, as such if the user wants to use multiple
+            devices they need to copy the key to another device. If lost, all associated messages and
+            data-files are forgone. If this system is reused, we may want to up the RSA bits.
+        */
+        constexpr size_t RSAStrength = 512;
         const char *Existingkey{};
+
+        // Fetch the key from the environment.
+        #if !defined (_WIN32)
+        Existingkey = std::getenv("AYRIA_CLIENTPK");
+        #else
         char Buffer[512]{};
         DWORD Size{ 512 };
         HKEY Registrykey;
@@ -152,18 +165,14 @@ namespace Clientinfo
                 Existingkey = Buffer;
             RegCloseKey(Registrykey);
         }
-        #else
-        Existingkey = std::getenv("AYRIA_CLIENTPK");
         #endif
 
-        if (Existingkey)
+        // Parse the saved key or create a new one.
+        if (Existingkey) Global.Cryptokeys = PK_RSA::Createkeypair(Base64::Decode(Existingkey));
+        if (!Global.Cryptokeys)
         {
-            Global.Cryptokeys = PK_RSA::Createkeypair(Base64::Decode(Existingkey));
-        }
-        else
-        {
-            // Weak key as it's just for basic privacy.
-            Global.Cryptokeys = PK_RSA::Createkeypair(512);
+            // Weak key as it's just for basic privacy between local clients.
+            Global.Cryptokeys = PK_RSA::Createkeypair(RSAStrength);
 
             // We do not want to wait for the system to finish.
             std::thread([]()
@@ -178,8 +187,7 @@ namespace Clientinfo
             }).detach();
         }
 
-        Backend::Enqueuetask(5000, Sendclientinfo);
-        Backend::Enqueuetask(30000, Updateremoteclients);
-        Backend::Network::addHandler("Clientdiscovery", Discoveryhandler);
+        // Listen for local clients sharing their keys.
+        Backend::Network::addHandler("Keyshare", Keysharehandler);
     }
 }

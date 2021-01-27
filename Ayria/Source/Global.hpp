@@ -11,29 +11,49 @@
 #include "Subsystems/Subsystems.hpp"
 
 // Global system information.
-struct Globalstate_t
+#pragma pack(push, 1)
+struct Globalstate_t    // 51 bytes.
 {
-    union
-    {
-        uint64_t AccountID;
-        struct
-        {
-            uint32_t UserID;
-            uint8_t Stateflags;
-            uint8_t Accountflags;
-            uint16_t Creationdate;
-        };
-    };
+    uint32_t UserID;
+    char8_t Locale[12];
+    char8_t Username[24];
 
     RSA *Cryptokeys;
-    char8_t Username[24], Locale[10];
 
-    struct
+    union
     {
-        uint8_t
-            isOnline : 1,
-            useIAThooks : 1,
-            enableExternalconsole : 1;
+        uint8_t Stateflags;
+        struct
+        {
+            uint8_t
+                isOnline : 1,
+                isIngame : 1,
+                isPrivate : 1,
+                isHosting : 1;
+        };
+    };
+    union
+    {
+        uint8_t Privilegeflags;
+        struct
+        {
+            uint8_t
+                isAdmin : 1,
+                isModerator : 1;
+        };
+
+    };
+    union
+    {
+        uint8_t Applicationsettings;
+        struct
+        {
+            uint8_t
+                modifiedConfig : 1,
+                enableIATHooking : 1,
+                enableExternalconsole : 1;
+        };
     };
 };
 extern Globalstate_t Global;
+#pragma pack(pop)

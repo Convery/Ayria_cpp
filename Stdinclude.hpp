@@ -96,42 +96,6 @@ using namespace std::literals;
 // Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
-    // For parsing Account and User ID.
-    typedef union
-    {
-        uint64_t AccountID;
-        struct
-        {
-            uint32_t UserID;
-            uint8_t Stateflags;
-            uint8_t Accountflags;
-            uint16_t Creationdate;
-        };
-    } AccountID_t;
-    typedef union
-    {
-        uint8_t Raw;
-        struct
-        {
-            uint8_t
-                isIngame : 1,
-                isPrivate : 1,
-                isHosting : 1;
-        };
-    } Stateflags_t;
-    typedef union
-    {
-        uint8_t Raw;
-        struct
-        {
-            uint8_t
-                isAdmin : 1,
-                isGroup : 1,
-                isServer : 1,
-                isModerator : 1;
-        };
-    } Accountflags_t;
-
     // Call the exported JSON functions, pass NULL as function to list all.
     const char *(__cdecl *JSONAPI)(const char *Function, const char *JSONString);
 
