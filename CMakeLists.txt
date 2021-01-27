@@ -26,6 +26,11 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
         set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:full /cgthreads:8")
     endif()
 
+    # Need to specify the arch for x86.
+    if(${CMAKE_SIZEOF_VOID_P} EQUAL 4)
+        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/arch:SSE2")
+    endif()
+
     # Force static runtime, warnings, and override default flags.
     foreach(Flag
             CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO
