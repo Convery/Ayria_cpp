@@ -26,17 +26,18 @@ namespace JSON
     // Helper for type deduction.
     template<typename T> constexpr Type_t toType()
     {
-        if constexpr (std::is_same_v<T, std::u8string>) return Type_t::String;
+        if constexpr (Internal::isDerived<T, std::basic_string_view>{}) return Type_t::String;
+        if constexpr (Internal::isDerived<T, std::basic_string>{}) return Type_t::String;
         if constexpr (std::is_same_v<T, Object_t>) return Type_t::Object;
         if constexpr (std::is_floating_point_v<T>) return Type_t::Float;
         if constexpr (std::is_same_v<T, Array_t>) return Type_t::Array;
+        if constexpr (std::is_same_v<T, bool>) return Type_t::Bool;
         if constexpr (std::is_integral_v<T>)
         {
             if constexpr (std::is_signed_v<T>)
                 return Type_t::Signedint;
             return Type_t::Unsignedint;
         }
-        if constexpr (std::is_same_v<T, bool>) return Type_t::Bool;
 
         return Type_t::Null;
     }
@@ -190,15 +191,15 @@ namespace JSON
                 default: return {};
             }
         }
+        template<typename T> T get() const
+        {
+            return *this;
+        }
         template<typename T> T &get()
         {
             if (Type == Type_t::Null) *this = Value_t(T());
             return *asPtr(T);
         };
-        template<typename T> T get() const
-        {
-            return *this;
-        }
 
         //
         Value_t operator[](std::string_view Key) const
@@ -222,25 +223,24 @@ namespace JSON
                 return;
             }
 
+            // Safety-check, we do not convert arrays to strings.
+            static_assert(toType<T>() != Type_t::Null);
+
             if constexpr (std::is_same_v<T, Value_t>) *this = Input;
             else
             {
                 Type = toType<T>();
 
-                if constexpr (std::is_integral_v<T> && !std::is_signed_v<T>) Value = std::make_shared<uint64_t>(Input);
-                if constexpr (std::is_integral_v<T> && std::is_signed_v<T>) Value = std::make_shared<int64_t>(Input);
-                if constexpr (std::is_floating_point_v<T>) Value = std::make_shared<double>(Input);
-                if constexpr (std::is_same_v<T, bool>) Value = std::make_shared<bool>(Input);
+                if constexpr (toType<T>() == Type_t::String) Value = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
+                if constexpr (toType<T>() == Type_t::Unsignedint) Value = std::make_shared<uint64_t>(Input);
+                if constexpr (toType<T>() == Type_t::Signedint) Value = std::make_shared<int64_t>(Input);
+                if constexpr (toType<T>() == Type_t::Float) Value = std::make_shared<double>(Input);
+                if constexpr (toType<T>() == Type_t::Bool) Value = std::make_shared<bool>(Input);
 
-                if constexpr (Internal::isDerived<T, std::basic_string>{} ||
-                    Internal::isDerived<T, std::basic_string_view>{})
+                if constexpr (Internal::isDerived<T, std::unordered_map>{} || Internal::isDerived<T, std::map>{})
                 {
-                    Type = Type_t::String;
-                    Value = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
-                }
+                    static_assert(std::is_convertible_v<typename T::key_type, std::string>);
 
-                if constexpr (Internal::isDerived<T, std::unordered_map>{})
-                {
                     Object_t Object(Input.size());
                     for (const auto &[Key, _Value] : Input)
                         Object[Key] = _Value;
@@ -248,7 +248,9 @@ namespace JSON
                     Type = Type_t::Object;
                     Value = std::make_shared<Object_t>(std::move(Object));
                 }
-                if constexpr (Internal::isDerived<T, std::vector>{})
+                if constexpr (Internal::isDerived<T, std::set>{} ||
+                              Internal::isDerived<T, std::vector>{} ||
+                              Internal::isDerived<T, std::unordered_set>{})
                 {
                     Array_t Array(Input.size());
                     for (const auto &[Index, _Value] : Enumerate(Input))
@@ -257,8 +259,6 @@ namespace JSON
                     Type = Type_t::Array;
                     Value = std::make_shared<Array_t>(std::move(Array));
                 }
-
-                assert(Type != Type_t::Null);
             }
         }
         Value_t() = default;
