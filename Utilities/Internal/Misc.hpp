@@ -21,6 +21,28 @@
 #pragma region Python
 
 // for (const auto &[Index, Value] : Enumerate(std::vector({ 1, 2, 3, 4 }))) ...
+#if defined(__cpp_lib_coroutine) && __has_include(<experimental/generator>)
+#include <experimental/generator>
+
+template <typename Type, typename Indextype = size_t>
+std::experimental::generator<std::pair<Indextype, typename Type::value_type>>
+                            Enumerate(const Type &Collection, Indextype Start = {})
+{
+    for (const auto &Item : Collection)
+        co_yield std::make_pair(Start++, Item);
+}
+
+template <typename Type, typename Indextype = size_t>
+std::experimental::generator<std::pair<Indextype, typename Type::value_type>>
+                            Enumerate(Type &&Collection, Indextype Start = {})
+{
+    for (const auto &Item : Collection)
+        co_yield std::make_pair(Start++, Item);
+}
+
+
+#else
+
 template <typename Iteratortype, typename Indextype = size_t>
 struct Enumerate
 {
@@ -45,8 +67,25 @@ struct Enumerate
     auto begin() const { return Internaliterator(std::begin(Iterator), Index); };
     auto end() const { return Internaliterator(std::end(Iterator), Index); };
 };
+#endif
 
 // for (const auto &x : Range(1, 100, 2)) ...
+#if defined(__cpp_lib_coroutine) && __has_include(<experimental/generator>)
+#include <experimental/generator>
+
+template <typename Valuetype, typename Steptype = int>
+std::experimental::generator<Valuetype> Range(Valuetype Start, Valuetype End, Steptype Step = 1)
+{
+    if constexpr (std::is_arithmetic_v<Valuetype>)
+        for (auto i = Start; i < End; i += Step)
+            co_yield i;
+
+    else
+        for (auto i = Start; i < End; std::advance(i, Step))
+            co_yield i;
+}
+
+#else
 template <typename Valuetype, typename Steptype = int>
 struct Range
 {
@@ -77,6 +116,7 @@ struct Range
     auto begin() const { return *this; };
     auto end() const { return Max; };
 };
+#endif
 
 #pragma endregion
 
