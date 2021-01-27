@@ -1,11 +1,11 @@
 /*
-Initial author: Convery (tcn@ayria.se)
-Started: 2020-10-30
-License: MIT
+    Initial author: Convery (tcn@ayria.se)
+    Started: 2020-10-30
+    License: MIT
 
-Each SIMD library has their own 'issues'.
-NLohmann does not work well with u8string.
-SIMDJSON treats all but the largest ints as signed.
+    Each JSON library has their own 'issues'.
+    NLohmann does not work well with u8string.
+    SIMDJSON treats all but the largest ints as signed.
 */
 
 #pragma once
@@ -28,9 +28,15 @@ namespace JSON
     {
         if constexpr (Internal::isDerived<T, std::basic_string_view>{}) return Type_t::String;
         if constexpr (Internal::isDerived<T, std::basic_string>{}) return Type_t::String;
-        if constexpr (std::is_same_v<T, Object_t>) return Type_t::Object;
+
+        if constexpr (Internal::isDerived<T, std::unordered_set>{}) return Type_t::Array;
+        if constexpr (Internal::isDerived<T, std::vector>{}) return Type_t::Array;
+        if constexpr (Internal::isDerived<T, std::set>{}) return Type_t::Array;
+
+        if constexpr (Internal::isDerived<T, std::unordered_map>{}) return Type_t::Object;
+        if constexpr (Internal::isDerived<T, std::map>{}) return Type_t::Object;
+
         if constexpr (std::is_floating_point_v<T>) return Type_t::Float;
-        if constexpr (std::is_same_v<T, Array_t>) return Type_t::Array;
         if constexpr (std::is_same_v<T, bool>) return Type_t::Bool;
         if constexpr (std::is_integral_v<T>)
         {
@@ -47,10 +53,10 @@ namespace JSON
     struct Value_t
     {
         Type_t Type{};
-        std::shared_ptr<void> Value;
+        std::shared_ptr<void> Value{};
 
         //
-        std::string dump() const
+        [[nodiscard]] std::string dump() const
         {
             switch (Type)
             {
@@ -105,14 +111,7 @@ namespace JSON
 
             switch (Input.Type)
             {
-                case Type_t::Unsignedint: *this = Input; break;
-                case Type_t::Signedint: *this = Input; break;
-                case Type_t::String: *this = Input; break;
-                case Type_t::Array: *this = Input; break;
-                case Type_t::Float: *this = Input; break;
-                case Type_t::Bool: *this = Input; break;
                 case Type_t::Null: break;
-
                 case Type_t::Object:
                 {
                     const auto Delta = std::static_pointer_cast<Object_t>(Input.Value);
@@ -125,18 +124,30 @@ namespace JSON
 
                     break;
                 }
+                case Type_t::Array:
+                {
+                    const auto Delta = std::static_pointer_cast<Array_t>(Input.Value);
+                    const auto Current = asPtr(Array_t);
+
+                    Current->reserve(Current->size() + Delta->size());
+                    std::ranges::copy(*Delta, Current->end());
+
+                    break;
+                }
+
+                default: *this = Input; break;
             }
 
             return true;
         }
 
         //
-        bool contains(std::string_view Key) const
+        [[nodiscard]] bool contains(std::string_view Key) const
         {
             if (Type != Type_t::Object) return false;
             return asPtr(Object_t)->contains(Key.data());
         }
-        bool empty() const
+        [[nodiscard]] bool empty() const
         {
             if (Type == Type_t::String) return asPtr(std::u8string)->empty();
             if (Type == Type_t::Object) return asPtr(Object_t)->empty();
@@ -170,13 +181,13 @@ namespace JSON
                 case Type_t::Object: if constexpr (std::is_same_v<T, Object_t>) return *asPtr(Object_t);
                 case Type_t::Unsignedint: if constexpr (std::is_integral_v<T>) return *asPtr(uint64_t);
                 case Type_t::Float: if constexpr (std::is_floating_point_v<T>) return *asPtr(double);
-                case Type_t::Array: if constexpr (std::is_same_v<T, Array_t>) return *asPtr(Array_t);
                 case Type_t::Signedint: if constexpr (std::is_integral_v<T>) return *asPtr(int64_t);
                 case Type_t::Bool: if constexpr (std::is_same_v<T, bool>) return *asPtr(bool);
+                case Type_t::Null: break;
+
                 case Type_t::String:
                 {
-                    if constexpr (Internal::isDerived<T, std::basic_string>{} ||
-                        Internal::isDerived<T, std::basic_string_view>{})
+                    if constexpr (Internal::isDerived<T, std::basic_string>{} || Internal::isDerived<T, std::basic_string_view>{})
                     {
                         if constexpr (std::is_same_v<typename T::value_type, wchar_t>)
                             return Encoding::toWide(*asPtr(std::u8string));
@@ -187,9 +198,32 @@ namespace JSON
                         if constexpr (std::is_same_v<typename T::value_type, char8_t>)
                             return *asPtr(std::u8string);
                     }
+                    break;
                 }
-                default: return {};
+                case Type_t::Array:
+                {
+                    if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{} ||
+                                  Internal::isDerived<T, std::vector>{})
+                    {
+                        if constexpr (std::is_same_v<T, Array_t>)
+                        return *asPtr(Array_t);
+
+                        const auto Array = asPtr(Array_t);
+                        T Result; Result.reserve(Array->size());
+
+                        if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{})
+                            for (const auto &Item : *Array)
+                                Result.insert(Item);
+
+                        if constexpr (Internal::isDerived<T, std::vector>{})
+                            std::ranges::copy(*Array, Result.begin());
+                    }
+                    break;
+                }
             }
+
+            assert(false);
+            return {};
         }
         template<typename T> T get() const
         {
@@ -248,9 +282,8 @@ namespace JSON
                     Type = Type_t::Object;
                     Value = std::make_shared<Object_t>(std::move(Object));
                 }
-                if constexpr (Internal::isDerived<T, std::set>{} ||
-                              Internal::isDerived<T, std::vector>{} ||
-                              Internal::isDerived<T, std::unordered_set>{})
+                if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{} ||
+                              Internal::isDerived<T, std::vector>{})
                 {
                     Array_t Array(Input.size());
                     for (const auto &[Index, _Value] : Enumerate(Input))
