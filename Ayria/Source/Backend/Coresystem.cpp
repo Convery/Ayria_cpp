@@ -55,13 +55,12 @@ namespace Backend
             reinterpret_cast<size_t (__stdcall *)(size_t)>(Callback)(size_t(-2));
 
         // Initialize the subsystems.
-        // TODO(tcn): Initialize pluginmenu.
-        Overlay_t<> Ingameconsole({}, {});
+        // TODO(tcn): Initialize pluginmenu, move the overlay storage somewhere.
+        Overlay_t<false> Ingameconsole({}, {});
         Console::Overlay::Createconsole(&Ingameconsole);
 
         // Optional console for developers.
-        if (std::strstr(GetCommandLineA(), "-DEVCON"))
-            Console::Windows::Createconsole(GetModuleHandleW(NULL));
+        if (Global.enableExternalconsole) Console::Windows::Createconsole(GetModuleHandleW(NULL));
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
@@ -109,8 +108,19 @@ namespace Backend
         // Set SSE to behave properly, MSVC seems to be missing a flag.
         _mm_setcsr(_mm_getcsr() | 0x8040); // _MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON
 
-        // As of Windows 10 update 20H2 (2004) we need to set the interrupt resolution.
+        // As of Windows 10 update 20H2 (v2004) we need to set the interrupt resolution for each process.
         timeBeginPeriod(1);
+
+        // Initialize the global state from disk settings.
+        const auto Config = JSON::Parse(FS::Readfile<char>("./Ayria/Settings.json"));
+        Global.enableExternalconsole = Config.value<bool>("enableExternalconsole");
+        Global.useIAThooks = Config.value<bool>("useIAThooks");
+        Global.UserID = Config.value("UserID", 0xDEADC0DE);
+
+        const auto Locale = Config.value("Locale", u8"english"s);
+        const auto Username = Config.value("Username", u8"AYRIA"s);
+        std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
+        std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
 
         // Initialize subsystems that plugins may need.
         //Matchmaking::API_Initialize();

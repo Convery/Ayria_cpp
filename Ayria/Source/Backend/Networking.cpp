@@ -32,26 +32,26 @@ namespace Backend::Network
         // Windows does not like partial messages, so prefix the buffer with ID and type.
         if (Base64::isValid(JSONString)) [[unlikely]]
         {
-            const auto Size = LZ4_compressBound(JSONString.size());
+            const auto Size = LZ4_compressBound(int(JSONString.size()));
 
             Encoded.reserve(Size + sizeof(uint64_t));
             Encoded.append((char *)&RandomID, sizeof(RandomID));
             Encoded.append((char *)&Messagetype, sizeof(Messagetype));
             Encoded.resize(Size + sizeof(uint64_t));
 
-            LZ4_compress_default(JSONString.data(), Encoded.data() + sizeof(uint64_t), JSONString.size(), Size);
+            LZ4_compress_default(JSONString.data(), Encoded.data() + sizeof(uint64_t), int(JSONString.size()), Size);
         }
         else
         {
             const auto String = Base64::Encode(JSONString);
-            const auto Size = LZ4_compressBound(String.size());
+            const auto Size = LZ4_compressBound(int(String.size()));
 
             Encoded.reserve(Size + sizeof(uint64_t));
             Encoded.append((char *)&RandomID, sizeof(RandomID));
             Encoded.append((char *)&Messagetype, sizeof(Messagetype));
             Encoded.resize(Size + sizeof(uint64_t));
 
-            LZ4_compress_default(String.data(), Encoded.data() + sizeof(uint64_t), String.size(), Size);
+            LZ4_compress_default(String.data(), Encoded.data() + sizeof(uint64_t), int(String.size()), Size);
         }
 
         sendto(Sendersocket, Encoded.data(), int(Encoded.size()), 0, (sockaddr *)&Multicast, sizeof(Multicast));
@@ -130,7 +130,7 @@ namespace Backend::Network
                 // May have multiple listeners for the same messageID.
                 for (const auto Callback : Result->second)
                 {
-                    Callback(Packet->RandomID, Decoded.data(), Decoded.size());
+                    Callback(Packet->RandomID, Decoded.data(), (unsigned int)Decoded.size());
                 }
             }
         }

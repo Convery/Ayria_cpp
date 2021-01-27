@@ -14,7 +14,8 @@ namespace Clientinfo
     // The only interface other code should use.
     std::vector<Client_t *> getRemoteclients()
     {
-        std::vector<Client_t *> Result; Result.reserve(Remoteclients.size());
+        std::vector<Client_t *> Result;
+        Result.reserve(Remoteclients.size());
         for (auto &Remoteclient : Remoteclients)
             Result.push_back(&Remoteclient);
         return Result;

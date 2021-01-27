@@ -13,10 +13,6 @@
 // Global system information.
 struct Globalstate_t
 {
-    std::unique_ptr<std::wstring> Username, Locale;
-    RSA *Cryptokeys;
-    bool isOnline;
-
     union
     {
         uint64_t AccountID;
@@ -27,6 +23,17 @@ struct Globalstate_t
             uint8_t Accountflags;
             uint16_t Creationdate;
         };
+    };
+
+    RSA *Cryptokeys;
+    char8_t Username[24], Locale[10];
+
+    struct
+    {
+        uint8_t
+            isOnline : 1,
+            useIAThooks : 1,
+            enableExternalconsole : 1;
     };
 };
 extern Globalstate_t Global;

@@ -37,7 +37,7 @@ namespace Backend::Fileshare
 
                         if (const auto Filebuffer = FS::Readfile<char>(Filepath); !Filebuffer.empty())
                         {
-                            send(Newsocket, Filebuffer.data(), Filebuffer.size(), NULL);
+                            send(Newsocket, Filebuffer.data(), int(Filebuffer.size()), NULL);
                         }
                         closesocket(Newsocket);
                     }
@@ -92,7 +92,7 @@ namespace Backend::Fileshare
             FD_SET(Socket, &Activesockets);
             listen(Socket, 10);
 
-            const auto Share = &Mappedfiles.emplace_back(Filebuffer.size(), Checksum, Global.UserID, Stored->c_str(), Localhost.sin_port);
+            const auto Share = &Mappedfiles.emplace_back(uint32_t(Filebuffer.size()), Checksum, Global.UserID, Stored->c_str(), Localhost.sin_port);
             Socketmap[Socket] = Share;
 
             if (!Initialized)

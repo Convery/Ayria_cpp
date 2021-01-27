@@ -108,7 +108,7 @@ namespace Clientinfo
     static void __cdecl Sendclientinfo()
     {
         const auto Object = JSON::Object_t({
-            { "Username", Global.Username.get() },
+            { "Username", std::u8string_view(Global.Username) },
             { "AccountID", Global.AccountID }
         });
 
@@ -177,11 +177,6 @@ namespace Clientinfo
                 #endif
             }).detach();
         }
-
-        const auto Config = JSON::Parse(FS::Readfile<char>("./Ayria/Settings.json"));
-        Global.Username = std::make_unique<std::wstring>(Config.value("Username", L"AYRIA"s));
-        Global.Locale = std::make_unique<std::wstring>(Config.value("Locale", L"english"s));
-        Global.UserID = Config.value("UserID", 0xDEADC0DE);
 
         Backend::Enqueuetask(5000, Sendclientinfo);
         Backend::Enqueuetask(30000, Updateremoteclients);
