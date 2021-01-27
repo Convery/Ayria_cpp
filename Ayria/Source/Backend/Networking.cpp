@@ -164,7 +164,8 @@ namespace Backend::Network
         // Export the network to the plugins.
         API::addHandler("Network::Sendmessage", Export::Sendmessage);
 
-        Enqueuetask(0, Updatenetworking);
+        // Should only need to check for packets 10 times a second.
+        Enqueuetask(100, Updatenetworking);
     }
     void Blockclient(uint32_t NodeID)
     {
