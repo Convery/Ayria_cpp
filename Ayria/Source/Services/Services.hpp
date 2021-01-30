@@ -45,9 +45,10 @@ namespace Social
         using Relationflags_t = union { uint8_t Raw; struct { uint8_t isPending : 1, isFriend : 1, isBlocked : 1; }; };
         using Userrelation_t = struct { uint32_t UserID; std::u8string Username; Relationflags_t Flags; };
 
+        // Modify the relations stored to disk.
         void Insert(uint32_t UserID, std::u8string_view Username, Relationflags_t Flags);
-        void Remove(uint32_t UserID, std::u8string_view Username);
         std::vector<const Userrelation_t *> List();
+        void Remove(uint32_t UserID);
 
         // Load the relations from disk.
         void Initialize();
@@ -118,5 +119,11 @@ namespace Social
 
         // Add the message-handlers and load pending messages from disk.
         void Initialize();
+    }
+
+    //
+    inline void Initialize()
+    {
+        Relations::Initialize();
     }
 }

@@ -114,7 +114,7 @@ namespace Clientinfo
     void Initializediscovery()
     {
         Backend::Enqueuetask(5000, sendDiscovery);
-        Backend::Enqueuetask(5000, Clearoutdated);
+        Backend::Enqueuetask(6000, Clearoutdated);
         Backend::Network::addHandler("Clientdiscovery", Discoveryhandler);
     }
 }

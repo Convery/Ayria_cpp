@@ -51,8 +51,8 @@ namespace Backend
         setThreadname("Ayria_Graphics");
 
         // Disable DPI scaling on Windows 10.
-        if (const auto Callback = GetProcAddress(LoadLibraryA("User32.dll"), "SetThreadDpiAwarenessContext"))
-            reinterpret_cast<size_t (__stdcall *)(size_t)>(Callback)(size_t(-2));
+        if (const auto Callback = GetProcAddress(GetModuleHandleA("User32.dll"), "SetThreadDpiAwarenessContext"))
+            reinterpret_cast<size_t (__stdcall *)(size_t)>(Callback)(static_cast<size_t>(-2));
 
         // Initialize the subsystems.
         // TODO(tcn): Initialize pluginmenu, move the overlay storage somewhere.
@@ -142,10 +142,10 @@ namespace Backend
 
         // Initialize subsystems that plugins may need.
         //Matchmaking::API_Initialize();
-        //Social::API_Initialize();
         Clientinfo::Initialize();
         Fileshare::Initialize();
         Network::Initialize();
+        Social::Initialize();
 
         // Workers.
         CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
