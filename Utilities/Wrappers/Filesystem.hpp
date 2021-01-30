@@ -47,7 +47,7 @@ namespace FS
 
     namespace Internal
     {
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_large(std::string_view Path, size_t Size)
         {
             #if defined(_WIN32)
@@ -82,11 +82,11 @@ namespace FS
 
             return Filebuffer;
         }
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_large(std::wstring_view Path, size_t Size)
         {
             #if !defined(_WIN32)
-                return Readfile_large(toNarrow(Path), Size);
+                return Readfile_large(Encoding::toNarrow(Path), Size);
             #else
                 const auto FD = _wopen(Path.data(), 0x800, 0);
                 if (FD == -1) return {};
@@ -108,7 +108,7 @@ namespace FS
             #endif
         }
 
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_small(std::string_view Path, size_t Size)
         {
             std::FILE *Filehandle = std::fopen(Path.data(), "rb");
@@ -120,13 +120,13 @@ namespace FS
 
             return std::basic_string<T>(Buffer.get(), Size);
         }
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_small(std::wstring_view Path, size_t Size)
         {
             #if defined(_WIN32)
             std::FILE *Filehandle = _wfopen(Path.data(), L"rb");
             #else
-            std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "rb");
+            std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "rb");
             #endif
             if (!Filehandle) return {};
 
@@ -138,14 +138,14 @@ namespace FS
         }
     }
 
-    template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
     [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
     {
         const auto Size = Filesize(Path);
         if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
         else return Internal::Readfile_small<T>(Path, Size);
     }
-    template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
     [[nodiscard]] inline std::basic_string<T> Readfile(std::wstring_view Path)
     {
         const auto Size = Filesize(Path);
@@ -173,7 +173,7 @@ namespace FS
         #if defined(_WIN32)
         std::FILE *Filehandle = _wfopen(Path.data(), L"wb");
         #else
-        std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "wb");
+        std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "wb");
         #endif
         if (!Filehandle) return false;
 
@@ -263,7 +263,7 @@ namespace FS
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #else
         struct stat Buffer;
-        if (stat(toNarrow(Path).c_str(), &Buffer) == -1) return {};
+        if (stat(Encoding::toNarrow(Path).c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #endif
     }

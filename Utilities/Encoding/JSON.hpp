@@ -222,7 +222,6 @@ namespace JSON
                 }
             }
 
-            assert(false);
             return {};
         }
         template<typename T> T get() const

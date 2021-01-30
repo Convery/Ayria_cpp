@@ -340,7 +340,6 @@ namespace Encoding
     }
 }
 
-
 #if defined(HAS_ABSEIL)
 [[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, char Needle)
 {
