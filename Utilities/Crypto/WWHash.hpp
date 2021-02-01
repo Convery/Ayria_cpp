@@ -112,7 +112,6 @@ namespace Hash
             Seed = (Seed ^ (Seed << 16)) * (Length ^ _waterp0);
             return (uint32_t)(Seed - (Seed >> 32));
         }
-
     }
 
     // Compile-time hashing for literals.

@@ -88,6 +88,7 @@ namespace Clientinfo
         // If the client can't even format a simple request, block them.
         if (!UserID || Username.empty()) [[unlikely]]
         {
+            Infoprint(va("Blocking client %08X due to invalid discovery request.", UserID));
             Backend::Network::Blockclient(NodeID);
             return;
         }
@@ -95,6 +96,17 @@ namespace Clientinfo
         // If we need to add a client..
         if (!Networkmap.contains(NodeID)) [[unlikely]]
         {
+            // Check if we don't want to process requests from this client.
+            for (const auto &Relation : Social::Relations::List())
+            {
+                if (Relation->UserID == UserID)
+                {
+                    Infoprint(va("Blocking client %08X due to relationship status.", UserID));
+                    Backend::Network::Blockclient(NodeID);
+                    return;
+                }
+            }
+
             Localclients.emplace_back(UserID, nullptr, &*Clientnames.insert(Username).first, nullptr);
             Networkmap.emplace(NodeID, UserID);
         }

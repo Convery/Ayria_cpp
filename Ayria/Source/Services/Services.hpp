@@ -15,6 +15,13 @@ struct Client_t
     const std::u8string *Authticket;
 };
 
+// Helper for async tasks.
+template<typename T> struct Task_t
+{
+    std::atomic_flag hasResult, isDone;
+    T Result;
+};
+
 namespace Clientinfo
 {
     // LAN clients are identified by their random ID.
@@ -57,37 +64,42 @@ namespace Social
     // A collection of active users.
     namespace Group
     {
-        struct Group_t // 48 bytes.
+        union GroupID_t
         {
-            //                       UserID                      User-data
-            Inlinedvector<std::pair<uint32_t, std::unique_ptr<JSON::Object_t>>, 2> Members;
-
-            union
+            uint64_t Raw;
+            struct
             {
-                uint64_t GroupID;
-                struct
-                {
-                    uint32_t AdminID;   // Creator.
-                    uint16_t RoomID;    // Random.
-                    uint8_t HostID;     // Server, 0 == localhost.
-                    uint8_t Limit;      // Users.
-                };
+                uint32_t AdminID;   // Creator.
+                uint16_t RoomID;    // Random.
+                uint8_t HostID;     // Server, 0 == localhost.
+                uint8_t Limit;      // Users.
             };
         };
+        struct Group_t
+        {
+            GroupID_t GroupID;
+            std::unique_ptr<Hashmap<uint32_t, JSON::Value_t>> Members;
+        };
+        struct Joinrequest_t
+        {
+            GroupID_t GroupID;
+            uint32_t ClientID;
+            JSON::Value_t Extradata;
+        };
 
-        // Create a new group as host, request a remote host for it.
-        Group_t *Createlocal(bool Public, uint8_t Memberlimit = 2);
-        std::future<bool> Makeremote(Group_t *Localgroup);
+        // Create a new group as host, optionally request a remote host for it.
+        const Task_t<GroupID_t> *Creategroup(bool Local, uint8_t Memberlimit);
 
-        // Manage the group-members for groups this client is admin of.
-        void insertClient(uint64_t GroupID, uint32_t ClientID, std::string_view JSONData = {});
-        void modifyClient(uint64_t GroupID, uint32_t ClientID, std::string_view DeltaJSON);
-        void removeClient(uint64_t GroupID, uint32_t ClientID);
+        // Manage the group-members for groups this client is admin of, update inserts a new user.
+        void updateMember(GroupID_t GroupID, uint32_t ClientID, JSON::Value_t Clientinfo);
+        void removeMember(GroupID_t GroupID, uint32_t ClientID);
 
-        // Get/send a request in the form of <GroupID, ClientID>.
-        std::future<bool> Requestjoin(uint64_t GroupID);
-        std::pair<uint64_t, uint32_t> getJoinrequest();
-        void Leavegroup(uint64_t GroupID);
+        // Manage group-membership.
+        const Task_t<bool> *Subscribe(GroupID_t GroupID, JSON::Value_t Extradata);
+        void Acceptrequest(Joinrequest_t *Request, JSON::Value_t Clientinfo);
+        void Rejectrequest(Joinrequest_t *Request);
+        void Unsubscribe(GroupID_t GroupID);
+        Joinrequest_t *getJoinrequest();
 
         // List the groups we know of, optionally filtered by Admin or Member.
         std::vector<const Group_t *> List(const uint32_t *byOwner = {}, const uint32_t *byUser = {});
@@ -125,5 +137,6 @@ namespace Social
     inline void Initialize()
     {
         Relations::Initialize();
+        Group::Initialize();
     }
 }

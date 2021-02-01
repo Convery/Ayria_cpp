@@ -40,7 +40,6 @@ std::experimental::generator<std::pair<Indextype, typename Type::value_type>>
         co_yield std::make_pair(Start++, Item);
 }
 
-
 #else
 
 template <typename Iteratortype, typename Indextype = size_t>
@@ -119,4 +118,3 @@ struct Range
 #endif
 
 #pragma endregion
-
