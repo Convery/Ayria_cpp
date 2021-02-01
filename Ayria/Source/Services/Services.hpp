@@ -103,6 +103,7 @@ namespace Social
 
         // List the groups we know of, optionally filtered by Admin or Member.
         std::vector<const Group_t *> List(const uint32_t *byOwner = {}, const uint32_t *byUser = {});
+        bool isGroupmember(GroupID_t GroupID, uint32_t UserID);
 
         // Set up message-handlers.
         void Initialize();
@@ -111,11 +112,7 @@ namespace Social
     // Client messages are stored locally and sent when target is online.
     namespace Messages
     {
-        using Message_t = struct { uint32_t Timestamp; uint32_t Source, Target; std::string B64Message; };
-
-        // TODO(TCN): Move to the .cpp when implemented.
-        Message_t Deserialize(const JSON::Object_t &Object);
-        JSON::Object_t Serialize(const Message_t &Message);
+        using Message_t = struct { uint32_t Timestamp; uint32_t Source, Target; uint64_t GroupID; std::string B64Message; };
 
         namespace Send
         {
@@ -136,7 +133,8 @@ namespace Social
     //
     inline void Initialize()
     {
-        Relations::Initialize();
         Group::Initialize();
+        Messages::Initialize();
+        Relations::Initialize();
     }
 }

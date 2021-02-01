@@ -280,6 +280,10 @@ namespace Social::Group
 
         return Result;
     }
+    bool isGroupmember(GroupID_t GroupID, uint32_t UserID)
+    {
+        return Knowngroups.contains(GroupID.Raw) && Knowngroups[GroupID.Raw].Members->contains(UserID);
+    }
 
     // Set up message-handlers.
     void Initialize()
