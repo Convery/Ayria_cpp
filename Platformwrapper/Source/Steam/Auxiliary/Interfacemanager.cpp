@@ -165,6 +165,10 @@ namespace Steam
         { "STEAMAPPS_INTERFACE_VERSION007", "SteamApps007" },
         { "STEAMAPPS_INTERFACE_VERSION008", "SteamApps008" },
 
+        { "SteamBilling001", "SteamBilling001" },
+        { "SteamBilling002", "SteamBilling002" },
+
+
         { "SteamClient001", "SteamClient001" },
         { "SteamClient002", "SteamClient002" },
         { "SteamClient003", "SteamClient003" },
