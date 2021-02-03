@@ -11,6 +11,7 @@ namespace Steam
     std::deque<std::pair<Interfacetype_t, Interface_t *>> *Interfacestore;
     std::unordered_map<Interfacetype_t, Interface_t *> Currentinterfaces;
     std::unordered_map<std::string_view, Interface_t *> *Interfacenames;
+    extern const Hashmap<std::string, std::string> Scanstrings;
 
     // A nice little dummy interface for debugging.
     struct Dummyinterface : Interface_t
@@ -52,6 +53,10 @@ namespace Steam
     }
     Interface_t **Fetchinterface(std::string_view Name)
     {
+        // See if we got a Steam name.
+        if (Scanstrings.contains(Name))
+            Name = Scanstrings.at(Name).c_str();
+
         // See if we even have the interface implemented.
         const auto Result = Interfacenames->find(Name);
         if (Result == Interfacenames->end())
@@ -122,7 +127,6 @@ namespace Steam
     }
 
     // Poke at a module until it gives up its secrets.
-    extern const std::vector<std::pair<std::string, std::string>> Scanstrings;
     bool Scanforinterfaces(std::string_view Filename)
     {
         const auto Filebuffer = FS::Readfile(Filename);
@@ -148,8 +152,10 @@ namespace Steam
         // Did we find any results?
         return !!Foundnames;
     }
-    const std::vector<std::pair<std::string, std::string>> Scanstrings
+    const Hashmap<std::string, std::string> Scanstrings
     {
+        {"STEAMAPPLIST_INTERFACE_VERSION001,", "SteamApplist001"},
+
         { "STEAMAPPS_INTERFACE_VERSION001", "SteamApps001" },
         { "STEAMAPPS_INTERFACE_VERSION002", "SteamApps002" },
         { "STEAMAPPS_INTERFACE_VERSION003", "SteamApps003" },
@@ -157,6 +163,40 @@ namespace Steam
         { "STEAMAPPS_INTERFACE_VERSION005", "SteamApps005" },
         { "STEAMAPPS_INTERFACE_VERSION006", "SteamApps006" },
         { "STEAMAPPS_INTERFACE_VERSION007", "SteamApps007" },
+        { "STEAMAPPS_INTERFACE_VERSION008", "SteamApps008" },
+
+        { "SteamClient001", "SteamClient001" },
+        { "SteamClient002", "SteamClient002" },
+        { "SteamClient003", "SteamClient003" },
+        { "SteamClient004", "SteamClient004" },
+        { "SteamClient005", "SteamClient005" },
+        { "SteamClient006", "SteamClient006" },
+        { "SteamClient007", "SteamClient007" },
+        { "SteamClient008", "SteamClient008" },
+        { "SteamClient009", "SteamClient009" },
+        { "SteamClient010", "SteamClient010" },
+        { "SteamClient011", "SteamClient011" },
+        { "SteamClient012", "SteamClient012" },
+        { "SteamClient013", "SteamClient013" },
+        { "SteamClient014", "SteamClient014" },
+        { "SteamClient015", "SteamClient015" },
+        { "SteamClient016", "SteamClient016" },
+        { "SteamClient017", "SteamClient017" },
+        { "SteamClient018", "SteamClient018" },
+        { "SteamClient019", "SteamClient019" },
+        { "SteamClient020", "SteamClient020" },
+
+        { "SteamContentServer001", "SteamContentserver001" },
+        { "SteamContentServer002", "SteamContentserver002" },
+
+        { "SteamController001", "SteamController001" },
+        { "SteamController002", "SteamController002" },
+        { "SteamController003", "SteamController003" },
+        { "SteamController004", "SteamController004" },
+        { "SteamController005", "SteamController005" },
+        { "SteamController006", "SteamController006" },
+        { "SteamController007", "SteamController007" },
+        { "SteamController008", "SteamController008" },
 
         { "SteamFriends001", "SteamFriends001" },
         { "SteamFriends002", "SteamFriends002" },
@@ -173,6 +213,12 @@ namespace Steam
         { "SteamFriends013", "SteamFriends013" },
         { "SteamFriends014", "SteamFriends014" },
         { "SteamFriends015", "SteamFriends015" },
+        { "SteamFriends016", "SteamFriends016" },
+        { "SteamFriends017", "SteamFriends017" },
+
+
+        { "SteamGameCoordinator001", "SteamCoordinator001" },
+        { "SteamMatchGameSearch001", "SteamMatchsearch001" },
 
         { "SteamGameServer001", "SteamGameserver001" },
         { "SteamGameServer002", "SteamGameserver002" },
@@ -182,10 +228,32 @@ namespace Steam
         { "SteamGameServer006", "SteamGameserver006" },
         { "SteamGameServer007", "SteamGameserver007" },
         { "SteamGameServer008", "SteamGameserver008" },
-        { "SteamGameServer009", "SteamGameserver009" },
+        { "SteamGameServer001", "SteamGameserver009" },
         { "SteamGameServer010", "SteamGameserver010" },
         { "SteamGameServer011", "SteamGameserver011" },
         { "SteamGameServer012", "SteamGameserver012" },
+        { "SteamGameServer013", "SteamGameserver013" },
+
+        { "SteamGameServerStats001", "SteamGameserverstats01" },
+
+        { "STEAMHTMLSURFACE_INTERFACE_VERSION_001", "SteamHTML001" },
+        { "STEAMHTMLSURFACE_INTERFACE_VERSION_002", "SteamHTML002" },
+        { "STEAMHTMLSURFACE_INTERFACE_VERSION_003", "SteamHTML003" },
+        { "STEAMHTMLSURFACE_INTERFACE_VERSION_004", "SteamHTML004" },
+        { "STEAMHTMLSURFACE_INTERFACE_VERSION_005", "SteamHTML005" },
+
+        { "STEAMHTTP_INTERFACE_VERSION001", "SteamHTTP001" },
+        { "STEAMHTTP_INTERFACE_VERSION002", "SteamHTTP002" },
+        { "STEAMHTTP_INTERFACE_VERSION003", "SteamHTTP003" },
+
+        { "SteamInput001", "SteamInput001" },
+        { "SteamInput002", "SteamInput002" },
+
+        { "STEAMINVENTORY_INTERFACE_V001", "SteamInventory001" },
+        { "STEAMINVENTORY_INTERFACE_V002", "SteamInventory002" },
+        { "STEAMINVENTORY_INTERFACE_V003", "SteamInventory003" },
+
+        { "SteamMasterServerUpdater001", "SteamServerupdater001" },
 
         { "SteamMatchMaking001", "SteamMatchmaking001" },
         { "SteamMatchMaking002", "SteamMatchmaking002" },
@@ -197,11 +265,43 @@ namespace Steam
         { "SteamMatchMaking008", "SteamMatchmaking008" },
         { "SteamMatchMaking009", "SteamMatchmaking009" },
 
+        { "SteamMatchMakingServers001", "SteamMatchmakingservers001" },
+        { "SteamMatchMakingServers002", "SteamMatchmakingservers002" },
+
+        { "STEAMMUSIC_INTERFACE_VERSION001", "SteamMusic001" },
+
+        { "STEAMMUSICREMOTE_INTERFACE_VERSION001", "SteamRemotemusic001" },
+
         { "SteamNetworking001", "SteamNetworking001" },
         { "SteamNetworking002", "SteamNetworking002" },
         { "SteamNetworking003", "SteamNetworking003" },
         { "SteamNetworking004", "SteamNetworking004" },
         { "SteamNetworking005", "SteamNetworking005" },
+        { "SteamNetworking006", "SteamNetworking006" },
+
+        { "SteamNetworkingMessages001", "SteamNetworkingmessages001" },
+        { "SteamNetworkingMessages002", "SteamNetworkingmessages002" },
+
+        { "SteamNetworkingSockets001", "SteamNetworkingsockets001" },
+        { "SteamNetworkingSockets002", "SteamNetworkingsockets002" },
+        { "SteamNetworkingSockets003", "SteamNetworkingsockets003" },
+        { "SteamNetworkingSockets004", "SteamNetworkingsockets004" },
+        { "SteamNetworkingSockets005", "SteamNetworkingsockets005" },
+        { "SteamNetworkingSockets006", "SteamNetworkingsockets006" },
+        { "SteamNetworkingSockets007", "SteamNetworkingsockets007" },
+        { "SteamNetworkingSockets008", "SteamNetworkingsockets008" },
+        { "SteamNetworkingSockets009", "SteamNetworkingsockets009" },
+
+        { "SteamNetworkingUtils001", "SteamNetworkingutilities001" },
+        { "SteamNetworkingUtils002", "SteamNetworkingutilities002" },
+        { "SteamNetworkingUtils003", "SteamNetworkingutilities003" },
+
+        { "STEAMPARENTALSETTINGS_INTERFACE_VERSION001", "SteamParentalsettings001" },
+
+        { "SteamParties001", "SteamParties001" },
+        { "SteamParties002", "SteamParties002" },
+
+        { "STEAMREMOTEPLAY_INTERFACE_VERSION001", "SteamRemoteplay001" },
 
         { "STEAMREMOTESTORAGE_INTERFACE_VERSION001", "SteamRemotestorage001" },
         { "STEAMREMOTESTORAGE_INTERFACE_VERSION002", "SteamRemotestorage002" },
@@ -215,9 +315,32 @@ namespace Steam
         { "STEAMREMOTESTORAGE_INTERFACE_VERSION010", "SteamRemotestorage010" },
         { "STEAMREMOTESTORAGE_INTERFACE_VERSION011", "SteamRemotestorage011" },
         { "STEAMREMOTESTORAGE_INTERFACE_VERSION012", "SteamRemotestorage012" },
+        { "STEAMREMOTESTORAGE_INTERFACE_VERSION013", "SteamRemotestorage013" },
+        { "STEAMREMOTESTORAGE_INTERFACE_VERSION014", "SteamRemotestorage014" },
 
         { "STEAMSCREENSHOTS_INTERFACE_VERSION001", "SteamScreenshots001" },
         { "STEAMSCREENSHOTS_INTERFACE_VERSION002", "SteamScreenshots002" },
+        { "STEAMSCREENSHOTS_INTERFACE_VERSION003", "SteamScreenshots003" },
+
+        { "STEAMTV_INTERFACE_V001", "SteamTV001" },
+
+        { "STEAMUGC_INTERFACE_VERSION001", "SteamUGC001" },
+        { "STEAMUGC_INTERFACE_VERSION002", "SteamUGC002" },
+        { "STEAMUGC_INTERFACE_VERSION003", "SteamUGC003" },
+        { "STEAMUGC_INTERFACE_VERSION004", "SteamUGC004" },
+        { "STEAMUGC_INTERFACE_VERSION005", "SteamUGC005" },
+        { "STEAMUGC_INTERFACE_VERSION006", "SteamUGC006" },
+        { "STEAMUGC_INTERFACE_VERSION007", "SteamUGC007" },
+        { "STEAMUGC_INTERFACE_VERSION008", "SteamUGC008" },
+        { "STEAMUGC_INTERFACE_VERSION009", "SteamUGC009" },
+        { "STEAMUGC_INTERFACE_VERSION010", "SteamUGC010" },
+        { "STEAMUGC_INTERFACE_VERSION011", "SteamUGC011" },
+        { "STEAMUGC_INTERFACE_VERSION012", "SteamUGC012" },
+        { "STEAMUGC_INTERFACE_VERSION013", "SteamUGC013" },
+        { "STEAMUGC_INTERFACE_VERSION014", "SteamUGC014" },
+        { "STEAMUGC_INTERFACE_VERSION015", "SteamUGC015" },
+
+        { "STEAMUNIFIEDMESSAGES_INTERFACE_VERSION001", "SteamUnifiedmessages001" },
 
         { "SteamUser001", "SteamUser001" },
         { "SteamUser002", "SteamUser002" },
@@ -237,6 +360,9 @@ namespace Steam
         { "SteamUser016", "SteamUser016" },
         { "SteamUser017", "SteamUser017" },
         { "SteamUser018", "SteamUser018" },
+        { "SteamUser019", "SteamUser019" },
+        { "SteamUser020", "SteamUser020" },
+        { "SteamUser021", "SteamUser021" },
 
         { "STEAMUSERSTATS_INTERFACE_VERSION001", "SteamUserstats001" },
         { "STEAMUSERSTATS_INTERFACE_VERSION002", "SteamUserstats002" },
@@ -249,6 +375,7 @@ namespace Steam
         { "STEAMUSERSTATS_INTERFACE_VERSION009", "SteamUserstats009" },
         { "STEAMUSERSTATS_INTERFACE_VERSION010", "SteamUserstats010" },
         { "STEAMUSERSTATS_INTERFACE_VERSION011", "SteamUserstats011" },
+        { "STEAMUSERSTATS_INTERFACE_VERSION012", "SteamUserstats012" },
 
         { "SteamUtils001", "SteamUtilities001" },
         { "SteamUtils002", "SteamUtilities002" },
@@ -257,30 +384,11 @@ namespace Steam
         { "SteamUtils005", "SteamUtilities005" },
         { "SteamUtils006", "SteamUtilities006" },
         { "SteamUtils007", "SteamUtilities007" },
+        { "SteamUtils008", "SteamUtilities008" },
+        { "SteamUtils009", "SteamUtilities009" },
+        { "SteamUtils010", "SteamUtilities010" },
 
-        { "SteamMasterServerUpdater001", "SteamMasterserverupdater001" },
-
-        { "SteamMatchMakingServers001", "SteamMatchmakingservers001" },
-        { "SteamMatchMakingServers002", "SteamMatchmakingservers002" },
-
-        { "SteamClient001", "SteamClient001" },
-        { "SteamClient002", "SteamClient002" },
-        { "SteamClient003", "SteamClient003" },
-        { "SteamClient004", "SteamClient004" },
-        { "SteamClient005", "SteamClient005" },
-        { "SteamClient006", "SteamClient006" },
-        { "SteamClient007", "SteamClient007" },
-        { "SteamClient008", "SteamClient008" },
-        { "SteamClient009", "SteamClient009" },
-        { "SteamClient010", "SteamClient010" },
-        { "SteamClient011", "SteamClient011" },
-        { "SteamClient012", "SteamClient012" },
-        { "SteamClient013", "SteamClient013" },
-        { "SteamClient014", "SteamClient014" },
-        { "SteamClient015", "SteamClient015" },
-        { "SteamClient016", "SteamClient016" },
-        { "SteamClient017", "SteamClient017" },
-
-        /* TODO(tcn): Add more interfaces here later. */
+        { "STEAMVIDEO_INTERFACE_V001", "SteamVideo001" },
+        { "STEAMVIDEO_INTERFACE_V002", "SteamVideo002" },
     };
 }
