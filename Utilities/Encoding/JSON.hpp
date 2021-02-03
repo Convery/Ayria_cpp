@@ -164,7 +164,7 @@ namespace JSON
             if (!asPtr(Object_t)->contains(Key.data())) return Defaultvalue;
             return asPtr(Object_t)->at(Key.data());
         }
-        template<typename T> T value(std::string_view Key) const
+        template<typename T = Value_t> T value(std::string_view Key) const
         {
             if constexpr (!std::is_convertible_v<Value_t, T>) return {};
             if (Type != Type_t::Object) return {};
