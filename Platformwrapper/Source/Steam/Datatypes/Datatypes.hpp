@@ -71,9 +71,12 @@ namespace Steam
     using PartyBeaconID_t = uint64_t;
     using SteamAPICall_t = uint64_t;
     using ManifestID_t = uint64_t;
+    using GID_t = uint64_t;
 
     using AccountID_t = uint32_t;
     using PartnerID_t = uint32_t;
+    using HAuthTicket = uint32_t;
+    using PackageId_t = uint32_t;
     using DepotID_t = uint32_t;
     using AppID_t = uint32_t;
 
