@@ -91,6 +91,7 @@ using namespace std::literals;
 #include <Utilities/Internal/Misc.hpp>
 #include <Utilities/Internal/Spinlock.hpp>
 #include <Utilities/Internal/Debugmutex.hpp>
+#include <Utilities/Internal/Compressedstring.hpp>
 
 // Ayria module used throughout the projects.
 // Exports as struct for easier plugin initialization.

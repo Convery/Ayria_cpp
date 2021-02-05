@@ -9,8 +9,6 @@
 
 namespace Social::Messages
 {
-    //using Message_t = struct { uint32_t Timestamp; uint32_t Source, Target; std::string B64Message; };
-
     static std::vector<Message_t> Messagehistory;
     static std::vector<Message_t> Pendingprivate;
     static std::vector<Message_t> Pendingpublic;
@@ -25,14 +23,14 @@ namespace Social::Messages
             Object.value<uint32_t>("Source"),
             Object.value<uint32_t>("Target"),
             Object.value<uint64_t>("GroupID"),
-            Object.value<std::string>("Message")
+            LZString_t(Object.value<std::string>("Message"))
         };
     }
     static inline JSON::Object_t Serialize(const Message_t &Message)
     {
         return JSON::Object_t({
+            { "Message", std::string(Message.B64Message) },
             { "Timestamp", Message.Timestamp },
-            { "Message", Message.B64Message },
             { "GroupID", Message.GroupID },
             { "Source", Message.Source },
             { "Target", Message.Target }
@@ -46,9 +44,15 @@ namespace Social::Messages
         if (!Sender) [[unlikely]] return;
 
         const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto B64Message = Request.value<std::string>("Message");
         const auto Checksum = Request.value<uint32_t>("Checksum");
         const auto Private = Request.value<bool>("isPrivate");
-        auto lMessage = Deserialize(Request);
+
+         Message_t lMessage = {
+            Request.value<uint32_t>("Timestamp"),
+            Request.value<uint32_t>("Source"),
+            Request.value<uint32_t>("Target")
+        };
 
         // Either the sender messed up or this is not for us.
         if (Sender->UserID != lMessage.Source) return;
@@ -56,14 +60,18 @@ namespace Social::Messages
 
         if (Private)
         {
-            const auto Tmp = Base64::Decode(lMessage.B64Message);
-            lMessage.B64Message  = PK_RSA::Decrypt(Tmp, Global.Cryptokeys);
+            const auto Decrypted = PK_RSA::Decrypt(Base64::Decode(B64Message), Global.Cryptokeys);
+            lMessage.B64Message = LZString_t(Base64::Encode(Decrypted));
 
-            if (Hash::WW32(lMessage.B64Message) != Checksum)
+            if (Hash::WW32(Decrypted) != Checksum)
             {
                 Errorprint(va("Client ID %08X sent an invalid private message.", Sender->UserID));
                 return;
             }
+        }
+        else
+        {
+            lMessage.B64Message = LZString_t(B64Message);
         }
 
         lMessage.GroupID = 0;
@@ -96,25 +104,24 @@ namespace Social::Messages
                 return;
             }
 
-            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, 0, GroupID, std::string(B64Message) };
-            Pendinggroup.emplace_back(std::move(Message));
+            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, 0, GroupID, LZString_t(B64Message) };
+            Pendinggroup.emplace_back(Message);
         }
         void toClient(uint32_t ClientID, std::string_view B64Message)
         {
-            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, ClientID, 0, std::string(B64Message) };
-            Pendingpublic.emplace_back(std::move(Message));
+            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, ClientID, 0, LZString_t(B64Message) };
+            Pendingpublic.emplace_back(Message);
         }
         void toClientencrypted(uint32_t ClientID, std::string_view B64Message)
         {
-            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, ClientID, 0, std::string(B64Message) };
-            Pendingprivate.emplace_back(std::move(Message));
+            const Message_t Message{ uint32_t(time(NULL)), Global.UserID, ClientID, 0, LZString_t(B64Message) };
+            Pendingprivate.emplace_back(Message);
         }
     }
 
     // Read messages optionally filtered by group, sender, and/or timeframe.
     std::vector<const Message_t *> Read(const std::pair<uint32_t, uint32_t> *Timeframe,
-        const uint64_t *GroupID,
-        const uint32_t *Source)
+                                        const uint64_t *GroupID, const uint32_t *Source)
     {
         // Apparently this mess is easier for the compiler to reason about..
         #pragma region Avert_thine_eyes
@@ -163,12 +170,12 @@ namespace Social::Messages
         for (auto &Item : Pendinggroup)
         {
             Backend::Network::Sendmessage("Groupmessage", JSON::Dump(Serialize(Item)));
-            Item.B64Message.clear();
+            Item.B64Message.Buffersize = 0;
         }
         for (auto &Item : Pendingpublic)
         {
             Backend::Network::Sendmessage("Clientmessage", JSON::Dump(Serialize(Item)));
-            Item.B64Message.clear();
+            Item.B64Message.Buffersize = 0;
         }
         for (auto &Item : Pendingprivate)
         {
@@ -179,27 +186,32 @@ namespace Social::Messages
                     if (!Client->Sharedkey) Clientinfo::Requestcryptokeys({ Client->UserID });
                     else
                     {
-                        const auto Checksum = Hash::WW32(Item.B64Message);
+                        const std::u8string String = Base64::Decode(std::u8string(Item.B64Message));
                         const auto Key = Base64::Decode(*Client->Sharedkey);
-                        const auto Enc = PK_RSA::Encrypt(Item.B64Message, Key);
+                        const auto Enc = PK_RSA::Encrypt(String, Key);
+                        const auto Checksum = Hash::WW32(String);
 
-                        Item.B64Message = Base64::Encode(Enc);
-
-                        auto Request = Serialize(Item);
-                        Request["Checksum"] = Checksum;
-                        Request["isPrivate"] = true;
+                        const auto Request = JSON::Object_t({
+                            { "Message", Base64::Encode(Enc) },
+                            { "Timestamp", Item.Timestamp },
+                            { "GroupID", Item.GroupID },
+                            { "Source", Item.Source },
+                            { "Target", Item.Target },
+                            { "Checksum", Checksum },
+                            { "isPrivate", true }
+                        });
 
                         Backend::Network::Sendmessage("Clientmessage", JSON::Dump(Request));
-                        Item.B64Message.clear();
+                        Item.B64Message.Buffersize = 0;
                     }
                 }
             }
         }
 
         // Clear any sent messages.
-        std::erase_if(Pendinggroup, [](const auto &Item) { return Item.B64Message.empty(); });
-        std::erase_if(Pendingpublic, [](const auto &Item) { return Item.B64Message.empty(); });
-        std::erase_if(Pendingprivate, [](const auto &Item) { return Item.B64Message.empty(); });
+        std::erase_if(Pendinggroup, [](const auto &Item) { return !!Item.B64Message.Buffersize; });
+        std::erase_if(Pendingpublic, [](const auto &Item) { return !!Item.B64Message.Buffersize; });
+        std::erase_if(Pendingprivate, [](const auto &Item) { return !!Item.B64Message.Buffersize; });
     }
 
     // Add the message-handlers and load pending messages from disk.
@@ -247,34 +259,34 @@ namespace Social::Messages
             const auto Cryptokey = Hash::Tiger192(HardwareID.data(), HardwareID.size());
 
             if (!Messagehistory.empty())
-                {
-                    JSON::Array_t Array;
-                    Array.reserve(Messagehistory.size());
-                    for (const auto &Item : Messagehistory)
-                        Array.emplace_back(Serialize(Item));
+            {
+                JSON::Array_t Array;
+                Array.reserve(Messagehistory.size());
+                for (const auto &Item : Messagehistory)
+                    Array.emplace_back(Serialize(Item));
 
-                    const auto String = JSON::Dump(Array);
-                    const auto Encrypted = AES::Encrypt(String.data(), String.size(), Cryptokey.data(), Cryptokey.data());
-                    FS::Writefile(L"./Ayria/Chatlog.json", Encrypted);
-                }
+                const auto String = JSON::Dump(Array);
+                const auto Encrypted = AES::Encrypt(String.data(), String.size(), Cryptokey.data(), Cryptokey.data());
+                FS::Writefile(L"./Ayria/Chatlog.json", Encrypted);
+            }
 
             JSON::Object_t Pending;
             if (!Pendingpublic.empty())
-                {
-                    JSON::Array_t Array;
-                    Array.reserve(Pendingpublic.size());
-                    for (const auto &Item : Pendingpublic)
-                        Array.emplace_back(Serialize(Item));
-                    Pending["Pendingpublic"] = Array;
-                }
+            {
+                JSON::Array_t Array;
+                Array.reserve(Pendingpublic.size());
+                for (const auto &Item : Pendingpublic)
+                    Array.emplace_back(Serialize(Item));
+                Pending["Pendingpublic"] = Array;
+            }
             if (!Pendingprivate.empty())
-                {
-                    JSON::Array_t Array;
-                    Array.reserve(Pendingprivate.size());
-                    for (const auto &Item : Pendingprivate)
-                        Array.emplace_back(Serialize(Item));
-                    Pending["Pendingprivate"] = Array;
-                }
+            {
+                JSON::Array_t Array;
+                Array.reserve(Pendingprivate.size());
+                for (const auto &Item : Pendingprivate)
+                    Array.emplace_back(Serialize(Item));
+                Pending["Pendingprivate"] = Array;
+            }
 
             if (!Pending.empty())
             {

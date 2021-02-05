@@ -149,7 +149,7 @@ namespace Clientinfo
             data-files are forgone. If this system is reused, we may want to up the RSA bits.
         */
         constexpr size_t RSAStrength = 512;
-        const char *Existingkey{};
+        std::string Existingkey;
 
         // Fetch the key from the environment.
         #if !defined (_WIN32)
@@ -162,13 +162,13 @@ namespace Clientinfo
         if (ERROR_SUCCESS == RegOpenKeyA(HKEY_CURRENT_USER, "Environment", &Registrykey))
         {
             if (ERROR_SUCCESS == RegQueryValueExA(Registrykey, "AYRIA_CLIENTPK", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                Existingkey = Buffer;
+                Existingkey = std::string(Buffer, Size);
             RegCloseKey(Registrykey);
         }
         #endif
 
         // Parse the saved key or create a new one.
-        if (Existingkey) Global.Cryptokeys = PK_RSA::Createkeypair(Base64::Decode(Existingkey));
+        if (!Existingkey.empty()) Global.Cryptokeys = PK_RSA::Createkeypair(Base64::Decode(Existingkey));
         if (!Global.Cryptokeys)
         {
             // Weak key as it's just for basic privacy between local clients.
