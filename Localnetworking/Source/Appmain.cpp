@@ -105,21 +105,28 @@ namespace Localnetworking
     void Connectserver(size_t Clientsocket, IServer *Serverinstance)
     {
         assert(Serverinstance);
-        size_t Serversocket{};
 
-        // Accept may block.
-        std::thread([&]()
+        // Accept while the client connects.
+        std::future<size_t> Serverfuture = std::async(std::launch::async, []()
         {
-            Serversocket = accept(Listensocket, NULL, NULL);
-        }).detach();
+            size_t Serversocket = INVALID_SOCKET;
+            do
+            {
+                Serversocket = accept(Listensocket, NULL, NULL);
+                if (WSAGetLastError() != WSAEWOULDBLOCK)
+                    break;
+
+            } while (Serversocket == INVALID_SOCKET);
+
+            return Serversocket;
+        });
 
         SOCKADDR_IN Server{ AF_INET, Backendport, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        if (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
-        {
-            closesocket(Serversocket);
-            return;
-        }
+        while(SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+            if (WSAGetLastError() != WSAEWOULDBLOCK)
+                    break;
 
+        const auto Serversocket = Serverfuture.get();
         if (Serversocket != INVALID_SOCKET)
         {
             Serversockets[Serversocket] = Serverinstance;
@@ -233,7 +240,7 @@ namespace Localnetworking
     void Createbackend(uint16_t Serverport)
     {
         WSADATA wsaData;
-        WSAStartup(MAKEWORD(2, 2), &wsaData);
+        WSAStartup(MAKEWORD(1, 1), &wsaData);
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
         // Find an available port to listen on, if we fail after 64 tries we have other issues.
@@ -245,6 +252,9 @@ namespace Localnetworking
 
             if (0 == bind(Listensocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             {
+                unsigned long Argument{ 1 };
+                ioctlsocket(Listensocket, FIONBIO, &Argument);
+
                 listen(Listensocket, 32);
                 break;
             };
