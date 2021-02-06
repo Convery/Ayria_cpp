@@ -76,11 +76,11 @@ namespace Social::Relations
                 for (const auto &Entry : Entries)
                 {
                     Array.emplace_back(JSON::Object_t(
-                        {
-                            { "UserID", Entry->UserID},
-                            { "Flags", Entry->Flags.Raw},
-                            { "Username", Entry->Username}
-                        }));
+                    {
+                        { "UserID", Entry->UserID },
+                        { "Flags", Entry->Flags.Raw },
+                        { "Username", Entry->Username }
+                    }));
                 }
 
                 FS::Writefile(L"./Ayria/Socialrelations.json", JSON::Dump(Array));

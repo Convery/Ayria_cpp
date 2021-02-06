@@ -112,7 +112,7 @@ namespace Social
     // Client messages are stored locally and sent when target is online.
     namespace Messages
     {
-        using Message_t = struct { uint32_t Timestamp; uint32_t Source, Target; uint64_t GroupID; std::string B64Message; };
+        using Message_t = struct { uint32_t Timestamp; uint32_t Source, Target; uint64_t GroupID; LZString_t B64Message; };
 
         namespace Send
         {
@@ -130,11 +130,22 @@ namespace Social
         void Initialize();
     }
 
+    // Simple key-value stored shared with clients.
+    namespace Presence
+    {
+        void setPresence(std::string Key, std::string Value);
+        std::string getPresence(uint32_t UserID);
+
+        void Initialize();
+    }
+
+
     //
     inline void Initialize()
     {
         Group::Initialize();
         Messages::Initialize();
+        Presence::Initialize();
         Relations::Initialize();
     }
 }
