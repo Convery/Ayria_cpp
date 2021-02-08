@@ -47,6 +47,7 @@ namespace Winsock
             if (Datagramsockets.contains(Socket)) [[unlikely]]
             {
                 Directedconnections[Socket] = *(sockaddr_in *)Name;
+                bind(Socket, Name, Namelength);
             }
             else
             {
@@ -109,7 +110,7 @@ namespace Winsock
             {
                 if (FNV::Equal(Item.second.sin_addr, ((sockaddr_in *)To)->sin_addr))
                 {
-                    return send(Item.first, Buffer, Length, NULL);
+                    return Calloriginal(send)(Item.first, Buffer, Length, NULL);
                 }
             }
 
@@ -120,7 +121,7 @@ namespace Winsock
             unsigned long Argument{ 1 };
             ioctlsocket(Localsocket, FIONBIO, &Argument);
             Connections[Localsocket] = *(sockaddr_in *)To;
-            return send(Localsocket, Buffer, Length, NULL);
+            return Calloriginal(send)(Localsocket, Buffer, Length, NULL);
         }
 
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
@@ -141,9 +142,9 @@ namespace Winsock
                 //if (Bindings[Socket].sin_port != Item.second.sin_port) continue;
                 if (Bindings[Socket].sin_addr.s_addr && !FNV::Equal(Bindings[Socket].sin_addr, Item.second.sin_addr)) continue;
 
-                if (Fromlength) *Fromlength = sizeof(SOCKADDR_IN);
                 if (From)*((sockaddr_in *)From) = Item.second;
-                return recv(Item.first, Buffer, Length, 0);
+                if (Fromlength) *Fromlength = sizeof(SOCKADDR_IN);
+                return Calloriginal(recv)(Item.first, Buffer, Length, 0);
             }
         }
 
@@ -279,10 +280,12 @@ namespace Localnetworking
         Hook("getaddrinfo", (void *)Winsock::Getaddrinfo);
         Hook("connect", (void *)Winsock::Connectsocket);
         Hook("recvfrom", (void *)Winsock::Receivefrom);
-        Hook("socket", (void *)Winsock::Createsocket);
         Hook("sendto", (void *)Winsock::Sendto);
+        Hook("bind", (void *)Winsock::Bind);
+
+        // TODO(tcn): Make these optional.
+        Hook("socket", (void *)Winsock::Createsocket);
         Hook("recv", (void *)Winsock::Receive);
         Hook("send", (void *)Winsock::Send);
-        Hook("bind", (void *)Winsock::Bind);
     }
 }
