@@ -41,17 +41,31 @@
 #define HAS_MHOOK
 #endif
 
+#if __has_include(<MinHook.h>)
+#define HAS_MINHOOK
+#if defined(__x86_64__) || defined(_M_X64)
+    #if defined(NDEBUG)
+    #pragma comment(lib, "minhook.x64.lib")
+    #else
+    #pragma comment(lib, "minhook.x64d.lib")
+    #endif
+#else
+    #if defined(NDEBUG)
+    #pragma comment(lib, "minhook.x32.lib")
+    #else
+    #pragma comment(lib, "minhook.x32d.lib")
+    #endif
+#endif
+#endif
+
 // Extensive disassembler library.
 #if __has_include(<capstone/capstone.h>)
 #pragma comment(lib, "capstone.lib")
-#include <capstone/capstone.h>
 #define HAS_CAPSTONE
 #endif
 
 // Advanced hooking library.
 #if __has_include(<polyhook2/IHook.hpp>)
-#include <polyhook2/Detour/x86Detour.hpp>
-#include <polyhook2/Detour/x64Detour.hpp>
 #pragma comment(lib, "PolyHook_2.lib")
 #define HAS_POLYHOOK
 #endif

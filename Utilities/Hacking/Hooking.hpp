@@ -4,6 +4,7 @@
     License: MIT
 
     Abstractions over hooking engines, priority:
+    MinHook
     Polyhook::Capstone
     MHook
     Fallback
@@ -17,8 +18,28 @@
 #include <Stdinclude.hpp>
 
 #if !defined(NO_HOOKLIB)
-#if defined(HAS_MHOOK)
+#if defined (HAS_MINHOOK)
+#include <MinHook.h>
+namespace Hooking::Minhook
+{
+    inline std::uintptr_t Stomphook(std::uintptr_t Target, std::uintptr_t Replacement)
+    {
+        if (MH_Initialize() == MH_ERROR_MEMORY_ALLOC) return 0;
 
+        void *Trampolinefunction = (void *)Target;
+        if (MH_CreateHook((void *)Target, (void *)Replacement, &Trampolinefunction) == MH_OK)
+        {
+            if (MH_OK == MH_EnableHook((void *)Target))
+            {
+                return reinterpret_cast<std::uintptr_t>(Trampolinefunction);
+            }
+        }
+        return 0;
+    }
+}
+#endif
+
+#if defined(HAS_MHOOK)
 namespace Hooking::MHook
 {
     inline std::uintptr_t Stomphook(std::uintptr_t Target, std::uintptr_t Replacement)
@@ -32,6 +53,9 @@ namespace Hooking::MHook
 #endif
 
 #if defined(HAS_POLYHOOK) && defined(HAS_CAPSTONE)
+#include <capstone/capstone.h>
+#include <polyhook2/Detour/x86Detour.hpp>
+#include <polyhook2/Detour/x64Detour.hpp>
 #include <polyhook2/CapstoneDisassembler.hpp>
 
 namespace Hooking::Polyhook
@@ -258,6 +282,13 @@ namespace Hooking
     // Stomp-hooking inserts a jump at the target address.
     inline std::uintptr_t Stomphook(std::uintptr_t Target, std::uintptr_t Replacement)
     {
+        #if defined (HAS_MINHOOK)
+        {
+            const auto Result = Minhook::Stomphook(Target, Replacement);
+            if (Result) return Result;
+        }
+        #endif
+
         #if defined (HAS_POLYHOOK)
         {
             const auto Result = Polyhook::Stomphook(Target, Replacement);
