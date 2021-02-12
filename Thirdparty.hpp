@@ -82,6 +82,12 @@
 //#pragma comment(lib, "Dbghelp.lib")
 //#endif
 
+// Joyents parser, https://github.com/nodejs/http-parser
+#if __has_include(<http_parser.h>)
+#include <http_parser.h>
+#define HAS_HTTPPARSER
+#endif
+
 // Googles extensions/alternatives to the STL.
 #if __has_include(<absl/random/random.h>)
 #define HAS_ABSEIL

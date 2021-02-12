@@ -69,6 +69,7 @@ using namespace std::literals;
 
 // Global utilities.
 #include <Utilities/Datatypes.hpp>
+#include <Utilities/Containers/Ringbuffer.hpp>
 #include <Utilities/Crypto/FNV1Hash.hpp>
 #include <Utilities/Crypto/CRC32Hash.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
@@ -85,7 +86,7 @@ using namespace std::literals;
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
-#include <Utilities/Containers/Ringbuffer.hpp>
+#include <Utilities/Localnetservers.hpp>
 
 // Temporary includes.
 #include <Utilities/Internal/Misc.hpp>
