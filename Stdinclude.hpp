@@ -101,12 +101,16 @@ struct Ayriamodule_t
     // Call the exported JSON functions, pass NULL as function to list all.
     const char *(__cdecl *JSONAPI)(const char *Function, const char *JSONString);
 
-    // Callback = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
-    void (__cdecl *addMessagehandler)(const char *Messagetype, const void *Callback);
+    // Callback on LAN messages.
+    void (__cdecl *addMessagehandler)(const char *Messagetype,
+                                      void(__cdecl *Callback)(unsigned int NodeID, const char *Message, unsigned int Length));
 
-    // UTF8 escaped ASCII strings, Callback = void(__cdecl *)(int Argc, const char **Argv);
+    // UTF8 escaped ASCII strings.
     void (__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
-    void (__cdecl *addConsolecommand)(const char *Command, const void *Callback);
+    void (__cdecl *addConsolecommand)(const char *Command, void(__cdecl *Callback)(int Argc, const char **Argv));
+
+    // Run a periodic task on the systems background thread.
+    void(__cdecl *Createperiodictask)(unsigned int PeriodMS, void(__cdecl *Callback)(void));
 
     #if defined(__cplusplus)
     Ayriamodule_t()
@@ -116,14 +120,17 @@ struct Ayriamodule_t
         #else
         const auto Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
         #endif
-        assert(Modulehandle);
 
-        #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x)
-        Import(addMessagehandler);
-        Import(addConsolemessage);
-        Import(addConsolecommand);
-        Import(JSONAPI);
-        #undef Import
+        if (Modulehandle)
+        {
+            #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x)
+            Import(Createperiodictask);
+            Import(addMessagehandler);
+            Import(addConsolemessage);
+            Import(addConsolecommand);
+            Import(JSONAPI);
+            #undef Import
+        }
     }
     #endif
 };

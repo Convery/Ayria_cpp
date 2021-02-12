@@ -40,6 +40,7 @@ __attribute__((constructor)) void __stdcall DllMain()
 }
 #endif
 
+Ayriamodule_t Ayria{};
 namespace Localnetworking
 {
     Nodemap<std::string, Proxyserver_t> Proxyservers{};
@@ -108,23 +109,23 @@ namespace Localnetworking
 
         // Accept while the client connects.
         std::future<size_t> Serverfuture = std::async(std::launch::async, []()
-        {
-            size_t Serversocket = INVALID_SOCKET;
-            do
             {
-                Serversocket = accept(Listensocket, NULL, NULL);
-                if (WSAGetLastError() != WSAEWOULDBLOCK)
-                    break;
+                size_t Serversocket = INVALID_SOCKET;
+                do
+                {
+                    Serversocket = accept(Listensocket, NULL, NULL);
+                    if (WSAGetLastError() != WSAEWOULDBLOCK)
+                        break;
 
-            } while (Serversocket == INVALID_SOCKET);
+                } while (Serversocket == INVALID_SOCKET);
 
-            return Serversocket;
-        });
+                return Serversocket;
+            });
 
         SOCKADDR_IN Server{ AF_INET, Backendport, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
-        while(SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
+        while (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
             if (WSAGetLastError() != WSAEWOULDBLOCK)
-                    break;
+                break;
 
         const auto Serversocket = Serverfuture.get();
         if (Serversocket != INVALID_SOCKET)
@@ -148,7 +149,8 @@ namespace Localnetworking
             {
                 THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF };
                 RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR *)&Info);
-            } __except (EXCEPTION_EXECUTE_HANDLER) {}
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
     }
 
@@ -209,7 +211,7 @@ namespace Localnetworking
                 if (Size <= 0)
                 {
                     // Winsock had some internal issue that we can't be arsed to recover from..
-                    if (Size == -1) Infoprint(va("Error on socket %u - %u", Socket, WSAGetLastError()));
+                    if (Size == -1) Errorprint(va("Error on socket %u - %u", Socket, WSAGetLastError()));
                     if (Server) Server->onDisconnect();
                     assert(Activesockets.fd_count);
                     FD_CLR(Socket, &Activesockets);
@@ -234,6 +236,74 @@ namespace Localnetworking
         }
 
         return 0;
+    }
+    void __cdecl Ayriapoll()
+    {
+        constexpr timeval Defaulttimeout{ NULL, 10 };
+        constexpr uint32_t Buffersizelimit = 4096;
+        char Buffer[Buffersizelimit];
+
+        // Let's not poll when we don't have any sockets.
+        if (Activesockets.fd_count == 0) return;
+
+        FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
+        const auto Count{ Activesockets.fd_count + 1 };
+        auto Timeout{ Defaulttimeout };
+
+        // Now POSIX compatible.
+        if (!select(Count, &ReadFD, &WriteFD, NULL, &Timeout)) return;
+
+        // Poll the servers for data and send it to the sockets.
+        for (const auto &[Socket, Server] : Serversockets)
+        {
+            if (!FD_ISSET(Socket, &WriteFD)) continue;
+            uint32_t Datasize{ Buffersizelimit };
+
+            if (Server->onStreamread(Buffer, &Datasize) || Server->onPacketread(Buffer, &Datasize))
+            {
+                // Servers can have multiple associated sockets, so we duplicate.
+                for (const auto &[Localsocket, Instance] : Serversockets)
+                {
+                    if (Instance == Server)
+                    {
+                        send(Localsocket, (char *)Buffer, Datasize, NULL);
+                    }
+                }
+            }
+        }
+
+        // If there's data on the socket, forward to a server.
+        LOOP: for (const auto &[Socket, Server] : Serversockets)
+        {
+            if (!FD_ISSET(Socket, &ReadFD)) continue;
+            const auto Size = recv(Socket, Buffer, Buffersizelimit, NULL);
+
+            // Broken connection.
+            if (Size <= 0)
+            {
+                // Winsock had some internal issue that we can't be arsed to recover from..
+                if (Size == -1) Errorprint(va("Error on socket %u - %u", Socket, WSAGetLastError()));
+                if (Server) Server->onDisconnect();
+                assert(Activesockets.fd_count);
+                FD_CLR(Socket, &Activesockets);
+                Serversockets.erase(Socket);
+                closesocket(Socket);
+                goto LOOP;
+            }
+
+            // We assume that the client properly inherits properly.
+            if (!Server->onStreamwrite(Buffer, Size))
+            {
+                for (const auto &Item : Proxyservers)
+                {
+                    if (Item.second.Instance == Server)
+                    {
+                        Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr), ntohs(Item.second.Address.sin_port) };
+                        Server->onPacketwrite(Buffer, Size, &Universalformat);
+                    }
+                }
+            }
+        }
     }
 
     // Initialize the server backend.
@@ -261,8 +331,9 @@ namespace Localnetworking
         }
 
         // Notify the developer and spawn the server.
-        Debugprint(va("Spawning localnet backend on %u", ntohs(Backendport)));
-        CreateThread(NULL, NULL, Pollsockets, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        Infoprint(va("Spawning localnet backend on port %u", ntohs(Backendport)));
+        if (Ayria.Createperiodictask) [[likely]] Ayria.Createperiodictask(50, Ayriapoll);
+        else CreateThread(NULL, NULL, Pollsockets, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 
         // Load all plugins from disk.
         for (const auto &Item : FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"))

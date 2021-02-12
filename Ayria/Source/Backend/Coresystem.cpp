@@ -115,6 +115,16 @@ namespace Backend
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
     }
 
+    // Export functionality to the plugins.
+    namespace Export
+    {
+        extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
+        {
+            if (PeriodMS && Callback)
+                Enqueuetask(PeriodMS, Callback);
+        }
+    }
+
     // Initialize the system.
     void Initialize()
     {
