@@ -42,6 +42,15 @@ namespace Clientinfo
 
         return {};
     }
+    bool isClientonline(uint32_t UserID)
+    {
+        const bool A = std::any_of(std::execution::par_unseq, Localclients.begin(), Localclients.end(),
+            [=](const Client_t &Item) { return UserID == Item.UserID; });
+        const bool B = std::any_of(std::execution::par_unseq, Remoteclients.begin(), Remoteclients.end(),
+            [=](const Client_t &Item) { return UserID == Item.UserID; });
+
+        return A || B;
+    }
 
     // Periodically clean up the maps.
     static void Clearoutdated()
@@ -101,9 +110,12 @@ namespace Clientinfo
             {
                 if (Relation->UserID == UserID)
                 {
-                    Infoprint(va("Blocking client %08X due to relationship status.", UserID));
-                    Backend::Network::Blockclient(NodeID);
-                    return;
+                    if (Relation->Flags.isBlocked)
+                    {
+                        Infoprint(va("Blocking client %08X due to relationship status.", UserID));
+                        Backend::Network::Blockclient(NodeID);
+                        return;
+                    }
                 }
             }
 

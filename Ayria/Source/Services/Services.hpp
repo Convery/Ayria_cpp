@@ -27,6 +27,7 @@ namespace Clientinfo
     // LAN clients are identified by their random ID.
     std::vector<Client_t *> Listclients(bool onlyLAN = true);
     Client_t *getLocalclient(uint32_t NodeID);
+    bool isClientonline(uint32_t UserID);
 
     // If another clients crypto-key is needed, we request it.
     void Requestcryptokeys(std::vector<uint32_t> UserIDs);
@@ -35,8 +36,8 @@ namespace Clientinfo
     std::string_view getHardwareID();
 
     //
-    void Initializediscovery();
     void Initializecrypto();
+    void Initializediscovery();
     inline void Initialize()
     {
         Initializediscovery();
