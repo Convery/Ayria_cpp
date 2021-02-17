@@ -591,7 +591,7 @@ namespace PK_RSA
 
 namespace PK_ECC
 {
-    inline EC_KEY *Createkeypair(int Curve = NID_secp521r1)
+    inline EC_KEY *Createkeypair(int Curve = NID_secp160r1)
     {
         const auto Key = EC_KEY_new_by_curve_name(Curve);
         if (1 != EC_KEY_generate_key(Key)) return nullptr;
@@ -629,7 +629,6 @@ namespace PK_ECC
         EVP_MD_CTX_destroy(Context);
         return Result;
     }
-
     inline std::string getPublickey(EC_KEY *Key)
     {
         const auto Bio = BIO_new(BIO_s_mem());

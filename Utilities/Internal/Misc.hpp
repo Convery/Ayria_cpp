@@ -118,3 +118,35 @@ struct Range
 #endif
 
 #pragma endregion
+
+// Helper for debug-builds, constexpr if is not valid on MSVC.
+#if defined (WIN32)
+inline void setThreadname(std::string_view Name)
+{
+    if constexpr (Build::isDebug)
+    {
+        #pragma pack(push, 8)
+        using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
+        #pragma pack(pop)
+
+        __try
+        {
+            const THREADNAME_INFO Info{ 0x1000, Name.data(), GetCurrentThreadId(), 0 };
+            RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), reinterpret_cast<const ULONG_PTR *>(&Info));
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
+}
+#elif defined (__linux__)
+inline void setThreadname(std::string_view Name)
+{
+    if constexpr (Build::isDebug)
+    {
+        prctl(PR_SET_NAME, Name.data(), 0, 0, 0);
+    }
+}
+#else
+inline void setThreadname(std::string_view Name)
+{
+}
+#endif

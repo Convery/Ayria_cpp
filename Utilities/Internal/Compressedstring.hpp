@@ -38,6 +38,8 @@ struct LZString_t
 
     [[nodiscard]] operator std::u8string() const
     {
+        if (Buffersize == 0) return {};
+
         const auto Decodebuffer = std::make_shared<char8_t []>(Buffersize * 3);
         const auto Decodesize = LZ4_decompress_safe((char *)Internalstorage.get(),
             (char *)Decodebuffer.get(), (int)Buffersize, (int)Buffersize * 3);
@@ -46,6 +48,8 @@ struct LZString_t
     }
     [[nodiscard]] operator std::wstring() const
     {
+        if (Buffersize == 0) return {};
+
         const auto Decodebuffer = std::make_shared<char8_t []>(Buffersize * 3);
         const auto Decodesize = LZ4_decompress_safe((char *)Internalstorage.get(),
             (char *)Decodebuffer.get(), (int)Buffersize, (int)Buffersize * 3);
@@ -54,6 +58,8 @@ struct LZString_t
     }
     [[nodiscard]] operator std::string() const
     {
+        if (Buffersize == 0) return {};
+
         const auto Decodebuffer = std::make_shared<char8_t []>(Buffersize * 3);
         const auto Decodesize = LZ4_decompress_safe((char *)Internalstorage.get(),
             (char *)Decodebuffer.get(), (int)Buffersize, (int)Buffersize * 3);

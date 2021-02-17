@@ -22,7 +22,7 @@ struct Globalstate_t    // 51 bytes.
 
     union
     {
-        uint8_t Stateflags;
+        uint8_t Full;
         struct
         {
             uint8_t
@@ -31,21 +31,20 @@ struct Globalstate_t    // 51 bytes.
                 isPrivate : 1,
                 isHosting : 1;
         };
-    };
+    } Stateflags;
     union
     {
-        uint8_t Privilegeflags;
+        uint8_t Full;
         struct
         {
             uint8_t
                 isAdmin : 1,
                 isModerator : 1;
         };
-
-    };
+    } Privilegeflags;
     union
     {
-        uint8_t Applicationsettings;
+        uint8_t Full;
         struct
         {
             uint8_t
@@ -53,7 +52,7 @@ struct Globalstate_t    // 51 bytes.
                 enableIATHooking : 1,
                 enableExternalconsole : 1;
         };
-    };
+    } Applicationsettings;
 };
 extern Globalstate_t Global;
 #pragma pack(pop)

@@ -7,51 +7,83 @@
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
+// JSON Interface.
 namespace Backend::API
 {
-    static Hashmap<uint32_t, std::string> Functionresults{};
-    static Hashmap<uint32_t, Callback_t> Functionhandlers{};
-    static Hashmap<uint32_t, std::string> Functionnames{};
+    using Handler_t = struct { LZString_t Name; Callback_t Handler; LZString_t Usage; };
+    static Hashmap<uint32_t, Handler_t> Requesthandlers{};
+    static Ringbuffer_t<std::string, 6> Results{};
+    static std::string Failurestring{};
 
-    void addHandler(const char *Function, Callback_t Callback)
+    // static std::string __cdecl Callback(JSON::Value_t &&Request);
+    // using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
+    void addEndpoint(std::string_view Functionname, Callback_t Callback, std::string_view Usagestring)
     {
-        assert(Function);  assert(Callback);
-        const auto Hash = Hash::WW32(Function);
-        Functionnames.emplace(Hash, Function);
-        Functionhandlers.emplace(Hash, Callback);
+        const auto ID = Hash::WW32(Functionname);
+        Requesthandlers[ID] = { Functionname, Callback, Usagestring };
     }
-    const char *callHandler(const char *Function, const char *JSONString)
+
+    // For internal use.
+    std::vector<JSON::Value_t> listEndpoints()
     {
-        assert(Function); assert(JSONString);
-        const auto Hash = Hash::WW32(Function);
+        std::vector<JSON::Value_t> Result;
+        Result.reserve(Requesthandlers.size());
 
-        const auto Result = Functionhandlers.at(Hash)(JSONString);
-        if (Hash::WW32(Result) != Hash::WW32(Functionresults.at(Hash)))
-            Functionresults.emplace(Hash, Result);
-
-        return Functionresults.at(Hash).c_str();
-    }
-    extern "C" EXPORT_ATTR const char *__cdecl JSONAPI(const char *Function, const char *JSONString)
-    {
-        assert(Function); assert(JSONString);
-        const auto Hash = Hash::WW32(Function);
-
-        if (!JSONString) [[unlikely]] JSONString = "";
-        if (!Function || !Functionhandlers.contains(Hash)) [[unlikely]]
+        for (const auto &[ID, Handler] : Requesthandlers)
         {
-            // Return a list of the available functions.
-            JSON::Array_t Array; Array.reserve(Functionnames.size());
-            for (const auto &[Key, Value] : Functionnames)
-                Array.push_back(Value);
-
-            Functionresults.emplace(0, JSON::Dump(Array));
-            return Functionresults.at(0).c_str();
+            Result.emplace_back(JSON::Object_t({
+                { "Endpointname", (std::u8string)Handler.Name },
+                { "Usage", (std::u8string)Handler.Usage },
+                { "EndpointID", ID}
+            }));
         }
 
-        const auto Result = Functionhandlers.at(Hash)(JSONString);
-        if (Hash::WW32(Result) != Hash::WW32(Functionresults.at(Hash)))
-            Functionresults.emplace(Hash, Result);
+        return Result;
+    }
+    const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
+    {
+        static Debugmutex Threadsafe{};
+        std::scoped_lock Lock(Threadsafe);
 
-        return Functionresults.at(Hash).c_str();
+        const auto ID = Hash::WW32(Functionname);
+        if (!Requesthandlers.contains(ID))
+        {
+            const auto Failure = JSON::Object_t({
+                { "Error", va("There's no JSON API with name %*s or ID %08X", Functionname.size(), Functionname.data(), ID) },
+                { "Endpoints", listEndpoints() }
+            });
+
+            Failurestring = JSON::Dump(Failure);
+            return Failurestring.c_str();
+        }
+
+        // Call the handler with the object.
+        auto Handlerinfo = &Requesthandlers[ID];
+        const auto Result = Handlerinfo->Handler(std::move(Request));
+
+        // Functions that return no data use a simple "{}".
+        if (Result.empty())
+        {
+            const auto Failure = JSON::Object_t({
+                { "Error", "The function returned an error, verify your input."s },
+                { "Usage", (std::u8string)Handlerinfo->Usage }
+            });
+
+            Failurestring = JSON::Dump(Failure);
+            return Failurestring.c_str();
+        }
+
+        // Save the result on the heap for 6 calls.
+        return Results.push_back(Result)->c_str();
+    }
+
+    // Export the JSON interface to the plugins.
+    namespace API
+    {
+        extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
+        {
+            std::string_view Functionname = Function ? Function : "";
+            return callEndpoint(Functionname, JSON::Parse(JSONString));
+        }
     }
 }

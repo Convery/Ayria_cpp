@@ -9,6 +9,8 @@
 
 namespace Social::Relations
 {
+    using Relationflags_t = union { uint8_t Raw; struct { uint8_t isMututal : 1, isFriend : 1, isBlocked : 1; }; };
+    using Userrelation_t = struct { uint32_t UserID; std::u8string Username; Relationflags_t Flags; };
     static Hashmap<uint32_t, Userrelation_t> Relationships{};
     static bool isModified{};
 
@@ -34,124 +36,116 @@ namespace Social::Relations
     }
     static void Saverelations()
     {
-        const auto Entries = List();
-        if (Entries.empty()) [[unlikely]]
+        if (Relationships.empty()) [[unlikely]]
         {
             std::remove("./Ayria/Socialrelations.json");
             return;
         }
 
         JSON::Array_t Array;
-        Array.reserve(Entries.size());
+        Array.reserve(Relationships.size());
 
-        for (const auto &Entry : Entries)
+        for (const auto &[ID, Entry] : Relationships)
         {
             Array.emplace_back(JSON::Object_t({
-                { "UserID", Entry->UserID },
-                { "Flags", Entry->Flags.Raw },
-                { "Username", Entry->Username }
+                { "Username", Entry.Username },
+                { "Flags", Entry.Flags.Raw },
+                { "UserID", Entry.UserID }
             }));
         }
 
         FS::Writefile(L"./Ayria/Socialrelations.json", JSON::Dump(Array));
     }
 
+    // Fetch information about clients.
+    bool isBlocked(uint32_t UserID)
+    {
+        return Relationships.contains(UserID) && Relationships[UserID].Flags.isBlocked;
+    }
+
     // Notify another user of our friendslist being updated.
     static void onRelationchange(uint32_t UserID)
     {
-        if (!Relationships.contains(UserID)) return;
+        if (Global.Stateflags.isPrivate) [[unlikely]] return;
         if (!Clientinfo::isClientonline(UserID)) return;
+        if (!Relationships.contains(UserID)) return;
 
         const auto Relation = Relationships[UserID].Flags;
         const auto Request = JSON::Object_t({
-            { "Target", UserID },
+            { "UserID", UserID },
             { "isFriend", Relation.isFriend }
             // We do not notify if the user is blocked.
         });
 
-        Backend::Network::Sendmessage("Relationshipupdate", JSON::Dump(Request));
+        Backend::Network::Transmitmessage("Relationshipupdate", Request);
     }
     static void __cdecl Relationchangehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
-        const auto Client = Clientinfo::getLocalclient(NodeID);
+        const auto Client = Clientinfo::getLANClient(NodeID);
         if (!Client) [[unlikely]] return;
 
         const auto Request = JSON::Parse(std::string_view(Message, Length));
-        if (Global.UserID != Request.value<uint32_t>("Target")) [[likely]] return;
+        if (Global.UserID != Request.value<uint32_t>("UserID")) [[likely]] return;
 
         if (Relationships.contains(Client->UserID))
         {
             auto Relation = &Relationships[Client->UserID].Flags;
             if (Relation->isFriend && Request.value<bool>("isFriend"))
-                Relation->isPending = false;
+            {
+                Relation->isMututal = true;
+                isModified = true;
+            }
         }
-    }
-
-    // Modify the relations stored to disk.
-    void Insert(uint32_t UserID, std::u8string_view Username, Relationflags_t Flags)
-    {
-        isModified = true;
-        Flags.isPending = true;
-        Relationships[UserID] = { UserID, std::u8string(Username.data(), Username.size()), Flags };
-        onRelationchange(UserID);
-    }
-    void Remove(uint32_t UserID)
-    {
-        Relationships.erase(UserID);
-        onRelationchange(UserID);
-        isModified = true;
-    }
-
-    // List all known relations.
-    std::vector<const Userrelation_t *> List()
-    {
-        std::vector<const Userrelation_t *> Result;
-        Result.reserve(Relationships.size());
-
-        for (const auto &[Key, Value] : Relationships)
-            Result.emplace_back(&Value);
-
-        return Result;
     }
 
     // JSON interface for the plugins.
     namespace API
     {
-        static std::string __cdecl Insert(const char *JSONString)
+        static std::string __cdecl Insert(JSON::Value_t &&Request)
         {
-            const auto Request = JSON::Parse(JSONString);
-            const auto Flags = Request.value<uint8_t>("Flags");
-            const auto UserID = Request.value<uint32_t>("UserID");
+            Relationflags_t Flags{};
+
             const auto Username = Request.value<std::u8string>("Username");
-
-            Social::Relations::Insert(UserID, Username, { Flags });
-            return "{}";
-        }
-        static std::string __cdecl Remove(const char *JSONString)
-        {
-            const auto Request = JSON::Parse(JSONString);
             const auto UserID = Request.value<uint32_t>("UserID");
+            Flags.isBlocked = Request.value<bool>("isBlocked");
+            Flags.isFriend = Request.value<bool>("isFriend");
 
-            Social::Relations::Remove(UserID);
+            // We really need an online ID..
+            if (!UserID || !Clientinfo::isClientonline(UserID)) return {};
+            if (!Flags.Raw) return {};
+
+            Relationships[UserID] = { UserID, Username, Flags };
+            onRelationchange(UserID);
+            isModified = true;
             return "{}";
         }
-        static std::string __cdecl List(const char *)
+        static std::string __cdecl Remove(JSON::Value_t &&Request)
         {
-            const auto Entries = Social::Relations::List();
+            const auto UserID = Request.value<uint32_t>("UserID");
+            if (!UserID || !Clientinfo::isClientonline(UserID)) return {};
 
-            JSON::Array_t Array;
-            Array.reserve(Entries.size());
+            Relationships.erase(UserID);
+            onRelationchange(UserID);
+            isModified = true;
+            return "{}";
+        }
+        static std::string __cdecl List(JSON::Value_t &&)
+        {
+            JSON::Array_t Result;
+            Result.reserve(Relationships.size());
 
-            for (const auto &Entry : Entries)
+            for (const auto &[ID, Entry] : Relationships)
             {
-                Array.emplace_back(JSON::Object_t({
-                    { "UserID", Entry->UserID },
-                    { "Flags", Entry->Flags.Raw },
-                    { "Username", Entry->Username }
+                Result.emplace_back(JSON::Object_t({
+                    { "isMututal", (bool)Entry.Flags.isMututal },
+                    { "isBlocked", (bool)Entry.Flags.isBlocked },
+                    { "isFriend", (bool)Entry.Flags.isFriend },
+                    { "Username", Entry.Username },
+                    { "UserID", Entry.UserID }
                 }));
             }
 
-            return JSON::Dump(Array);
+            return JSON::Dump(Result);
         }
     }
 
@@ -161,9 +155,10 @@ namespace Social::Relations
         Loadrelations();
         std::atexit([]() { if (isModified) Saverelations(); });
 
-        Backend::API::addHandler("Social::Relations::List", API::List);
-        Backend::API::addHandler("Social::Relations::Remove", API::Remove);
-        Backend::API::addHandler("Social::Relations::Insert", API::Insert);
-        Backend::Network::addHandler("Relationshipupdate", Relationchangehandler);
+        Backend::Network::Registerhandler("Relationshipupdate", Relationchangehandler);
+
+        Backend::API::addEndpoint("Social::Relations::List", API::List);
+        Backend::API::addEndpoint("Social::Relations::Remove", API::Remove, R"({ "UserID" : 1234 })");
+        Backend::API::addEndpoint("Social::Relations::Insert", API::Insert, R"({ "UserID" : 1234, "isFriend" : false, "isBlocked" : true })");
     }
 }

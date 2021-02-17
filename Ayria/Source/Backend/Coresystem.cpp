@@ -60,7 +60,7 @@ namespace Backend
         Console::Overlay::Createconsole(&Ingameconsole);
 
         // Optional console for developers.
-        if (Global.enableExternalconsole) Console::Windows::Createconsole(GetModuleHandleW(NULL));
+        if (Global.Applicationsettings.enableExternalconsole) Console::Windows::Createconsole(GetModuleHandleW(NULL));
 
         // Main loop, runs until the application terminates or DLL unloads.
         std::chrono::high_resolution_clock::time_point Lastframe{};
@@ -106,23 +106,19 @@ namespace Backend
     void Saveconfig()
     {
         JSON::Object_t Config{};
-        Config["enableExternalconsole"] = Global.enableExternalconsole;
+        Config["enableExternalconsole"] = Global.Applicationsettings.enableExternalconsole;
+        Config["enableIATHooking"] = Global.Applicationsettings.enableIATHooking;
         Config["Username"] = std::u8string_view(Global.Username);
         Config["Locale"] = std::u8string_view(Global.Locale);
-        Config["enableIATHooking"] = Global.enableIATHooking;
         Config["UserID"] = Global.UserID;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
     }
 
     // Export functionality to the plugins.
-    namespace Export
+    extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
     {
-        extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
-        {
-            if (PeriodMS && Callback)
-                Enqueuetask(PeriodMS, Callback);
-        }
+        if (PeriodMS && Callback) Enqueuetask(PeriodMS, Callback);
     }
 
     // Initialize the system.
@@ -137,8 +133,8 @@ namespace Backend
         // Initialize the global state from disk settings.
         {
             const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
-            Global.enableExternalconsole = Config.value<bool>("enableExternalconsole");
-            Global.enableIATHooking = Config.value<bool>("enableIATHooking");
+            Global.Applicationsettings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
+            Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
             Global.UserID = Config.value("UserID", 0xDEADC0DE);
 
             const auto Locale = Config.value("Locale", u8"english"s);
@@ -147,13 +143,13 @@ namespace Backend
             std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
 
             // Save the configuration on exit.
-            std::atexit([]() { if (Global.modifiedConfig) Saveconfig(); });
+            std::atexit([]() { if (Global.Applicationsettings.modifiedConfig) Saveconfig(); });
         }
 
         // Initialize subsystems that plugins may need.
         //Matchmaking::API_Initialize();
         Clientinfo::Initialize();
-        Fileshare::Initialize();
+        //Fileshare::Initialize();
         Network::Initialize();
         Social::Initialize();
 

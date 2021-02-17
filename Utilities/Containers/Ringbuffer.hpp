@@ -8,15 +8,15 @@
 #include <Stdinclude.hpp>
 
 template<typename T, size_t N>
-class Ringbuffer
+class Ringbuffer_t
 {
     size_t Head{}, Tail{}, Size{};
     std::array<T, N> Storage{};
 
     public:
-    Ringbuffer() = default;
-    ~Ringbuffer() { clear(); }
-    Ringbuffer(const Ringbuffer &Right) noexcept(std::is_nothrow_copy_constructible_v<T>)
+    Ringbuffer_t() = default;
+    ~Ringbuffer_t() { clear(); }
+    Ringbuffer_t(const Ringbuffer_t &Right) noexcept(std::is_nothrow_copy_constructible_v<T>)
     {
         Head = Right.Head; Tail = Right.Tail; Size = Right.Size;
 
@@ -43,13 +43,13 @@ class Ringbuffer
             }
         }
     }
-    Ringbuffer &operator=(const Ringbuffer &Right) noexcept(std::is_nothrow_copy_constructible_v<T>)
+    Ringbuffer_t &operator=(const Ringbuffer_t &Right) noexcept(std::is_nothrow_copy_constructible_v<T>)
     {
         // Sanity checking.
         if (this == &Right) return *this;
 
         clear();
-        this = Ringbuffer(Right);
+        this = Ringbuffer_t(Right);
         return *this;
     }
 
@@ -83,23 +83,29 @@ class Ringbuffer
         Tail = ++Tail % N;
         --Size;
     }
-    void push_back(T &&Value) noexcept
+    const T *push_back(T &&Value) noexcept
     {
         if (full()) erase(Head);
         Storage[Head] = std::move(Value);
+        const auto Result = &Storage[Head];
 
         if (full()) Tail = ++Tail % N;
         if (!full()) ++Size;
         Head = ++Head % N;
+
+        return Result;
     }
-    void push_back(const T &Value) noexcept
+    const T *push_back(const T &Value) noexcept
     {
         if (full()) erase(Head);
         Storage[Head] = Value;
+        const auto Result = &Storage[Head];
 
         if (full()) Tail = ++Tail % N;
         if (!full()) ++Size;
         Head = ++Head % N;
+
+        return Result;
     }
 
     template <typename... Args>
@@ -117,17 +123,17 @@ class Ringbuffer
     }
 
     [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }
-    [[nodiscard]] const T &front() const noexcept { return const_cast<Ringbuffer<T, N> *>(this)->front(); }
-    [[nodiscard]] const T &back() const noexcept { return const_cast<Ringbuffer<T, N> *>(back)->back(); }
+    [[nodiscard]] const T &front() const noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->front(); }
+    [[nodiscard]] const T &back() const noexcept { return const_cast<Ringbuffer_t<T, N> *>(back)->back(); }
     [[nodiscard]] T &front() noexcept { return reinterpret_cast<T &>(Storage[Tail]); }
 
     [[nodiscard]] T &operator[](size_t Index) noexcept { return reinterpret_cast<T &>(Storage[Index]); }
-    [[nodiscard]] const T &operator[](size_t Index) const noexcept { return const_cast<Ringbuffer<T, N> *>(this)->operator[](Index); }
+    [[nodiscard]] const T &operator[](size_t Index) const noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->operator[](Index); }
 
     template<typename T, size_t N, bool C>
     struct Iterator
     {
-        using Buffer_t = std::conditional_t<!C, Ringbuffer<T, N> *, Ringbuffer<T, N> const *>;
+        using Buffer_t = std::conditional_t<!C, Ringbuffer_t<T, N> *, Ringbuffer_t<T, N> const *>;
         using iterator_category = std::bidirectional_iterator_tag;
         using self_type = Iterator<T, N, C>;
         using difference_type = ptrdiff_t;

@@ -14,7 +14,7 @@ namespace Console
     static Spinlock Writelock;
     constexpr size_t Logsize = 256;
     static std::wstring Currentfilter{};
-    static Ringbuffer<Logline_t, Logsize> Consolelog{};
+    static Ringbuffer_t<Logline_t, Logsize> Consolelog{};
 
     // Threadsafe injection of strings into the global log.
     void addConsolemessage(const std::string &Message, Color_t Colour)
@@ -151,11 +151,9 @@ namespace Console
         if (!Command || !Callback) return;
         addConsolecommand(std::string_view(Command), Callback_t(Callback));
     }
-    static std::string __cdecl execCommand(const char *JSONString)
+    static std::string __cdecl execCommand(JSON::Value_t &&Request)
     {
-        const auto Request = JSON::Parse(JSONString);
         const auto Commandline = Request.value<std::string>("Commandline");
-
         execCommandline(Commandline, false);
         return "{}";
     }
@@ -198,7 +196,7 @@ namespace Console
         addConsolecommand("setFilter", Changefilter);
         addConsolecommand("Filter", Changefilter);
 
-        Backend::API::addHandler("Console::Exec", execCommand);
+        Backend::API::addEndpoint("Console::Exec", execCommand);
     }
 
     // Provide a C-API for external code.

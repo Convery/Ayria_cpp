@@ -9,8 +9,30 @@
 
 namespace Clientinfo
 {
-    Nodemap<uint32_t, std::string> Clientkeys;
+    Hashmap<uint32_t, LZString_t> Clientkeys;
     std::string HardwareID;
+
+    // If another clients crypto-key is needed, we request it.
+    void Requestcryptokeys(std::vector<uint32_t> UserIDs)
+    {
+        const auto Object = JSON::Object_t({
+            { "Senderkey", Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys)) },
+            { "SenderID", Global.UserID },
+            { "WantedIDs", UserIDs }
+        });
+
+        if (Global.Stateflags.isOnline)
+        {
+            // TODO(tcn): Forward request to some remote server.
+        }
+
+        Backend::Network::Transmitmessage("Keyshare", Object);
+    }
+    std::string getCryptokey(uint32_t UserID)
+    {
+        if (!Clientkeys.contains(UserID)) return {};
+        else return Clientkeys[UserID];
+    }
 
     // Primarily used for cryptography.
     std::string_view getHardwareID()
@@ -88,42 +110,23 @@ namespace Clientinfo
         return HardwareID;
     }
 
-    // If another clients crypto-key is needed, we request it.
-    void Requestcryptokeys(std::vector<uint32_t> UserIDs)
-    {
-        const auto Object = JSON::Object_t({
-            { "Senderkey", Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys)) },
-            { "SenderID", Global.UserID },
-            { "WantedIDs", UserIDs }
-        });
-
-        if (Global.isOnline)
-        {
-            // TODO(tcn): Forward request to some remote server.
-        }
-
-        Backend::Network::Sendmessage("Keyshare", JSON::Dump(Object));
-    }
-
     // Handle local clients requests.
     static void __cdecl Keysharehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto B64Senderkey = Request.value<std::string>("B64Senderkey");
         const auto WantedIDs = Request.value<std::vector<uint32_t> >("WantedIDs");
-        const auto Senderkey = Request.value<std::string>("Senderkey");
-        const auto SenderID = Request.value<uint32_t>("SenderID");
 
         // If the other client is secretive, ignore them.
-        if (!SenderID || Senderkey.empty()) return;
+        if (B64Senderkey.empty()) return;
 
         // Update the clients key if they are online.
-        if (const auto Client = Clientinfo::getLocalclient(NodeID))
+        if (const auto Client = Clientinfo::getLANClient(NodeID))
         {
-            assert(Client->UserID == SenderID);
-            Client->Sharedkey = &Clientkeys.emplace(SenderID, Senderkey).first->second;
+            Clientkeys.emplace(Client->UserID, B64Senderkey);
 
             // Developer information.
-            Debugprint(va("Updated shared key for clientID %08X", SenderID));
+            Debugprint(va("Updated shared key for clientID %08X", Client->UserID));
         }
 
         // Check if they want our key back.
@@ -138,56 +141,13 @@ namespace Clientinfo
         }
     }
 
-    //
+    // In the future, allow a persistant key.
     void Initializecrypto()
     {
-        /*
-            NOTE(tcn):
-            We want the users to feel some sense of privacy so we provide a RSA key for message encryption.
-            This key is stored on the system for persistence, as such if the user wants to use multiple
-            devices they need to copy the key to another device. If lost, all associated messages and
-            data-files are forgone. If this system is reused, we may want to up the RSA bits.
-        */
-        constexpr size_t RSAStrength = 512;
-        std::string Existingkey;
-
-        // Fetch the key from the environment.
-        #if !defined (_WIN32)
-        Existingkey = std::getenv("AYRIA_CLIENTPK");
-        #else
-        char Buffer[512]{};
-        DWORD Size{ 512 };
-        HKEY Registrykey;
-
-        if (ERROR_SUCCESS == RegOpenKeyA(HKEY_CURRENT_USER, "Environment", &Registrykey))
-        {
-            if (ERROR_SUCCESS == RegQueryValueExA(Registrykey, "AYRIA_CLIENTPK", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                Existingkey = std::string(Buffer, Size);
-            RegCloseKey(Registrykey);
-        }
-        #endif
-
-        // Parse the saved key or create a new one.
-        if (!Existingkey.empty()) Global.Cryptokeys = PK_RSA::Createkeypair(Base64::Decode(Existingkey));
-        if (!Global.Cryptokeys)
-        {
-            // Weak key as it's just for basic privacy between local clients.
-            Global.Cryptokeys = PK_RSA::Createkeypair(RSAStrength);
-
-            // We do not want to wait for the system to finish.
-            std::thread([]()
-            {
-                const auto Privatekey = Base64::Encode(PK_RSA::getPrivatekey(Global.Cryptokeys));
-
-                #if defined (_WIN32)
-                system(("SETX AYRIA_CLIENTPK "s + Privatekey).c_str());
-                #else
-                system(("SETENV AYRIA_CLIENTPK "s + Privatekey).c_str());
-                #endif
-            }).detach();
-        }
+        // Create a weak random key for this session.
+        Global.Cryptokeys = PK_RSA::Createkeypair(512);
 
         // Listen for local clients sharing their keys.
-        Backend::Network::addHandler("Keyshare", Keysharehandler);
+        Backend::Network::Registerhandler("Keyshare", Keysharehandler);
     }
 }

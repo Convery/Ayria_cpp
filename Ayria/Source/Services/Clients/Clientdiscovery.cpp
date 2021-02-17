@@ -9,54 +9,69 @@
 
 namespace Clientinfo
 {
-    std::vector<Client_t> Localclients, Remoteclients;
-    Hashmap<uint32_t, uint32_t> Networkmap;
-    Hashmap<uint32_t, uint32_t> Lastseen;
-    Hashset<std::u8string> Clientnames;
+    static std::vector<Client_t> Localclients{}, Remoteclients{};
+    static Hashmap<uint32_t, uint32_t> Networkmap{};
+    static Hashmap<uint32_t, uint32_t> Lastseen{};
+    static Hashset<std::u8string> Clientnames{};
 
-    // LAN clients are identified by their random ID.
-    std::vector<Client_t *> Listclients(bool onlyLAN)
+    // Fetch information about a client.
+    bool isClientonline(uint32_t UserID)
     {
-        std::vector<Client_t *> Result;
-        Result.reserve(Localclients.size() + (!onlyLAN * Remoteclients.size()));
-
-        for (auto &Client : Localclients)
-            Result.emplace_back(&Client);
-
-        if (!onlyLAN)
-            for (auto &Client : Remoteclients)
-                Result.emplace_back(&Client);
-
-        return Result;
+        const bool A = std::any_of(std::execution::par_unseq, Localclients.begin(), Localclients.end(),
+                                   [=](const Client_t &Item) { return UserID == Item.UserID; });
+        const bool B = std::any_of(std::execution::par_unseq, Remoteclients.begin(), Remoteclients.end(),
+                                   [=](const Client_t &Item) { return UserID == Item.UserID; });
+        return A || B;
     }
-    Client_t *getLocalclient(uint32_t NodeID)
+    Client_t *getLANClient(uint32_t NodeID)
     {
         if (Networkmap.contains(NodeID)) [[likely]]
         {
             const auto Result = std::find_if(std::execution::par_unseq, Localclients.begin(), Localclients.end(),
-                                             [ID = Networkmap[NodeID]](const Client_t &Item) { return Item.UserID == ID; });
+            [ID = Networkmap[NodeID]](const Client_t &Item) { return Item.UserID == ID; });
 
-            if (Result != Localclients.end()) [[likely]]
-                return &*Result;
+        if (Result != Localclients.end()) [[likely]]
+            return &*Result;
         }
 
         return {};
     }
-    bool isClientonline(uint32_t UserID)
+    Client_t *getWANClient(uint32_t UserID)
     {
-        const bool A = std::any_of(std::execution::par_unseq, Localclients.begin(), Localclients.end(),
-            [=](const Client_t &Item) { return UserID == Item.UserID; });
-        const bool B = std::any_of(std::execution::par_unseq, Remoteclients.begin(), Remoteclients.end(),
-            [=](const Client_t &Item) { return UserID == Item.UserID; });
+        const auto Result = std::find_if(std::execution::par_unseq, Remoteclients.begin(), Remoteclients.end(),
+            [=](const Client_t &Item) { return Item.UserID == UserID; });
 
-        return A || B;
+        if (Result != Remoteclients.end()) [[likely]]
+            return &*Result;
+
+        return {};
+    }
+    bool isClientauthenticated(uint32_t UserID)
+    {
+        // If the clients info has been supplied from a server, they are authenticated.
+        return std::any_of(std::execution::par_unseq, Remoteclients.begin(), Remoteclients.end(),
+                           [=](const Client_t &Item) { return UserID == Item.UserID; });
     }
 
-    // Periodically clean up the maps.
-    static void Clearoutdated()
+    // Update information about the world.
+    static void Updateclients()
     {
-        const auto Currenttime = time(NULL);
+        if (Global.Stateflags.isPrivate) [[unlikely]] return;
 
+        const auto Request = JSON::Object_t({
+            { "Username", std::u8string_view(Global.Username) },
+            { "isOnline", Global.Stateflags.isOnline},
+            { "UserID", Global.UserID }
+        });
+        Backend::Network::Transmitmessage("Clientdiscovery", Request);
+
+        if (Global.Stateflags.isOnline)
+        {
+            // TODO(tcn): Forward our information to some server.
+        }
+
+        // Clear outdated clients.
+        const auto Currenttime = time(NULL);
         for (const auto &[ClientID, Timestamp] : Lastseen)
         {
             if ((Timestamp + 15) < Currenttime)
@@ -74,24 +89,13 @@ namespace Clientinfo
                 }
             }
         }
-    };
-
-    // Handle local client discovery.
-    static void __cdecl sendDiscovery()
-    {
-        const auto Object = JSON::Object_t({
-            { "Username", std::u8string_view(Global.Username) },
-            { "isOnline", Global.isOnline},
-            { "UserID", Global.UserID }
-        });
-
-        Backend::Network::Sendmessage("Clientdiscovery", JSON::Dump(Object));
     }
+
+    // Handle local discovery notifications.
     static void __cdecl Discoveryhandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
         const auto Username = Request.value<std::u8string>("Username");
-        const auto isOnline = Request.value<bool>("isOnline");
         const auto UserID = Request.value<uint32_t>("UserID");
 
         // If the client can't even format a simple request, block them.
@@ -102,43 +106,74 @@ namespace Clientinfo
             return;
         }
 
+        // If the user doesn't want to be associated, block them.
+        if (Social::Relations::isBlocked(UserID)) [[unlikely]]
+        {
+            Infoprint(va("Blocking client %08X due to relationship status.", UserID));
+            Backend::Network::Blockclient(NodeID);
+            return;
+        }
+
         // If we need to add a client..
         if (!Networkmap.contains(NodeID)) [[unlikely]]
         {
-            // Check if we don't want to process requests from this client.
-            for (const auto &Relation : Social::Relations::List())
-            {
-                if (Relation->UserID == UserID)
-                {
-                    if (Relation->Flags.isBlocked)
-                    {
-                        Infoprint(va("Blocking client %08X due to relationship status.", UserID));
-                        Backend::Network::Blockclient(NodeID);
-                        return;
-                    }
-                }
-            }
-
-            Localclients.emplace_back(UserID, nullptr, &*Clientnames.insert(Username).first, nullptr);
+            // Notify the developers about this.
+            Debugprint(va("Found a new LAN client with ID %08X", UserID));
+            Localclients.emplace_back(UserID, &*Clientnames.insert(Username).first);
             Networkmap.emplace(NodeID, UserID);
         }
 
         // Update their last-seen timestamp.
-        const auto Client = getLocalclient(NodeID);
+        const auto Client = getLANClient(NodeID);
         Lastseen[Client->UserID] = uint32_t(time(NULL));
+    }
 
-        // Need to request and verify their ticket.
-        if (isOnline && !Client->Authticket) [[unlikely]]
+    // JSON interface for the plugins.
+    namespace API
+    {
+        static std::string __cdecl getLocalclients(JSON::Value_t &&)
         {
-            // TODO(tcn): Create some auth service to handle this.
+            JSON::Array_t Result;
+            Result.reserve(Localclients.size());
+
+            for (const auto &Client : Localclients)
+            {
+                const auto Cryptokey = getCryptokey(Client.UserID);
+                Result.emplace_back(JSON::Object_t({
+                    { "Username", Client.Username ? *Client.Username : u8""s },
+                    { "UserID", Client.UserID },
+                    { "Sharedkey", Cryptokey }
+                }));
+            }
+
+            return JSON::Dump(Result);
+        }
+        static std::string __cdecl getRemoteclients(JSON::Value_t &&)
+        {
+            JSON::Array_t Result;
+            Result.reserve(Remoteclients.size());
+
+            for (const auto &Client : Remoteclients)
+            {
+                const auto Cryptokey = getCryptokey(Client.UserID);
+                Result.emplace_back(JSON::Object_t({
+                    { "Username", Client.Username ? *Client.Username : u8""s },
+                    { "UserID", Client.UserID },
+                    { "Sharedkey", Cryptokey }
+                }));
+            }
+
+            return JSON::Dump(Result);
         }
     }
 
     //
     void Initializediscovery()
     {
-        Backend::Enqueuetask(5000, sendDiscovery);
-        Backend::Enqueuetask(6000, Clearoutdated);
-        Backend::Network::addHandler("Clientdiscovery", Discoveryhandler);
+        Backend::Enqueuetask(5000, Updateclients);
+        Backend::Network::Registerhandler("Clientdiscovery", Discoveryhandler);
+
+        Backend::API::addEndpoint("Clientinfo::getLocalclients", API::getLocalclients);
+        Backend::API::addEndpoint("Clientinfo::getRemoteclients", API::getRemoteclients);
     }
 }

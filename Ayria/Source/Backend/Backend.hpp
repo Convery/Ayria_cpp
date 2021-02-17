@@ -13,49 +13,37 @@ namespace Backend
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)());
 
-    // Helper for debug-builds.
-    inline void setThreadname(std::string_view Name)
-    {
-        if constexpr (Build::isDebug)
-        {
-            #pragma pack(push, 8)
-            using THREADNAME_INFO = struct { DWORD dwType; LPCSTR szName; DWORD dwThreadID; DWORD dwFlags; };
-            #pragma pack(pop)
+    // Initialize the system.
+    void Initialize();
 
-            __try
-            {
-                THREADNAME_INFO Info{ 0x1000, Name.data(), 0xFFFFFFFF, 0 };
-                RaiseException(0x406D1388, 0, sizeof(Info) / sizeof(ULONG_PTR), reinterpret_cast<ULONG_PTR *>(&Info));
-            } __except (EXCEPTION_EXECUTE_HANDLER) {}
-        }
+    // JSON Interface.
+    namespace API
+    {
+        // static std::string __cdecl Callback(JSON::Value_t &&Request);
+        using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
+        void addEndpoint(std::string_view Functionname, Callback_t Callback, std::string_view Usagestring = {});
+
+        // For internal use.
+        const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request);
+        std::vector<JSON::Value_t> listEndpoints();
     }
 
-    // Initialize the system.
-    void Initialize();
-}
+    // Network interface.
+    namespace Network
+    {
+        // static void __cdecl Callback(unsigned int NodeID, const char *Message, unsigned int Length);
+        using Callback_t = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
+        void Registerhandler(std::string_view Identifier, Callback_t Handler);
 
-// Callbacks for the syncing multi-casts.
-namespace Backend::Network
-{
-    // static void __cdecl Callback(unsigned int NodeID, const char *Message, unsigned int Length);
-    using Callback_t = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
-    void Sendmessage(const char *Identifier, std::string_view JSONString);
-    void addHandler(const char *Identifier, Callback_t Callback);
+        // Formats and LZ compresses the message.
+        void Transmitmessage(std::string_view Identifier, JSON::Value_t &&Message);
 
-    // Prevent packets from being processed.
-    void Blockclient(uint32_t NodeID);
+        // Prevent packets from being processed.
+        void Blockclient(uint32_t NodeID);
 
-    // Initialize the system.
-    void Initialize();
-}
-
-// Callbacks for the APIs, JSON in, JSON out.
-namespace Backend::API
-{
-    // static std::string __cdecl Callback(const char *JSONString);
-    const char *callHandler(const char *Function, const char *JSONString);
-    using Callback_t = std::string (__cdecl *)(const char *JSONString);
-    void addHandler(const char *Function, Callback_t Callback);
+        // Initialize the system.
+        void Initialize();
+    }
 }
 
 // TCP connections for upload/download.

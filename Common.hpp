@@ -49,6 +49,13 @@ namespace Build
     constexpr bool isWindows = false;
     #endif
 
+    #if defined(__linux__)
+    constexpr bool isLinux = true;
+    #else
+    constexpr bool isLinux = false;
+    #endif
+
+
     #if defined(NDEBUG)
     constexpr bool isDebug = false;
     #else

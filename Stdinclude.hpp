@@ -98,12 +98,12 @@ using namespace std::literals;
 // Exports as struct for easier plugin initialization.
 struct Ayriamodule_t
 {
-    // Call the exported JSON functions, pass NULL as function to list all.
-    const char *(__cdecl *JSONAPI)(const char *Function, const char *JSONString);
+    // Call the exported JSON functions, pass NULL as function to list all. Result-string freed after 6 calls.
+    const char *(__cdecl *JSONRequest)(const char *Function, const char *JSONString);
 
     // Callback on LAN messages.
     void (__cdecl *addMessagehandler)(const char *Messagetype,
-                                      void(__cdecl *Callback)(unsigned int NodeID, const char *Message, unsigned int Length));
+        void(__cdecl *Callback)(unsigned int NodeID, const char *Message, unsigned int Length));
 
     // UTF8 escaped ASCII strings.
     void (__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
@@ -125,10 +125,10 @@ struct Ayriamodule_t
         {
             #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x)
             Import(Createperiodictask);
-            Import(addMessagehandler);
             Import(addConsolemessage);
             Import(addConsolecommand);
-            Import(JSONAPI);
+            Import(addMessagehandler);
+            Import(JSONRequest);
             #undef Import
         }
     }

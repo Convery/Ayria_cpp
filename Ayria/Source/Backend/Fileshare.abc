@@ -149,7 +149,7 @@ namespace Backend::Fileshare
 
         std::thread([=]() -> void
         {
-            Backend::setThreadname("Fileshare::Downloadfile");
+            setThreadname("Fileshare::Downloadfile");
 
             const auto Blob = Recv(Address, Port, Size);
             if (!Blob.empty()) FS::Writefile(Filepath, Blob);
