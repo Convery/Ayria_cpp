@@ -12,6 +12,20 @@ namespace Backend
     using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
 
+    // Get the client-database.
+    sqlite::database Database()
+    {
+        try
+        {
+            return sqlite::database("./Ayria/Client.db");
+        }
+        catch (std::exception &e)
+        {
+            Errorprint(va("Could not connect to the database: %s", e.what()));
+            return sqlite::database(":memory:");
+        }
+    }
+
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)())
     {
@@ -141,6 +155,9 @@ namespace Backend
             const auto Username = Config.value("Username", u8"AYRIA"s);
             std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
             std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
+
+            // Sanity checking, force save if nothing was parsed.
+            if (!FS::Fileexists(L"./Ayria/Settings.json")) Saveconfig();
 
             // Save the configuration on exit.
             std::atexit([]() { if (Global.Applicationsettings.modifiedConfig) Saveconfig(); });

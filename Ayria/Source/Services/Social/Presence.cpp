@@ -63,9 +63,13 @@ namespace Social::Presence
 
     void Initialize()
     {
+        // Send presence if outdated.
         Backend::Enqueuetask(1000, Sendpresence);
+
+        // Register the network handlers.
         Backend::Network::Registerhandler("Presenceupdate", Presencehandler);
 
+        // JSON endpoints.
         Backend::API::addEndpoint("Social::Presence::Set", API::Set, R"([ "Key" : value })");
         Backend::API::addEndpoint("Social::Presence::Get", API::Get, R"({ "UserID" : 1234 })");
     }

@@ -85,6 +85,11 @@ int main(int, char **)
 {
     printf("Host startup..\n");
 
+    // Ensure that Ayrias default directories exist.
+    std::filesystem::create_directories("./Ayria/Logs");
+    std::filesystem::create_directories("./Ayria/Storage");
+    std::filesystem::create_directories("./Ayria/Plugins");
+
     // Register the window.
     WNDCLASSEXW Windowclass{};
     Windowclass.cbSize = sizeof(WNDCLASSEXW);

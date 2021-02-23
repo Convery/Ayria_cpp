@@ -10,15 +10,12 @@
 #include "Services/Services.hpp"
 #include "Subsystems/Subsystems.hpp"
 
-// Global system information.
-#pragma pack(push, 1)
-struct Globalstate_t    // 51 bytes.
+// Global system information, 48 bytes on x64.
+struct Globalstate_t
 {
     uint32_t UserID;
     char8_t Locale[12];
-    char8_t Username[24];
-
-    RSA *Cryptokeys;
+    char8_t Username[21];
 
     union
     {
@@ -53,6 +50,7 @@ struct Globalstate_t    // 51 bytes.
                 enableExternalconsole : 1;
         };
     } Applicationsettings;
+
+    RSA *Cryptokeys;
 };
 extern Globalstate_t Global;
-#pragma pack(pop)

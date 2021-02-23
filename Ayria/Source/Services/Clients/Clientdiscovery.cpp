@@ -126,6 +126,10 @@ namespace Clientinfo
         // Update their last-seen timestamp.
         const auto Client = getLANClient(NodeID);
         Lastseen[Client->UserID] = uint32_t(time(NULL));
+
+        // Update the database for the plugins.
+        Backend::Database() << "insert or replace into Knownclients (ClientID, Lastseen, Uername, Local) values (?, ?, ?, ?);"
+                            << Client->UserID << Lastseen[Client->UserID] << Encoding::toNarrow(*Client->Username) << true;
     }
 
     // JSON interface for the plugins.
@@ -170,6 +174,13 @@ namespace Clientinfo
     //
     void Initializediscovery()
     {
+        // Persistent database entry of known clients.
+        Backend::Database() << "create table if not exists Knownclients ("
+                               "ClientID integer primary key unique not null, "
+                               "Lastseen integer, "
+                               "Username text, "
+                               "Local boolean);";
+
         Backend::Enqueuetask(5000, Updateclients);
         Backend::Network::Registerhandler("Clientdiscovery", Discoveryhandler);
 

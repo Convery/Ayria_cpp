@@ -10,6 +10,9 @@
 
 namespace Backend
 {
+    // Get the client-database.
+    sqlite::database Database();
+
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t Period, void(__cdecl *Callback)());
 
