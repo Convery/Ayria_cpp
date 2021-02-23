@@ -6,7 +6,6 @@
     Abstractions over hooking engines, priority:
     MinHook
     Polyhook::Capstone
-    MHook
     Fallback
 */
 
@@ -34,19 +33,6 @@ namespace Hooking::Minhook
                 return reinterpret_cast<std::uintptr_t>(Trampolinefunction);
             }
         }
-        return 0;
-    }
-}
-#endif
-
-#if defined(HAS_MHOOK)
-namespace Hooking::MHook
-{
-    inline std::uintptr_t Stomphook(std::uintptr_t Target, std::uintptr_t Replacement)
-    {
-        void *Originalfunction = (void *)Target;
-        if (Mhook_SetHook(&Originalfunction, (void *)Replacement))
-            return reinterpret_cast<std::uintptr_t>(Originalfunction);
         return 0;
     }
 }
@@ -292,13 +278,6 @@ namespace Hooking
         #if defined (HAS_POLYHOOK)
         {
             const auto Result = Polyhook::Stomphook(Target, Replacement);
-            if (Result) return Result;
-        }
-        #endif
-
-        #if defined (HAS_MHOOK)
-        {
-            const auto Result = MHook::Stomphook(Target, Replacement);
             if (Result) return Result;
         }
         #endif

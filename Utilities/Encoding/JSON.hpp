@@ -315,15 +315,15 @@ namespace JSON
             {
                 switch (Item.type())
                 {
-                    case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string());
-                    case simdjson::dom::element_type::DOUBLE: return Item.get_double().first;
-                    case simdjson::dom::element_type::UINT64: return Item.get_uint64().first;
-                    case simdjson::dom::element_type::INT64: return Item.get_int64().first;
-                    case simdjson::dom::element_type::BOOL: return Item.get_bool().first;
+                    case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string().value());
+                    case simdjson::dom::element_type::DOUBLE: return Item.get_double().value();
+                    case simdjson::dom::element_type::UINT64: return Item.get_uint64().value();
+                    case simdjson::dom::element_type::INT64: return Item.get_int64().value();
+                    case simdjson::dom::element_type::BOOL: return Item.get_bool().value();
 
                     case simdjson::dom::element_type::OBJECT:
                     {
-                        Object_t Object; Object.reserve(Item.get_object().size());
+                        Object_t Object; Object.reserve(Item.get_object().value().size());
                         for (const auto &[Key, Value] : Item.get_object())
                         {
                             Object.emplace(Key, Parse(Value));
@@ -332,7 +332,7 @@ namespace JSON
                     }
                     case simdjson::dom::element_type::ARRAY:
                     {
-                        Array_t Array; Array.reserve(Item.get_array().size());
+                        Array_t Array; Array.reserve(Item.get_array().value().size());
                         for (const auto &Subitem : Item.get_array())
                         {
                             Array.push_back(Parse(Subitem));

@@ -55,16 +55,13 @@ else()
     endif()
 endif()
 
-# If we have VCPKG installed, add the directories based on a common package.
-find_package(OPENSSL)
-if(OPENSSL_FOUND)
-    find_path(VCPKG_INC openssl/aes.h)
-    find_library(VCPKG_LIB_RAW libssl.lib)
-    get_filename_component(VCPKG_LIB ${VCPKG_LIB_RAW} DIRECTORY)
-
-    include_directories(${VCPKG_INC})
-    link_directories(${VCPKG_LIB})
-endif()
+# Try to add the lib directories based on a required package.
+find_package(OpenSSL REQUIRED)
+find_path(STD_INC openssl/aes.h)
+find_library(STD_LIB_RAW libssl.lib)
+get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
+include_directories(${STD_INC})
+link_directories(${STD_LIB})
 
 # Global utilities.
 include_directories("${PROJECT_SOURCE_DIR}")

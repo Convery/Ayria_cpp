@@ -34,13 +34,7 @@
 #define HAS_OPENSSL
 #endif
 
-// Generic hooking library for Windows.
-#if __has_include(<mhook-lib/mhook.h>)
-#pragma comment(lib, "mhook.lib")
-#include <mhook-lib/mhook.h>
-#define HAS_MHOOK
-#endif
-
+// Generic hooking library.
 #if __has_include(<MinHook.h>)
 #define HAS_MINHOOK
 #if defined(__x86_64__) || defined(_M_X64)
@@ -68,6 +62,13 @@
 #if __has_include(<polyhook2/IHook.hpp>)
 #pragma comment(lib, "PolyHook_2.lib")
 #define HAS_POLYHOOK
+#endif
+
+// C++ wrapper around Sqlite3.
+#if __has_include(<sqlite_modern_cpp.h>)
+#pragma comment(lib, "sqlite3.lib")
+#include <sqlite_modern_cpp.h>
+#define HAS_SQLITE
 #endif
 
 // Agner Fogs SIMD library.
@@ -103,7 +104,7 @@
 #endif
 
 // Googles extensions/alternatives to the STL.
-#if __has_include(<absl/random/random.h>)
+#if __has_include(<absl/base/config.h>)
 #define HAS_ABSEIL
 
 #include <absl/container/inlined_vector.h>
@@ -118,7 +119,7 @@
 #include <absl/strings/str_cat.h>
 #include <absl/random/random.h>
 
-// NOTE(tcn): Can't be arsed to update these, so just ls | grep all and let the linker figure it out.
+// NOTE(tcn): Can't be arsed to update these, so just ls | grep all and let the linker figure it out if it fails..
 #pragma comment(lib, "absl_bad_any_cast_impl.lib")
 #pragma comment(lib, "absl_bad_optional_access.lib")
 #pragma comment(lib, "absl_bad_variant_access.lib")
@@ -179,7 +180,6 @@
 #pragma comment(lib, "absl_throw_delegate.lib")
 #pragma comment(lib, "absl_time.lib")
 #pragma comment(lib, "absl_time_zone.lib")
-#pragma comment(lib, "absl_wyhash.lib")
 
 template <class K, class V,
           class Hash = absl::container_internal::hash_default_hash<K>,
