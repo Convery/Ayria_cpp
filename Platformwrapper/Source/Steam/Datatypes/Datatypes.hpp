@@ -82,4 +82,7 @@ namespace Steam
 
     using HSteamPipe = int32_t;
     using HSteamUser = int32_t;
+    using HSteamCall = int32_t;
+
+    using FriendsGroupID_t = int16_t;
 }

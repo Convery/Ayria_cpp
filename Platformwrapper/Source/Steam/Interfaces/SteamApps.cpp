@@ -9,6 +9,44 @@
 
 namespace Steam
 {
+    static bool Initialized = false;
+    static sqlite::database Database()
+    {
+        try
+        {
+            sqlite::sqlite_config Config{};
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READWRITE| sqlite::OpenFlags::FULLMUTEX;
+            auto DB = sqlite::database("./Ayria/Steam.db", Config);
+
+            if (!Initialized)
+            {
+                DB << "create table if not exists DLCInfo ("
+                      "DLCID integer primary key unique not null, "
+                      "Checkfile text, "
+                      "AppID integer, "
+                      "Name text);";
+
+                DB << "create table if not exists DLCData ("
+                      "AppID integer, "
+                      "Key text, "
+                      "Value text);";
+
+                DB << "create table if not exists Appinfo ("
+                    "AppID integer primary key unique not null, "
+                    "Languages text);";
+
+                Initialized = true;
+            }
+
+            return DB;
+        }
+        catch (std::exception &e)
+        {
+            Errorprint(va("Could not connect to the database: %s", e.what()));
+            return sqlite::database(":memory:");
+        }
+    }
+
     struct SteamApps
     {
         enum ERegisterActivationCodeResult : uint32_t
@@ -22,43 +60,21 @@ namespace Steam
 
         bool BGetDLCDataByIndex(int32_t iDLC, AppID_t *pAppID, bool *pbAvailable, char *pchName, int32_t cchNameBufferSize)
         {
-            static const auto DLCInfo = []
+            bool Result{};
+
+            Database() << "select * from DLCInfo where AppID = ? limit 1 offset ?;" << Global.ApplicationID << iDLC
+                >> [&](uint32_t DLCID, const std::string &Checkfile, uint32_t AppID, const std::string &Name)
             {
-                const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Storage/SteamApps.json"));
-                const auto App = Config.value(va("%u", Global.ApplicationID));
-                return App.value<JSON::Array_t>("DLCInfo");
-            }();
+                if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
+                *pbAvailable = FS::Fileexists(Checkfile);
+                *pAppID = AppID;
+                Result = true;
+            };
 
-            // Off-by-one error in the game?
-            if (DLCInfo.size() <= iDLC) return false;
-
-            for (const auto &DLC : DLCInfo)
-            {
-                if (iDLC--) continue;
-                if (!DLC.contains("ID") || !DLC.contains("Name") || !DLC.contains("Checkfile"))
-                {
-                    Errorprint(va("Malformed DLC data in SteamApps.json for app %u", Global.ApplicationID));
-                    return false;
-                }
-
-                const auto Name = DLC.value<std::string>("Name");
-                std::memcpy(pchName, Name.c_str(), std::min(int32_t(Name.size()), cchNameBufferSize));
-                *pbAvailable = FS::Fileexists(DLC.value<std::string>("Checkfile"));
-                *pAppID = DLC.value<uint32_t>("ID");
-                break;
-            }
-
-            return true;
+            return Result;
         }
         bool GetDlcDownloadProgress(AppID_t nAppID, uint64_t *punBytesDownloaded, uint64_t *punBytesTotal)
         {
-            if (BIsDlcInstalled(nAppID))
-            {
-                *punBytesDownloaded = 100;
-                *punBytesTotal = 100;
-                return true;
-            }
-
             return false;
         }
         SteamAPICall_t GetFileDetails(const char *pszFileName)
@@ -80,22 +96,16 @@ namespace Steam
         }
         bool BIsDlcInstalled(AppID_t appID)
         {
-            static const auto DLCInfo = []
-            {
-                const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Storage/SteamApps.json"));
-                const auto App = Config.value(va("%u", Global.ApplicationID));
-                return App.value<JSON::Array_t>("DLCInfo");
-            }();
+            bool Result{};
 
-            for (const auto &DLC : DLCInfo)
+            Database() << "select Checkfile from DLCInfo where AppID = ? limit 1;" << Global.ApplicationID
+                >> [&](const std::string &Checkfile)
             {
-                if (appID == DLC.value<uint32_t>("ID"))
-                {
-                    return FS::Fileexists(DLC.value<std::string>("Checkfile"));
-                }
-            }
+                Result = FS::Fileexists(Checkfile);
+            };
 
-            return FS::Fileexists(L"./Ayria/DEV_DLC");
+            if (!Result) Result = FS::Fileexists(L"./Ayria/DEV_DLC");
+            return Result;
         }
         bool BIsAppInstalled(AppID_t appID)
         {
@@ -128,24 +138,23 @@ namespace Steam
         }
         int32_t GetDLCCount()
         {
-            static const auto DLCInfo = []
-            {
-                const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Storage/SteamApps.json"));
-                const auto App = Config.value(va("%u", Global.ApplicationID));
-                return App.value<JSON::Array_t>("DLCInfo");
-            }();
-
-            return int32_t(DLCInfo.size());
+            int32_t Count{};
+            Database() << "select count(*) from  DLCInfo where AppID = ?;" << Global.ApplicationID >> Count;
+            return Count;
         }
 
         int32_t GetAppData(AppID_t nAppID, const char *pchKey, char *pchValue, int32_t cchValueMax)
         {
-            const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Storage/SteamApps.json"));
-            const auto Appdata = Config.value(va("%u", nAppID)).value("Appdata");
-            const auto Value = Appdata.value(pchKey, ""s);
+            int32_t Result{};
 
-            std::memcpy(pchValue, Value.c_str(), std::min(int32_t(Value.size()), cchValueMax));
-            return std::min(int32_t(Value.size()), cchValueMax);
+            Database() << "select Value from DLCData where AppID = ? and Key = ? limit 1;"
+                << nAppID << pchKey >> [&](const std::string &Value)
+            {
+                std::strncpy(pchValue, Value.c_str(), cchValueMax);
+                Result = std::min(Value.size(), size_t(cchValueMax));
+            };
+
+            return Result;
         }
         uint32_t GetAppInstallDir(AppID_t appID, char *pchFolder, uint32_t cchFolderBufferSize)
         {
@@ -156,7 +165,7 @@ namespace Steam
             }
 
             // We need to contact Steam for this information, maybe in a future Ayria version.
-            Traceprint();
+            Errorprint(va("Need to contact steam about where AppID %u is installed.", appID));
             return 0;
         }
         uint32_t GetInstalledDepots1(AppID_t appID, DepotID_t *pvecDepots, uint32_t cMaxDepots)
@@ -249,22 +258,11 @@ namespace Steam
         }
         const char *GetAvailableGameLanguages()
         {
-            static const auto Appinfo = []
-            {
-                const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Storage/SteamApps.json"));
-                return Config.value(va("%u", Global.ApplicationID));
-            }();
+            static std::string Cache;
 
-            std::string List{ *Global.Locale };
-            for (const std::string Item : Appinfo.value<JSON::Array_t>("Languages"))
-            {
-                List += ",";
-                List += Item;
-            }
-
-            static std::string Heapresult;
-            Heapresult = std::move(List);
-            return Heapresult.c_str();
+            Database() << "select Languages from Appinfo where AppID = ? limit 1;" >> Cache;
+            if (Cache.empty()) Cache = *Global.Locale;
+            return Cache.c_str();
         }
         const char *GetCurrentGameLanguage()
         {
