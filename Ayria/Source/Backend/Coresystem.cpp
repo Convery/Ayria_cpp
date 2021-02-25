@@ -17,7 +17,9 @@ namespace Backend
     {
         try
         {
-            return sqlite::database("./Ayria/Client.db");
+            sqlite::sqlite_config Config{};
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
+            return sqlite::database("./Ayria/Client.db", Config);
         }
         catch (std::exception &e)
         {

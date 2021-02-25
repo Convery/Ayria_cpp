@@ -23,6 +23,7 @@ namespace Social::Groups
     struct Group_t
     {
         GroupID_t GroupID;
+        std::u8string Groupname;
         Hashset<uint32_t> MemberIDs;
         Hashmap<uint32_t, JSON::Value_t> Memberdata;
     };
@@ -212,6 +213,7 @@ namespace Social::Groups
         // Create a new group as host, optionally request a remote host for it.
         static std::string __cdecl Creategroup(JSON::Value_t &&Request)
         {
+            const auto Groupname = Request.value<std::u8string>("Groupname");
             const auto Memberlimit = Request.value<uint8_t>("Memberlimit");
             const auto Selfhosted = Request.value<bool>("Selfhosted");
 
@@ -230,6 +232,7 @@ namespace Social::Groups
             Newgroup.GroupID.AdminID = Global.UserID;
             Newgroup.MemberIDs.insert(Global.UserID);
             Newgroup.GroupID.Limit = Memberlimit;
+            Newgroup.Groupname = Groupname;
 
             Localgroups[Newgroup.GroupID.Raw] = Newgroup;
             onGroupstatuschange(Newgroup.GroupID.Raw);
@@ -467,8 +470,9 @@ namespace Social::Groups
                     Members.emplace_back(ID);
 
                 Local.emplace_back(JSON::Object_t({
+                    { "Groupname", Entry.Groupname },
                     { "GroupID", GroupID },
-                    { "Members", Members}
+                    { "Members", Members }
                 }));
             }
             for (const auto &[GroupID, Entry] : Remotegroups)
@@ -480,8 +484,9 @@ namespace Social::Groups
                     Members.emplace_back(ID);
 
                 Remote.emplace_back(JSON::Object_t({
+                    { "Groupname", Entry.Groupname },
                     { "GroupID", GroupID },
-                    { "Members", Members}
+                    { "Members", Members }
                 }));
             }
 

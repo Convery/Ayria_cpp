@@ -12,7 +12,7 @@ namespace Backend::API
 {
     using Handler_t = struct { LZString_t Name; Callback_t Handler; LZString_t Usage; };
     static Hashmap<uint32_t, Handler_t> Requesthandlers{};
-    static Ringbuffer_t<std::string, 6> Results{};
+    static Ringbuffer_t<std::string, 16> Results{};
     static std::string Failurestring{};
 
     // static std::string __cdecl Callback(JSON::Value_t &&Request);
@@ -73,7 +73,7 @@ namespace Backend::API
             return Failurestring.c_str();
         }
 
-        // Save the result on the heap for 6 calls.
+        // Save the result on the heap for 16 calls.
         return Results.push_back(Result)->c_str();
     }
 

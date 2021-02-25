@@ -68,14 +68,14 @@ namespace Social::Relations
         {
             Relationflags_t Flags{};
 
-            const auto Username = Request.value<std::u8string>("Username");
+            auto Username = Request.value<std::u8string>("Username");
             const auto UserID = Request.value<uint32_t>("UserID");
             Flags.isBlocked = Request.value<bool>("isBlocked");
             Flags.isFriend = Request.value<bool>("isFriend");
 
             // We really need an online ID..
-            if (!UserID || !Clientinfo::isClientonline(UserID)) return {};
-            if (!Flags.Raw) return {};
+            if (!UserID || !Clientinfo::isClientonline(UserID)) return R"({ "Error" : "User is not online." })";
+            if (!Flags.Raw) return R"({ "Error" : "Need relation flags." })";
 
             Relationships[UserID] = { UserID, Username, Flags };
             onRelationchange(UserID);
@@ -84,7 +84,7 @@ namespace Social::Relations
         static std::string __cdecl Remove(JSON::Value_t &&Request)
         {
             const auto UserID = Request.value<uint32_t>("UserID");
-            if (!UserID || !Clientinfo::isClientonline(UserID)) return {};
+            if (!UserID) return R"({ "Error" : "Invalid user." })";
 
             Relationships.erase(UserID);
             onRelationchange(UserID);

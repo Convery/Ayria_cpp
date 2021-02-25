@@ -135,29 +135,19 @@ namespace Clientinfo
     // JSON interface for the plugins.
     namespace API
     {
+        static std::string __cdecl isClientonline(JSON::Value_t &&Request)
+        {
+            const auto ClientID = Request.value<uint32_t>("ClientID");
+
+            const auto Response = JSON::Object_t({ { "isOnline", Clientinfo::isClientonline(ClientID)} });
+            return JSON::Dump(Response);
+        }
         static std::string __cdecl getLocalclients(JSON::Value_t &&)
         {
             JSON::Array_t Result;
             Result.reserve(Localclients.size());
 
             for (const auto &Client : Localclients)
-            {
-                const auto Cryptokey = getCryptokey(Client.UserID);
-                Result.emplace_back(JSON::Object_t({
-                    { "Username", Client.Username ? *Client.Username : u8""s },
-                    { "UserID", Client.UserID },
-                    { "Sharedkey", Cryptokey }
-                }));
-            }
-
-            return JSON::Dump(Result);
-        }
-        static std::string __cdecl getRemoteclients(JSON::Value_t &&)
-        {
-            JSON::Array_t Result;
-            Result.reserve(Remoteclients.size());
-
-            for (const auto &Client : Remoteclients)
             {
                 const auto Cryptokey = getCryptokey(Client.UserID);
                 Result.emplace_back(JSON::Object_t({
@@ -184,7 +174,7 @@ namespace Clientinfo
         Backend::Enqueuetask(5000, Updateclients);
         Backend::Network::Registerhandler("Clientdiscovery", Discoveryhandler);
 
+        Backend::API::addEndpoint("Clientinfo::isClientonline", API::isClientonline);
         Backend::API::addEndpoint("Clientinfo::getLocalclients", API::getLocalclients);
-        Backend::API::addEndpoint("Clientinfo::getRemoteclients", API::getRemoteclients);
     }
 }
