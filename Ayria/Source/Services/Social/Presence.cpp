@@ -64,7 +64,7 @@ namespace Social::Presence
     void Initialize()
     {
         // Send presence if outdated.
-        Backend::Enqueuetask(1000, Sendpresence);
+        Backend::Enqueuetask(5000, Sendpresence);
 
         // Register the network handlers.
         Backend::Network::Registerhandler("Presenceupdate", Presencehandler);
