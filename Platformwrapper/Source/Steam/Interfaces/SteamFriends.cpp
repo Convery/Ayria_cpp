@@ -9,540 +9,1006 @@
 
 namespace Steam
 {
+    struct GameInfo_t
+    {
+        GameID_t m_gameID;
+        uint32_t m_unGameIP;
+        uint16_t m_usGamePort;
+        uint16_t m_usQueryPort;
+        SteamID_t m_steamIDLobby;
+    };
+    static Hashmap<uint64_t, GameInfo_t> Friendsgames;
+    uint32_t Personastate;
+
+    static sqlite::database Database()
+    {
+        try
+        {
+            sqlite::sqlite_config Config{};
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READONLY | sqlite::OpenFlags::FULLMUTEX;
+            return sqlite::database("./Ayria/Client.db", Config);
+        }
+        catch (std::exception &e)
+        {
+            Errorprint(va("Could not connect to the database: %s", e.what()));
+            return sqlite::database(":memory:");
+        }
+    }
+
     struct SteamFriends
     {
-        // Local player information.
-        const char *getPlayername()
+        enum EActivateGameOverlayToWebPageMode
         {
-            static auto Username = Steam.Username.asUTF8();
-            return (char *)Username.c_str();
-        }
-        uint64_t setPlayername_async(const char *pchPersonaName)
+            k_EActivateGameOverlayToWebPageMode_Default = 0,
+            k_EActivateGameOverlayToWebPageMode_Modal = 1
+        };
+        enum EChatRoomEnterResponse
         {
-            const auto Request = new Callbacks::SetPersonaNameResponse_t();
-            const auto RequestID = Callbacks::Createrequest();
-            Request->m_result = EResult::k_EResultOK;
-            Request->m_bLocalSuccess = true;
-            Request->m_bSuccess = true;
+            k_EChatRoomEnterResponseSuccess = 1,				// Success
+            k_EChatRoomEnterResponseDoesntExist = 2,			// Chat doesn't exist (probably closed)
+            k_EChatRoomEnterResponseNotAllowed = 3,				// General Denied - You don't have the permissions needed to join the chat
+            k_EChatRoomEnterResponseFull = 4,					// Chat room has reached its maximum size
+            k_EChatRoomEnterResponseError = 5,					// Unexpected Error
+            k_EChatRoomEnterResponseBanned = 6,					// You are banned from this chat room and may not join
+            k_EChatRoomEnterResponseLimited = 7,				// Joining this chat is not allowed because you are a limited user (no value on account)
+            k_EChatRoomEnterResponseClanDisabled = 8,			// Attempt to join a clan chat when the clan is locked or disabled
+            k_EChatRoomEnterResponseCommunityBan = 9,			// Attempt to join a chat when the user has a community lock on their account
+            k_EChatRoomEnterResponseMemberBlockedYou = 10,		// Join failed - some member in the chat has blocked you from joining
+            k_EChatRoomEnterResponseYouBlockedMember = 11,		// Join failed - you have blocked some member already in the chat
+            k_EChatRoomEnterResponseNoRankingDataLobby = 12,	// There is no ranking data available for the lobby
+            k_EChatRoomEnterResponseNoRankingDataUser = 13,		// There is no ranking data available for the user
+            k_EChatRoomEnterResponseRankOutOfRange = 14,		// The user is out of the allowable ranking range
+        };
+        enum EOverlayToStoreFlag
+        {
+            k_EOverlayToStoreFlag_None = 0,
+            k_EOverlayToStoreFlag_AddToCart = 1,
+            k_EOverlayToStoreFlag_AddToCartAndShow = 2,
+        };
+        enum EFriendRelationship
+        {
+            k_EFriendRelationshipNone = 0,
+            k_EFriendRelationshipBlocked = 1,			// this doesn't get stored; the user has just done an Ignore on an friendship invite
+            k_EFriendRelationshipRequestRecipient = 2,
+            k_EFriendRelationshipFriend = 3,
+            k_EFriendRelationshipRequestInitiator = 4,
+            k_EFriendRelationshipIgnored = 5,			// this is stored; the user has explicit blocked this other user from comments/chat/etc
+            k_EFriendRelationshipIgnoredFriend = 6,
+            k_EFriendRelationshipSuggested_DEPRECATED = 7,		// was used by the original implementation of the facebook linking feature, but now unused.
 
-            setPlayername(pchPersonaName);
+            // keep this updated
+            k_EFriendRelationshipMax = 8,
+        };
+        enum EUserRestriction
+        {
+            k_nUserRestrictionNone = 0,	// no known chat/content restriction
+            k_nUserRestrictionUnknown = 1,	// we don't know yet (user offline)
+            k_nUserRestrictionAnyChat = 2,	// user is not allowed to (or can't) send/recv any chat
+            k_nUserRestrictionVoiceChat = 4,	// user is not allowed to (or can't) send/recv voice chat
+            k_nUserRestrictionGroupChat = 8,	// user is not allowed to (or can't) send/recv group chat
+            k_nUserRestrictionRating = 16,	// user is too young according to rating in current region
+            k_nUserRestrictionGameInvites = 32,	// user cannot send or recv game invites (e.g. mobile)
+            k_nUserRestrictionTrading = 64,	// user cannot participate in trading (console, mobile)
+        };
+        enum EChatEntryType
+        {
+            k_EChatEntryTypeInvalid = 0,
+            k_EChatEntryTypeChatMsg = 1,		// Normal text message from another user
+            k_EChatEntryTypeTyping = 2,			// Another user is typing (not used in multi-user chat)
+            k_EChatEntryTypeInviteGame = 3,		// Invite from other user into that users current game
+            k_EChatEntryTypeEmote = 4,			// text emote message (deprecated, should be treated as ChatMsg)
+            //k_EChatEntryTypeLobbyGameStart = 5,	// lobby game is starting (dead - listen for LobbyGameCreated_t callback instead)
+            k_EChatEntryTypeLeftConversation = 6, // user has left the conversation ( closed chat window )
+            // Above are previous FriendMsgType entries, now merged into more generic chat entry types
+            k_EChatEntryTypeEntered = 7,		// user has entered the conversation (used in multi-user chat and group chat)
+            k_EChatEntryTypeWasKicked = 8,		// user was kicked (data: 64-bit steamid of actor performing the kick)
+            k_EChatEntryTypeWasBanned = 9,		// user was banned (data: 64-bit steamid of actor performing the ban)
+            k_EChatEntryTypeDisconnected = 10,	// user disconnected
+            k_EChatEntryTypeHistoricalChat = 11,	// a chat message from user's chat history or offilne message
+            //k_EChatEntryTypeReserved1 = 12, // No longer used
+            //k_EChatEntryTypeReserved2 = 13, // No longer used
+            k_EChatEntryTypeLinkBlocked = 14, // a link was removed by the chat filter.
+        };
+        enum EPersonaState
+        {
+            k_EPersonaStateOffline = 0,			// friend is not currently logged on
+            k_EPersonaStateOnline = 1,			// friend is logged on
+            k_EPersonaStateBusy = 2,			// user is on, but busy
+            k_EPersonaStateAway = 3,			// auto-away feature
+            k_EPersonaStateSnooze = 4,			// auto-away for a long time
+            k_EPersonaStateLookingToTrade = 5,	// Online, trading
+            k_EPersonaStateLookingToPlay = 6,	// Online, wanting to play
+            k_EPersonaStateInvisible = 7,		// Online, but appears offline to friends.  This status is never published to clients.
+            k_EPersonaStateMax,
+        };
+        enum EFriendFlags
+        {
+            k_EFriendFlagNone = 0x00,
+            k_EFriendFlagBlocked = 0x01,
+            k_EFriendFlagFriendshipRequested = 0x02,
+            k_EFriendFlagImmediate = 0x04,			// "regular" friend
+            k_EFriendFlagClanMember = 0x08,
+            k_EFriendFlagOnGameServer = 0x10,
+            k_EFriendFlagHasPlayedWith	= 0x20,	// not currently used
+            k_EFriendFlagFriendOfFriend	= 0x40, // not currently used
+            k_EFriendFlagRequestingFriendship = 0x80,
+            k_EFriendFlagRequestingInfo = 0x100,
+            k_EFriendFlagIgnored = 0x200,
+            k_EFriendFlagIgnoredFriend = 0x400,
+            k_EFriendFlagSuggested = 0x800,	// not used
+            k_EFriendFlagChatMember = 0x1000,
+            k_EFriendFlagAll = 0xFFFF,
+        };
+        union GroupID_t
+        {
+            uint64_t Raw;
+            struct
+            {
+                uint32_t AdminID;   // Creator.
+                uint16_t RoomID;    // Random.
+                uint8_t HostID;     // Server, 0 == localhost.
+                uint8_t Limit;      // Users.
+            };
+        };
 
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamFriendsCallbacks + 47, Request);
-            return RequestID;
-        }
-        void setPlayername(const char *pchPersonaName)
+        AppID_t GetFriendCoplayGame(SteamID_t steamIDFriend)
         {
-            Traceprint();
-            Steam.Username = std::string(pchPersonaName);
-        }
-        uint32_t getPlayerstate()
-        {
-            return 1; // EPersonaState::Online
-        }
-        void setPlayerstate(uint32_t ePersonaState)
-        {
-            Traceprint();
-        }
-        void SetInGameVoiceSpeaking(CSteamID steamIDUser, bool bSpeaking)
-        {
-            Traceprint();
-        }
-        uint32_t GetUserRestrictions()
-        {
-            Traceprint();
+            if (Friendsgames.contains(steamIDFriend.FullID))
+                return Friendsgames[steamIDFriend.FullID].m_gameID.AppID;
             return 0;
         }
-        void SetPlayedWith(CSteamID steamIDUserPlayedWith)
+        EFriendRelationship GetFriendRelationship(SteamID_t steamIDFriend)
         {
-            Traceprint();
-        }
-
-        // Friends-list management.
-        bool AddFriend(CSteamID steamIDFriend)
-        {
-            Traceprint();
-            return Social::addRelation(steamIDFriend.GetAccountID());
-        }
-        uint32_t AddFriendByName(const char *pchEmailOrAccountName)
-        {
-            return Social::addRelation(0, Encoding::toUTF8(pchEmailOrAccountName));
-        }
-        bool RemoveFriend(CSteamID steamIDFriend)
-        {
-            Traceprint();
-            Social::removeRelation(steamIDFriend.GetAccountID());
-            return true;
-        }
-        bool HasFriend(CSteamID steamIDFriend)
-        {
-            const auto FriendID = steamIDFriend.GetAccountID();
-            for (const auto &Friend : Social::getFriends())
+            if (const auto Callback = Ayria.JSONRequest)
             {
-                if (Friend->UserID == FriendID) return true;
-            }
-            return false;
-        }
-        bool HasFriend_Filtered(CSteamID steamIDFriend, uint32_t iFriendFlags)
-        {
-            return HasFriend(steamIDFriend);
-        }
-        int GetFriendCount()
-        {
-            return int(Social::getFriends().size());
-        }
-        int GetFriendCount_Filtered(uint32_t iFriendFlags)
-        {
-            return GetFriendCount();
-        }
-        int GetFriendCountFromSource(CSteamID steamIDSource)
-        {
-            return GetFriendCount();
-        }
-        CSteamID GetFriendByIndex(int iFriend)
-        {
-            for (const auto &Friend : Social::getFriends())
-            {
-                if (iFriend--) continue;
-                return uint64_t(0x110000100000000ULL | Friend->UserID);
-            }
-            return CSteamID();
-        }
-        CSteamID GetFriendByIndex_Filtered(int iFriend, uint32_t iFriendFlags)
-        {
-            return GetFriendByIndex(iFriend);
-        }
-        uint32_t GetBlockedFriendCount()
-        {
-            Traceprint();
-            return 0;
-        }
-        CSteamID GetFriendFromSourceByIndex(CSteamID steamIDSource, int iFriend)
-        {
-            return GetFriendByIndex(iFriend);
-        }
-        bool RequestUserInformation(CSteamID steamIDUser, bool bRequireNameOnly)
-        {
-            Traceprint();
-            return false;
-        }
-        const char *GetFriendPersonaNameHistory(CSteamID steamIDFriend, int iPersonaName)
-        {
-            Traceprint();
-            return "";
-        }
+                const auto Response = Callback("Social::Relations::List", "{}");
+                const JSON::Array_t Array = JSON::Parse(Response);
 
-        // Friend information.
-        bool GetFriendGamePlayed_64(CSteamID steamIDFriend, uint64_t *pulGameID, uint32_t *punGameIP, uint16_t *pusGamePort)
-        {
-            Traceprint();
-            return false;
-        }
-        bool GetFriendGamePlayed_32(CSteamID steamIDFriend, int32_t *pnGameID, uint32_t *punGameIP, uint16_t *pusGamePort)
-        {
-            Traceprint();
-            return false;
-        }
-        bool GetFriendGamePlayedEx_64(CSteamID steamDIFriend, uint64_t *pulGameID, uint32_t *punGameIP, uint16_t *pusGamePort, uint16_t *pusQueryPort)
-        {
-            Traceprint();
-            return false;
-        }
-        bool GetFriendGamePlayed_Struct(CSteamID steamIDFriend, struct FriendGameInfo_t *pFriendGameInfo)
-        {
-            return false;
-        }
-        int GetFriendAvatar(CSteamID steamIDFriend)
-        {
-            Traceprint();
-            return 0;
-        }
-        int GetFriendAvatar_Size(CSteamID steamIDFriend, int eAvatarSize)
-        {
-            return GetFriendAvatar(steamIDFriend);
-        }
-        uint32_t GetFriendRelationship(CSteamID steamIDFriend)
-        {
-            return 3; // EFriendRelationship::Friend
-        }
-        uint32_t GetFriendPersonaState(CSteamID steamIDFriend)
-        {
-            const auto &[ID, Name] = Social::getUser(steamIDFriend.GetAccountID());
-            return ID != 0;
-        }
-        const char *GetFriendPersonaName(CSteamID steamIDFriend)
-        {
-            const auto FriendID = steamIDFriend.GetAccountID();
-
-            for (const auto &Friend : Social::getFriends())
-            {
-                if (Friend->UserID == FriendID)
+                for (const auto &Item : Array)
                 {
-                    return (char *)Friend->Username.c_str();
+                    const auto UserID = Item.value<uint32_t>("UserID");
+                    if (UserID == steamIDFriend.UserID)
+                    {
+                        if (Item.value<bool>("isFriend"))
+                        {
+                            if (Item.value<bool>("isMututal"))
+                                return EFriendRelationship::k_EFriendRelationshipFriend;
+                            else
+                                return EFriendRelationship::k_EFriendRelationshipRequestRecipient;
+                        }
+
+                        if (Item.value<bool>("isBlocked"))
+                            return EFriendRelationship::k_EFriendRelationshipBlocked;
+
+                        break;
+                    }
                 }
             }
 
-            return "Unknown";
+            return EFriendRelationship::k_EFriendRelationshipNone;
         }
-        int GetSmallFriendAvatar(CSteamID steamIDFriend)
+        EPersonaState GetFriendPersonaState(SteamID_t steamIDFriend)
         {
-            return GetFriendAvatar(steamIDFriend);
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = va("{ \"ClientID\" : %u }", steamIDFriend.UserID);
+                const auto Response = Callback("Clientinfo::isClientonline", Request.c_str());
+                const auto isOnline = JSON::Parse(Response).value<bool>("isOnline");
+
+                return isOnline ? EPersonaState::k_EPersonaStateOnline : EPersonaState::k_EPersonaStateOffline;
+            }
+            return EPersonaState::k_EPersonaStateOffline;
         }
-        int GetMediumFriendAvatar(CSteamID steamIDFriend)
+        EPersonaState GetPersonaState()
         {
-            return GetFriendAvatar(steamIDFriend);
+            return EPersonaState(Personastate);
         }
-        int GetLargeFriendAvatar(CSteamID steamIDFriend)
+        EUserRestriction GetUserRestrictions()
         {
-            return GetFriendAvatar(steamIDFriend);
+            return k_nUserRestrictionNone;
+        }
+        FriendsGroupID_t GetFriendsGroupIDByIndex(int iFG)
+        {
+            return GroupID_t{ GetClanByIndex(iFG).FullID }.RoomID;
+        }
+
+        HSteamCall AddFriendByName(const char *pchEmailOrAccountName)
+        {
+            uint32_t AccountID{};
+
+            Database() << "select ClientID from Knownclients where Username = ?;"
+                       << std::string(pchEmailOrAccountName)
+                       >> AccountID;
+
+            if (AccountID)
+            {
+                SteamID_t ID;
+                ID.UserID = AccountID;
+                AddFriend(ID);
+            }
+
+            return 0;
+        }
+        HSteamCall InviteFriendByEmail0(const char *pchEmailOrAccountName)
+        {
+            return AddFriendByName(pchEmailOrAccountName);
+        }
+
+        SteamAPICall_t DownloadClanActivityCounts(SteamID_t *psteamIDClans, int cClansToRequest)
+        {
+            return 0;
+        }
+        SteamAPICall_t EnumerateFollowingList(uint32_t unStartIndex)
+        {
+            return 0;
+        }
+        SteamAPICall_t GetFollowerCount(SteamID_t steamID)
+        {
+            return 0;
+        }
+        SteamAPICall_t IsFollowing(SteamID_t steamID)
+        {
+            return 0;
+        }
+        SteamAPICall_t JoinClanChatRoom(SteamID_t groupID)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { "GroupID", groupID.FullID } });
+                const auto Response = Callback("Social::Groups::Requestjoin", JSON::Dump(Request).c_str());
+
+                if (!std::strstr(Response, "Error"))
+                {
+                    const auto RequestID = Callbacks::Createrequest();
+
+                    std::thread([=]()
+                    {
+                        for (int i = 0; i < 60; ++i)
+                        {
+                            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                            std::vector<uint32_t> MemberIDs{};
+                            Database() << "select MemberIDs from Groups where GroupID = ?;"
+                                << groupID.FullID >> MemberIDs;
+
+                            if (MemberIDs.contains(Global.XUID.UserID))
+                            {
+                                const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
+                                Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseSuccess;
+                                Response->m_steamIDClanChat = groupID;
+
+                                Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
+                                return;
+                            }
+                        }
+
+                        const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
+                        Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseFull;
+                        Response->m_steamIDClanChat = groupID;
+                        Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
+
+                    }).detach();
+                    return RequestID;
+                }
+            }
+
+            return 0;
+        }
+        SteamAPICall_t RequestClanOfficerList(SteamID_t steamIDClan)
+        {
+            return 0;
+        }
+        SteamAPICall_t SetPersonaName1(const char *pchPersonaName)
+        {
+            SetPersonaName0(pchPersonaName);
+
+            const auto Response = new Callbacks::SetPersonaNameResponse_t();
+            const auto RequestID = Callbacks::Createrequest();
+            Response->m_result = EResult::k_EResultOK;
+            Response->m_bSuccess = true;
+
+            Callbacks::Completerequest(RequestID, Callbacks::Types::SetPersonaNameResponse_t, Response);
+            return RequestID;
+        }
+
+        SteamID_t GetChatMemberByIndex(SteamID_t groupID, int iIndex)
+        {
+            SteamID_t Result = Global.XUID;
+
+            std::vector<uint32_t> MemberIDs{};
+            Database() << "select MemberIDs from Groups where GroupID = ?;"
+                       << groupID.FullID >> MemberIDs;
+
+            if (MemberIDs.size() < iIndex) return {};
+            else Result.UserID = MemberIDs[iIndex];
+
+            return Result;
+        }
+        SteamID_t GetClanByIndex(int iClan)
+        {
+            std::vector<uint64_t> GroupIDs{};
+            Database() << "select GroupID from Groups;" >> GroupIDs;
+
+            for (const auto &Item : GroupIDs)
+            {
+                if (GroupID_t{ Item }.HostID == 0xFF && iClan-- == 0)
+                    return { Item };
+            }
+
+            return {};
+        }
+        SteamID_t GetClanOfficerByIndex(SteamID_t steamIDClan, int iOfficer)
+        { return GetClanOwner(steamIDClan); }
+        SteamID_t GetClanOwner(SteamID_t steamIDClan)
+        {
+            SteamID_t ID = Global.XUID;
+            ID.UserID = GroupID_t{ steamIDClan.FullID }.AdminID;
+            return ID;
+        }
+        SteamID_t GetCoplayFriend(int iCoplayFriend)
+        {
+            return {};
+        }
+        SteamID_t GetFriendByIndex0(int iFriend)
+        {
+            return GetFriendByIndex1(iFriend, k_EFriendFlagImmediate);
+        }
+        SteamID_t GetFriendByIndex1(int iFriend, EFriendFlags iFriendFlags)
+        {
+            SteamID_t Result{ 0x1100001DEADC0DEULL };
+
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Response = Callback("Social::Relations::List", "{}");
+                const JSON::Array_t Array = JSON::Parse(Response);
+
+                if (const auto & Item : Array)
+                {
+                    if (iFriend--) continue;
+                    Result.UserID = Item.value<uint32_t>("UserID");
+                    break;
+                }
+            }
+
+            return Result;
+        }
+        SteamID_t GetFriendFromSourceByIndex(SteamID_t steamIDSource, int iFriend)
+        {
+            return GetFriendByIndex0(iFriend);
+        }
+
+        bool AcknowledgeInviteToClan(SteamID_t steamID, bool bAcceptOrDenyClanInvite)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({
+                    { "Accepted", bAcceptOrDenyClanInvite },
+                    { "ClientID", steamID.UserID }
+                });
+                Callback("Social::Groups::answerJoinrequestequest", JSON::Dump(Request).c_str());
+            }
+
+            return true;
+        }
+        bool AddFriend(SteamID_t steamIDFriend)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({
+                    { "Username", GetPlayerNickname(steamIDFriend) },
+                    { "UserID", steamIDFriend.UserID },
+                    { "isFriend", true}
+                });
+
+                Callback("Social::Relations::Insert", JSON::Dump(Request).c_str());
+
+                const auto Request = new Callbacks::FriendAdded_t();
+                Request->m_m_ulSteamID = steamIDFriend.FullID;
+                Request->m_result = EResult::k_EResultOK;
+
+                Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::Types::FriendAdded_t, Request);
+                return true;
+            }
+
+            return false;
+        }
+        bool CloseClanChatWindowInSteam(SteamID_t groupID)
+        { return true; }
+        bool GetClanActivityCounts(SteamID_t steamID, int *pnOnline, int *pnInGame, int *pnChatting)
+        {
+            return false;
+        }
+        bool GetFriendGamePlayed0(SteamID_t steamIDFriend, GameInfo_t *pFriendGameInfo)
+        {
+            if (!Friendsgames.contains(steamIDFriend.FullID)) return false;
+            *pFriendGameInfo = Friendsgames[steamIDFriend.FullID];
+            return true;
+        }
+        bool GetFriendGamePlayed1(SteamID_t steamIDFriend, int32_t *pnGameID, uint32_t *punGameIP, uint16_t *pusGamePort)
+        {
+            if (!Friendsgames.contains(steamIDFriend.FullID)) return false;
+            const auto Entry = &Friendsgames[steamIDFriend.FullID];
+            *pusGamePort = Entry->m_usGamePort;
+            *pnGameID = Entry->m_gameID.AppID;
+            *punGameIP = Entry->m_unGameIP;
+            return true;
+        }
+        bool GetFriendGamePlayed2(SteamID_t steamIDFriend, uint64_t *pulGameID, uint32_t *punGameIP, uint16_t *pusGamePort)
+        {
+            if (!Friendsgames.contains(steamIDFriend.FullID)) return false;
+            const auto Entry = &Friendsgames[steamIDFriend.FullID];
+            *pulGameID = Entry->m_gameID.FullID;
+            *pusGamePort = Entry->m_usGamePort;
+            *punGameIP = Entry->m_unGameIP;
+            return true;
+        }
+        bool GetFriendGamePlayed3(SteamID_t steamIDFriend, uint64_t *pulGameID, uint32_t *punGameIP, uint16_t *pusGamePort, uint16_t *pusQueryPort)
+        {
+            if (!Friendsgames.contains(steamIDFriend.FullID)) return false;
+            const auto Entry = &Friendsgames[steamIDFriend.FullID];
+            *pusQueryPort = Entry->m_usQueryPort;
+            *pulGameID = Entry->m_gameID.FullID;
+            *pusGamePort = Entry->m_usGamePort;
+            *punGameIP = Entry->m_unGameIP;
+            return true;
+        }
+        bool HasFriend0(SteamID_t steamIDFriend)
+        {
+            return HasFriend1(steamIDFriend, k_EFriendFlagImmediate);
+        }
+        bool HasFriend1(SteamID_t steamIDFriend, EFriendFlags iFriendFlags)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Response = Callback("Social::Relations::List", "{}");
+                const JSON::Array_t Array = JSON::Parse(Response);
+
+                for (const auto &Item : Array)
+                {
+                    const auto UserID = Item.value<uint32_t>("UserID");
+                    if (UserID == steamIDFriend.UserID)
+                    {
+                        if (iFriendFlags & k_EFriendFlagBlocked)
+                            if (Item.value<bool>("isBlocked"))
+                                return true;
+
+                        if (iFriendFlags & k_EFriendFlagFriendshipRequested)
+                            if (Item.value<bool>("isFriend"))
+                                return true;
+
+                        if (iFriendFlags & k_EFriendFlagImmediate)
+                            if (Item.value<bool>("isFriend") && Item.value<bool>("isMutual"))
+                                return true;
+
+                        break;
+                    }
+                }
+            }
+
+            return false;
+        }
+        bool InviteFriendByEmail1(const char *emailAddr)
+        {
+            InviteFriendByEmail0(emailAddr);
+            return true;
+        }
+        bool InviteFriendToClan(SteamID_t steamIDfriend, SteamID_t steamIDclan)
+        {
+            const auto Message = JSON::Object_t({
+                { "ClanID", steamIDclan.FullID },
+                { "Type", "Steam_Claninvite" }
+            });
+            const auto Request = JSON::Object_t({
+                { "B64Message", Base64::Encode(JSON::Dump(Message)) },
+                { "UserID", steamIDfriend.UserID }
+            });
+
+            if (const auto Callback = Ayria.JSONRequest)
+                Callback("Social::Messaging::Sendtouser", JSON::Dump(Request).c_str());
+
+            return true;
+        }
+        bool InviteUserToGame(SteamID_t steamIDFriend, const char *pchConnectString)
+        {
+            const auto Message = JSON::Object_t({
+                { "Connectstring", std::string(pchConnectString) },
+                { "Type", "Steam_Gameinvite" }
+            });
+            const auto Request = JSON::Object_t({
+                { "B64Message", Base64::Encode(JSON::Dump(Message)) },
+                { "UserID", steamIDFriend.UserID }
+            });
+
+            if (const auto Callback = Ayria.JSONRequest)
+                Callback("Social::Messaging::Sendtouser", JSON::Dump(Request).c_str());
+
+            return true;
+        }
+        bool IsClanChatAdmin(SteamID_t groupID, SteamID_t userID)
+        {
+            return GroupID_t{ groupID.FullID }.AdminID == userID.UserID;
+        }
+        bool IsClanChatWindowOpenInSteam(SteamID_t groupID)
+        { return false; }
+        bool IsClanOfficialGameGroup(SteamID_t steamIDClan)
+        { return false; }
+        bool IsClanPublic(SteamID_t steamIDClan)
+        {
+            return GroupID_t{ steamIDClan.FullID }.HostID;
+        }
+        bool IsUserInSource(SteamID_t steamIDUser, SteamID_t steamIDSource)
+        {
+            std::vector<uint32_t> MemberIDs{};
+            Database() << "select MemberIDs from Groups where GroupID = ?;"
+                       << steamIDSource.FullID >> MemberIDs;
+
+            return MemberIDs.end() != std::find(MemberIDs.begin(), MemberIDs.end(), steamIDUser.UserID);
+        }
+        bool LeaveClanChatRoom(SteamID_t groupID)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ {"GroupID", groupID.UserID} });
+                Callback("Social::Groups::Notifyleave", JSON::Dump(Request).c_str());
+            }
+
+            return true;
+        }
+        bool OpenClanChatWindowInSteam(SteamID_t groupID)
+        {
+            return false;
+        }
+        bool RegisterProtocolInOverlayBrowser(const char *pchProtocol)
+        {
+            Infoprint(va("%s: %s", __FUNCTION__, pchProtocol));
+            return true;
+        }
+        bool RemoveFriend(SteamID_t steamIDFriend)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { "UserID", steamIDFriend.UserID } });
+                Callback("Social::Relations::Remove", JSON::Dump(Request).c_str());
+                return true;
+            }
+
+            return false;
+        }
+        bool ReplyToFriendMessage(SteamID_t steamIDFriend, const char *pchMsgToSend)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({
+                    { "B64Message", Base64::Encode(pchMsgToSend) },
+                    { "UserID", steamIDFriend.UserID },
+                    { "Private", true }
+                });
+
+                const auto Response = Callback("Social::Messaging::Sendtouser", JSON::Dump(Request).c_str());
+                return !JSON::Parse(Response).contains("Error");
+            }
+
+            return false;
+        }
+        bool RequestUserInformation(SteamID_t steamIDUser, bool bRequireNameOnly)
+        {
+            return true;
+        }
+        bool SendClanChatMessage(SteamID_t groupID, const char *cszMessage)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({
+                    { "B64Message", Base64::Encode(pchMsgToSend) },
+                    { "GroupID", groupID }
+                    });
+
+                const auto Response = Callback("Social::Messaging::Sendtogroup", JSON::Dump(Request).c_str());
+                return !JSON::Parse(Response).contains("Error");
+            }
+
+            return false;
+        }
+        bool SendMsgToFriend1(SteamID_t steamIDFriend, EChatEntryType eFriendMsgType, const void *pvMsgBody, int cubMsgBody)
+        {
+            if (eFriendMsgType != k_EChatEntryTypeChatMsg && eFriendMsgType == k_EChatEntryTypeEmote)
+                return false;
+
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({
+                    { "B64Message", Base64::Encode(std::string_view((char *)pvMsgBody, cubMsgBody)) },
+                    { "UserID", steamIDFriend.UserID },
+                    { "Private", true }
+                });
+
+                const auto Response = Callback("Social::Messaging::Sendtouser", JSON::Dump(Request).c_str());
+                return !JSON::Parse(Response).contains("Error");
+            }
+
+            return false;
+        }
+        bool SetListenForFriendsMessages(bool bInterceptEnabled)
+        { return true; }
+        bool SetRichPresence(const char *pchKey, const char *pchValue)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { std::string(pchKey), std::string(pchValue) } });
+                Callback("Social::Presence::Set", JSON::Dump(Request).c_str());
+                return true;
+            }
+
+            return false;
+        }
+
+        const char *GetClanName(SteamID_t steamIDClan)
+        {
+            static std::string Name{};
+            Database() << "select Groupname from Groups where GroupID = ?;" << steamIDClan.FullID >> Name;
+            return Name.c_str();
+        }
+        const char *GetClanTag(SteamID_t steamIDClan)
+        {
+            return "";
+        }
+        const char *GetFriendPersonaName(SteamID_t steamIDFriend)
+        {
+            static std::string Name{};
+            Database() << "select Username from Knownclients where ClientID = ? limit 1;" << steamIDFriend.UserID >> Name;
+            return Name.c_str();
+        }
+        const char *GetFriendPersonaNameHistory(SteamID_t steamIDFriend, int iPersonaName)
+        {
+            if (iPersonaName == 0) return GetFriendPersonaName(steamIDFriend);
+            else return "";
+        }
+        const char *GetFriendRegValue(SteamID_t steamIDFriend, const char *pchKey)
+        {
+            return GetFriendRichPresence(steamIDFriend, pchKey);
+        }
+        const char *GetFriendRichPresence(SteamID_t steamIDFriend, const char *pchKey)
+        {
+            static std::string Cache;
+            Cache = "";
+
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { "UserID", steamIDFriend.UserID } });
+                const auto Response = Callback("Social::Presence::Get", JSON::Dump(Request).c_str());
+                const auto Map = JSON::Parse(Response);
+
+                Cache = Map.value<std::string>(pchKey);
+                return Cache.c_str();
+            }
+
+            return "";
+        }
+        const char *GetFriendRichPresenceKeyByIndex(SteamID_t steamIDFriend, int iKey)
+        {
+            static std::string Cache;
+            Cache = "";
+
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { "UserID", steamIDFriend.UserID } });
+                const auto Response = Callback("Social::Presence::Get", JSON::Dump(Request).c_str());
+                const JSON::Object_t Map = JSON::Parse(Response);
+
+                for (const auto &[Key, Value] : Map)
+                {
+                    if (iKey-- == 0)
+                    {
+                        Cache = Key;
+                        return Cache.c_str();
+                    }
+                }
+            }
+
+            return "";
+        }
+        const char *GetFriendsGroupName(FriendsGroupID_t friendsGroupID)
+        {
+            static std::string Name{};
+            std::vector<uint64_t> GroupIDs{};
+            Database() << "select GroupID from Groups;" >> GroupIDs;
+
+            for (const auto &ID : GroupIDs)
+            {
+                if (GroupID_t{ ID }.RoomID == friendsGroupID)
+                {
+                    Database() << "select Groupname from Groups where GroupID = ?;" << ID >> Name;
+                    return Name.c_str();
+                }
+            }
+
+            return "";
+        }
+        const char *GetPersonaName()
+        {
+            // Persona names 'should' support raw UTF8..
+            return (const char *)Global.Username;
+        }
+        const char *GetPlayerNickname(SteamID_t steamIDPlayer)
+        {
+            static std::string Cache{};
+
+            Database() << "select Username from Knownclients where ClientID = ?;"
+                       << steamIDPlayer.UserID
+                       >> Cache;
+
+            return Cache.c_str();
+        }
+
+        int GetChatIDOfChatHistoryStart(SteamID_t steamIDFriend)
+        { return 0; }
+        int GetChatMessage(SteamID_t steamIDFriend, int iChatID, void *pvData, int cubData, EChatEntryType *peFriendMsgType)
+        {
+            uint32_t Timestamp{};  std::string B64Message{};
+            Database() << "select Timestamp, B64Message from Socialmessages where SourceID = ? limit 1 offset ?;"
+                       << steamIDFriend.UserID << iChatID >> std::tie(Timestamp, B64Message);
+
+            const auto Decoded = Base64::Decode(B64Message);
+            int Min = std::min(cubData, int(Decoded.size()));
+
+            *peFriendMsgType = (time(NULL) - Timestamp) > 30 ? k_EChatEntryTypeHistoricalChat : k_EChatEntryTypeChatMsg;
+            std::memcpy(pvData, Decoded.data(), Min);
+            return Min;
+        }
+        int GetClanChatMemberCount(SteamID_t groupID)
+        {
+            std::vector<uint32_t> MemberIDs{};
+            Database() << "select MemberIDs from Groups where GroupID = ?;"
+                       << groupID.FullID >> MemberIDs;
+
+            return MemberIDs.size();
+        }
+        int GetClanChatMessage(SteamID_t groupID, int iMessage, void *prgchText, int cchTextMax, EChatEntryType *peChatEntryType, SteamID_t *pSteamIDChatter)
+        {
+            uint32_t SenderID{};  std::string B64Message{};
+            Database() << "select SourceID, B64Message from Socialmessages where GroupID = ? limit 1 offset ?;"
+                       << groupID.FullID << iMessage >> std::tie(SenderID, B64Message);
+
+            const auto Decoded = Base64::Decode(B64Message);
+            int Min = std::min(cchTextMax, int(Decoded.size()));
+
+            *pSteamIDChatter = Global.XUID;
+            pSteamIDChatter->UserID = SenderID;
+
+            *peChatEntryType = k_EChatEntryTypeChatMsg;
+            std::memcpy(prgchText, Decoded.data(), Min);
+            return Min;
+        }
+        int GetClanCount()
+        {
+            int Count = 0;
+            std::vector<uint64_t> GroupIDs{};
+            Database() << "select GroupID from Groups;" >> GroupIDs;
+
+            for (const auto &Item : GroupIDs)
+            {
+                if (GroupID_t{ Item }.HostID == 0xFF)
+                    Count++;
+            }
+
+            return Count;
+        }
+        int GetClanOfficerCount(SteamID_t steamIDClan)
+        {
+            return 0;
         }
         int GetCoplayFriendCount()
         {
-            Traceprint();
             return 0;
         }
-        CSteamID GetCoplayFriend(int iCoplayFriend)
+        int GetFriendAvatar0(SteamID_t steamIDFriend)
         {
-            Traceprint();
-            return CSteamID();
+            return GetFriendAvatar0(steamIDFriend, 128);
         }
-        int GetFriendCoplayTime(CSteamID steamIDFriend)
+        int GetFriendAvatar1(SteamID_t steamIDFriend, int eAvatarSize)
         {
-            Traceprint();
             return 0;
         }
-        uint32_t GetFriendCoplayGame(CSteamID steamIDFriend)
+        int GetFriendCoplayTime(SteamID_t steamIDFriend)
         {
-            Traceprint();
             return 0;
         }
-        const char *GetPlayerNickname(CSteamID steamIDPlayer)
+        int GetFriendCount0()
         {
-            Traceprint();
-            return "";
+            return GetFriendCount1(k_EFriendFlagImmediate);
         }
-        int GetFriendSteamLevel(CSteamID steamIDFriend)
+        int GetFriendCount1(EFriendFlags iFriendFlags)
         {
-            Traceprint();
-            return 0;
-        }
+            int32_t Count{};
 
-        // Messaging.
-        void SendMsgToFriend(CSteamID steamIDFriend, uint32_t eFriendMsgType, const char *pchMsgBody)
-        {
-            if (const auto Callback = Ayria.API_Social)
+            if (const auto Callback = Ayria.JSONRequest)
             {
-                const auto Payload = nlohmann::json::object({ { "Type", eFriendMsgType}, {"Body", pchMsgBody } });
-                const auto Object = nlohmann::json::object({ { "Target", steamIDFriend.GetAccountID()}, { "Message", Payload.dump() } });
-                Callback(Ayria.toFunctionID("Sendmessage_enc"), DumpJSON(Object).c_str());
-            }
-        }
-        bool SendMsgToFriend_Safe(CSteamID steamIDFriend, uint32_t eFriendMsgType, const void *pvMsgBody, int cubMsgBody)
-        {
-            if (const auto Callback = Ayria.API_Social)
-            {
-                const auto Payload = nlohmann::json::object({ { "Type", eFriendMsgType}, {"Body", std::string((const char *)pvMsgBody, cubMsgBody) } });
-                const auto Object = nlohmann::json::object({ { "Target", steamIDFriend.GetAccountID()}, { "Message", Payload.dump() } });
-                const auto Result = Callback(Ayria.toFunctionID("Sendmessage_enc"), DumpJSON(Object).c_str());
-                return !!std::strstr(Result, "OK");
-            }
+                const auto Response = Callback("Social::Relations::List", "{}");
+                const JSON::Array_t Array = JSON::Parse(Response);
 
-            return false;
-        }
-        int GetChatMessage(CSteamID steamIDFriend, int iChatID, void *pvData, int cubData, uint32_t *peFriendMsgType)
-        {
-            if (const auto Callback = Ayria.API_Social)
-            {
-                const auto Request = nlohmann::json::object({ {"SenderID", steamIDFriend.GetAccountID() } });
-                const auto Result = Callback(Ayria.toFunctionID("Readmessages"), DumpJSON(Request).c_str());
-                const auto Array = ParseJSON(Result);
-
-                for (const auto &Message : Array)
+                if (const auto & Item : Array)
                 {
-                    const auto Payload = ParseJSON(Message.value("Message", std::string()));
-                    const auto Type = Payload.value("Type", uint32_t());
+                    if (iFriendFlags & k_EFriendFlagBlocked)
+                        if (Item.value<bool>("isBlocked"))
+                            Count++;
 
-                    // Skip group messages.
-                    if (Hash::FNV1_32("Steamlobbychat") == Type) continue;
+                    if (iFriendFlags & k_EFriendFlagFriendshipRequested)
+                        if (Item.value<bool>("isFriend"))
+                            Count++;
 
-                    // Skip to offset.
-                    if (iChatID--) continue;
+                    if (iFriendFlags & k_EFriendFlagImmediate)
+                        if (Item.value<bool>("isFriend") && Item.value<bool>("isMutual"))
+                            Count++;
+                }
+            }
 
-                    const auto Body = Payload.value("Body", std::string());
-                    const auto Size = std::min(Body.size(), size_t(cubData));
-                    std::memcpy(pvData, Body.data(), Size);
-                    *peFriendMsgType = Type;
-                    return int(Size);
+            return Count;
+        }
+        int GetFriendCountFromSource(SteamID_t steamIDSource)
+        {
+            return 0;
+        }
+        int GetFriendMessage(SteamID_t friendID, int iChatID, void *pvData, int cubData, EChatEntryType *peChatEntryType)
+        {
+            return GetChatMessage(friendID, iChatID, pvData, cubData, peChatEntryType);
+        }
+        int GetFriendRichPresenceKeyCount(SteamID_t steamIDFriend)
+        {
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Request = JSON::Object_t({ { "UserID", steamIDFriend.UserID } });
+                const auto Response = Callback("Social::Presence::Get", JSON::Dump(Request).c_str());
+                const auto Map = JSON::Parse(Response);
+
+                return int(Map.size());
+            }
+
+            return 0;
+        }
+        int GetFriendSteamLevel(SteamID_t steamIDFriend)
+        {
+            return 42;
+        }
+        int GetFriendsGroupCount()
+        {
+            return 0;
+        }
+        int GetFriendsGroupMembersCount(FriendsGroupID_t friendsGroupID)
+        {
+            std::vector<uint64_t> GroupIDs{};
+            Database() << "select GroupID from Groups;" >> GroupIDs;
+
+            for (const auto &Item : GroupIDs)
+            {
+                if (GroupID_t{ Item }.RoomID == friendsGroupID)
+                {
+                    std::vector<uint32_t> MemberIDs{};
+                    Database() << "select MemberIDs from Groups where GroupID = ?;"
+                               << Item >> MemberIDs;
+
+                    return int(MemberIDs.size());
                 }
             }
 
             return 0;
         }
-        int GetChatIDOfChatHistoryStart(CSteamID steamIDFriend)
+        int GetLargeFriendAvatar(SteamID_t steamIDFriend)
         {
-            Traceprint();
+            return GetFriendAvatar0(steamIDFriend, 184);
+        }
+        int GetMediumFriendAvatar(SteamID_t steamIDFriend)
+        {
+            return GetFriendAvatar0(steamIDFriend, 64);
+        }
+        int GetNumChatsWithUnreadPriorityMessages()
+        {
             return 0;
         }
-        void SetChatHistoryStart(CSteamID steamIDFriend, int iChatID)
+        int GetSmallFriendAvatar(SteamID_t steamIDFriend)
         {
-            Traceprint();
-        }
-        void ClearChatHistory(CSteamID steamIDFriend)
-        {
-            Traceprint();
-        }
-        bool SetListenForFriendsMessages(bool bListen)
-        {
-            Traceprint();
-            return false;
-        }
-        bool ReplyToFriendMessage(CSteamID friendID, const char *cszMessage)
-        {
-            Traceprint();
-            return false;
+            return GetFriendAvatar0(steamIDFriend, 32);
         }
 
-        // Presence.
-        void SetFriendRegValue(CSteamID steamIDFriend, const char *pchKey, const char *pchValue)
+        uint32_t GetBlockedFriendCount()
         {
-            Traceprint();
+            uint32_t Count{};
+
+            if (const auto Callback = Ayria.JSONRequest)
+            {
+                const auto Response = Callback("Social::Relations::List", "{}");
+                const JSON::Array_t Array = JSON::Parse(Response);
+
+                if (const auto & Item : Array)
+                {
+                    if (Item.value<bool>("isBlocked"))
+                        Count++;
+                }
+            }
+
+            return Count;
         }
-        const char *GetFriendRegValue(CSteamID steamIDFriend, const char *pchKey)
+
+        void ActivateGameOverlay(const char *pchDialog)
+        {}
+        void ActivateGameOverlayInviteDialog(SteamID_t steamIDLobby)
+        {}
+        void ActivateGameOverlayInviteDialogConnectString(const char *pchConnectString)
+        {}
+        void ActivateGameOverlayRemotePlayTogetherInviteDialog(SteamID_t steamIDLobby)
+        {}
+        void ActivateGameOverlayToStore0(AppID_t nAppID)
         {
-            Traceprint();
-            return "";
+            return ActivateGameOverlayToStore1(nAppID, k_EOverlayToStoreFlag_None);
         }
-        bool SetRichPresence(const char *pchKey, const char *pchValue)
+        void ActivateGameOverlayToStore1(AppID_t nAppID, EOverlayToStoreFlag eFlag)
+        {}
+        void ActivateGameOverlayToUser(const char *pchDialog, SteamID_t steamID)
+        {}
+        void ActivateGameOverlayToWebPage0(const char *pchURL)
         {
-            Debugprint(va("%s: %s %s", __FUNCTION__, pchKey, pchValue));
-            return true;
+            return ActivateGameOverlayToWebPage1(pchURL, k_EActivateGameOverlayToWebPageMode_Default);
+        }
+        void ActivateGameOverlayToWebPage1(const char *pchURL, EActivateGameOverlayToWebPageMode eMode)
+        {}
+        void ClearChatHistory(SteamID_t steamIDFriend)
+        {
+            Database() << "delete from Socialmessages where SourceID = ?;" << steamIDFriend.UserID;
         }
         void ClearRichPresence()
+        {}
+        void GetFriendsGroupMembersList(FriendsGroupID_t friendsGroupID, SteamID_t *pOutSteamIDMembers, int nMembersCount)
         {
-            Traceprint();
-        }
-        const char *GetFriendRichPresence(CSteamID steamIDFriend, const char *pchKey)
-        {
-            Traceprint();
-            return "";
-        }
-        int GetFriendRichPresenceKeyCount(CSteamID steamIDFriend)
-        {
-            Traceprint();
-            return 0;
-        }
-        const char *GetFriendRichPresenceKeyByIndex(CSteamID steamIDFriend, int iKey)
-        {
-            Traceprint();
-            return "";
-        }
-        void RequestFriendRichPresence(CSteamID steamIDFriend)
-        {
-            Traceprint();
-            return;
-        }
+            std::vector<uint64_t> GroupIDs{};
+            Database() << "select GroupID from Groups;" >> GroupIDs;
 
-        // Client UI (should be in some other interface).
-        void ActivateGameOverlayToStore(uint32_t nAppID)
-        {
-            Debugprint(va("%s: %u", __FUNCTION__, nAppID));
-        }
-        void ActivateGameOverlayToStore_Flags(uint32_t nAppID, uint32_t eFlag)
-        {
-            return ActivateGameOverlayToStore(nAppID);
-        }
-        void ActivateGameOverlay(const char *pchDialog)
-        {
-            Debugprint(va("%s: %s", __FUNCTION__, pchDialog));
-        }
-        void ActivateGameOverlayToUser(const char *pchDialog, CSteamID steamID)
-        {
-            Debugprint(va("%s: %s", __FUNCTION__, pchDialog));
-        }
-        void ActivateGameOverlayToWebPage(const char *pchURL)
-        {
-            Debugprint(va("%s: %s", __FUNCTION__, pchURL));
-        }
-        void ActivateGameOverlayInviteDialog(CSteamID steamIDLobby)
-        {
-            Debugprint(va("%s: %llu", __FUNCTION__, steamIDLobby.ConvertToUint64()));
-        }
-        bool IsClanChatWindowOpenInSteam(CSteamID groupID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool OpenClanChatWindowInSteam(CSteamID groupID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool CloseClanChatWindowInSteam(CSteamID groupID)
-        {
-            Traceprint();
-            return false;
-        }
+            for (const auto &Item : GroupIDs)
+            {
+                if (GroupID_t{ Item }.RoomID == friendsGroupID)
+                {
+                    std::vector<uint32_t> MemberIDs{};
+                    Database() << "select MemberIDs from Groups where GroupID = ?;"
+                        << Item >> MemberIDs;
 
-        // Clan management.
-        int GetClanCount()
-        {
-            Traceprint();
-            return 0;
-        }
-        CSteamID GetClanByIndex(int iClan)
-        {
-            Traceprint();
-            return CSteamID(Steam.XUID);
-        }
-        bool InviteFriendToClan(CSteamID steamIDfriend, CSteamID steamIDclan)
-        {
-            Traceprint();
-            return false;
-        }
-        bool AcknowledgeInviteToClan(CSteamID steamID, bool)
-        {
-            Traceprint();
-            return false;
-        }
+                    for (int i = 0; i < std::min(int(MemberIDs.size()), nMembersCount); ++i)
+                    {
+                        pOutSteamIDMembers[i] = Global.XUID;
+                        pOutSteamIDMembers[i].UserID = MemberIDs[i];
+                    }
 
-        // Clan information.
-        const char *GetClanName(CSteamID steamIDClan)
-        {
-            Traceprint();
-            return "AYA";
+                    return;
+                }
+            }
         }
-        const char *GetClanTag(CSteamID steamIDClan)
+        void RequestFriendRichPresence(SteamID_t steamIDFriend)
+        {}
+        void SendMsgToFriend0(SteamID_t steamIDFriend, EChatEntryType eFriendMsgType, const char *pchMsgBody)
         {
-            Traceprint();
-            return "AYA";
+            SendMsgToFriend1(steamIDFriend, eFriendMsgType, pchMsgBody, std::strlen(pchMsgBody));
         }
-        uint64_t RequestClanOfficerList(CSteamID steamIDClan)
+        void SetChatHistoryStart(SteamID_t steamIDFriend, int iChatID)
+        {}
+        void SetFriendRegValue(SteamID_t steamIDFriend, const char *pchKey, const char *pchValue)
         {
-            Traceprint();
-            return 0;
         }
-        CSteamID GetClanOwner(CSteamID steamIDClan)
+        void SetInGameVoiceSpeaking(SteamID_t steamIDUser, bool bSpeaking)
+        {}
+        void SetPersonaName0(const char *pchPersonaName)
         {
-            Traceprint();
-            return CSteamID(Steam.XUID);
-        }
-        int GetClanOfficerCount(CSteamID steamIDClan)
-        {
-            Traceprint();
-            return 0;
-        }
-        CSteamID GetClanOfficerByIndex(CSteamID steamIDClan, int iOfficer)
-        {
-            Traceprint();
-            return CSteamID(Steam.XUID);
-        }
-        bool GetClanActivityCounts(CSteamID steamID, int *pnOnline, int *pnInGame, int *pnChatting)
-        {
-            Traceprint();
-            return false;
-        }
-        uint64_t DownloadClanActivityCounts(CSteamID groupIDs[], int nIds)
-        {
-            Traceprint();
-            return 0;
-        }
+            std::memcpy(Global.Username, pchPersonaName, std::min(size_t(20), std::strlen(pchPersonaName)));
 
-        // Clan messaging.
-        uint64_t JoinClanChatRoom(CSteamID groupID)
-        {
-            Traceprint();
-            return 0;
-        }
-        bool LeaveClanChatRoom(CSteamID groupID)
-        {
-            Traceprint();
-            return false;
-        }
-        int GetClanChatMemberCount(CSteamID groupID)
-        {
-            Traceprint();
-            return 0;
-        }
-        CSteamID GetChatMemberByIndex(CSteamID groupID, int iIndex)
-        {
-            Traceprint();
-            return CSteamID(uint64_t(0));
-        }
-        bool SendClanChatMessage(CSteamID groupID, const char *cszMessage)
-        {
-            Traceprint();
-            return false;
-        }
-        int GetClanChatMessage(CSteamID groupID, int iChatID, void *pvData, int cubData, uint32_t *peChatEntryType, CSteamID *pSteamIDChatter)
-        {
-            Traceprint();
-            return 0;
-        }
-        bool IsClanChatAdmin(CSteamID groupID, CSteamID userID)
-        {
-            Traceprint();
-            return false;
-        }
+            // Notify the game that the players state changed.
+            const auto Notification = new Callbacks::PersonaStateChange_t();
+            Notification->m_ulSteamID = Global.XUID.FullID;
+            Notification->m_nChangeFlags = 1;
 
-        // Stalkers.
-        uint64_t GetFollowerCount(CSteamID steamID)
-        {
-            Traceprint();
-            return 0;
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::Types::PersonaStateChange_t, Notification);
         }
-        uint64_t IsFollowing(CSteamID steamID)
+        void SetPersonaState(EPersonaState ePersonaState)
         {
-            Traceprint();
-            return 0;
+            Personastate = ePersonaState;
         }
-        uint64_t EnumerateFollowingList(uint32_t unStartIndex)
-        {
-            Traceprint();
-            return 0;
-        }
-
-        // Friend groups (totally not clans).
-        int16_t GetFriendsGroupCount()
-        {
-            Traceprint();
-            return 0;
-        }
-        int16_t GetFriendsGroupIDByIndex(int32_t)
-        {
-            Traceprint();
-            return 0;
-        }
-        const char *GetFriendsGroupName(int16_t)
-        {
-            Traceprint();
-            return "";
-        }
-        int GetFriendsGroupMembersCount(int16_t)
-        {
-            Traceprint();
-            return 0;
-        }
-        int GetFriendsGroupMembersList(int16_t, CSteamID *, int32_t)
-        {
-            Traceprint();
-            return 0;
-        }
-
-        // Game invitations.
-        bool InviteFriendByEmail(const char *emailAddr)
-        {
-            Traceprint();
-            return false;
-        }
-        bool InviteUserToGame(CSteamID steamIDFriend, const char *pchConnectString)
-        {
-            Debugprint(va("Want to invite user with: %s", pchConnectString));
-            return false;
-        }
-        bool IsUserInSource(CSteamID steamIDUser, CSteamID steamIDSource)
-        {
-            Traceprint();
-            return false;
-        }
+        void SetPlayedWith(SteamID_t steamIDUserPlayedWith)
+        {}
     };
 
     static std::any Hackery;
@@ -552,59 +1018,59 @@ namespace Steam
     {
         SteamFriends001()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, setPlayerstate);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, SetPersonaState);
             Createmethod(4, SteamFriends, AddFriend);
             Createmethod(5, SteamFriends, RemoveFriend);
-            Createmethod(6, SteamFriends, HasFriend);
+            Createmethod(6, SteamFriends, HasFriend0);
             Createmethod(7, SteamFriends, GetFriendRelationship);
             Createmethod(8, SteamFriends, GetFriendPersonaState);
-            Createmethod(9, SteamFriends, GetFriendGamePlayed_32);
+            Createmethod(9, SteamFriends, GetFriendGamePlayed0);
             Createmethod(10, SteamFriends, GetFriendPersonaName);
             Createmethod(11, SteamFriends, AddFriendByName);
-            Createmethod(12, SteamFriends, GetFriendCount);
-            Createmethod(13, SteamFriends, GetFriendByIndex);
-            Createmethod(14, SteamFriends, SendMsgToFriend);
+            Createmethod(12, SteamFriends, GetFriendCount0);
+            Createmethod(13, SteamFriends, GetFriendByIndex0);
+            Createmethod(14, SteamFriends, SendMsgToFriend0);
             Createmethod(15, SteamFriends, SetFriendRegValue);
             Createmethod(16, SteamFriends, GetFriendRegValue);
             Createmethod(17, SteamFriends, GetFriendPersonaNameHistory);
             Createmethod(18, SteamFriends, GetChatMessage);
-            Createmethod(19, SteamFriends, SendMsgToFriend_Safe);
+            Createmethod(19, SteamFriends, SendMsgToFriend1);
             Createmethod(20, SteamFriends, GetChatIDOfChatHistoryStart);
             Createmethod(21, SteamFriends, SetChatHistoryStart);
             Createmethod(22, SteamFriends, ClearChatHistory);
-            Createmethod(23, SteamFriends, InviteFriendByEmail);
+            Createmethod(23, SteamFriends, InviteFriendByEmail0);
             Createmethod(24, SteamFriends, GetBlockedFriendCount);
-            Createmethod(25, SteamFriends, GetFriendGamePlayed_64);
-            Createmethod(26, SteamFriends, GetFriendGamePlayedEx_64);
+            Createmethod(25, SteamFriends, GetFriendGamePlayed1);
+            Createmethod(26, SteamFriends, GetFriendGamePlayed2);
         };
     };
     struct SteamFriends002 : Interface_t
     {
         SteamFriends002()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, setPlayerstate);
-            Createmethod(4, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(5, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, SetPersonaState);
+            Createmethod(4, SteamFriends, GetFriendCount1);
+            Createmethod(5, SteamFriends, GetFriendByIndex1);
             Createmethod(6, SteamFriends, GetFriendRelationship);
             Createmethod(7, SteamFriends, GetFriendPersonaState);
             Createmethod(8, SteamFriends, GetFriendPersonaName);
             Createmethod(9, SteamFriends, SetFriendRegValue);
             Createmethod(10, SteamFriends, GetFriendRegValue);
-            Createmethod(11, SteamFriends, GetFriendGamePlayedEx_64);
+            Createmethod(11, SteamFriends, GetFriendGamePlayed3);
             Createmethod(12, SteamFriends, GetFriendPersonaNameHistory);
             Createmethod(13, SteamFriends, AddFriend);
             Createmethod(14, SteamFriends, RemoveFriend);
-            Createmethod(15, SteamFriends, HasFriend_Filtered);
+            Createmethod(15, SteamFriends, HasFriend1);
             Createmethod(16, SteamFriends, AddFriendByName);
-            Createmethod(17, SteamFriends, InviteFriendByEmail);
+            Createmethod(17, SteamFriends, InviteFriendByEmail1);
             Createmethod(18, SteamFriends, GetChatMessage);
-            Createmethod(19, SteamFriends, SendMsgToFriend_Safe);
+            Createmethod(19, SteamFriends, SendMsgToFriend1);
             Createmethod(20, SteamFriends, GetChatIDOfChatHistoryStart);
             Createmethod(21, SteamFriends, SetChatHistoryStart);
             Createmethod(22, SteamFriends, ClearChatHistory);
@@ -621,18 +1087,18 @@ namespace Steam
     {
         SteamFriends003()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendAvatar);
-            Createmethod(9, SteamFriends, GetFriendGamePlayedEx_64);
+            Createmethod(8, SteamFriends, GetFriendAvatar0);
+            Createmethod(9, SteamFriends, GetFriendGamePlayed3);
             Createmethod(10, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(11, SteamFriends, HasFriend_Filtered);
+            Createmethod(11, SteamFriends, HasFriend1);
             Createmethod(12, SteamFriends, GetClanCount);
             Createmethod(13, SteamFriends, GetClanByIndex);
             Createmethod(14, SteamFriends, GetClanName);
@@ -647,18 +1113,18 @@ namespace Steam
     {
         SteamFriends004()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendAvatar_Size);
-            Createmethod(9, SteamFriends, GetFriendGamePlayedEx_64);
+            Createmethod(8, SteamFriends, GetFriendAvatar1);
+            Createmethod(9, SteamFriends, GetFriendGamePlayed3);
             Createmethod(10, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(11, SteamFriends, HasFriend_Filtered);
+            Createmethod(11, SteamFriends, HasFriend1);
             Createmethod(12, SteamFriends, GetClanCount);
             Createmethod(13, SteamFriends, GetClanByIndex);
             Createmethod(14, SteamFriends, GetClanName);
@@ -673,18 +1139,18 @@ namespace Steam
     {
         SteamFriends005()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendAvatar_Size);
-            Createmethod(9, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendAvatar1);
+            Createmethod(9, SteamFriends, GetFriendGamePlayed0);
             Createmethod(10, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(11, SteamFriends, HasFriend_Filtered);
+            Createmethod(11, SteamFriends, HasFriend1);
             Createmethod(12, SteamFriends, GetClanCount);
             Createmethod(13, SteamFriends, GetClanByIndex);
             Createmethod(14, SteamFriends, GetClanName);
@@ -694,8 +1160,8 @@ namespace Steam
             Createmethod(18, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(19, SteamFriends, ActivateGameOverlay);
             Createmethod(20, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(22, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(22, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(23, SteamFriends, SetPlayedWith);
         };
     };
@@ -703,18 +1169,18 @@ namespace Steam
     {
         SteamFriends006()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendAvatar_Size);
-            Createmethod(9, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendAvatar1);
+            Createmethod(9, SteamFriends, GetFriendGamePlayed0);
             Createmethod(10, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(11, SteamFriends, HasFriend_Filtered);
+            Createmethod(11, SteamFriends, HasFriend1);
             Createmethod(12, SteamFriends, GetClanCount);
             Createmethod(13, SteamFriends, GetClanByIndex);
             Createmethod(14, SteamFriends, GetClanName);
@@ -725,8 +1191,8 @@ namespace Steam
             Createmethod(19, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(20, SteamFriends, ActivateGameOverlay);
             Createmethod(21, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(22, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(23, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(22, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(23, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(24, SteamFriends, SetPlayedWith);
             Createmethod(25, SteamFriends, ActivateGameOverlayInviteDialog);
         };
@@ -735,17 +1201,17 @@ namespace Steam
     {
         SteamFriends007()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -756,8 +1222,8 @@ namespace Steam
             Createmethod(18, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(19, SteamFriends, ActivateGameOverlay);
             Createmethod(20, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(22, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(22, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(23, SteamFriends, SetPlayedWith);
             Createmethod(24, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(25, SteamFriends, GetSmallFriendAvatar);
@@ -769,17 +1235,17 @@ namespace Steam
     {
         SteamFriends008()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -790,8 +1256,8 @@ namespace Steam
             Createmethod(18, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(19, SteamFriends, ActivateGameOverlay);
             Createmethod(20, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(22, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(22, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(23, SteamFriends, SetPlayedWith);
             Createmethod(24, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(25, SteamFriends, GetSmallFriendAvatar);
@@ -809,17 +1275,17 @@ namespace Steam
     {
         SteamFriends009()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -830,8 +1296,8 @@ namespace Steam
             Createmethod(18, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(19, SteamFriends, ActivateGameOverlay);
             Createmethod(20, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(22, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(21, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(22, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(23, SteamFriends, SetPlayedWith);
             Createmethod(24, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(25, SteamFriends, GetSmallFriendAvatar);
@@ -859,17 +1325,17 @@ namespace Steam
     {
         SteamFriends010()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -882,8 +1348,8 @@ namespace Steam
             Createmethod(20, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(21, SteamFriends, ActivateGameOverlay);
             Createmethod(22, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(24, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(24, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(25, SteamFriends, SetPlayedWith);
             Createmethod(26, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(27, SteamFriends, GetSmallFriendAvatar);
@@ -924,17 +1390,17 @@ namespace Steam
     {
         SteamFriends011()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName0);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -947,8 +1413,8 @@ namespace Steam
             Createmethod(20, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(21, SteamFriends, ActivateGameOverlay);
             Createmethod(22, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(24, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(24, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(25, SteamFriends, SetPlayedWith);
             Createmethod(26, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(27, SteamFriends, GetSmallFriendAvatar);
@@ -993,17 +1459,17 @@ namespace Steam
     {
         SteamFriends012()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername_async);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName1);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -1016,8 +1482,8 @@ namespace Steam
             Createmethod(20, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(21, SteamFriends, ActivateGameOverlay);
             Createmethod(22, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(24, SteamFriends, ActivateGameOverlayToStore);
+            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(24, SteamFriends, ActivateGameOverlayToStore0);
             Createmethod(25, SteamFriends, SetPlayedWith);
             Createmethod(26, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(27, SteamFriends, GetSmallFriendAvatar);
@@ -1062,17 +1528,17 @@ namespace Steam
     {
         SteamFriends013()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername_async);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName1);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
-            Createmethod(10, SteamFriends, HasFriend_Filtered);
+            Createmethod(10, SteamFriends, HasFriend1);
             Createmethod(11, SteamFriends, GetClanCount);
             Createmethod(12, SteamFriends, GetClanByIndex);
             Createmethod(13, SteamFriends, GetClanName);
@@ -1085,8 +1551,8 @@ namespace Steam
             Createmethod(20, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(21, SteamFriends, ActivateGameOverlay);
             Createmethod(22, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(24, SteamFriends, ActivateGameOverlayToStore_Flags);
+            Createmethod(23, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(24, SteamFriends, ActivateGameOverlayToStore1);
             Createmethod(25, SteamFriends, SetPlayedWith);
             Createmethod(26, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(27, SteamFriends, GetSmallFriendAvatar);
@@ -1131,18 +1597,18 @@ namespace Steam
     {
         SteamFriends014()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername_async);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName1);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
             Createmethod(10, SteamFriends, GetPlayerNickname);
-            Createmethod(11, SteamFriends, HasFriend_Filtered);
+            Createmethod(11, SteamFriends, HasFriend1);
             Createmethod(12, SteamFriends, GetClanCount);
             Createmethod(13, SteamFriends, GetClanByIndex);
             Createmethod(14, SteamFriends, GetClanName);
@@ -1155,8 +1621,8 @@ namespace Steam
             Createmethod(21, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(22, SteamFriends, ActivateGameOverlay);
             Createmethod(23, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(24, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(25, SteamFriends, ActivateGameOverlayToStore_Flags);
+            Createmethod(24, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(25, SteamFriends, ActivateGameOverlayToStore1);
             Createmethod(26, SteamFriends, SetPlayedWith);
             Createmethod(27, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(28, SteamFriends, GetSmallFriendAvatar);
@@ -1201,15 +1667,15 @@ namespace Steam
     {
         SteamFriends015()
         {
-            Createmethod(0, SteamFriends, getPlayername);
-            Createmethod(1, SteamFriends, setPlayername_async);
-            Createmethod(2, SteamFriends, getPlayerstate);
-            Createmethod(3, SteamFriends, GetFriendCount_Filtered);
-            Createmethod(4, SteamFriends, GetFriendByIndex_Filtered);
+            Createmethod(0, SteamFriends, GetPersonaName);
+            Createmethod(1, SteamFriends, SetPersonaName1);
+            Createmethod(2, SteamFriends, GetPersonaState);
+            Createmethod(3, SteamFriends, GetFriendCount1);
+            Createmethod(4, SteamFriends, GetFriendByIndex1);
             Createmethod(5, SteamFriends, GetFriendRelationship);
             Createmethod(6, SteamFriends, GetFriendPersonaState);
             Createmethod(7, SteamFriends, GetFriendPersonaName);
-            Createmethod(8, SteamFriends, GetFriendGamePlayed_Struct);
+            Createmethod(8, SteamFriends, GetFriendGamePlayed0);
             Createmethod(9, SteamFriends, GetFriendPersonaNameHistory);
             Createmethod(10, SteamFriends, GetFriendSteamLevel);
             Createmethod(11, SteamFriends, GetPlayerNickname);
@@ -1218,7 +1684,7 @@ namespace Steam
             Createmethod(14, SteamFriends, GetFriendsGroupName);
             Createmethod(15, SteamFriends, GetFriendsGroupMembersCount);
             Createmethod(16, SteamFriends, GetFriendsGroupMembersList);
-            Createmethod(17, SteamFriends, HasFriend_Filtered);
+            Createmethod(17, SteamFriends, HasFriend1);
             Createmethod(18, SteamFriends, GetClanCount);
             Createmethod(19, SteamFriends, GetClanByIndex);
             Createmethod(20, SteamFriends, GetClanName);
@@ -1231,8 +1697,8 @@ namespace Steam
             Createmethod(27, SteamFriends, SetInGameVoiceSpeaking);
             Createmethod(28, SteamFriends, ActivateGameOverlay);
             Createmethod(29, SteamFriends, ActivateGameOverlayToUser);
-            Createmethod(30, SteamFriends, ActivateGameOverlayToWebPage);
-            Createmethod(31, SteamFriends, ActivateGameOverlayToStore_Flags);
+            Createmethod(30, SteamFriends, ActivateGameOverlayToWebPage0);
+            Createmethod(31, SteamFriends, ActivateGameOverlayToStore1);
             Createmethod(32, SteamFriends, SetPlayedWith);
             Createmethod(33, SteamFriends, ActivateGameOverlayInviteDialog);
             Createmethod(34, SteamFriends, GetSmallFriendAvatar);
@@ -1273,6 +1739,170 @@ namespace Steam
             Createmethod(69, SteamFriends, EnumerateFollowingList);
         };
     };
+    struct SteamFriends016 : Interface_t
+    {
+        SteamFriends016()
+        {
+            Createmethod(0, SteamFriends,    GetPersonaName);
+            Createmethod(1, SteamFriends,    SetPersonaName1);
+            Createmethod(2, SteamFriends,    GetPersonaState);
+            Createmethod(3, SteamFriends,    GetFriendCount1);
+            Createmethod(4, SteamFriends,    GetFriendByIndex1);
+            Createmethod(5, SteamFriends,    GetFriendRelationship);
+            Createmethod(6, SteamFriends,    GetFriendPersonaState);
+            Createmethod(7, SteamFriends,    GetFriendPersonaName);
+            Createmethod(8, SteamFriends,    GetFriendGamePlayed0);
+            Createmethod(9, SteamFriends,    GetFriendPersonaNameHistory);
+            Createmethod(10, SteamFriends,   GetFriendSteamLevel);
+            Createmethod(11, SteamFriends,   GetPlayerNickname);
+            Createmethod(12, SteamFriends,   GetFriendsGroupCount);
+            Createmethod(13, SteamFriends,   GetFriendsGroupIDByIndex);
+            Createmethod(14, SteamFriends,   GetFriendsGroupName);
+            Createmethod(15, SteamFriends,   GetFriendsGroupMembersCount);
+            Createmethod(16, SteamFriends,   GetFriendsGroupMembersList);
+            Createmethod(17, SteamFriends,   HasFriend1);
+            Createmethod(18, SteamFriends,   GetClanCount);
+            Createmethod(19, SteamFriends,   GetClanByIndex);
+            Createmethod(20, SteamFriends,   GetClanName);
+            Createmethod(21, SteamFriends,   GetClanTag);
+            Createmethod(22, SteamFriends,   GetClanActivityCounts);
+            Createmethod(23, SteamFriends,   DownloadClanActivityCounts);
+            Createmethod(24, SteamFriends,   GetFriendCountFromSource);
+            Createmethod(25, SteamFriends,   GetFriendFromSourceByIndex);
+            Createmethod(26, SteamFriends,   IsUserInSource);
+            Createmethod(27, SteamFriends,   SetInGameVoiceSpeaking);
+            Createmethod(28, SteamFriends,   ActivateGameOverlay);
+            Createmethod(29, SteamFriends,   ActivateGameOverlayToUser);
+            Createmethod(30, SteamFriends,   ActivateGameOverlayToWebPage1);
+            Createmethod(31, SteamFriends,   ActivateGameOverlayToStore1);
+            Createmethod(32, SteamFriends,   SetPlayedWith);
+            Createmethod(33, SteamFriends,   ActivateGameOverlayInviteDialog);
+            Createmethod(34, SteamFriends,   GetSmallFriendAvatar);
+            Createmethod(35, SteamFriends,   GetMediumFriendAvatar);
+            Createmethod(36, SteamFriends,   GetLargeFriendAvatar);
+            Createmethod(37, SteamFriends,   RequestUserInformation);
+            Createmethod(38, SteamFriends,   RequestClanOfficerList);
+            Createmethod(39, SteamFriends,   GetClanOwner);
+            Createmethod(40, SteamFriends,   GetClanOfficerCount);
+            Createmethod(41, SteamFriends,   GetClanOfficerByIndex);
+            Createmethod(42, SteamFriends,   GetUserRestrictions);
+            Createmethod(43, SteamFriends,   SetRichPresence);
+            Createmethod(44, SteamFriends,   ClearRichPresence);
+            Createmethod(45, SteamFriends,   GetFriendRichPresence);
+            Createmethod(46, SteamFriends,   GetFriendRichPresenceKeyCount);
+            Createmethod(47, SteamFriends,   GetFriendRichPresenceKeyByIndex);
+            Createmethod(48, SteamFriends,   RequestFriendRichPresence);
+            Createmethod(49, SteamFriends,   InviteUserToGame);
+            Createmethod(50, SteamFriends,   GetCoplayFriendCount);
+            Createmethod(51, SteamFriends,   GetCoplayFriend);
+            Createmethod(52, SteamFriends,   GetFriendCoplayTime);
+            Createmethod(53, SteamFriends,   GetFriendCoplayGame);
+            Createmethod(54, SteamFriends,   JoinClanChatRoom);
+            Createmethod(55, SteamFriends,   LeaveClanChatRoom);
+            Createmethod(56, SteamFriends,   GetClanChatMemberCount);
+            Createmethod(57, SteamFriends,   GetChatMemberByIndex);
+            Createmethod(58, SteamFriends,   SendClanChatMessage);
+            Createmethod(59, SteamFriends,   GetClanChatMessage);
+            Createmethod(60, SteamFriends,   IsClanChatAdmin);
+            Createmethod(61, SteamFriends,   IsClanChatWindowOpenInSteam);
+            Createmethod(62, SteamFriends,   OpenClanChatWindowInSteam);
+            Createmethod(63, SteamFriends,   CloseClanChatWindowInSteam);
+            Createmethod(64, SteamFriends,   SetListenForFriendsMessages);
+            Createmethod(65, SteamFriends,   ReplyToFriendMessage);
+            Createmethod(66, SteamFriends,   GetFriendMessage);
+            Createmethod(67, SteamFriends,   GetFollowerCount);
+            Createmethod(68, SteamFriends,   IsFollowing);
+            Createmethod(69, SteamFriends,   EnumerateFollowingList);
+
+            Createmethod(70, SteamFriends,   IsClanPublic);
+            Createmethod(71, SteamFriends,   IsClanOfficialGameGroup);
+            Createmethod(72, SteamFriends,   GetNumChatsWithUnreadPriorityMessages);
+        };
+    };
+    struct SteamFriends017 : Interface_t
+    {
+        SteamFriends017()
+        {
+            Createmethod(0, SteamFriends,    GetPersonaName);
+            Createmethod(1, SteamFriends,    SetPersonaName1);
+            Createmethod(2, SteamFriends,    GetPersonaState);
+            Createmethod(3, SteamFriends,    GetFriendCount1);
+            Createmethod(4, SteamFriends,    GetFriendByIndex1);
+            Createmethod(5, SteamFriends,    GetFriendRelationship);
+            Createmethod(6, SteamFriends,    GetFriendPersonaState);
+            Createmethod(7, SteamFriends,    GetFriendPersonaName);
+            Createmethod(8, SteamFriends,    GetFriendGamePlayed);
+            Createmethod(9, SteamFriends,    GetFriendPersonaNameHistory);
+            Createmethod(10, SteamFriends,   GetFriendSteamLevel);
+            Createmethod(11, SteamFriends,   GetPlayerNickname);
+            Createmethod(12, SteamFriends,   GetFriendsGroupCount);
+            Createmethod(13, SteamFriends,   GetFriendsGroupIDByIndex);
+            Createmethod(14, SteamFriends,   GetFriendsGroupName);
+            Createmethod(15, SteamFriends,   GetFriendsGroupMembersCount);
+            Createmethod(16, SteamFriends,   GetFriendsGroupMembersList);
+            Createmethod(17, SteamFriends,   HasFriend1);
+            Createmethod(18, SteamFriends,   GetClanCount);
+            Createmethod(19, SteamFriends,   GetClanByIndex);
+            Createmethod(20, SteamFriends,   GetClanName);
+            Createmethod(21, SteamFriends,   GetClanTag);
+            Createmethod(22, SteamFriends,   GetClanActivityCounts);
+            Createmethod(23, SteamFriends,   DownloadClanActivityCounts);
+            Createmethod(24, SteamFriends,   GetFriendCountFromSource);
+            Createmethod(25, SteamFriends,   GetFriendFromSourceByIndex);
+            Createmethod(26, SteamFriends,   IsUserInSource);
+            Createmethod(27, SteamFriends,   SetInGameVoiceSpeaking);
+            Createmethod(28, SteamFriends,   ActivateGameOverlay);
+            Createmethod(29, SteamFriends,   ActivateGameOverlayToUser);
+            Createmethod(30, SteamFriends,   ActivateGameOverlayToWebPage1);
+            Createmethod(31, SteamFriends,   ActivateGameOverlayToStore1);
+            Createmethod(32, SteamFriends,   SetPlayedWith);
+            Createmethod(33, SteamFriends,   ActivateGameOverlayInviteDialog);
+            Createmethod(34, SteamFriends,   GetSmallFriendAvatar);
+            Createmethod(35, SteamFriends,   GetMediumFriendAvatar);
+            Createmethod(36, SteamFriends,   GetLargeFriendAvatar);
+            Createmethod(37, SteamFriends,   RequestUserInformation);
+            Createmethod(38, SteamFriends,   RequestClanOfficerList);
+            Createmethod(39, SteamFriends,   GetClanOwner);
+            Createmethod(40, SteamFriends,   GetClanOfficerCount);
+            Createmethod(41, SteamFriends,   GetClanOfficerByIndex);
+            Createmethod(42, SteamFriends,   GetUserRestrictions);
+            Createmethod(43, SteamFriends,   SetRichPresence);
+            Createmethod(44, SteamFriends,   ClearRichPresence);
+            Createmethod(45, SteamFriends,   GetFriendRichPresence);
+            Createmethod(46, SteamFriends,   GetFriendRichPresenceKeyCount);
+            Createmethod(47, SteamFriends,   GetFriendRichPresenceKeyByIndex);
+            Createmethod(48, SteamFriends,   RequestFriendRichPresence);
+            Createmethod(49, SteamFriends,   InviteUserToGame);
+            Createmethod(50, SteamFriends,   GetCoplayFriendCount);
+            Createmethod(51, SteamFriends,   GetCoplayFriend);
+            Createmethod(52, SteamFriends,   GetFriendCoplayTime);
+            Createmethod(53, SteamFriends,   GetFriendCoplayGame);
+            Createmethod(54, SteamFriends,   JoinClanChatRoom);
+            Createmethod(55, SteamFriends,   LeaveClanChatRoom);
+            Createmethod(56, SteamFriends,   GetClanChatMemberCount);
+            Createmethod(57, SteamFriends,   GetChatMemberByIndex);
+            Createmethod(58, SteamFriends,   SendClanChatMessage);
+            Createmethod(59, SteamFriends,   GetClanChatMessage);
+            Createmethod(60, SteamFriends,   IsClanChatAdmin);
+            Createmethod(61, SteamFriends,   IsClanChatWindowOpenInSteam);
+            Createmethod(62, SteamFriends,   OpenClanChatWindowInSteam);
+            Createmethod(63, SteamFriends,   CloseClanChatWindowInSteam);
+            Createmethod(64, SteamFriends,   SetListenForFriendsMessages);
+            Createmethod(65, SteamFriends,   ReplyToFriendMessage);
+            Createmethod(66, SteamFriends,   GetFriendMessage);
+            Createmethod(67, SteamFriends,   GetFollowerCount);
+            Createmethod(68, SteamFriends,   IsFollowing);
+            Createmethod(69, SteamFriends,   EnumerateFollowingList);
+
+            Createmethod(70, SteamFriends,   IsClanPublic);
+            Createmethod(71, SteamFriends,   IsClanOfficialGameGroup);
+            Createmethod(72, SteamFriends,   GetNumChatsWithUnreadPriorityMessages);
+
+            Createmethod(73, SteamFriends,   ActivateGameOverlayRemotePlayTogetherInviteDialog);
+            Createmethod(74, SteamFriends,   RegisterProtocolInOverlayBrowser);
+            Createmethod(75, SteamFriends,   ActivateGameOverlayInviteDialogConnectString);
+        };
+    };
 
     struct Steamfriendsloader
     {
@@ -1294,6 +1924,8 @@ namespace Steam
             Register(Interfacetype_t::FRIENDS, "SteamFriends013", SteamFriends013);
             Register(Interfacetype_t::FRIENDS, "SteamFriends014", SteamFriends014);
             Register(Interfacetype_t::FRIENDS, "SteamFriends015", SteamFriends015);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends016", SteamFriends016);
+            Register(Interfacetype_t::FRIENDS, "SteamFriends017", SteamFriends017);
         }
     };
     static Steamfriendsloader Interfaceloader{};
