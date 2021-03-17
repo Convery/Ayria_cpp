@@ -27,7 +27,7 @@ namespace Encoding
                     return false;
 
             // Don't care about over-reads.
-            if (Remaining == 3) return !(Intptr[Count32] & 0x00800080);
+            if (Remaining == 3) return !(Intptr[Count32] & 0x00808080);
             if (Remaining == 2) return !(Intptr[Count32] & 0x00008080);
             if (Remaining == 1) return !(Intptr[Count32] & 0x00000080);
             return true;
@@ -42,6 +42,7 @@ namespace Encoding
             if ((Code & 0xFE) == 0xFC) return 6;
             return 1;   // Fallback.
         }
+
         inline std::u8string toUTF8Chars(Codepoint_t Codepoint)
         {
             std::u8string Result{};

@@ -14,6 +14,7 @@
 struct LZString_t
 {
     std::shared_ptr<char8_t []> Internalstorage{};
+    size_t Originalsize{};
     size_t Buffersize{};
 
     template<typename T> LZString_t(const std::basic_string<T> &Input)
@@ -22,6 +23,7 @@ struct LZString_t
         const auto Size = LZ4_compressBound(int(Safestring.size()));
 
         Buffersize = Size + 1;
+        Originalsize = Safestring.size();
         Internalstorage = std::make_shared<char8_t[]>(Buffersize);
         LZ4_compress_default((char *)Safestring.data(), (char *)Internalstorage.get(), (int)Input.size(), (int)Buffersize);
     }
@@ -31,6 +33,7 @@ struct LZString_t
         const auto Size = LZ4_compressBound(int(Safestring.size()));
 
         Buffersize = Size + 1;
+        Originalsize = Safestring.size();
         Internalstorage = std::make_shared<char8_t[]>(Buffersize);
         LZ4_compress_default((char *)Safestring.data(), (char *)Internalstorage.get(), (int)Input.size(), (int)Buffersize);
     }
@@ -67,13 +70,9 @@ struct LZString_t
         return Encoding::toNarrow(std::u8string_view(Decodebuffer.get(), Decodesize));
     }
 
-    [[nodiscard]] const char8_t *data() const
-    {
-        return Internalstorage.get();
-    }
     [[nodiscard]] size_t size() const
     {
-        return Buffersize;
+        return Originalsize;
     }
 };
 #else
