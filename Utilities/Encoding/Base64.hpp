@@ -33,18 +33,21 @@ namespace Base64
             64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
             41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64
         };
+
+        template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
     }
 
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Encode(std::basic_string_view<T> Input)
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr std::array<char, ((N + 2) / 3 * 4)> Encode(const T (&Input)[N])
     {
-        std::basic_string<T> Result(((Input.size() + 2) / 3 * 4), '=');
+        std::array<char, ((N + 2) / 3 * 4)> Result;
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
+            const auto Item = Input[i];
             Accumulator = (Accumulator << 8) | (Item & 0xFF);
             Bits += 8;
             while (Bits >= 6)
@@ -60,75 +63,23 @@ namespace Base64
             Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
         }
 
-        return Result;
-    }
-
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Encode(const std::basic_string<T> &Input)
-    {
-        std::basic_string<T> Result(((Input.size() + 2) / 3 * 4), '=');
-        size_t Outputposition{};
-        uint32_t Accumulator{};
-        uint32_t Bits{};
-
-        for (const auto &Item : Input)
-        {
-            Accumulator = (Accumulator << 8) | (Item & 0xFF);
-            Bits += 8;
-            while (Bits >= 6)
-            {
-                Bits -= 6;
-                Result[Outputposition++] = Internal::Table[Accumulator >> Bits & 0x3F];
-            }
-        }
-
-        if (Bits)
-        {
-            Accumulator <<= 6 - Bits;
-            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
-        }
+        while (Outputposition < ((N + 2) / 3 * 4))
+            Result[Outputposition++] = '=';
 
         return Result;
     }
 
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Encode(std::basic_string<T> &&Input)
+    template<size_t N, typename T = char, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr std::array<T, (3 * N / 4)> Decode(const char (&Input)[N])
     {
-        std::basic_string<T> Result(((Input.size() + 2) / 3 * 4), '=');
+        std::array<T, (3 * N / 4)> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
-            Accumulator = (Accumulator << 8) | (Item & 0xFF);
-            Bits += 8;
-            while (Bits >= 6)
-            {
-                Bits -= 6;
-                Result[Outputposition++] = Internal::Table[Accumulator >> Bits & 0x3F];
-            }
-        }
-
-        if (Bits)
-        {
-            Accumulator <<= 6 - Bits;
-            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
-        }
-
-        return Result;
-    }
-
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Decode(std::basic_string_view<T> Input)
-    {
-        std::basic_string<T> Result((Input.size() / 4 * 3), '\0');
-        size_t Outputposition{};
-        uint32_t Accumulator{};
-        uint32_t Bits{};
-
-        for (const auto &Item : Input)
-        {
+            const auto Item = Input[i];
             if (Item == '=') continue;
 
             Accumulator = Accumulator << 6 | Internal::Reversetable[static_cast<uint8_t>(Item)];
@@ -144,16 +95,49 @@ namespace Base64
         return Result;
     }
 
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Decode(const std::basic_string<T> &Input)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr std::array<char, ((N + 2) / 3 * 4)> Encode(const std::array<T, N> &Input)
     {
-        std::basic_string<T> Result((Input.size() / 4 * 3), '\0');
+        std::array<char, ((N + 2) / 3 * 4)> Result;
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
+            const auto Item = Input[i];
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = Internal::Table[Accumulator >> Bits & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
+        }
+
+        while (Outputposition < ((N + 2) / 3 * 4))
+            Result[Outputposition++] = '=';
+
+        return Result;
+    }
+
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr std::array<T, (3 * N / 4)> Decode(const std::array<T, N> &Input)
+    {
+        std::array<T, (3 * N / 4)> Result{};
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
             if (Item == '=') continue;
 
             Accumulator = Accumulator << 6 | Internal::Reversetable[static_cast<uint8_t>(Item)];
@@ -169,10 +153,38 @@ namespace Base64
         return Result;
     }
 
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Decode(std::basic_string<T> &&Input)
+    template <Internal::Iteratable_t T, typename = std::enable_if<(sizeof(T::value_type) == 1)>::type>
+    [[nodiscard]] inline std::string Encode(const T &Input)
     {
-        std::basic_string<T> Result((Input.size() / 4 * 3), '\0');
+        std::string Result(((Input.size() + 2) / 3 * 4), '=');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = Internal::Table[Accumulator >> Bits & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
+        }
+
+        return Result;
+    }
+
+    template <Internal::Iteratable_t T, typename = std::enable_if<(sizeof(T::value_type) == 1)>::type>
+    [[nodiscard]] inline std::basic_string<typename T::value_type> Decode(const T &Input)
+    {
+        std::basic_string<T::value_type> Result(( 3 * Input.size() / 4), '\0');
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};
@@ -195,7 +207,7 @@ namespace Base64
     }
 
     // No need for extra allocations.
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template <typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     constexpr std::basic_string_view<T> Decode_inplace(T *Input, size_t Length)
     {
         size_t Outputposition{};
@@ -221,8 +233,7 @@ namespace Base64
     }
 
     // Verify that the string is valid.
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] constexpr bool isValid(std::basic_string_view<T> Input)
+    [[nodiscard]] inline bool isValid(const std::string &Input)
     {
         if ((Input.size() & 3) != 0) return false;
 
@@ -239,70 +250,41 @@ namespace Base64
     }
 
     // RFC7515 compatibility.
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> toURL(std::basic_string<T> &&Input)
+    [[nodiscard]] inline std::string toURL(std::string_view Input)
     {
         while (Input.back() == '=')
-            Input.pop_back();
+            Input.remove_suffix(1);
 
-        for (auto &Item : Input)
+        std::string Result(Input);
+        for (auto &Item : Result)
         {
             if (Item == '+') Item = '-';
             if (Item == '/') Item = '_';
         }
 
-        return Input;
+        return Result;
     }
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> &toURL(std::basic_string<T> &Input)
+    [[nodiscard]] inline std::string fromURL(std::string_view Input)
     {
-        while (Input.back() == '=')
-            Input.pop_back();
+        std::string Result(Input);
 
-        for (auto &Item : Input)
-        {
-            if (Item == '+') Item = '-';
-            if (Item == '/') Item = '_';
-        }
-
-        return Input;
-    }
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> fromURL(std::basic_string<T> &&Input)
-    {
-        for (auto &Item : Input)
+        for (auto &Item : Result)
         {
             if (Item == '-') Item = '+';
             if (Item == '_') Item = '/';
         }
 
-        switch (Input.size() & 3)
+        switch (Result.size() & 3)
         {
-            case 3: Input += "==="; break;
-            case 2: Input += "=="; break;
-            case 1: Input += "="; break;
+            case 3: Result += "==="; break;
+            case 2: Result += "=="; break;
+            case 1: Result += "="; break;
             default: break;
         }
 
-        return Input;
+        return Result;
     }
-    template <typename T, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> &fromURL(std::basic_string<T> &Input)
-    {
-        for (auto &Item : Input)
-        {
-            if (Item == '-') Item = '+';
-            if (Item == '_') Item = '/';
-        }
 
-        switch (Input.size() & 3)
-        {
-            case 3: Input += "==="; break;
-            case 2: Input += "=="; break;
-            case 1: Input += "="; break;
-            default: break;
-        }
-
-        return Input;
-    }
+    // Sanity checking.
+    static_assert(Encode("12345") == Encode(Decode(Encode("12345"))), "Someone fucked with the Base64 encoding");
 }
