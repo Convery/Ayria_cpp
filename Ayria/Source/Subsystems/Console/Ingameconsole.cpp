@@ -276,7 +276,7 @@ namespace Console
                 if (!isVisible) [[likely]] return;
 
                 // Check if the output area needs to be repainted.
-                const auto Hash = Hash::WW32(Console::getLoglines(1, L"")[0].first);
+                const auto Hash = Hash::WW32(Encoding::toNarrow(Console::getLoglines(1, L"")[0].first));
                 if (Lastmessage != Hash) [[unlikely]]
                 {
                     ++Outputarea::Eventcount;
