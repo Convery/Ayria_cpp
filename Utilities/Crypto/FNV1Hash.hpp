@@ -10,64 +10,60 @@
 
 namespace Hash
 {
-    namespace Internal
+    namespace FNVInternal
     {
         constexpr uint32_t FNV1_Prime_32 = 16777619u;
         constexpr uint32_t FNV1_Offset_32 = 2166136261u;
         constexpr uint64_t FNV1_Prime_64 = 1099511628211u;
         constexpr uint64_t FNV1_Offset_64 = 14695981039346656037u;
 
-        // Worlds worst strlen, but compilers get upset.
-        [[nodiscard]] constexpr size_t FNVStrlen(const char *String)
-        {
-            return *String ? 1 + FNVStrlen(String + 1) : 0;
-        }
+        template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
 
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint32_t FNV1_32(T *Input, size_t Length)
         {
-            uint32_t Hash = Internal::FNV1_Offset_32;
+            uint32_t Hash = FNVInternal::FNV1_Offset_32;
             for (size_t i = 0; i < Length; ++i)
             {
-                Hash *= Internal::FNV1_Prime_32;
+                Hash *= FNVInternal::FNV1_Prime_32;
                 Hash ^= Input[i];
             }
 
             return Hash;
         }
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint32_t FNV1a_32(T *Input, size_t Length)
         {
-            uint32_t Hash = Internal::FNV1_Offset_32;
+            uint32_t Hash = FNVInternal::FNV1_Offset_32;
             for (size_t i = 0; i < Length; ++i)
             {
                 Hash ^= Input[i];
-                Hash *= Internal::FNV1_Prime_32;
+                Hash *= FNVInternal::FNV1_Prime_32;
             }
 
             return Hash;
         }
 
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint64_t FNV1_64(T *Input, size_t Length)
         {
-            uint64_t Hash = Internal::FNV1_Offset_64;
+            uint64_t Hash = FNVInternal::FNV1_Offset_64;
             for (size_t i = 0; i < Length; ++i)
             {
-                Hash *= Internal::FNV1_Prime_64;
+                Hash *= FNVInternal::FNV1_Prime_64;
                 Hash ^= Input[i];
             }
 
             return Hash;
         }
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint64_t FNV1a_64(T *Input, size_t Length)
         {
-            uint64_t Hash = Internal::FNV1_Offset_64;
+            uint64_t Hash = FNVInternal::FNV1_Offset_64;
             for (size_t i = 0; i < Length; ++i)
             {
                 Hash ^= Input[i];
-                Hash *= Internal::FNV1_Prime_64;
+                Hash *= FNVInternal::FNV1_Prime_64;
             }
 
             return Hash;
@@ -75,124 +71,104 @@ namespace Hash
     }
 
     // Compile-time hashing for literals.
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint32_t FNV1_32(T(&Input)[N])
     {
-        return Internal::FNV1_32(Input, N - 1);
+        return FNVInternal::FNV1_32(Input, N - 1);
     }
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint64_t FNV1_64(T(&Input)[N])
     {
-        return Internal::FNV1_64(Input, N - 1);
+        return FNVInternal::FNV1_64(Input, N - 1);
     }
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint32_t FNV1a_32(T(&Input)[N])
     {
-        return Internal::FNV1a_32(Input, N - 1);
+        return FNVInternal::FNV1a_32(Input, N - 1);
     }
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint64_t FNV1a_64(T(&Input)[N])
     {
-        return Internal::FNV1a_64(Input, N - 1);
+        return FNVInternal::FNV1a_64(Input, N - 1);
     }
 
     // Compile-time hashing for fixed-length datablocks.
-    [[nodiscard]] constexpr uint32_t FNV1_32(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t FNV1_32(const T *Input, size_t Length)
     {
-        return Internal::FNV1_32(Input, Length);
+        return FNVInternal::FNV1_32(Input, Length);
     }
-    [[nodiscard]] constexpr uint64_t FNV1_64(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t FNV1_64(const T *Input, size_t Length)
     {
-        return Internal::FNV1_64(Input, Length);
+        return FNVInternal::FNV1_64(Input, Length);
     }
-    [[nodiscard]] constexpr uint32_t FNV1a_32(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t FNV1a_32(const T *Input, size_t Length)
     {
-        return Internal::FNV1a_32(Input, Length);
+        return FNVInternal::FNV1a_32(Input, Length);
     }
-    [[nodiscard]] constexpr uint64_t FNV1a_64(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t FNV1a_64(const T *Input, size_t Length)
     {
-        return Internal::FNV1a_64(Input, Length);
+        return FNVInternal::FNV1a_64(Input, Length);
     }
-
-    // Run-time hashing for fixed-length datablocks.
-    [[nodiscard]] inline uint32_t FNV1_32(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t FNV1_32(const std::array<T, N> &Input)
     {
-        return Internal::FNV1_32((const uint8_t *)Input, Length);
+        return FNVInternal::FNV1_32(Input, N);
     }
-    [[nodiscard]] inline uint64_t FNV1_64(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t FNV1_64(const std::array<T, N> &Input)
     {
-        return Internal::FNV1_64((const uint8_t *)Input, Length);
+        return FNVInternal::FNV1_64(Input, N);
     }
-    [[nodiscard]] inline uint32_t FNV1a_32(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t FNV1a_32(const std::array<T, N> &Input)
     {
-        return Internal::FNV1a_32((const uint8_t *)Input, Length);
+        return FNVInternal::FNV1a_32(Input, N);
     }
-    [[nodiscard]] inline uint64_t FNV1a_64(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t FNV1a_64(const std::array<T, N> &Input)
     {
-        return Internal::FNV1a_64((const uint8_t *)Input, Length);
+        return FNVInternal::FNV1a_64(Input, N);
     }
 
     // Run-time hashing for dynamic data, constexpr in C++20.
-    [[nodiscard]] constexpr uint32_t FNV1_32(const char *Input)
-    {
-        return Internal::FNV1_32(Input, Internal::FNVStrlen(Input));
-    }
-    [[nodiscard]] constexpr uint64_t FNV1_64(const char *Input)
-    {
-        return Internal::FNV1_64(Input, Internal::FNVStrlen(Input));
-    }
-    [[nodiscard]] constexpr uint32_t FNV1a_32(const char *Input)
-    {
-        return Internal::FNV1a_32(Input, Internal::FNVStrlen(Input));
-    }
-    [[nodiscard]] constexpr uint64_t FNV1a_64(const char *Input)
-    {
-        return Internal::FNV1a_64(Input, Internal::FNVStrlen(Input));
-    }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(std::basic_string_view<T> String)
+    template<FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32(const T &String)
     {
         return FNV1_32(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(std::basic_string_view<T> String)
+    template<FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64(const T &String)
     {
         return FNV1_64(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(std::basic_string_view<T> String)
+    template<FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1a_32(const T &String)
     {
         return FNV1a_32(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(std::basic_string_view<T> String)
-    {
-        return FNV1a_64(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const std::basic_string<T> &String)
-    {
-        return FNV1_32(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const std::basic_string<T> &String)
-    {
-        return FNV1_64(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const std::basic_string<T> &String)
-    {
-        return FNV1a_32(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const std::basic_string<T> &String)
+    template<FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1a_64(const T &String)
     {
         return FNV1a_64(String.data(), String.size());
     }
 
     // Wrappers for random types.
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(T Value) { return FNV1_3232(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(T Value) { return FNV1_6464(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(T Value) { return FNV1a_3232(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(T Value) { return FNV1a_6464(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1_32(const T &Value) { return FNV1_32((uint8_t *)&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1_64(const T &Value) { return FNV1_64((uint8_t *)&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t FNV1a_32(const T &Value) { return FNV1a_32((uint8_t *)&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint64_t FNV1a_64(const T &Value) { return FNV1a_64((uint8_t *)&Value, sizeof(Value)); }
+
+    // Sanity checking.
+    static_assert(FNV1_32("12345") == 0xDEEE36FA, "Someone fucked with FNV32.");
+    static_assert(FNV1a_32("12345") == 0x43C2C0D8, "Someone fucked with FNV32a.");
+    static_assert(FNV1_64("12345") == 0xA92F4455DA95A77A, "Someone fucked with FNV64.");
+    static_assert(FNV1a_64("12345") == 0xE575E8883C0F89F8, "Someone fucked with FNV64a.");
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.
 // e.g. std::unordered_map<SillyType, int, decltype(FNV::Hash), decltype(FNV::Equal)>
 namespace FNV
 {
-    constexpr auto Hash = [](const auto &v) { return Hash::FNV1a_64(&v, sizeof(v)); };
+    constexpr auto Hash = [](const auto &v) { return Hash::FNV1a_64((uint8_t *)&v, sizeof(v)); };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }

@@ -15,23 +15,10 @@ namespace Hash
 {
     namespace Internal
     {
-        // std::array operator [] is not proper constexpr.
-        template <typename T, size_t N> struct Array
-        {
-            T m_data[N];
-            using value_type = T;
-            using size_type = std::size_t;
-            using reference = value_type &;
-            using const_reference = const value_type &;
-
-            static constexpr size_type size() noexcept { return N; }
-            constexpr reference operator[](size_type i) noexcept { return m_data[i]; }
-            constexpr const_reference operator[](size_type i) const noexcept { return m_data[i]; }
-        };
-        constexpr Array<uint32_t, 256> CRC32B_Table()
+        constexpr std::array<uint32_t, 256> CRC32B_Table()
         {
             const uint32_t Polynomial = 0xEDB88320;
-            Array<uint32_t, 256> Table{};
+            std::array<uint32_t, 256> Table{};
 
             for (uint16_t i = 0; i <= 0xFF; ++i)
             {

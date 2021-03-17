@@ -12,20 +12,16 @@
 
 namespace Hash
 {
-    namespace Internal
+    namespace WWInternal
     {
         constexpr uint64_t _wheatp0 = 0xa0761d6478bd642full, _wheatp1 = 0xe7037ed1a0b428dbull, _wheatp2 = 0x8ebc6af09c88c6e3ull;
         constexpr uint64_t _wheatp3 = 0x589965cc75374cc3ull, _wheatp4 = 0x1d8e4e27c47d124full, _wheatp5 = 0xeb44accab455d165ull;
         constexpr uint64_t _waterp0 = 0xa0761d65ull, _waterp1 = 0xe7037ed1ull, _waterp2 = 0x8ebc6af1ull;
         constexpr uint64_t _waterp3 = 0x589965cdull, _waterp4 = 0x1d8e4e27ull, _waterp5 = 0xeb44accbull;
 
-        // Worlds worst strlen, but compilers get upset.
-        [[nodiscard]] constexpr size_t WWStrlen(const char *String)
-        {
-            return *String ? 1 + WWStrlen(String + 1) : 0;
-        }
+        template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
 
-        template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint64_t toINT64(T *p)
         {
             uint64_t Result{};
@@ -47,7 +43,7 @@ namespace Hash
             return Tmp - (Tmp >> 32);
         }
 
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint64_t Wheathash(T *Input, size_t Length, uint64_t Seed)
         {
             for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
@@ -80,7 +76,7 @@ namespace Hash
             return Seed - (Seed >> 31) + (Seed << 33);
         }
 
-        template<typename T, typename = std::enable_if<sizeof(T) == 1>>
+        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
         constexpr uint32_t Waterhash(T *Input, size_t Length, uint64_t Seed)
         {
             for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
@@ -115,72 +111,62 @@ namespace Hash
     }
 
     // Compile-time hashing for literals.
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint32_t WW32(T(&Input)[N])
     {
-        return Internal::Waterhash(Input, N - 1, Internal::_waterp0);
+        return WWInternal::Waterhash(Input, N - 1, WWInternal::_waterp0);
     }
-    template<size_t N, typename T, typename = std::enable_if<sizeof(T) == 1>>
+    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
     [[nodiscard]] constexpr uint64_t WW64(T(&Input)[N])
     {
-        return Internal::Wheathash(Input, N - 1, Internal::_wheatp0);
+        return WWInternal::Wheathash(Input, N - 1, WWInternal::_wheatp0);
     }
 
     // Compile-time hashing for fixed-length datablocks.
-    [[nodiscard]] constexpr uint32_t WW32(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t WW32(const T *Input, size_t Length)
     {
-        return Internal::Waterhash(Input, Length, Internal::_waterp0);
+        return WWInternal::Waterhash(Input, Length, WWInternal::_waterp0);
     }
-    [[nodiscard]] constexpr uint64_t WW64(const uint8_t *Input, size_t Length)
+    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t WW64(const T *Input, size_t Length)
     {
-        return Internal::Wheathash(Input, Length, Internal::_wheatp0);
+        return WWInternal::Wheathash(Input, Length, WWInternal::_wheatp0);
     }
-
-    // Run-time hashing for fixed-length datablocks.
-    [[nodiscard]] inline uint32_t WW32(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint32_t WW32(const std::array<T, N> &Input)
     {
-        return Internal::Waterhash((const uint8_t *)Input, Length, Internal::_waterp0);
+        return WWInternal::Waterhash(Input.data(), N, WWInternal::_waterp0);
     }
-    [[nodiscard]] inline uint64_t WW64(const void *Input, const size_t Length)
+    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
+    [[nodiscard]] constexpr uint64_t WW64(const std::array<T, N> &Input)
     {
-        return Internal::Wheathash((const uint8_t *)Input, Length, Internal::_wheatp0);
+        return WWInternal::Wheathash(Input.data(), N, WWInternal::_wheatp0);
     }
 
     // Run-time hashing for dynamic data, constexpr in C++20.
-    [[nodiscard]] constexpr uint32_t WW32(const char *Input)
-    {
-         return Internal::Waterhash(Input, Internal::WWStrlen(Input), Internal::_waterp0);
-    }
-    [[nodiscard]] constexpr uint64_t WW64(const char *Input)
-    {
-        return Internal::Wheathash(Input, Internal::WWStrlen(Input), Internal::_wheatp0);
-    }
-    template<typename T> [[nodiscard]] constexpr uint32_t WW32(std::basic_string_view<T> String)
+    template<WWInternal::Iteratable_t T> [[nodiscard]] inline uint32_t WW32(const T &String)
     {
         return WW32(String.data(), String.size());
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t WW64(std::basic_string_view<T> String)
-    {
-        return WW64(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint32_t WW32(const std::basic_string<T> &String)
-    {
-        return WW32(String.data(), String.size());
-    }
-    template<typename T> [[nodiscard]] constexpr uint64_t WW64(const std::basic_string<T> &String)
+    template<WWInternal::Iteratable_t T> [[nodiscard]] inline uint64_t WW64(const T &String)
     {
         return WW64(String.data(), String.size());
     }
 
     // Wrappers for random types.
-    template<typename T> [[nodiscard]] constexpr uint32_t WW32(T Value) { return WW32(&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint64_t WW64(T Value) { return WW64(&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint32_t WW32(T Value) { return WW32((uint8_t *)&Value, sizeof(Value)); }
+    template<typename T> [[nodiscard]] constexpr uint64_t WW64(T Value) { return WW64((uint8_t *)&Value, sizeof(Value)); }
+
+    // Sanity checking.
+    static_assert(WW32("12345") == 0xEE98FD70, "Someone fucked with WW32.");
+    static_assert(WW64("12345") == 0x3C570C468027DB01, "Someone fucked with WW64.");
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.
 // e.g. std::unordered_set<SillyType, decltype(WW::Hash), decltype(WW::Equal)>
 namespace WW
 {
-    constexpr auto Hash = [](const auto &v) { return Hash::WW64(&v, sizeof(v)); };
+    constexpr auto Hash = [](const auto &v) { return Hash::WW64((uint8_t *)&v, sizeof(v)); };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }
