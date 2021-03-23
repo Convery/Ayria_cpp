@@ -20,9 +20,9 @@ namespace Hash
         constexpr uint64_t _waterp3 = 0x589965cdull, _waterp4 = 0x1d8e4e27ull, _waterp5 = 0xeb44accbull;
 
         template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
+        template <typename T> concept Bytealigned_t = sizeof(T) == 1;
 
-        template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-        constexpr uint64_t toINT64(T *p)
+        template<size_t N, Bytealigned_t T> constexpr uint64_t toINT64(T *p)
         {
             uint64_t Result{};
 
@@ -36,48 +36,14 @@ namespace Hash
             if constexpr (N >= 8)  Result |= (uint64_t(*p++) << (N - 8));
             return Result;
         }
-
         constexpr uint64_t Process(uint64_t A, uint64_t B)
         {
             const uint64_t Tmp{ A * B };
             return Tmp - (Tmp >> 32);
         }
 
-        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-        constexpr uint64_t Wheathash(T *Input, size_t Length, uint64_t Seed)
-        {
-            for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
-            {
-                Seed = Process(
-                    Process(toINT64<32>(Input) ^ _wheatp1, toINT64<32>(Input + 4) ^ _wheatp2) + Seed,
-                    Process(toINT64<32>(Input + 8) ^ _wheatp3, toINT64<32>(Input + 12) ^ _wheatp4));
-            }
-
-            Seed += _wheatp5;
-            switch (Length & 15)
-            {
-                case 1:  Seed = Process(_wheatp2 ^ Seed, toINT64<8>(Input) ^ _wheatp1); break;
-                case 2:  Seed = Process(_wheatp3 ^ Seed, toINT64<16>(Input) ^ _wheatp4); break;
-                case 3:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<8>(Input + 2) ^ _wheatp2); break;
-                case 4:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<16>(Input + 2) ^ _wheatp3); break;
-                case 5:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<8>(Input + 4) ^ _wheatp1); break;
-                case 6:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<16>(Input + 4) ^ _wheatp1); break;
-                case 7:  Seed = Process(toINT64<32>(Input) ^ Seed, (toINT64<16>(Input + 4) << 8 | toINT64<8>(Input + 6)) ^ _wheatp1); break;
-                case 8:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp0); break;
-                case 9:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ _wheatp4, toINT64<8>(Input + 8) ^ _wheatp3); break;
-                case 10: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, toINT64<16>(Input + 8) ^ _wheatp3); break;
-                case 11: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, ((toINT64<16>(Input + 8) << 8) | toINT64<8>(Input + 10)) ^ _wheatp3); break;
-                case 12: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), _wheatp4); break;
-                case 13: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<8>(Input + 12)) ^ _wheatp4); break;
-                case 14: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12)) ^ _wheatp4); break;
-                case 15: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12) << 8 | toINT64<8>(Input + 14)) ^ _wheatp4); break;
-            }
-            Seed = (Seed ^ Seed << 16) * (Length ^ _wheatp0);
-            return Seed - (Seed >> 31) + (Seed << 33);
-        }
-
-        template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-        constexpr uint32_t Waterhash(T *Input, size_t Length, uint64_t Seed)
+        // Implementation.
+        template<Bytealigned_t T> constexpr uint32_t Waterhash(const T *Input, size_t Length, uint64_t Seed = _waterp0)
         {
             for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
             {
@@ -108,55 +74,104 @@ namespace Hash
             Seed = (Seed ^ (Seed << 16)) * (Length ^ _waterp0);
             return (uint32_t)(Seed - (Seed >> 32));
         }
+        template<Bytealigned_t T> constexpr uint64_t Wheathash(const T *Input, size_t Length, uint64_t Seed = _wheatp0)
+        {
+            for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
+            {
+                Seed = Process(
+                    Process(toINT64<32>(Input) ^ _wheatp1, toINT64<32>(Input + 4) ^ _wheatp2) + Seed,
+                    Process(toINT64<32>(Input + 8) ^ _wheatp3, toINT64<32>(Input + 12) ^ _wheatp4));
+            }
+
+            Seed += _wheatp5;
+            switch (Length & 15)
+            {
+                case 1:  Seed = Process(_wheatp2 ^ Seed, toINT64<8>(Input) ^ _wheatp1); break;
+                case 2:  Seed = Process(_wheatp3 ^ Seed, toINT64<16>(Input) ^ _wheatp4); break;
+                case 3:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<8>(Input + 2) ^ _wheatp2); break;
+                case 4:  Seed = Process(toINT64<16>(Input) ^ Seed, toINT64<16>(Input + 2) ^ _wheatp3); break;
+                case 5:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<8>(Input + 4) ^ _wheatp1); break;
+                case 6:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<16>(Input + 4) ^ _wheatp1); break;
+                case 7:  Seed = Process(toINT64<32>(Input) ^ Seed, (toINT64<16>(Input + 4) << 8 | toINT64<8>(Input + 6)) ^ _wheatp1); break;
+                case 8:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp0); break;
+                case 9:  Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ _wheatp4, toINT64<8>(Input + 8) ^ _wheatp3); break;
+                case 10: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, toINT64<16>(Input + 8) ^ _wheatp3); break;
+                case 11: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed, ((toINT64<16>(Input + 8) << 8) | toINT64<8>(Input + 10)) ^ _wheatp3); break;
+                case 12: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), _wheatp4); break;
+                case 13: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<8>(Input + 12)) ^ _wheatp4); break;
+                case 14: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12)) ^ _wheatp4); break;
+                case 15: Seed = Process(toINT64<32>(Input) ^ Seed, toINT64<32>(Input + 4) ^ _wheatp2) ^ Process(Seed ^ toINT64<32>(Input + 8), (toINT64<16>(Input + 12) << 8 | toINT64<8>(Input + 14)) ^ _wheatp4); break;
+            }
+            Seed = (Seed ^ Seed << 16) * (Length ^ _wheatp0);
+            return Seed - (Seed >> 31) + (Seed << 33);
+        }
     }
 
-    // Compile-time hashing for literals.
-    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint32_t WW32(T(&Input)[N])
+    // Compile-time hashing for simple fixed-length datablocks.
+    template <WWInternal::Bytealigned_t T, size_t N> [[nodiscard]] constexpr uint32_t WW32(const std::array<T, N> &Input)
     {
-        return WWInternal::Waterhash(Input, N - 1, WWInternal::_waterp0);
+        return WWInternal::Waterhash(Input.data(), N);
     }
-    template<size_t N, typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint64_t WW64(T(&Input)[N])
+    template <WWInternal::Bytealigned_t T, size_t N> [[nodiscard]] constexpr uint64_t WW64(const std::array<T, N> &Input)
     {
-        return WWInternal::Wheathash(Input, N - 1, WWInternal::_wheatp0);
+        return WWInternal::Wheathash(Input.data(), N);
+    }
+    template <typename T, size_t N> [[nodiscard]] constexpr uint32_t WW32(const std::array<T, N> &Input)
+    {
+        return WWInternal::Waterhash<uint8_t>((const uint8_t *)Input.data(), sizeof(T) * N);
+    }
+    template <typename T, size_t N> [[nodiscard]] constexpr uint64_t WW64(const std::array<T, N> &Input)
+    {
+        return WWInternal::Wheathash<uint8_t>((const uint8_t *)Input.data(), sizeof(T) * N);
     }
 
-    // Compile-time hashing for fixed-length datablocks.
-    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint32_t WW32(const T *Input, size_t Length)
+    // Compile-time hashing for string literals.
+    template <WWInternal::Bytealigned_t T, size_t N> [[nodiscard]] constexpr uint32_t WW32(T(&Input)[N])
     {
-        return WWInternal::Waterhash(Input, Length, WWInternal::_waterp0);
+        return WWInternal::Waterhash<T>(Input, N - 1);
     }
-    template<typename T, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint64_t WW64(const T *Input, size_t Length)
+    template <WWInternal::Bytealigned_t T, size_t N> [[nodiscard]] constexpr uint64_t WW64(T(&Input)[N])
     {
-        return WWInternal::Wheathash(Input, Length, WWInternal::_wheatp0);
+        return WWInternal::Wheathash<T>(Input, N - 1);
     }
-    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint32_t WW32(const std::array<T, N> &Input)
+    template <typename T, size_t N> [[nodiscard]] constexpr uint32_t WW32(T(&Input)[N])
     {
-        return WWInternal::Waterhash(Input.data(), N, WWInternal::_waterp0);
+        return WWInternal::Waterhash<uint8_t>((const uint8_t *)&Input, sizeof(T) * (N - 1));
     }
-    template<typename T, size_t N, typename = std::enable_if<(sizeof(T) == 1)>::type>
-    [[nodiscard]] constexpr uint64_t WW64(const std::array<T, N> &Input)
+    template <typename T, size_t N> [[nodiscard]] constexpr uint64_t WW64(T(&Input)[N])
     {
-        return WWInternal::Wheathash(Input.data(), N, WWInternal::_wheatp0);
+        return WWInternal::Wheathash<uint8_t>((const uint8_t *)&Input, sizeof(T) * (N - 1));
     }
 
     // Run-time hashing for dynamic data, constexpr in C++20.
-    template<WWInternal::Iteratable_t T> [[nodiscard]] inline uint32_t WW32(const T &String)
+    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
+        requires WWInternal::Bytealigned_t<typename T::value_type>
     {
-        return WW32(String.data(), String.size());
+        return WWInternal::Waterhash<T::value_type>(Vector.data(), Vector.size());
     }
-    template<WWInternal::Iteratable_t T> [[nodiscard]] inline uint64_t WW64(const T &String)
+    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
+        requires WWInternal::Bytealigned_t<typename T::value_type>
     {
-        return WW64(String.data(), String.size());
+        return WWInternal::Wheathash<T::value_type>(Vector.data(), Vector.size());
+    }
+    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
+    {
+        return WWInternal::Waterhash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
+    }
+    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
+    {
+        return WWInternal::Wheathash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
     }
 
-    // Wrappers for random types.
-    template<typename T> [[nodiscard]] constexpr uint32_t WW32(T Value) { return WW32((uint8_t *)&Value, sizeof(Value)); }
-    template<typename T> [[nodiscard]] constexpr uint64_t WW64(T Value) { return WW64((uint8_t *)&Value, sizeof(Value)); }
+    // Wrappers for random types, constexpr depending on compiler.
+    template<typename T> [[nodiscard]] constexpr uint32_t WW32(const T &Value)
+    {
+        return WWInternal::Waterhash<uint8_t>((const uint8_t *)&Value, sizeof(Value));
+    }
+    template<typename T> [[nodiscard]] constexpr uint64_t WW64(const T &Value)
+    {
+        return WWInternal::Wheathash<uint8_t>((const uint8_t *)&Value, sizeof(Value));
+    }
 
     // Sanity checking.
     static_assert(WW32("12345") == 0xEE98FD70, "Someone fucked with WW32.");
