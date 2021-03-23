@@ -22,7 +22,7 @@ namespace Hash
         template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
         template <typename T> concept Bytealigned_t = sizeof(T) == 1;
 
-        template <size_t N, Bytealigned_t T> constexpr uint64_t toINT64(T *p)
+        template <size_t N, Bytealigned_t T> constexpr uint64_t toINT64(const T *p)
         {
             uint64_t Result{};
 
