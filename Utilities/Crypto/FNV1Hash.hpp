@@ -169,6 +169,12 @@ namespace Hash
 // e.g. std::unordered_map<SillyType, int, decltype(FNV::Hash), decltype(FNV::Equal)>
 namespace FNV
 {
-    constexpr auto Hash = [](const auto &v) { return Hash::FNV1a_64((uint8_t *)&v, sizeof(v)); };
+    constexpr auto Hash = [](const auto &v)
+    {
+        if constexpr(sizeof(size_t) == sizeof(uint32_t))
+            return Hash::FNV1a_32((uint8_t *)&v, sizeof(v));
+        else
+            return Hash::FNV1a_64((uint8_t *)&v, sizeof(v));
+    };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }

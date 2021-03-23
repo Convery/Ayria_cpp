@@ -20,7 +20,7 @@ namespace Hash
             const uint32_t Polynomial = 0xEDB88320;
             std::array<uint32_t, 256> Table{};
 
-            for (uint16_t i = 0; i <= 0xFF; ++i)
+            for (uint16_t i = 0; i < 0xFF; ++i)
             {
                 uint32_t Remainder{ i };
 

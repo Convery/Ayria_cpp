@@ -167,6 +167,12 @@ namespace Hash
 // e.g. std::unordered_set<SillyType, decltype(WW::Hash), decltype(WW::Equal)>
 namespace WW
 {
-    constexpr auto Hash = [](const auto &v) { return Hash::WW64((uint8_t *)&v, sizeof(v)); };
+    constexpr auto Hash = [](const auto &v)
+    {
+        if constexpr (sizeof(size_t) == sizeof(uint32_t))
+            return Hash::WW32((uint8_t *)&v, sizeof(v));
+        else
+            return Hash::WW64((uint8_t *)&v, sizeof(v));
+    };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }
