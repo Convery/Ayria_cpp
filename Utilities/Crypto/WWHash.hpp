@@ -22,7 +22,7 @@ namespace Hash
         template <typename T> concept Iteratable_t = requires (const T &t) { t.cbegin(); t.cend(); };
         template <typename T> concept Bytealigned_t = sizeof(T) == 1;
 
-        template<size_t N, Bytealigned_t T> constexpr uint64_t toINT64(T *p)
+        template <size_t N, Bytealigned_t T> constexpr uint64_t toINT64(T *p)
         {
             uint64_t Result{};
 
@@ -43,7 +43,7 @@ namespace Hash
         }
 
         // Implementation.
-        template<Bytealigned_t T> constexpr uint32_t Waterhash(const T *Input, size_t Length, uint64_t Seed = _waterp0)
+        template <Bytealigned_t T> constexpr uint32_t Waterhash(const T *Input, size_t Length, uint64_t Seed = _waterp0)
         {
             for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
             {
@@ -74,7 +74,7 @@ namespace Hash
             Seed = (Seed ^ (Seed << 16)) * (Length ^ _waterp0);
             return (uint32_t)(Seed - (Seed >> 32));
         }
-        template<Bytealigned_t T> constexpr uint64_t Wheathash(const T *Input, size_t Length, uint64_t Seed = _wheatp0)
+        template <Bytealigned_t T> constexpr uint64_t Wheathash(const T *Input, size_t Length, uint64_t Seed = _wheatp0)
         {
             for (size_t i = 0; i + 16 <= Length; i += 16, Input += 16)
             {
@@ -144,31 +144,31 @@ namespace Hash
     }
 
     // Run-time hashing for dynamic data, constexpr in C++20.
-    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
+    template <WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
         requires WWInternal::Bytealigned_t<typename T::value_type>
     {
         return WWInternal::Waterhash<T::value_type>(Vector.data(), Vector.size());
     }
-    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
+    template <WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
         requires WWInternal::Bytealigned_t<typename T::value_type>
     {
         return WWInternal::Wheathash<T::value_type>(Vector.data(), Vector.size());
     }
-    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
+    template <WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
     {
         return WWInternal::Waterhash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
     }
-    template<WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
+    template <WWInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
     {
         return WWInternal::Wheathash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
     }
 
     // Wrappers for random types, constexpr depending on compiler.
-    template<typename T> [[nodiscard]] constexpr uint32_t WW32(const T &Value)
+    template <typename T> [[nodiscard]] constexpr uint32_t WW32(const T &Value)
     {
         return WWInternal::Waterhash<uint8_t>((const uint8_t *)&Value, sizeof(Value));
     }
-    template<typename T> [[nodiscard]] constexpr uint64_t WW64(const T &Value)
+    template <typename T> [[nodiscard]] constexpr uint64_t WW64(const T &Value)
     {
         return WWInternal::Wheathash<uint8_t>((const uint8_t *)&Value, sizeof(Value));
     }
@@ -184,10 +184,8 @@ namespace WW
 {
     constexpr auto Hash = [](const auto &v)
     {
-        if constexpr (sizeof(size_t) == sizeof(uint32_t))
-            return Hash::WW32((uint8_t *)&v, sizeof(v));
-        else
-            return Hash::WW64((uint8_t *)&v, sizeof(v));
+        if constexpr (sizeof(size_t) == sizeof(uint32_t)) return Hash::WW32(v);
+        else return Hash::WW64(v);
     };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }

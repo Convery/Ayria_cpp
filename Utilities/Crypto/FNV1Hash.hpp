@@ -106,31 +106,31 @@ namespace Hash
     }
 
     // Run-time hashing for dynamic data, constexpr in C++20.
-    template<bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Vector)
+    template <bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Vector)
         requires FNVInternal::Bytealigned_t<typename T::value_type>
     {
         return FNV1_32_t<TypeA, T::value_type>(Vector.data(), Vector.size());
     }
-    template<bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Vector)
+    template <bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Vector)
         requires FNVInternal::Bytealigned_t<typename T::value_type>
     {
         return FNV1_64_t<TypeA, T::value_type>(Vector.data(), Vector.size());
     }
-    template<bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Vector)
+    template <bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Vector)
     {
         return FNV1_32_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
     }
-    template<bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Vector)
+    template <bool TypeA, FNVInternal::Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Vector)
     {
         return FNV1_64_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
     }
 
     // Wrappers for random types, constexpr depending on compiler.
-    template<bool TypeA, typename T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Value)
+    template <bool TypeA, typename T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Value)
     {
         return FNV1_32_t<TypeA, uint8_t>((const uint8_t *)&Value, sizeof(Value));
     }
-    template<bool TypeA, typename T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Value)
+    template <bool TypeA, typename T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Value)
     {
         return FNV1_64_t<TypeA, uint8_t>((const uint8_t *)&Value, sizeof(Value));
     }
@@ -154,10 +154,8 @@ namespace FNV
 {
     constexpr auto Hash = [](const auto &v)
     {
-        if constexpr(sizeof(size_t) == sizeof(uint32_t))
-            return Hash::FNV1a_32((uint8_t *)&v, sizeof(v));
-        else
-            return Hash::FNV1a_64((uint8_t *)&v, sizeof(v));
+        if constexpr(sizeof(size_t) == sizeof(uint32_t)) return Hash::FNV1a_32(v);
+        else return Hash::FNV1a_64(v);
     };
     constexpr auto Equal = [](const auto &l, const auto &r) { return Hash(l) == Hash(r); };
 }
