@@ -63,7 +63,7 @@ namespace Clientinfo
             { "isOnline", Global.Stateflags.isOnline},
             { "UserID", Global.UserID }
         });
-        Backend::Network::Transmitmessage("Clientdiscovery", Request);
+        Backend::Network::Transmitmessage("Clientinfo::Discovery", Request);
 
         if (Global.Stateflags.isOnline)
         {
@@ -128,7 +128,7 @@ namespace Clientinfo
         Lastseen[Client->UserID] = uint32_t(time(NULL));
 
         // Update the database for the plugins.
-        Backend::Database() << "insert or replace into Knownclients (ClientID, Lastseen, Uername, Local) values (?, ?, ?, ?);"
+        Backend::Database() << "insert or replace into Onlineclients (ClientID, Lastseen, Uername, Local) values (?, ?, ?, ?);"
                             << Client->UserID << Lastseen[Client->UserID] << Encoding::toNarrow(*Client->Username) << true;
     }
 
@@ -165,14 +165,14 @@ namespace Clientinfo
     void Initializediscovery()
     {
         // Persistent database entry of known clients.
-        Backend::Database() << "create table if not exists Knownclients ("
+        Backend::Database() << "create table Onlineclients ("
                                "ClientID integer primary key unique not null, "
                                "Lastseen integer, "
                                "Username text, "
                                "Local boolean);";
 
         Backend::Enqueuetask(5000, Updateclients);
-        Backend::Network::Registerhandler("Clientdiscovery", Discoveryhandler);
+        Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
 
         Backend::API::addEndpoint("Clientinfo::isClientonline", API::isClientonline);
         Backend::API::addEndpoint("Clientinfo::getLocalclients", API::getLocalclients);

@@ -91,3 +91,12 @@ namespace Social
         Relations::Initialize();
     }
 }
+
+namespace Matchmaking
+{
+    // Currently hosting.
+    bool isActive();
+
+    // Set up handlers.
+    void Initialize();
+}

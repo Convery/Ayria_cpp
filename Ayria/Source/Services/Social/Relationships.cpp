@@ -33,7 +33,7 @@ namespace Social::Relations
             { "isFriend", Relation->Flags.isFriend }
             // We do not notify if the user is blocked.
         });
-        Backend::Network::Transmitmessage("Relationshipupdate", Request);
+        Backend::Network::Transmitmessage("Relations::Update", Request);
 
         // Save the change for later.
         Backend::Database() << "insert or replace into Socialrelations (ClientID, Uername, Flags) values (?, ?, ?);"
@@ -127,11 +127,11 @@ namespace Social::Relations
         };
 
         // Register the network handlers.
-        Backend::Network::Registerhandler("Relationshipupdate", Relationchangehandler);
+        Backend::Network::Registerhandler("Relations::Update", Relationchangehandler);
 
         // JSON endpoints.
-        Backend::API::addEndpoint("Social::Relations::List", API::List);
-        Backend::API::addEndpoint("Social::Relations::Remove", API::Remove, R"({ "UserID" : 1234 })");
-        Backend::API::addEndpoint("Social::Relations::Insert", API::Insert, R"({ "UserID" : 1234, "isFriend" : false, "isBlocked" : true })");
+        Backend::API::addEndpoint("Relations::List", API::List);
+        Backend::API::addEndpoint("Relations::Remove", API::Remove, R"({ "UserID" : 1234 })");
+        Backend::API::addEndpoint("Relations::Insert", API::Insert, R"({ "UserID" : 1234, "isFriend" : false, "isBlocked" : true })");
     }
 }

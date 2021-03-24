@@ -26,7 +26,7 @@ namespace Clientinfo
             // TODO(tcn): Forward request to some remote server.
         }
 
-        Backend::Network::Transmitmessage("Keyshare", Object);
+        Backend::Network::Transmitmessage("Clientinfo::Keyshare", Object);
     }
     std::string getCryptokey(uint32_t UserID)
     {
@@ -148,6 +148,6 @@ namespace Clientinfo
         Global.Cryptokeys = PK_RSA::Createkeypair(512);
 
         // Listen for local clients sharing their keys.
-        Backend::Network::Registerhandler("Keyshare", Keysharehandler);
+        Backend::Network::Registerhandler("Clientinfo::Keyshare", Keysharehandler);
     }
 }

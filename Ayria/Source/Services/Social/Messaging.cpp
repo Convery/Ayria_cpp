@@ -32,7 +32,7 @@ namespace Social::Messages
                 { "B64Message", B64Message },
                 { "GroupID", GroupID }
             });
-            Backend::Network::Transmitmessage("Groupmessage", Payload);
+            Backend::Network::Transmitmessage("Messaging::Groupmessage", Payload);
             return "{}";
         }
         static std::string __cdecl Sendtouser(JSON::Value_t &&Request)
@@ -70,7 +70,7 @@ namespace Social::Messages
                 { "TargetID", UserID },
                 { "Private", Private }
             });
-            Backend::Network::Transmitmessage("Usermessage", Payload);
+            Backend::Network::Transmitmessage("Messaging::Usermessage", Payload);
             return "{}";
         }
     }
@@ -156,11 +156,11 @@ namespace Social::Messages
                                "B64Message text);";
 
         // Register the network handlers.
-        Backend::Network::Registerhandler("Usermessage", onUsermessage);
-        Backend::Network::Registerhandler("Groupmessage", onGroupmessage);
+        Backend::Network::Registerhandler("Messaging::Usermessage", onUsermessage);
+        Backend::Network::Registerhandler("Messaging::Groupmessage", onGroupmessage);
 
         // JSON endpoints.
-        Backend::API::addEndpoint("Social::Messaging::Sendtouser", API::Sendtouser, R"({ "UserID" : 1234, "B64Message" : "==", "Private" : false })");
-        Backend::API::addEndpoint("Social::Messaging::Sendtogroup", API::Sendtogroup, R"({ "GroupID" : 1234, "B64Message" : "==" })");
+        Backend::API::addEndpoint("Messaging::Sendtouser", API::Sendtouser, R"({ "UserID" : 1234, "B64Message" : "==", "Private" : false })");
+        Backend::API::addEndpoint("Messaging::Sendtogroup", API::Sendtogroup, R"({ "GroupID" : 1234, "B64Message" : "==" })");
     }
 }

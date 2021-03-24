@@ -166,7 +166,7 @@ namespace Backend
         }
 
         // Initialize subsystems that plugins may need.
-        //Matchmaking::API_Initialize();
+        Matchmaking::Initialize();
         Clientinfo::Initialize();
         //Fileshare::Initialize();
         Network::Initialize();

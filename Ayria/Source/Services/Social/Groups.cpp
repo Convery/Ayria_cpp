@@ -80,7 +80,7 @@ namespace Social::Groups
             { "MemberIDs", MemberIDs },
             { "GroupID", GroupID }
         });
-        Backend::Network::Transmitmessage("Groupstatuschange", Request);
+        Backend::Network::Transmitmessage("Groups::Statuschange", Request);
         Recentlyupdated.insert(GroupID);
     }
     static void onJoinrequest(uint64_t GroupID, JSON::Value_t Extradata)
@@ -90,7 +90,7 @@ namespace Social::Groups
             { "GroupID", GroupID }
         });
 
-        Backend::Network::Transmitmessage("Groupjoinrequest", Request);
+        Backend::Network::Transmitmessage("Groups:Joinrequest", Request);
     }
     static void __cdecl Statushandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
@@ -423,7 +423,7 @@ namespace Social::Groups
             }
             else
             {
-                Backend::Network::Transmitmessage("Groupleave", JSON::Object_t({{ "GroupID", GroupID } }));
+                Backend::Network::Transmitmessage("Groups::Leave", JSON::Object_t({{ "GroupID", GroupID } }));
             }
 
             return "{}";
@@ -490,21 +490,21 @@ namespace Social::Groups
         Backend::Enqueuetask(10000, Announce);
 
         // Register the status change handlers.
-        Backend::Network::Registerhandler("Groupleave", Leavehandler);
-        Backend::Network::Registerhandler("Groupjoinrequest", Joinhandler);
-        Backend::Network::Registerhandler("Groupstatuschange", Statushandler);
+        Backend::Network::Registerhandler("Groups::Leave", Leavehandler);
+        Backend::Network::Registerhandler("Groups::Joinrequest", Joinhandler);
+        Backend::Network::Registerhandler("Groups::Statuschange", Statushandler);
 
         // JSON endpoints.
-        Backend::API::addEndpoint("Social::Groups::Creategroup", API::Creategroup);
-        Backend::API::addEndpoint("Social::Groups::Deletegroup", API::Deletegroup);
-        Backend::API::addEndpoint("Social::Groups::addMember", API::addMember);
-        Backend::API::addEndpoint("Social::Groups::removeMember", API::removeMember);
-        Backend::API::addEndpoint("Social::Groups::getMemberdata", API::getMemberdata);
-        Backend::API::addEndpoint("Social::Groups::setMemberdata", API::setMemberdata);
-        Backend::API::addEndpoint("Social::Groups::getJoinrequests", API::getJoinrequests);
-        Backend::API::addEndpoint("Social::Groups::answerJoinrequestequest", API::answerJoinrequestequest);
-        Backend::API::addEndpoint("Social::Groups::Requestjoin", API::Requestjoin);
-        Backend::API::addEndpoint("Social::Groups::Notifyleave", API::Notifyleave);
-        Backend::API::addEndpoint("Social::Groups::Listgroups", API::Listgroups);
+        Backend::API::addEndpoint("Groups::Creategroup", API::Creategroup);
+        Backend::API::addEndpoint("Groups::Deletegroup", API::Deletegroup);
+        Backend::API::addEndpoint("Groups::addMember", API::addMember);
+        Backend::API::addEndpoint("Groups::removeMember", API::removeMember);
+        Backend::API::addEndpoint("Groups::getMemberdata", API::getMemberdata);
+        Backend::API::addEndpoint("Groups::setMemberdata", API::setMemberdata);
+        Backend::API::addEndpoint("Groups::getJoinrequests", API::getJoinrequests);
+        Backend::API::addEndpoint("Groups::answerJoinrequestequest", API::answerJoinrequestequest);
+        Backend::API::addEndpoint("Groups::Requestjoin", API::Requestjoin);
+        Backend::API::addEndpoint("Groups::Notifyleave", API::Notifyleave);
+        Backend::API::addEndpoint("Groups::Listgroups", API::Listgroups);
     }
 }

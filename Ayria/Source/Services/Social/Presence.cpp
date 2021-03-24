@@ -24,7 +24,7 @@ namespace Social::Presence
             {
                 isDirty = false;
                 Lastupdate = GetTickCount();
-                Backend::Network::Transmitmessage("Socialpresence", JSON::Parse((std::string)Presencemap[Global.UserID]));
+                Backend::Network::Transmitmessage("Presence::Update", JSON::Parse((std::string)Presencemap[Global.UserID]));
 
                 if (Global.Stateflags.isOnline)
                 {
@@ -67,10 +67,10 @@ namespace Social::Presence
         Backend::Enqueuetask(5000, Sendpresence);
 
         // Register the network handlers.
-        Backend::Network::Registerhandler("Presenceupdate", Presencehandler);
+        Backend::Network::Registerhandler("Presence::Update", Presencehandler);
 
         // JSON endpoints.
-        Backend::API::addEndpoint("Social::Presence::Set", API::Set, R"([ "Key" : value })");
-        Backend::API::addEndpoint("Social::Presence::Get", API::Get, R"({ "UserID" : 1234 })");
+        Backend::API::addEndpoint("Presence::Set", API::Set, R"([ "Key" : value })");
+        Backend::API::addEndpoint("Presence::Get", API::Get, R"({ "UserID" : 1234 })");
     }
 }
