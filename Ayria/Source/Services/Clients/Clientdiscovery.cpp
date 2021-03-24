@@ -159,6 +159,16 @@ namespace Clientinfo
 
             return JSON::Dump(Result);
         }
+        static std::string __cdecl getAccountinfo(JSON::Value_t &&)
+        {
+            const auto Response = JSON::Object_t({
+                { "Username", std::u8string(Global.Username) },
+                { "Locale", std::u8string(Global.Locale) },
+                { "AccountID", Global.UserID }
+            });
+
+            return JSON::Dump(Response);
+        }
     }
 
     //
@@ -175,6 +185,7 @@ namespace Clientinfo
         Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
 
         Backend::API::addEndpoint("Clientinfo::isClientonline", API::isClientonline);
+        Backend::API::addEndpoint("Clientinfo::getAccountinfo", API::getAccountinfo);
         Backend::API::addEndpoint("Clientinfo::getLocalclients", API::getLocalclients);
     }
 }
