@@ -119,7 +119,7 @@ namespace Backend
     }
 
     // Save the configuration to disk.
-    void Saveconfig()
+    static void Saveconfig()
     {
         JSON::Object_t Config{};
         Config["enableExternalconsole"] = Global.Applicationsettings.enableExternalconsole;
@@ -131,10 +131,83 @@ namespace Backend
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
     }
 
-    // Export functionality to the plugins.
-    extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
+    // Initialize the global state from disk settings.
+    static void Initializeglobals()
     {
-        if (PeriodMS && Callback) Enqueuetask(PeriodMS, Callback);
+        const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
+        Global.Applicationsettings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
+        Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
+        Global.UserID = Config.value("UserID", 0xDEADC0DE);
+
+        const auto Locale = Config.value("Locale", u8"english"s);
+        const auto Username = Config.value("Username", u8"AYRIA"s);
+        std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
+        std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
+
+        // Sanity checking, force save if nothing was parsed.
+        if (!FS::Fileexists(L"./Ayria/Settings.json")) Saveconfig();
+
+        // Save the configuration on exit.
+        std::atexit([]() { if (Global.Applicationsettings.modifiedConfig) Saveconfig(); });
+    }
+
+    // Ensure that all tables for the database is available.
+    static void Initializedatabase()
+    {
+        // Track available clients seen since startup.
+        Database() << "CREATE TABLE Onlineclients ("
+                      "ClientID integer primary key unique not null, "
+                      "Lastupdate integer, "
+                      "B64Sharedkey text, "
+                      "Username text );";
+
+        // Track group memberships.
+        Database() << "CREATE TABLE IF NOT EXISTS Usergroups ("
+                      "GroupID integer primary key unique not null, "
+                      "Lastupdate integer, "
+                      "Groupname text, "
+                      "Members blob );";
+
+        // Track pending requests to groups we administrate.
+        Database() << "CREATE TABLE Grouprequests ("
+                      "Timestamp integer, "
+                      "GroupID integer, "
+                      "UserID integer, "
+                      "Extradata text );";
+
+        // Track messages for chat-history and such.
+        Database() << "CREATE TABLE IF NOT EXISTS Messages ("
+                      "ProviderID integer, "
+                      "Timestamp integer, "
+                      "SourceID integer, "
+                      "TargetID integer, "
+                      "GroupID integer, "
+                      "B64Message text, "
+                      "Transient bool );";
+
+        // Track player presence.
+        Database() << "CREATE TABLE Presence ("
+                      "ClientID integer not null, "
+                      "Value text, "
+                      "Key text );";
+
+        // Track friendships and blocked users.
+        Database() << "CREATE TABLE IF NOT EXISTS Relationships ("
+                      "SourceID integer, "
+                      "TargetID integer, "
+                      "Flags integer );";
+
+        // Track available matchmaking sessions.
+        Database() << "CREATE TABLE Matchmakingsessions ("
+                      "HostID integer not null, "
+                      "Lastupdate integer, "
+                      "ProviderID integer, "
+                      "B64Gamedata text, "
+                      "Servername text, "
+                      "GameID integer, "
+                      "Mapname text, "
+                      "IPv4 integer, "
+                      "Port integer );";
     }
 
     // Initialize the system.
@@ -147,23 +220,10 @@ namespace Backend
         timeBeginPeriod(1);
 
         // Initialize the global state from disk settings.
-        {
-            const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
-            Global.Applicationsettings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
-            Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
-            Global.UserID = Config.value("UserID", 0xDEADC0DE);
+        Initializeglobals();
 
-            const auto Locale = Config.value("Locale", u8"english"s);
-            const auto Username = Config.value("Username", u8"AYRIA"s);
-            std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
-            std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
-
-            // Sanity checking, force save if nothing was parsed.
-            if (!FS::Fileexists(L"./Ayria/Settings.json")) Saveconfig();
-
-            // Save the configuration on exit.
-            std::atexit([]() { if (Global.Applicationsettings.modifiedConfig) Saveconfig(); });
-        }
+        // Create / clear the database if needed.
+        Initializedatabase();
 
         // Initialize subsystems that plugins may need.
         Matchmaking::Initialize();
@@ -176,4 +236,11 @@ namespace Backend
         CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
         CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     }
+
+    // Export functionality to the plugins.
+    extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
+    {
+        if (PeriodMS && Callback) Enqueuetask(PeriodMS, Callback);
+    }
+
 }

@@ -112,6 +112,9 @@ struct Ayriamodule_t
     // Run a periodic task on the systems background thread.
     void(__cdecl *Createperiodictask)(unsigned int PeriodMS, void(__cdecl *Callback)(void));
 
+    // Internal, notify other plugins we are initialized.
+    void(__cdecl *onInitialized)(bool);
+
     #if defined(__cplusplus)
     Ayriamodule_t()
     {
@@ -128,6 +131,7 @@ struct Ayriamodule_t
             Import(addConsolemessage);
             Import(addConsolecommand);
             Import(addMessagehandler);
+            Import(onInitialized);
             Import(JSONRequest);
             #undef Import
         }
