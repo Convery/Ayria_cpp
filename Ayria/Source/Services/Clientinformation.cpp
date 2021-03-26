@@ -140,8 +140,8 @@ namespace Services::Clientinfo
         Global.Cryptokeys = PK_RSA::Createkeypair(512);
 
         // Register the callback for client-requests.
-        Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
         Backend::Network::Registerhandler("Clientinfo::Terminate", Terminationhandler);
+        Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
 
         // Register the JSON API for plugins.
         Backend::API::addEndpoint("getAccountinfo", Accountinfo);

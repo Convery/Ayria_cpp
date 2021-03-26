@@ -63,9 +63,16 @@ namespace Services
         void Initialize();
     }
 
+    namespace Presence
+    {
+        // Set up the service.
+        void Initialize();
+    }
+
     // Set up the services.
     inline void Initialize()
     {
+        Presence::Initialize();
         Messaging::Initialize();
         Clientinfo::Initialize();
         Usergroups::Initialize();
