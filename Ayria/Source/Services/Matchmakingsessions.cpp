@@ -5,9 +5,9 @@
 */
 
 #include <Stdinclude.hpp>
-#include "Global.hpp"
+#include <Global.hpp>
 
-namespace Matchmaking
+namespace Services::Matchmakingsessions
 {
     struct Session_t
     {
@@ -33,24 +33,22 @@ namespace Matchmaking
         const auto IPv4 = Request.value<uint32_t>("IPv4");
         const auto Port = Request.value<uint16_t>("Port");
 
-        const auto Sender = Clientinfo::getLANClient(NodeID);
-        if (!Sender || Sender->UserID != HostID) return;
+        // No fuckery allowed.
+        if (Clientinfo::getClientID(NodeID) != HostID) return;
 
         // Add the entry to the database.
-        Backend::Database() << "insert or replace into Matchmakingsessions (HostID, ProviderID, B64Gamedata"
-                               "Lastseen, Servername, GameID, Mapname, IPv4, Port) values (?, ?, ?, "
-                               "?, ?, ?, ?, ?, ?);" << HostID << ProviderID << B64Gamedata
-                               << time(NULL) << Encoding::toNarrow(Servername) << GameID
-                               << Encoding::toNarrow(Mapname) << IPv4 << Port;
+        Backend::Database() << "REPLACE INTO Matchmakingsessions (ProviderID, HostID, Lastupdate, B64Gamedata, "
+                               "Servername, GameID, Mapname, IPv4, Port) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? );"
+                            << ProviderID << HostID << uint32_t(time(NULL)) << B64Gamedata << Encoding::toNarrow(Servername)
+                            << GameID << Encoding::toNarrow(Mapname) << IPv4 << Port;
     }
     static void __cdecl Terminationhandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
         const auto ProviderID = Request.value<uint32_t>("ProviderID");
 
-        if (const auto Sender = Clientinfo::getLANClient(NodeID))
-            Backend::Database() << "delete from Matchmakingsessions where HostID = ? and ProviderID = ?;"
-                                << Sender->UserID << ProviderID;
+       Backend::Database() << "DELETE FROM Matchmakingsessions WHERE HostID = ? AND ProviderID = ?;"
+                           << Clientinfo::getClientID(NodeID) << ProviderID;
     }
 
     // Send an update if we are active.
@@ -61,7 +59,7 @@ namespace Matchmaking
         for (const auto &[_, Session] : Localsession)
         {
             const auto Request = JSON::Object_t({
-                { "B64Gamedata", std::string(Session.B64Gamedata) },
+                { "B64Gamedata", (std::u8string)Session.B64Gamedata },
                 { "Servername", Session.Servername },
                 { "ProviderID", Session.ProviderID },
                 { "Mapname", Session.Mapname },
@@ -90,13 +88,13 @@ namespace Matchmaking
             Session->Port = Request.value("Port", Session->Port);
             Session->ProviderID = ProviderID;
 
-            const auto B64Gamedata = Request.value<std::string>("B64Gamedata");
+            const auto B64Gamedata = Request.value<std::u8string>("B64Gamedata");
             if (!B64Gamedata.empty())
             {
                 Session->B64Gamedata = B64Gamedata;
             }
 
-            Session->HostID = Global.UserID;
+            Session->HostID = Global.ClientID;
             return "{}";
         }
         static std::string __cdecl Terminate(JSON::Value_t &&Request)
@@ -109,27 +107,18 @@ namespace Matchmaking
         }
     }
 
-
+    // Set up the service.
     void Initialize()
     {
-        // Transient database entry of known sessions.
-        Backend::Database() << "create table Matchmakingsessions ("
-                               "HostID integer not null, "
-                               "ProviderID integer, "
-                               "B64Gamedata text, "
-                               "Lastseen integer, "
-                               "Servername text, "
-                               "GameID integer, "
-                               "Mapname text, "
-                               "IPv4 integer, "
-                               "Port integer);";
+        // Register the callback for client-requests.
+        Backend::Network::Registerhandler("Matchmakingsessions::Terminate", Terminationhandler);
+        Backend::Network::Registerhandler("Matchmakingsessions::Update", Updatehandler);
 
+        // Register the JSON API for plugins.
+        Backend::API::addEndpoint("Matchmakingsessions::Terminate", API::Terminate);
+        Backend::API::addEndpoint("Matchmakingsessions::Update", API::Update);
+
+        // Notify other clients once in a while.
         Backend::Enqueuetask(5000, Matchmakingupdate);
-
-        Backend::Network::Registerhandler("Matchmaking::Update", Updatehandler);
-        Backend::Network::Registerhandler("Matchmaking::Terminate", Terminationhandler);
-
-        Backend::API::addEndpoint("Matchmaking::Update", API::Update);
-        Backend::API::addEndpoint("Matchmaking::Terminate", API::Terminate);
     }
 }

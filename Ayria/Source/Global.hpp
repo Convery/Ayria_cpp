@@ -10,12 +10,13 @@
 #include "Services/Services.hpp"
 #include "Subsystems/Subsystems.hpp"
 
-// Global system information, 48 bytes on x64.
+// Global system information, 56 bytes on x64.
 struct Globalstate_t
 {
-    uint32_t UserID;
-    char8_t Locale[12];
-    char8_t Username[21];
+    uint32_t ClientID;
+    uint32_t Publicaddress;
+    char8_t Username[20];
+    char8_t Locale[10];
 
     union
     {
@@ -35,16 +36,6 @@ struct Globalstate_t
         struct
         {
             uint8_t
-                isAdmin : 1,
-                isModerator : 1;
-        };
-    } Privilegeflags;
-    union
-    {
-        uint8_t Full;
-        struct
-        {
-            uint8_t
                 modifiedConfig : 1,
                 enableIATHooking : 1,
                 enableExternalconsole : 1;
@@ -52,5 +43,6 @@ struct Globalstate_t
     } Applicationsettings;
 
     RSA *Cryptokeys;
+    std::string *B64Authticket;
 };
 extern Globalstate_t Global;

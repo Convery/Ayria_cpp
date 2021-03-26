@@ -124,9 +124,9 @@ namespace Backend
         JSON::Object_t Config{};
         Config["enableExternalconsole"] = Global.Applicationsettings.enableExternalconsole;
         Config["enableIATHooking"] = Global.Applicationsettings.enableIATHooking;
-        Config["Username"] = std::u8string_view(Global.Username);
-        Config["Locale"] = std::u8string_view(Global.Locale);
-        Config["UserID"] = Global.UserID;
+        Config["Username"] = std::u8string(Global.Username);
+        Config["Locale"] = std::u8string(Global.Locale);
+        Config["UserID"] = Global.ClientID;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
     }
@@ -137,7 +137,7 @@ namespace Backend
         const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
         Global.Applicationsettings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
         Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
-        Global.UserID = Config.value("UserID", 0xDEADC0DE);
+        Global.ClientID = Config.value("UserID", 0xDEADC0DE);
 
         const auto Locale = Config.value("Locale", u8"english"s);
         const auto Username = Config.value("Username", u8"AYRIA"s);
@@ -181,10 +181,10 @@ namespace Backend
 
         // Track messages for chat-history and such.
         Database() << "CREATE TABLE IF NOT EXISTS Messages ("
+                      "SourceID integer not null, "
                       "B64Message text not null, "
                       "ProviderID integer, "
                       "Timestamp integer, "
-                      "SourceID integer, "
                       "TargetID integer, "
                       "GroupID integer, "
                       "Transient bool not null );";

@@ -7,96 +7,69 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-struct Client_t
+namespace Services
 {
-    uint32_t UserID;
-    const std::u8string *Username;
-};
+    union GroupID_t
+    {
+        uint64_t Raw;
+        struct
+        {
+            uint32_t AdminID;   // Creator.
+            uint16_t RoomID;    // Random.
+            uint8_t Limit;      // Users.
+            uint8_t Type;       // Server, localhost, or clan.
+        };
+    };
 
-// Helper for async tasks.
-template<typename T> struct Task_t
-{
-    std::atomic_flag hasResult, isDone;
-    T Result;
-};
+    namespace Clientinfo
+    {
+        // Helper functionallity.
+        std::string_view getHardwareID();
+        uint32_t getClientID(uint32_t NodeID);
+        std::string getSharedkey(uint32_t ClientID);
 
-namespace Clientinfo
-{
-    // If another clients crypto-key is needed, we request it.
-    void Requestcryptokeys(std::vector<uint32_t> UserIDs);
-    std::string getCryptokey(uint32_t UserID);
+        // Set up the service.
+        void Initialize();
+    }
 
-    // Fetch information about a client, local or remote.
-    bool isClientauthenticated(uint32_t UserID);
-    Client_t *getWANClient(uint32_t UserID);
-    Client_t *getLANClient(uint32_t NodeID);
-    bool isClientonline(uint32_t UserID);
+    namespace Matchmakingsessions
+    {
+        // Set up the service.
+        void Initialize();
+    }
 
-    // Primarily used for cryptography.
-    std::string_view getHardwareID();
+    namespace Relationships
+    {
+        // Helper functionallity.
+        bool isBlocked(uint32_t SourceID, uint32_t TargetID);
+        bool isFriend(uint32_t SourceID, uint32_t TargetID);
 
-    //
-    void Initializecrypto();
-    void Initializediscovery();
+        // Set up the service.
+        void Initialize();
+    }
+
+    namespace Usergroups
+    {
+        // Helper functionallity.
+        bool isMember(uint64_t GroupID, uint32_t ClientID);
+
+        // Set up the service.
+        void Initialize();
+    }
+
+    namespace Messaging
+    {
+        // Set up the service.
+        void Initialize();
+    }
+
+    // Set up the services.
     inline void Initialize()
     {
-        Initializediscovery();
-        Initializecrypto();
+        Messaging::Initialize();
+        Clientinfo::Initialize();
+        Usergroups::Initialize();
+        Relationships::Initialize();
+        Matchmakingsessions::Initialize();
     }
-}
-
-namespace Social
-{
-    // View this as a simple friends-list for now.
-    namespace Relations
-    {
-        // Fetch information about clients.
-        bool isBlocked(uint32_t UserID);
-
-        // Load the relations from disk.
-        void Initialize();
-    }
-
-    // A collection of active users.
-    namespace Groups
-    {
-        // Verify membership.
-        bool isMember(uint64_t GroupID, uint32_t UserID);
-        bool isAdmin(uint64_t GroupID, uint32_t UserID);
-
-        // Set up message-handlers.
-        void Initialize();
-    }
-
-    // Simple P2P messaging.
-    namespace Messages
-    {
-        // Add the message-handlers and load message history from disk.
-        void Initialize();
-    }
-
-    // Simple key-value stored shared with clients.
-    namespace Presence
-    {
-        void Initialize();
-    }
-
-
-    //
-    inline void Initialize()
-    {
-        Groups::Initialize();
-        Messages::Initialize();
-        Presence::Initialize();
-        Relations::Initialize();
-    }
-}
-
-namespace Matchmaking
-{
-    // Currently hosting.
-    bool isActive();
-
-    // Set up handlers.
-    void Initialize();
 }
