@@ -9,7 +9,7 @@
 
 namespace Services::Presence
 {
-    Hashmap<std::string, LZString_t> Clientpresence;
+    static Hashmap<std::string, LZString_t> Clientpresence;
 
     // Handle local client-requests.
     static void __cdecl Updatehandler(unsigned int NodeID, const char *Message, unsigned int Length)

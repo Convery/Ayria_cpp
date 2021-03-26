@@ -9,8 +9,8 @@
 
 namespace Services::Usergroups
 {
-    Hashmap<uint64_t /* GroupID */, std::unordered_set<uint32_t>> Groupmembers;
-    Hashmap<uint64_t /* GroupID */, std::u8string> Groupnames;
+    static Hashmap<uint64_t /* GroupID */, std::unordered_set<uint32_t>> Groupmembers;
+    static Hashmap<uint64_t /* GroupID */, std::u8string> Groupnames;
 
     // Helper functionallity.
     bool isMember(uint64_t GroupID, uint32_t ClientID)

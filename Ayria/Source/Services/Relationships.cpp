@@ -10,7 +10,7 @@
 namespace Services::Relationships
 {
     using Relationflags_t = union { uint8_t Raw; struct { uint8_t isFriend : 1, isBlocked : 1; }; };
-    Hashset<uint32_t> Friendlyclients, Blockedclients;
+    static Hashset<uint32_t> Friendlyclients, Blockedclients;
 
     // Helper functionallity.
     bool isBlocked(uint32_t SourceID, uint32_t TargetID)
