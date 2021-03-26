@@ -14,7 +14,7 @@ namespace Backend
     sqlite::database Database();
 
     // Add a recurring task to the worker thread.
-    void Enqueuetask(uint32_t Period, void(__cdecl *Callback)());
+    void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)());
 
     // Initialize the system.
     void Initialize();

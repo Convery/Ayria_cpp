@@ -29,9 +29,9 @@ namespace Backend
     }
 
     // Add a recurring task to the worker thread.
-    void Enqueuetask(uint32_t Period, void(__cdecl *Callback)())
+    void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
     {
-        Backgroundtasks.push_back({ 0, Period, Callback });
+        Backgroundtasks.push_back({ 0, PeriodMS, Callback });
     }
 
     // TODO(tcn): Investigate if we can merge these threads.
