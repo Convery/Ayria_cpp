@@ -17,6 +17,7 @@ namespace Backend::Network
     static Hashmap<uint32_t, Hashset<Callback_t>> Messagehandlers{};
     static Hashset<uint32_t> Blacklistedclients{};
     static size_t Sendersocket, Receiversocket;
+    static Hashmap<uint32_t, IN_ADDR> Nodes{};
     static uint32_t RandomID{};
 
     // static void __cdecl Callback(unsigned int NodeID, const char *Message, unsigned int Length);
@@ -61,7 +62,8 @@ namespace Backend::Network
         // Get all available packets.
         while (true)
         {
-            const auto Packetlength = recvfrom(Receiversocket, (char *)Buffer, Buffersizelimit, NULL, NULL, NULL);
+            sockaddr_in Clientaddress; int Addresslen = sizeof(Clientaddress);
+            const auto Packetlength = recvfrom(Receiversocket, (char *)Buffer, Buffersizelimit, NULL, (sockaddr *)&Clientaddress, &Addresslen);
             if (Packetlength < 8) break;
 
             // For slightly cleaner code, should be optimized out.
@@ -73,6 +75,9 @@ namespace Backend::Network
 
             // Blocked clients shouldn't be processed.
             if (Blacklistedclients.contains(Packet->RandomID)) [[unlikely]] continue;
+
+            // Save the address in-case some service needs it.
+            Nodes[Packet->RandomID] = Clientaddress.sin_addr;
 
             // Do we even care for this message?
             if (const auto Result = Messagehandlers.find(Packet->Messagetype); Result != Messagehandlers.end()) [[likely]]
@@ -99,6 +104,13 @@ namespace Backend::Network
                     }
             }
         }
+    }
+
+    // Resolve a LAN nodes address.
+    IN_ADDR Nodeaddress(uint32_t NodeID)
+    {
+        if (!Nodes.contains(NodeID)) return {};
+        else return Nodes[NodeID];
     }
 
     // Prevent packets from being processed.

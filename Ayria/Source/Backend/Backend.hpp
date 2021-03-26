@@ -41,6 +41,9 @@ namespace Backend
         // Formats and LZ compresses the message.
         void Transmitmessage(std::string_view Identifier, JSON::Value_t &&Message);
 
+        // Resolve a LAN nodes address.
+        IN_ADDR Nodeaddress(uint32_t NodeID);
+
         // Prevent packets from being processed.
         void Blockclient(uint32_t NodeID);
 

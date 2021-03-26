@@ -156,10 +156,12 @@ namespace Backend
     {
         // Track available clients seen since startup.
         Database() << "CREATE TABLE Onlineclients ("
-                      "ClientID integer primary key unique not null, "
+                      "Authenticated bool not null, "
+                      "ClientID integer not null, "
                       "Lastupdate integer, "
                       "B64Sharedkey text, "
-                      "Username text );";
+                      "Username text, "
+                      "PRIMARY KEY (ClientID, Authenticated) );";
 
         // Track group memberships.
         Database() << "CREATE TABLE IF NOT EXISTS Usergroups ("
@@ -170,44 +172,54 @@ namespace Backend
 
         // Track pending requests to groups we administrate.
         Database() << "CREATE TABLE Grouprequests ("
+                      "GroupID integer not null, "
+                      "UserID integer not null, "
+                      "ProviderID integer, "
                       "Timestamp integer, "
-                      "GroupID integer, "
-                      "UserID integer, "
-                      "Extradata text );";
+                      "B64Extradata text, "
+                      "PRIMARY KEY (UserID, GroupID));";
 
         // Track messages for chat-history and such.
         Database() << "CREATE TABLE IF NOT EXISTS Messages ("
+                      "B64Message text not null, "
                       "ProviderID integer, "
                       "Timestamp integer, "
                       "SourceID integer, "
                       "TargetID integer, "
                       "GroupID integer, "
-                      "B64Message text, "
-                      "Transient bool );";
+                      "Transient bool not null );";
 
         // Track player presence.
         Database() << "CREATE TABLE Presence ("
                       "ClientID integer not null, "
+                      "Key text not null, "
                       "Value text, "
-                      "Key text );";
+                      "PRIMARY KEY (ClientID, Key) );";
 
         // Track friendships and blocked users.
         Database() << "CREATE TABLE IF NOT EXISTS Relationships ("
-                      "SourceID integer, "
-                      "TargetID integer, "
-                      "Flags integer );";
+                      "SourceID integer not null, "
+                      "TargetID integer not null, "
+                      "Flags integer not null, "
+                      "PRIMARY KEY(SourceID, TargetID) );";
 
         // Track available matchmaking sessions.
         Database() << "CREATE TABLE Matchmakingsessions ("
+                      "ProviderID integer  integer not null, "
                       "HostID integer not null, "
                       "Lastupdate integer, "
-                      "ProviderID integer, "
                       "B64Gamedata text, "
                       "Servername text, "
                       "GameID integer, "
                       "Mapname text, "
-                      "IPv4 integer, "
-                      "Port integer );";
+                      "IPv4 integer not null, "
+                      "Port integer not null, "
+                      "PRIMARY KEY (ProviderID, HostID) );";
+
+        // Clean up the database from the last session.
+        Database() << "DELETE FROM Messages WHERE Transient = true;";
+        Database() << "DELETE FROM Relationships WHERE Flags = 0;";
+        Database() << "PRAGMA VACUUM;";
     }
 
     // Initialize the system.
@@ -226,11 +238,7 @@ namespace Backend
         Initializedatabase();
 
         // Initialize subsystems that plugins may need.
-        Matchmaking::Initialize();
-        Clientinfo::Initialize();
-        //Fileshare::Initialize();
-        Network::Initialize();
-        Social::Initialize();
+        Services::Initialize();
 
         // Workers.
         CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
