@@ -115,7 +115,10 @@ struct Ayriamodule_t
     // Internal, notify other plugins we are initialized.
     void(__cdecl *onInitialized)(bool);
 
+    // Helpers for C++, C users have to do their own initialization.
     #if defined(__cplusplus)
+    #define Ayriarequest(x, y) []() { if (const auto Callback = Ayria.JSONRequest) return Callback(x, y); return ""; }()
+
     Ayriamodule_t()
     {
         #if defined(NDEBUG)

@@ -12,8 +12,12 @@ namespace Backend::API
 {
     using Handler_t = struct { LZString_t Name; Callback_t Handler; LZString_t Usage; };
     static Hashmap<uint32_t, Handler_t> Requesthandlers{};
-    static Ringbuffer_t<std::string, 16> Results{};
+    static Ringbuffer_t<std::string, 8> Results{};
     static std::string Failurestring{};
+
+    // Rather than adding generic results to the buffer.
+    static const auto Generichash = Hash::WW32("{}");
+    static const char *Genericresult = "{}";
 
     // static std::string __cdecl Callback(JSON::Value_t &&Request);
     // using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
@@ -73,7 +77,11 @@ namespace Backend::API
             return Failurestring.c_str();
         }
 
-        // Save the result on the heap for 16 calls.
+        // Is it a generic result?
+        if (Hash::WW32(Result) == Generichash)
+            return Genericresult;
+
+        // Save the result on the heap for 8 calls.
         return Results.push_back(Result)->c_str();
     }
 
