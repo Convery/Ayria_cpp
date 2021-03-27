@@ -100,8 +100,10 @@ namespace Services::Clientinfo
     // Send requests to local clients.
     static void Senddiscovery()
     {
-        static const auto B64Sharedkey = Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys));
+        // If the client is AFK, don't send any updates.
+        if (Global.Stateflags.isAway) return;
 
+        static const auto B64Sharedkey = Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys));
         auto Request = JSON::Object_t({
             { "Username", std::u8string(Global.Username) },
             { "B64Sharedkey", B64Sharedkey },

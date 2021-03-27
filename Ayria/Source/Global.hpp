@@ -23,6 +23,7 @@ struct Globalstate_t
         struct
         {
             uint8_t
+                isAway : 1,
                 isOnline : 1,
                 isIngame : 1,
                 isPrivate : 1,
