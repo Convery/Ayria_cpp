@@ -70,14 +70,17 @@ namespace Steam
 
     using HServerListRequest = void *;
 
+    using PublishedFileUpdateHandle_t = uint64_t;
     using SteamLeaderboardEntries_t = uint64_t;
     using SteamLeaderboard_t = uint64_t;
+    using PublishedFileId_t = uint64_t;
     using PartyBeaconID_t = uint64_t;
     using SteamAPICall_t = uint64_t;
     using ManifestID_t = uint64_t;
     using UGCHandle_t = uint64_t;
     using GID_t = uint64_t;
 
+    using ScreenshotHandle = uint32_t;
     using AccountID_t = uint32_t;
     using PartnerID_t = uint32_t;
     using HAuthTicket = uint32_t;

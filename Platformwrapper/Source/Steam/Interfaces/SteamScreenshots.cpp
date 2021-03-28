@@ -9,45 +9,61 @@
 
 namespace Steam
 {
-    static std::any Hackery;
-    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
-
     struct SteamScreenshots
     {
-        uint32_t WriteScreenshot(void *pubRGB, uint32_t cubRGB, int nWidth, int nHeight)
+        enum EVRScreenshotType
+        {
+            k_EVRScreenshotType_None = 0,
+            k_EVRScreenshotType_Mono = 1,
+            k_EVRScreenshotType_Stereo = 2,
+            k_EVRScreenshotType_MonoCubemap = 3,
+            k_EVRScreenshotType_MonoPanorama = 4,
+            k_EVRScreenshotType_StereoPanorama = 5
+        };
+
+        ScreenshotHandle AddScreenshotToLibrary(const char *pchFilename, const char *pchThumbnailFilename, int nWidth, int nHeight)
         {
             Traceprint();
             return 0;
         }
-        uint32_t AddScreenshotToLibrary(const char *pchJpegOrTGAFilename, const char *pchJpegOrTGAThumbFilename, int nWidth, int nHeight)
+        ScreenshotHandle AddVRScreenshotToLibrary(EVRScreenshotType eType, const char *pchFilename, const char *pchVRFilename)
         {
             Traceprint();
             return 0;
         }
-        void TriggerScreenshot()
+        ScreenshotHandle WriteScreenshot(void *pubRGB, uint32_t cubRGB, int nWidth, int nHeight)
         {
             Traceprint();
+            return 0;
         }
-        void HookScreenshots(bool bHook)
+
+        bool TagPublishedFile(ScreenshotHandle hScreenshot, PublishedFileId_t unPublishedFileId)
         {
             Traceprint();
+            return true;
         }
-        bool SetLocation(uint32_t hScreenshot, const char *pchLocation)
+        bool SetLocation(ScreenshotHandle hScreenshot, const char *pchLocation)
+        {
+            Traceprint();
+            return true;
+        }
+        bool TagUser(ScreenshotHandle hScreenshot, SteamID_t steamID)
+        {
+            Traceprint();
+            return true;
+        }
+        bool IsScreenshotsHooked()
         {
             Traceprint();
             return false;
         }
-        bool TagUser(uint32_t hScreenshot, CSteamID steamID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool TagPublishedFile(uint32_t hScreenshot, uint64_t unPublishedFileId)
-        {
-            Traceprint();
-            return false;
-        }
+
+        void HookScreenshots(bool bHook) {}
+        void TriggerScreenshot() {}
     };
+
+    static std::any Hackery;
+    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
     struct SteamScreenshots001 : Interface_t
     {
@@ -75,6 +91,22 @@ namespace Steam
         };
     };
 
+    struct SteamScreenshots003 : Interface_t
+    {
+        SteamScreenshots003()
+        {
+            Createmethod(0, SteamScreenshots, WriteScreenshot);
+            Createmethod(1, SteamScreenshots, AddScreenshotToLibrary);
+            Createmethod(2, SteamScreenshots, TriggerScreenshot);
+            Createmethod(3, SteamScreenshots, HookScreenshots);
+            Createmethod(4, SteamScreenshots, SetLocation);
+            Createmethod(5, SteamScreenshots, TagUser);
+            Createmethod(6, SteamScreenshots, TagPublishedFile);
+            Createmethod(7, SteamScreenshots, IsScreenshotsHooked);
+            Createmethod(8, SteamScreenshots, AddVRScreenshotToLibrary);
+        };
+    };
+
     struct Steamscreenshotsloader
     {
         Steamscreenshotsloader()
@@ -82,6 +114,7 @@ namespace Steam
             #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
             Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots001", SteamScreenshots001);
             Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots002", SteamScreenshots002);
+            Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots003", SteamScreenshots003);
         }
     };
     static Steamscreenshotsloader Interfaceloader{};
