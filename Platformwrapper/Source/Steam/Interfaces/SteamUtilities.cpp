@@ -14,7 +14,7 @@ namespace Steam
         uint32_t GetSecondsSinceAppActive() const
         {
             Traceprint();
-            return uint32_t(time(NULL) - Steam.Startuptime);
+            return uint32_t(uint32_t(time(NULL)) - Steam.Startuptime);
         }
         uint32_t GetSecondsSinceComputerActive() const
         {
@@ -27,7 +27,7 @@ namespace Steam
         }
         uint32_t GetServerRealTime() const
         {
-            return uint32_t(time(NULL));
+            return uint32_t(uint32_t(time(NULL)));
         }
 
         const char *GetIPCountry()

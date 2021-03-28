@@ -92,7 +92,7 @@ namespace Steam::Callbacks
     struct HTTPRequestCompleted_t { uint32_t m_hRequest; uint64_t m_ulContextValue; bool m_bRequestSuccessful; enum EHTTPStatusCode : uint32_t m_eStatusCode; uint32_t m_unBodySize; };
     struct HTTPRequestDataReceived_t { uint32_t m_hRequest; uint64_t m_ulContextValue; uint32_t m_cOffset; uint32_t m_cBytesReceived; };
     struct HTTPRequestHeadersReceived_t { uint32_t m_hRequest; uint64_t m_ulContextValue; };
-    struct JoinClanChatRoomCompletionResult_t { SteamID_t m_steamIDClanChat; enum EChatRoomEnterResponse : uint32_t m_eChatRoomEnterResponse; };
+    struct JoinClanChatRoomCompletionResult_t { SteamID_t m_steamIDClanChat; uint32_t m_eChatRoomEnterResponse; };
     struct LeaderboardEntry_t { SteamID_t m_steamIDUser; int32_t m_nGlobalRank; int32_t m_nScore; int32_t m_cDetails; uint64_t m_hUGC; };
     struct LeaderboardFindResult_t { uint64_t m_hSteamLeaderboard; uint8_t m_bLeaderboardFound; };
     struct LeaderboardScoreUploaded_t { uint8_t m_bSuccess; uint64_t m_hSteamLeaderboard; int32_t m_nScore; uint8_t m_bScoreChanged; int m_nGlobalRankNew; int m_nGlobalRankPrevious; };

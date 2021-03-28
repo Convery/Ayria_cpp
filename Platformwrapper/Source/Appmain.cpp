@@ -23,7 +23,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID)
     {
         // Ensure that Ayrias default directories exist.
         std::filesystem::create_directories("./Ayria/Logs");
-        std::filesystem::create_directories("./Ayria/Assets");
+        std::filesystem::create_directories("./Ayria/Storage");
         std::filesystem::create_directories("./Ayria/Plugins");
 
         // Only keep a log for this session.

@@ -92,7 +92,7 @@ namespace Steam
         {
             Traceprint();
 
-            return time(NULL) - 3000;
+            return uint32_t(time(NULL)) - 3000;
         }
         bool IsCloudEnabledForAccount()
         {

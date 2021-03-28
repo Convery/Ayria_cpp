@@ -11,7 +11,7 @@
 namespace Steam
 {
     // Global state.
-    Steaminfo_t Steam{};
+    Globalstate_t Global{};
 
     // Exported Steam interface.
     extern "C"
@@ -24,7 +24,7 @@ namespace Steam
             isInitialized = true;
 
             // For usage tracking.
-            Steam.Startuptime = time(NULL);
+            Global.Startuptime = uint32_t(time(NULL));
 
             // Legacy compatibility.
             Redirectmodulehandle();
@@ -37,28 +37,28 @@ namespace Steam
 
             // Modern games provide the ApplicationID via SteamAPI_RestartAppIfNecessary.
             // While legacy/dedis have hardcoded steam_apis. Thus we need a configuration file.
-            if (Steam.ApplicationID == 0)
+            if (Global.ApplicationID == 0)
             {
                 // Check for configuration files.
                 if (const auto Filehandle = std::fopen("steam_appid.txt", "r"))
                 {
-                    std::fscanf(Filehandle, "%u", &Steam.ApplicationID);
+                    std::fscanf(Filehandle, "%u", &Global.ApplicationID);
                     std::fclose(Filehandle);
                 }
                 if (const auto Filehandle = std::fopen("ayria_appid.txt", "r"))
                 {
-                    std::fscanf(Filehandle, "%u", &Steam.ApplicationID);
+                    std::fscanf(Filehandle, "%u", &Global.ApplicationID);
                     std::fclose(Filehandle);
                 }
 
                 // Else we need to at least warn the user, although it should be an error.
-                if (Steam.ApplicationID == 0)
+                if (Global.ApplicationID == 0)
                 {
                     Errorprint("Platformwrapper could not find the games Application ID.");
                     Errorprint("This may cause errors, contact the developer if you experience issues.");
                     Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\" with the ID");
 
-                    Steam.ApplicationID = Hash::FNV1a_32("Ayria");
+                    Global.ApplicationID = Hash::FNV1a_32("Ayria");
                 }
             }
 
@@ -72,12 +72,12 @@ namespace Steam
                     {
                         wchar_t Buffer[260]{}; long Size{ 260 };
                         if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"InstallPath", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                            Steam.Installpath = std::wstring(Buffer);
+                            Global.Installpath = std::make_unique(Encoding::toNarrow(std::wstring(Buffer)));
                     }
                     {
                         wchar_t Buffer[260]{}; long Size{ 260 };
                         if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"Language", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                            Steam.Steamlocale = std::wstring(Buffer);
+                            Global.Locale = std::make_unique(Encoding::toNarrow(std::wstring(Buffer)));
                     }
                     RegCloseKey(Registrykey);
                 }
@@ -86,27 +86,34 @@ namespace Steam
 
             // Ask Ayria nicely for data on the client.
             {
-                Steam.Username = u8"Ayria"s;
-                Steam.Ayrialocale = u8"english"s;
-                Steam.XUID = 0x1100001DEADC0DEULL;
+                uint32_t AccountID = 0xDEADC0DE;
+                auto Username = "Ayria"s;
+                auto Locale = "english"s;
 
-                if (const auto Callback = Ayria.API_Client) [[likely]]
+                if (const auto Callback = Ayria.JSONRequest) [[likely]]
                 {
-                    const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
-                    const auto AccountID = Object.value("AccountID", 0xDEADC0DE);
-                    Steam.Ayrialocale = Object.value("Locale", u8"english"s);
-                    Steam.Username = Object.value("Username", u8"Ayria"s);
-                    Steam.XUID = 0x0110000100000000ULL | AccountID;
+                    const auto Object = JSON::Parse(Callback("Clientinfo::getAccountinfo", nullptr));
+                    AccountID = Object.value("AccountID", 0xDEADC0DE);
+                    Username = Object.value("Username", "Ayria"s);
+                    Locale = Object.value("Locale", "english"s);
+                }
 
-                    // Ensure that a locale is set.
-                    if (Steam.Steamlocale.size() == 0)
-                        Steam.Steamlocale = Steam.Ayrialocale;
+                std::memcpy(Global.Username, Username.data(), std::min(sizeof(Global.Username), Username.size()));
+                Global.XUID = { 0x0110000100000000ULL | AccountID };
+                Global.Locale = std::make_unique(Locale);
+
+                // Ensure that we have a path available.
+                if (!Global.Installpath)
+                {
+                    wchar_t Buffer[260]{};
+                    const auto Size = GetCurrentDirectoryW(260, Buffer);
+                    Global.Installpath = std::make_unique(Encoding::toNarrow(std::wstring(Buffer, Size)));
                 }
             }
 
             // Some legacy applications query the application info from the environment.
-            SetEnvironmentVariableW(L"SteamAppId", va(L"%u", Steam.ApplicationID).c_str());
-            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Steam.ApplicationID & 0xFFFFFF).c_str());
+            SetEnvironmentVariableW(L"SteamAppId", va(L"%u", Global.ApplicationID).c_str());
+            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Global.ApplicationID & 0xFFFFFF).c_str());
             #if defined(_WIN32)
             {
                 {
@@ -115,11 +122,11 @@ namespace Steam
                     if (ERROR_SUCCESS == RegOpenKeyW(HKEY_CURRENT_USER, Steamregistry, &Registrykey))
                     {
                         const auto ProcessID = GetCurrentProcessId();
-                        const auto UserID = Steam.XUID.GetAccountID();
+                        const auto UserID = Global.XUID.UserID;
 
                         // Legacy wants the dlls loaded.
-                        const auto Clientpath64 = Steam.Installpath.asWCHAR() + L"\\steamclient64.dll";
-                        const auto Clientpath32 = Steam.Installpath.asWCHAR() + L"\\steamclient.dll";
+                        const auto Clientpath64 = Encoding::toWide(*Global.Installpath + "\\steamclient64.dll"s);
+                        const auto Clientpath32 = Encoding::toWide(*Global.Installpath + "\\steamclient.dll"s);
                         if (Build::is64bit) LoadLibraryW(Clientpath64.c_str());
                         else LoadLibraryW(Clientpath32.c_str());
 
@@ -134,8 +141,8 @@ namespace Steam
                 {
                     HKEY Registrykey;
                     auto Steamregistry = Build::is64bit ?
-                        L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\"s + va(L"%u", Steam.ApplicationID) :
-                        L"Software\\Valve\\Steam\\Apps\\"s + va(L"%u", Steam.ApplicationID);
+                        L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.ApplicationID) :
+                        L"Software\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.ApplicationID);
                     if (ERROR_SUCCESS == RegCreateKeyW(HKEY_CURRENT_USER, Steamregistry.c_str(), &Registrykey))
                     {
                         DWORD Running = TRUE;
@@ -152,36 +159,33 @@ namespace Steam
             #if defined(_WIN32)
             if (std::strstr(GetCommandLineA(), "-overlay"))
             {
-                constexpr auto Gameoverlay = Build::is64bit ? L"gameoverlayrenderer64.dll" : L"gameoverlayrenderer.dll";
-                constexpr auto Clientlibrary = Build::is64bit ? L"steamclient64.dll" : L"steamclient.dll";
+                constexpr auto Gameoverlay = Build::is64bit ? "gameoverlayrenderer64.dll" : "gameoverlayrenderer.dll";
+                constexpr auto Clientlibrary = Build::is64bit ? "steamclient64.dll" : "steamclient.dll";
 
-                LoadLibraryW((Steam.Installpath.asWCHAR() + Clientlibrary).c_str());
-                LoadLibraryW((Steam.Installpath.asWCHAR() + Gameoverlay).c_str());
+                LoadLibraryA((*Global.Installpath + Clientlibrary).c_str());
+                LoadLibraryA((*Global.Installpath + Gameoverlay).c_str());
             }
             #endif
 
             // Notify the game that it's properly connected.
             const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
+            Callbacks::Completerequest(RequestID, Callbacks::SteamServersConnected_t, nullptr);
 
             // Notify the plugins that we are initialized.
-            const auto Callback = GetProcAddress(Ayria.Modulehandle, "onInitialized");
-            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
+            if (const auto Callback = Ayria.onInitialized) Callback(false);
 
             return true;
         }
         EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
         EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
         EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
-        EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam.ApplicationID = unOwnAppID; return false; }
-        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { static auto Path = Steam.Installpath.asUTF8(); return (char *)Path.c_str(); }
+        EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Global.ApplicationID = unOwnAppID; return false; }
+        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { Global.Installpath->c_str(); }
 
         // Callback management.
         EXPORT_ATTR void SteamAPI_RunCallbacks()
         {
             Callbacks::Runcallbacks();
-            Matchmaking::doFrame();
-            Social::doFrame();
         }
         EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
         {
@@ -204,7 +208,7 @@ namespace Steam
         EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
         EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); }
         EXPORT_ATTR void SteamGameServer_RunCallbacks() { Callbacks::Runcallbacks(); }
-        EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Steam.XUID.ConvertToUint64(); }
+        EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Global.XUID.FullID; }
         EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
         {
             // For AppID.

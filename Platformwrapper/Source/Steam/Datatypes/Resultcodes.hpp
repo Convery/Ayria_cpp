@@ -133,7 +133,7 @@ namespace Steam
 		k_EResultLauncherMigrated = 119,			// The specified launcher type is no longer supported; the user should be directed elsewhere
 	};
 
-	constexpr std::string asString(EResult Code)
+	constexpr const char *asString(EResult Code)
 	{
 		switch (Code)
 		{

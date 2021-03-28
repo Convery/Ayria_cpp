@@ -117,7 +117,7 @@ struct Ayriamodule_t
 
     // Helpers for C++, C users have to do their own initialization.
     #if defined(__cplusplus)
-    #define Ayriarequest(x, y) []() { if (const auto Callback = Ayria.JSONRequest) return Callback(x, y); return ""; }()
+    #define Ayriarequest(x, y) [&]() { if (const auto Callback = Ayria.JSONRequest) return Callback(x, y.dump().c_str()); return ""; }()
 
     Ayriamodule_t()
     {

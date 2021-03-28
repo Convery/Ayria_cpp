@@ -13,6 +13,20 @@ namespace Steam
     using SteamAPI_CheckCallbackRegistered_t = uint32_t(*)( int iCallbackNum );
     using SteamAPIWarningMessageHook_t = void(__cdecl *)(int, const char *);
 
+    // User innterface for GetIVAC if anyone wants to implement it.
+    struct IVAC
+    {
+        virtual bool BVACCreateProcess(void *lpVACBlob, unsigned int cbBlobSize, const char *lpApplicationName,
+            char *lpCommandLine, uint32_t dwCreationFlags, void *lpEnvironment, char *lpCurrentDirectory, uint32_t nGameID) = 0;
+
+        virtual void KillAllVAC() = 0;
+
+        virtual uint8_t *PbLoadVacBlob(int *pcbVacBlob) = 0;
+        virtual void FreeVacBlob(uint8_t *pbVacBlob) = 0;
+
+        virtual void RealHandleVACChallenge(int nClientGameID, uint8_t *pubChallenge, int cubChallenge) = 0;
+    };
+
     struct SteamClient
     {
         HSteamPipe CreateSteamPipe()
@@ -76,7 +90,7 @@ namespace Steam
 
             return "Public";
         }
-        void *GetIVAC(int32_t hSteamUser)
+        IVAC *GetIVAC(int32_t hSteamUser)
         {
             Traceprint();
             return nullptr;

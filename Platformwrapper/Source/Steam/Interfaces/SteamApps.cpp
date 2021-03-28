@@ -20,20 +20,22 @@ namespace Steam
 
             if (!Initialized)
             {
-                DB << "create table if not exists DLCInfo ("
-                      "DLCID integer primary key unique not null, "
+                DB << "CREATE TABLE IF NOT EXISTS DLCInfo ("
+                      "DLCID integer not null, "
+                      "AppID integer not null, "
                       "Checkfile text, "
-                      "AppID integer, "
-                      "Name text);";
+                      "Name text, "
+                      "PRIMARY KEY (DLCID, AppID) );";
 
-                DB << "create table if not exists DLCData ("
-                      "AppID integer, "
-                      "Key text, "
-                      "Value text);";
+                DB << "CREATE TABLE IF NOT EXISTS DLCData ("
+                      "AppID integer not null, "
+                      "Key text not null, "
+                      "Value text, "
+                      "PRIMARY KEY (AppID, Key));";
 
-                DB << "create table if not exists Appinfo ("
-                    "AppID integer primary key unique not null, "
-                    "Languages text);";
+                DB << "CREATE TABLE IF NOT EXISTS Appinfo ("
+                      "AppID integer primary key unique not null, "
+                      "Languages text not null);";
 
                 Initialized = true;
             }
@@ -62,14 +64,14 @@ namespace Steam
         {
             bool Result{};
 
-            Database() << "select * from DLCInfo where AppID = ? limit 1 offset ?;" << Global.ApplicationID << iDLC
-                >> [&](uint32_t DLCID, const std::string &Checkfile, uint32_t AppID, const std::string &Name)
-            {
-                if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
-                *pbAvailable = FS::Fileexists(Checkfile);
-                *pAppID = AppID;
-                Result = true;
-            };
+            Database() << "SELECT * FROM DLCInfo WHERE AppID = ? LIMIT 1 OFFSET ?;" << Global.ApplicationID << iDLC
+                       >> [&](uint32_t DLCID, uint32_t AppID, const std::string &Checkfile, const std::string &Name)
+                       {
+                           if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
+                           *pbAvailable = FS::Fileexists(Checkfile);
+                           *pAppID = AppID;
+                           Result = true;
+                       };
 
             return Result;
         }
@@ -98,11 +100,11 @@ namespace Steam
         {
             bool Result{};
 
-            Database() << "select Checkfile from DLCInfo where AppID = ? limit 1;" << Global.ApplicationID
-                >> [&](const std::string &Checkfile)
-            {
-                Result = FS::Fileexists(Checkfile);
-            };
+            Database() << "SELECT Checkfile FROM DLCInfo WHERE AppID = ? LIMIT 1;" << Global.ApplicationID
+                       >> [&](const std::string &Checkfile)
+                       {
+                           Result = FS::Fileexists(Checkfile);
+                       };
 
             if (!Result) Result = FS::Fileexists(L"./Ayria/DEV_DLC");
             return Result;
@@ -139,7 +141,7 @@ namespace Steam
         int32_t GetDLCCount()
         {
             int32_t Count{};
-            Database() << "select count(*) from  DLCInfo where AppID = ?;" << Global.ApplicationID >> Count;
+            Database() << "SELECT COUNT(*) FROM DLCInfo WHERE AppID = ?;" << Global.ApplicationID >> Count;
             return Count;
         }
 
@@ -147,12 +149,12 @@ namespace Steam
         {
             int32_t Result{};
 
-            Database() << "select Value from DLCData where AppID = ? and Key = ? limit 1;"
-                << nAppID << pchKey >> [&](const std::string &Value)
-            {
-                std::strncpy(pchValue, Value.c_str(), cchValueMax);
-                Result = std::min(Value.size(), size_t(cchValueMax));
-            };
+            Database() << "SELECT Value FROM DLCData WHERE AppID = ? AND Key = ? LIMIT 1;"
+                       << nAppID << pchKey >> [&](const std::string &Value)
+                       {
+                           std::strncpy(pchValue, Value.c_str(), cchValueMax);
+                           Result = std::min(Value.size(), size_t(cchValueMax));
+                       };
 
             return Result;
         }
@@ -179,7 +181,7 @@ namespace Steam
         }
         int32_t GetLaunchCommandLine(char *pszCommandLine, int32_t cubCommandLine)
         {
-            std::string Line = GetCommandLineA();
+            const std::string Line = GetCommandLineA();
             std::memcpy(pszCommandLine, Line.c_str(), std::min(int32_t(Line.size()), cubCommandLine));
             return std::min(int32_t(Line.size()), cubCommandLine);
         }
@@ -210,7 +212,7 @@ namespace Steam
         }
         int32_t GetAppBuildId()
         {
-            // This would need to be synced with Steam.
+            // TODO(tcn): This would need to be synced with Steam.
             return 0;
         }
         SteamID_t GetAppOwner()
@@ -260,7 +262,7 @@ namespace Steam
         {
             static std::string Cache;
 
-            Database() << "select Languages from Appinfo where AppID = ? limit 1;" >> Cache;
+            Database() << "SELECT Languages FROM Appinfo WHERE AppID = ? LIMIT 1;" >> Cache;
             if (Cache.empty()) Cache = *Global.Locale;
             return Cache.c_str();
         }
@@ -275,7 +277,7 @@ namespace Steam
             Debugprint(va("%s: %s", __FUNCTION__, pchActivationCode));
 
             const auto Request = new Callbacks::RegisterActivationCodeResponse_t();
-            Request->m_eResult = k_ERegisterActivationCodeResultFail;
+            Request->m_eResult = k_ERegisterActivationCodeResultOK;
 
             const auto RequestID = Callbacks::Createrequest();
             Callbacks::Completerequest(RequestID, Callbacks::Types::RegisterActivationCodeResponse_t, Request);
@@ -304,7 +306,6 @@ namespace Steam
             Errorprint("The game thinks that this install is corrupted.");
             return true;
         }
-
     };
 
     static std::any Hackery;
@@ -362,6 +363,7 @@ namespace Steam
             Createmethod(11, SteamApps, BGetDLCDataByIndex);
             Createmethod(12, SteamApps, InstallDLC);
             Createmethod(13, SteamApps, UninstallDLC);
+            Createmethod(14, SteamApps, RegisterActivationCode);
         };
     };
     struct SteamApps005 : Interface_t
@@ -388,6 +390,7 @@ namespace Steam
             Createmethod(17, SteamApps, GetInstalledDepots0);
             Createmethod(18, SteamApps, GetAppInstallDir);
             Createmethod(19, SteamApps, BIsAppInstalled);
+            Createmethod(20, SteamApps, RegisterActivationCode);
         };
     };
     struct SteamApps006 : Interface_t
@@ -416,6 +419,7 @@ namespace Steam
             Createmethod(19, SteamApps, BIsAppInstalled);
             Createmethod(20, SteamApps, GetAppOwner);
             Createmethod(21, SteamApps, GetLaunchQueryParam);
+            Createmethod(22, SteamApps, RegisterActivationCode);
         };
     };
     struct SteamApps007 : Interface_t

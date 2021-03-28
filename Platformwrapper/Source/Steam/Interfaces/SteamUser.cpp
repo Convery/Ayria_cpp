@@ -208,7 +208,7 @@ namespace Steam
         bool SendGuestPassByAccountID(uint32_t uAccountID, GID_t gidGuestPassID, bool bResending) { return false; }
         bool RedeemGuestPass(const char *pchGuestPassCode) { return true; }
         bool AckGuestPass(const char *pchGuestPassCode) { return true; }
-        uint32_t GetGuestPassLastUpdateTime() { return uint32_t(time(NULL)); }
+        uint32_t GetGuestPassLastUpdateTime() { return uint32_t(uint32_t(time(NULL))); }
         uint32_t GetGuestPassToRedeemCount() { return 0; }
         uint32_t GetGuestPassToGiveCount() { return 0; }
 

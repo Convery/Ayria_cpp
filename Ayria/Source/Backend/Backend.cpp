@@ -205,7 +205,7 @@ namespace Backend
 
         // Track available matchmaking sessions.
         Database() << "CREATE TABLE Matchmakingsessions ("
-                      "ProviderID integer  integer not null, "
+                      "ProviderID integer not null, "
                       "HostID integer not null, "
                       "Lastupdate integer, "
                       "B64Gamedata text, "
