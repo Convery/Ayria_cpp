@@ -25,7 +25,44 @@ namespace Services::Usergroups
         return Members.cend() != std::find(Members.cbegin(), Members.cend(), ClientID);
     }
 
+    // Send requests to local clients.
+    static void Sendupdate(uint64_t GroupID)
+    {
+        if (GroupID == 0)
+        {
+            for (const auto &[ID, _] : Groupnames)
+            {
+                const auto Response = JSON::Object_t({
+                    { "Groupname", Groupnames[ID] },
+                    { "Members", Groupmembers[ID] },
+                    { "GroupID", ID }
+                });
+                Backend::Network::Transmitmessage("Usergroups::Update", Response);
+            }
+        }
+        else
+        {
+            const auto Response = JSON::Object_t({
+                { "Groupname", Groupnames[GroupID] },
+                { "Members", Groupmembers[GroupID] },
+                { "GroupID", GroupID }
+            });
+            Backend::Network::Transmitmessage("Usergroups::Update", Response);
+        }
+    }
+
     // Handle local client-requests.
+    static void __cdecl Leavehandler(unsigned int NodeID, const char *Message, unsigned int Length)
+    {
+        const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto GroupID = Request.value<uint64_t>("GroupID");
+
+        // If we are even intested in this group.
+        if (GroupID_t{ GroupID }.AdminID != Global.ClientID) return;
+
+        Groupmembers[GroupID].erase(Clientinfo::getClientID(NodeID));
+        Sendupdate(GroupID);
+    }
     static void __cdecl Statushandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
@@ -79,33 +116,13 @@ namespace Services::Usergroups
                             << GroupID << Clientinfo::getClientID(NodeID) << ProviderID;
     }
 
-    // Send requests to local clients.
-    static void Sendupdate(uint64_t GroupID)
-    {
-        if (GroupID == 0)
-        {
-            for (const auto &[ID, _] : Groupnames)
-            {
-                const auto Response = JSON::Object_t({
-                    { "Groupname", Groupnames[ID] },
-                    { "Members", Groupmembers[ID] },
-                    { "GroupID", ID }
-                });
-                Backend::Network::Transmitmessage("Usergroups::Update", Response);
-            }
-        }
-        else
-        {
-            const auto Response = JSON::Object_t({
-                { "Groupname", Groupnames[GroupID] },
-                { "Members", Groupmembers[GroupID] },
-                { "GroupID", GroupID }
-            });
-            Backend::Network::Transmitmessage("Usergroups::Update", Response);
-        }
-    }
-
     // JSON API access for the plugins.
+    static std::string __cdecl Leavegroup(JSON::Value_t &&Request)
+    {
+        const auto GroupID = Request.value<uint64_t>("GroupID");
+        Backend::Network::Transmitmessage("Usergroups::Notifyleave", JSON::Object_t({ { "GroupID", GroupID } }));
+        return "{}";
+    }
     static std::string __cdecl Requestjoin(JSON::Value_t &&Request)
     {
         const auto B64Extradata = Request.value<std::string>("B64Extradata");
@@ -193,11 +210,13 @@ namespace Services::Usergroups
         // Register the callback for client-requests.
         Backend::Network::Registerhandler("Usergroups::Joinresponse", Responsehandler);
         Backend::Network::Registerhandler("Usergroups::Joinrequest", Requesthandler);
+        Backend::Network::Registerhandler("Usergroups::Notifyleave", Leavehandler);
         Backend::Network::Registerhandler("Usergroups::Update", Statushandler);
 
         // Register the JSON API for plugins.
         Backend::API::addEndpoint("Usergroups::Answerrequest", answerRequest);
         Backend::API::addEndpoint("Usergroups::Requestjoin", Requestjoin);
+        Backend::API::addEndpoint("Usergroups::Leavegroup", Leavegroup);
         Backend::API::addEndpoint("Usergroups::Update", updateStatus);
         Backend::API::addEndpoint("Usergroups::Create", Creategroup);
 

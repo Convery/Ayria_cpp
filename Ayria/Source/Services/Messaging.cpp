@@ -63,7 +63,7 @@ namespace Services::Messaging
     static std::string __cdecl Sendtogroup(JSON::Value_t &&Request)
     {
         const auto B64Message = Request.value<std::string>("B64Message");
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
+        const auto ProviderID = Request.value<uint32_t>("ProviderID");
         const auto TargetID = Request.value<uint64_t>("TargetID");
         const auto GroupID = Request.value<uint64_t>("GroupID");
         const auto Transient = !Request.value<bool>("Save");
@@ -88,7 +88,7 @@ namespace Services::Messaging
     }
     static std::string __cdecl Sendtouser(JSON::Value_t &&Request)
     {
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
+        const auto ProviderID = Request.value<uint32_t>("ProviderID");
         auto B64Message = Request.value<std::string>("B64Message");
         const auto TargetID = Request.value<uint64_t>("TargetID");
         const auto isPrivate = Request.value<bool>("isPrivate");

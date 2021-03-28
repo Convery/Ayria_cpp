@@ -9,6 +9,20 @@
 
 namespace Services
 {
+    union Grouptype_t
+    {
+        uint8_t Raw;
+        struct
+        {
+            uint8_t
+                isClan : 1,
+                isPublic : 1,
+                isGamelobby : 1,
+                isLocalhost : 1,
+                isChatgroup : 1,
+                isFriendgroup : 1;
+        };
+    };
     union GroupID_t
     {
         uint64_t Raw;
