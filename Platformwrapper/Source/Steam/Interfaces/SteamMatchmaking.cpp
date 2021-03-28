@@ -67,10 +67,18 @@ namespace Steam
         char m_szKey[256];
         char m_szValue[256];
     };
+
+    enum ESteamPartyBeaconLocationType
+    {
+        k_ESteamPartyBeaconLocationType_Invalid = 0,
+        k_ESteamPartyBeaconLocationType_ChatGroup = 1,
+
+        k_ESteamPartyBeaconLocationType_Max,
+    };
     struct SteamPartyBeaconLocation_t
     {
         ESteamPartyBeaconLocationType m_eType;
-        uint64 m_ulLocationID;
+        uint64_t m_ulLocationID;
     };
 
     struct SteamMatchmaking
