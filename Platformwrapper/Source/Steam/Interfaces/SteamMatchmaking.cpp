@@ -9,10 +9,282 @@
 
 namespace Steam
 {
+    struct ISteamMatchmakingPingResponse
+    {
+        // Server has responded successfully and has updated data
+        virtual void ServerResponded(Callbacks::gameserveritem_t &server) = 0;
+
+        // Server failed to respond to the ping request
+        virtual void ServerFailedToRespond() = 0;
+    };
+    struct ISteamMatchmakingServerListResponse
+    {
+        // Server has responded ok with updated data
+        virtual void ServerResponded(HServerListRequest hRequest, int iServer) = 0;
+
+        // Server has failed to respond
+        virtual void ServerFailedToRespond(HServerListRequest hRequest, int iServer) = 0;
+
+        // A list refresh you had initiated is now 100% completed
+        virtual void RefreshComplete(HServerListRequest hRequest, EMatchMakingServerResponse response) = 0;
+    };
+    struct ISteamMatchmakingPlayersResponse
+    {
+        // Got data on a new player on the server -- you'll get this callback once per player
+        // on the server which you have requested player data on.
+        virtual void AddPlayerToList(const char *pchName, int nScore, float flTimePlayed) = 0;
+
+        // The server failed to respond to the request for player details
+        virtual void PlayersFailedToRespond() = 0;
+
+        // The server has finished responding to the player details request
+        // (ie, you won't get anymore AddPlayerToList callbacks)
+        virtual void PlayersRefreshComplete() = 0;
+    };
+    struct ISteamMatchmakingRulesResponse
+    {
+        // Got data on a rule on the server -- you'll get one of these per rule defined on
+        // the server you are querying
+        virtual void RulesResponded(const char *pchRule, const char *pchValue) = 0;
+
+        // The server failed to respond to the request for rule details
+        virtual void RulesFailedToRespond() = 0;
+
+        // The server has finished responding to the rule details request
+        // (ie, you won't get anymore RulesResponded callbacks)
+        virtual void RulesRefreshComplete() = 0;
+    };
+    struct MatchMakingKeyValuePair_t
+    {
+        MatchMakingKeyValuePair_t() { m_szKey[0] = m_szValue[0] = 0; }
+        MatchMakingKeyValuePair_t(const char *pchKey, const char *pchValue)
+        {
+            strncpy(m_szKey, pchKey, sizeof(m_szKey)); // this is a public header, use basic c library string funcs only!
+            m_szKey[sizeof(m_szKey) - 1] = '\0';
+            strncpy(m_szValue, pchValue, sizeof(m_szValue));
+            m_szValue[sizeof(m_szValue) - 1] = '\0';
+        }
+        char m_szKey[256];
+        char m_szValue[256];
+    };
+    struct SteamPartyBeaconLocation_t
+    {
+        ESteamPartyBeaconLocationType m_eType;
+        uint64 m_ulLocationID;
+    };
+
+    struct SteamMatchmaking
+    {
+        enum ELobbyType
+        {
+            k_ELobbyTypePrivate = 0,		// only way to join the lobby is to invite to someone else
+            k_ELobbyTypeFriendsOnly = 1,	// shows for friends or invitees, but not in lobby list
+            k_ELobbyTypePublic = 2,			// visible for friends and in lobby list
+            k_ELobbyTypeInvisible = 3,		// returned by search, but not visible to other friends
+                                            //    useful if you want a user in two lobbies, for example matching groups together
+                                            //	  a user can be in only one regular lobby, and up to two invisible lobbies
+            k_ELobbyTypePrivateUnique = 4,	// private, unique and does not delete when empty - only one of these may exist per unique keypair set
+                                            // can only create from webapi
+        };
+        enum ELobbyComparison
+        {
+            k_ELobbyComparisonEqualToOrLessThan = -2,
+            k_ELobbyComparisonLessThan = -1,
+            k_ELobbyComparisonEqual = 0,
+            k_ELobbyComparisonGreaterThan = 1,
+            k_ELobbyComparisonEqualToOrGreaterThan = 2,
+            k_ELobbyComparisonNotEqual = 3,
+        };
+        enum ELobbyDistanceFilter
+        {
+            k_ELobbyDistanceFilterClose,		// only lobbies in the same immediate region will be returned
+            k_ELobbyDistanceFilterDefault,		// only lobbies in the same region or near by regions
+            k_ELobbyDistanceFilterFar,			// for games that don't have many latency requirements, will return lobbies about half-way around the globe
+            k_ELobbyDistanceFilterWorldwide,	// no filtering, will match lobbies as far as India to NY (not recommended, expect multiple seconds of latency between the clients)
+        };
+        enum EGameSearchErrorCode_t
+        {
+            k_EGameSearchErrorCode_OK = 1,
+            k_EGameSearchErrorCode_Failed_Search_Already_In_Progress = 2,
+            k_EGameSearchErrorCode_Failed_No_Search_In_Progress = 3,
+            k_EGameSearchErrorCode_Failed_Not_Lobby_Leader = 4, // if not the lobby leader can not call SearchForGameWithLobby
+            k_EGameSearchErrorCode_Failed_No_Host_Available = 5, // no host is available that matches those search params
+            k_EGameSearchErrorCode_Failed_Search_Params_Invalid = 6, // search params are invalid
+            k_EGameSearchErrorCode_Failed_Offline = 7, // offline, could not communicate with server
+            k_EGameSearchErrorCode_Failed_NotAuthorized = 8, // either the user or the application does not have priveledges to do this
+            k_EGameSearchErrorCode_Failed_Unknown_Error = 9, // unknown error
+        };
+        enum EPlayerResult_t
+        {
+            k_EPlayerResultFailedToConnect = 1, // failed to connect after confirming
+            k_EPlayerResultAbandoned = 2,		// quit game without completing it
+            k_EPlayerResultKicked = 3,			// kicked by other players/moderator/server rules
+            k_EPlayerResultIncomplete = 4,		// player stayed to end but game did not conclude successfully ( nofault to player )
+            k_EPlayerResultCompleted = 5,		// player completed game
+        };
+        enum ESteamPartyBeaconLocationData
+        {
+            k_ESteamPartyBeaconLocationDataInvalid = 0,
+            k_ESteamPartyBeaconLocationDataName = 1,
+            k_ESteamPartyBeaconLocationDataIconURLSmall = 2,
+            k_ESteamPartyBeaconLocationDataIconURLMedium = 3,
+            k_ESteamPartyBeaconLocationDataIconURLLarge = 4,
+        };
+        enum EChatEntryType
+        {
+            k_EChatEntryTypeInvalid = 0,
+            k_EChatEntryTypeChatMsg = 1,		// Normal text message from another user
+            k_EChatEntryTypeTyping = 2,			// Another user is typing (not used in multi-user chat)
+            k_EChatEntryTypeInviteGame = 3,		// Invite from other user into that users current game
+            k_EChatEntryTypeEmote = 4,			// text emote message (deprecated, should be treated as ChatMsg)
+            //k_EChatEntryTypeLobbyGameStart = 5,	// lobby game is starting (dead - listen for LobbyGameCreated_t callback instead)
+            k_EChatEntryTypeLeftConversation = 6, // user has left the conversation ( closed chat window )
+            // Above are previous FriendMsgType entries, now merged into more generic chat entry types
+            k_EChatEntryTypeEntered = 7,		// user has entered the conversation (used in multi-user chat and group chat)
+            k_EChatEntryTypeWasKicked = 8,		// user was kicked (data: 64-bit steamid of actor performing the kick)
+            k_EChatEntryTypeWasBanned = 9,		// user was banned (data: 64-bit steamid of actor performing the ban)
+            k_EChatEntryTypeDisconnected = 10,	// user disconnected
+            k_EChatEntryTypeHistoricalChat = 11,	// a chat message from user's chat history or offilne message
+            //k_EChatEntryTypeReserved1 = 12, // No longer used
+            //k_EChatEntryTypeReserved2 = 13, // No longer used
+            k_EChatEntryTypeLinkBlocked = 14, // a link was removed by the chat filter.
+        };
+        enum EMatchMakingServerResponse
+        {
+            eServerResponded = 0,
+            eServerFailedToRespond,
+            eNoServersListedOnMasterServer // for the Internet query type, returned in response callback if no servers of this type match
+        };
+
+        Callbacks::gameserveritem_t *GetServerDetails(HServerListRequest hRequest, int iServer);
+
+        EGameSearchErrorCode_t AddGameSearchParams(const char *pchKeyToFind, const char *pchValuesToFind);
+        EGameSearchErrorCode_t CancelRequestPlayersForGame();
+        EGameSearchErrorCode_t DeclineGame();
+        EGameSearchErrorCode_t EndGame(uint64_t ullUniqueGameID);
+        EGameSearchErrorCode_t EndGameSearch();
+        EGameSearchErrorCode_t HostConfirmGameStart(uint64_t ullUniqueGameID);
+        EGameSearchErrorCode_t RequestPlayersForGame(int nPlayerMin, int nPlayerMax, int nMaxTeamSize);
+        EGameSearchErrorCode_t RetrieveConnectionDetails(SteamID_t steamIDHost, char *pchConnectionDetails, int cubConnectionDetails);
+        EGameSearchErrorCode_t SearchForGameSolo(int nPlayerMin, int nPlayerMax);
+        EGameSearchErrorCode_t SearchForGameWithLobby(SteamID_t steamIDLobby, int nPlayerMin, int nPlayerMax);
+        EGameSearchErrorCode_t SetConnectionDetails(const char *pchConnectionDetails, int cubConnectionDetails);
+        EGameSearchErrorCode_t SetGameHostParams(const char *pchKey, const char *pchValue);
+        EGameSearchErrorCode_t SubmitPlayerResult(uint64_t ullUniqueGameID, SteamID_t steamIDPlayer, EPlayerResult_t EPlayerResult);
+
+        HServerListRequest RequestFavoritesServerList(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+        HServerListRequest RequestFriendsServerList(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+        HServerListRequest RequestHistoryServerList(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+        HServerListRequest RequestInternetServerList(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+        HServerListRequest RequestLANServerList(AppID_t iApp, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+        HServerListRequest RequestSpectatorServerList(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse *pRequestServersResponse);
+
+        HServerQuery PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse);
+        HServerQuery PlayerDetails(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPlayersResponse *pRequestServersResponse);
+        HServerQuery ServerRules(uint32_t unIP, uint16_t usPort, ISteamMatchmakingRulesResponse *pRequestServersResponse);
+
+        PartyBeaconID_t GetBeaconByIndex(uint32_t unIndex);
+
+        SteamAPICall_t ChangeNumOpenSlots(PartyBeaconID_t ulBeacon, uint32_t unOpenSlots);
+        SteamAPICall_t CreateBeacon(uint32_t unOpenSlots, SteamPartyBeaconLocation_t *pBeaconLocation, const char *pchConnectString, const char *pchMetadata);
+        SteamAPICall_t CreateLobby(ELobbyType eLobbyType);
+        SteamAPICall_t CreateLobby(ELobbyType eLobbyType, int cMaxMembers);
+        SteamAPICall_t JoinLobby(SteamID_t steamIDLobby);
+        SteamAPICall_t JoinParty(PartyBeaconID_t ulBeaconID);
+        SteamAPICall_t RequestLobbyList();
+
+        SteamID_t GetLobbyByIndex(int iLobby);
+        SteamID_t GetLobbyMemberByIndex(SteamID_t steamIDLobby, int iMember);
+        SteamID_t GetLobbyOwner(SteamID_t steamIDLobby);
+
+        bool DeleteLobbyData(SteamID_t steamIDLobby, const char *pchKey);
+        bool DestroyBeacon(PartyBeaconID_t ulBeacon);
+        bool GetAvailableBeaconLocations(SteamPartyBeaconLocation_t *pLocationList, uint32_t uMaxNumLocations);
+        bool GetBeaconDetails(PartyBeaconID_t ulBeaconID, SteamID_t *pSteamIDBeaconOwner, SteamPartyBeaconLocation_t *pLocation, char *pchMetadata, int cchMetadata);
+        bool GetBeaconLocationData(SteamPartyBeaconLocation_t BeaconLocation, ESteamPartyBeaconLocationData eData, char *pchDataStringOut, int cchDataStringOut);
+        bool GetFavoriteGame(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint16_t *pnQueryPort, uint32_t *punFlags, uint32_t *puint32_tLastPlayedOnServer);
+        bool GetFavoriteGame(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint32_t *punFlags, uint32_t *puint32_tLastPlayedOnServer);
+        bool GetLobbyDataByIndex(SteamID_t steamIDLobby, int iLobbyData, char *pchKey, int cchKeyBufferSize, char *pchValue, int cchValueBufferSize);
+        bool GetLobbyGameServer(SteamID_t steamIDLobby, uint32_t *punGameServerIP, uint16_t *punGameServerPort, SteamID_t *psteamIDGameServer);
+        bool GetNumAvailableBeaconLocations(uint32_t *puNumLocations);
+        bool InviteUserToLobby(SteamID_t steamIDLobby, SteamID_t steamIDInvitee);
+        bool IsRefreshing(HServerListRequest hRequest);
+        bool RemoveFavoriteGame(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags);
+        bool RemoveFavoriteGame(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags);
+        bool RequestFriendsLobbies();
+        bool RequestLobbyData(SteamID_t steamIDLobby);
+        bool SendLobbyChatMsg(SteamID_t steamIDLobby, const void *pvMsgBody, int cubMsgBody);
+        bool SetLinkedLobby(SteamID_t steamIDLobby, SteamID_t steamIDLobbyDependent);
+        bool SetLobbyData(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        bool SetLobbyJoinable(SteamID_t steamIDLobby, bool bLobbyJoinable);
+        bool SetLobbyMemberLimit(SteamID_t steamIDLobby, int cMaxMembers);
+        bool SetLobbyOwner(SteamID_t steamIDLobby, SteamID_t steamIDNewOwner);
+        bool SetLobbyType(SteamID_t steamIDLobby, ELobbyType eLobbyType);
+
+        const char *GetLobbyData(SteamID_t steamIDLobby, const char *pchKey);
+        const char *GetLobbyMemberData(SteamID_t steamIDLobby, SteamID_t steamIDUser, const char *pchKey);
+
+        double GetLobbyDistance(SteamID_t steamIDLobby);
+
+        int AddFavoriteGame(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags, uint32_t uint32_tLastPlayedOnServer);
+        int AddFavoriteGame(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags, uint32_t uint32_tLastPlayedOnServer);
+        int GetFavoriteGameCount();
+        int GetLobbyChatEntry(SteamID_t steamIDLobby, int iChatID, SteamID_t *pSteamIDUser, void *pvData, int cubData, EChatEntryType *peChatEntryType);
+        int GetLobbyDataCount(SteamID_t steamIDLobby);
+        int GetLobbyMemberLimit(SteamID_t steamIDLobby);
+        int GetNumLobbyMembers(SteamID_t steamIDLobby);
+        int GetServerCount(HServerListRequest hRequest);
+
+        uint32_t GetNumActiveBeacons();
+
+        void AddPlayerToList(const char *pchName, int nScore, float flTimePlayed);
+        void AddRequestLobbyListCompatibleMembersFilter(SteamID_t steamIDLobby);
+        void AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter eLobbyDistanceFilter);
+        void AddRequestLobbyListFilter(const char *pchKeyToMatch, const char *pchValueToMatch);
+        void AddRequestLobbyListFilterSlotsAvailable(int nSlotsAvailable);
+        void AddRequestLobbyListNearValueFilter(const char *pchKeyToMatch, int nValueToBeCloseTo);
+        void AddRequestLobbyListNumericalFilter(const char *pchKeyToMatch, int nValueToMatch, ELobbyComparison eComparisonType);
+        void AddRequestLobbyListResultCountFilter(int cMaxResults);
+        void AddRequestLobbyListSlotsAvailableFilter();
+        void AddRequestLobbyListStringFilter(const char *pchKeyToMatch, const char *pchValueToMatch, ELobbyComparison eComparisonType);
+        void CancelQuery(HServerListRequest hRequest);
+        void CancelReservation(PartyBeaconID_t ulBeacon, SteamID_t steamIDUser);
+        void CancelServerQuery(HServerQuery hServerQuery);
+        void ChangeLobbyAdmin(SteamID_t steamIDLobby, SteamID_t steamIDNewAdmin);
+        void CheckForPSNGameBootInvite(unsigned int iGameBootAttributes );
+        void CreateLobby(bool bPrivate);
+        void CreateLobby(uint64_t ulGameID, bool bPrivate);
+        void JoinLobby(SteamID_t steamIDLobby);
+        void LeaveLobby(SteamID_t steamIDLobby);
+        void OnReservationCompleted(PartyBeaconID_t ulBeacon, SteamID_t steamIDUser);
+        void PlayersFailedToRespond();
+        void PlayersRefreshComplete();
+        void RefreshComplete(HServerListRequest hRequest, EMatchMakingServerResponse response);
+        void RefreshQuery(HServerListRequest hRequest);
+        void RefreshServer(HServerListRequest hRequest, int iServer);
+        void ReleaseRequest(HServerListRequest hServerListRequest);
+        void RequestLobbyList();
+        void RequestLobbyList(uint64_t ulGameID, MatchMakingKeyValuePair_t *pFilters, uint32_t nFilters);
+        void RulesFailedToRespond();
+        void RulesRefreshComplete();
+        void RulesResponded(const char *pchRule, const char *pchValue);
+        void ServerFailedToRespond();
+        void ServerFailedToRespond(HServerListRequest hRequest, int iServer);
+        void ServerResponded(Callbacks::gameserveritem_t &server);
+        void ServerResponded(HServerListRequest hRequest, int iServer);
+        void SetLobbyData(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        void SetLobbyGameServer(SteamID_t steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, SteamID_t steamIDGameServer);
+        void SetLobbyMemberData(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        void SetLobbyVoiceEnabled(SteamID_t steamIDLobby, bool bEnabled);
+
+        EGameSearchErrorCode_t AcceptGame();
+    };
+
+
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamMatchmaking
+    struct SteamMatchmaking2
     {
         int GetFavoriteGameCount()
         {

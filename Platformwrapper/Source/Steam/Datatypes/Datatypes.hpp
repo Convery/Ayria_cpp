@@ -68,6 +68,8 @@ namespace Steam
         };
     };
 
+    using HServerListRequest = void *;
+
     using SteamLeaderboardEntries_t = uint64_t;
     using SteamLeaderboard_t = uint64_t;
     using PartyBeaconID_t = uint64_t;
@@ -83,6 +85,7 @@ namespace Steam
     using DepotID_t = uint32_t;
     using AppID_t = uint32_t;
 
+    using HServerQuery = int32_t;
     using HSteamPipe = int32_t;
     using HSteamUser = int32_t;
     using HSteamCall = int32_t;
