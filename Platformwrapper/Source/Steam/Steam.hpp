@@ -82,4 +82,6 @@ namespace Steam
         uint64_t Createrequest();
         void Runcallbacks();
     }
+
+    using namespace Callbacks;
 }

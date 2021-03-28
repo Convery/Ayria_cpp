@@ -71,6 +71,7 @@ namespace Steam
     using HServerListRequest = void *;
 
     using PublishedFileUpdateHandle_t = uint64_t;
+    using UGCFileWriteStreamHandle_t = uint64_t;
     using SteamLeaderboardEntries_t = uint64_t;
     using SteamLeaderboard_t = uint64_t;
     using PublishedFileId_t = uint64_t;

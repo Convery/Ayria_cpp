@@ -9,6 +9,387 @@
 
 namespace Steam
 {
+    enum ERemoteStoragePublishedFileVisibility
+    {
+        k_ERemoteStoragePublishedFileVisibilityPublic = 0,
+        k_ERemoteStoragePublishedFileVisibilityFriendsOnly = 1,
+        k_ERemoteStoragePublishedFileVisibilityPrivate = 2,
+        k_ERemoteStoragePublishedFileVisibilityUnlisted = 3,
+    };
+    struct RemoteStorageUpdatePublishedFileRequest_t
+    {
+        PublishedFileId_t m_unPublishedFileId;
+        const char *m_pchFile;
+        const char *m_pchPreviewFile;
+        const char *m_pchTitle;
+        const char *m_pchDescription;
+        ERemoteStoragePublishedFileVisibility m_eVisibility;
+        SteamParamStringArray_t *m_pTags;
+        bool m_bUpdateFile;
+        bool m_bUpdatePreviewFile;
+        bool m_bUpdateTitle;
+        bool m_bUpdateDescription;
+        bool m_bUpdateVisibility;
+        bool m_bUpdateTags;
+
+        RemoteStorageUpdatePublishedFileRequest_t()
+        {
+            Initialize(k_GIDNil);
+        }
+        RemoteStorageUpdatePublishedFileRequest_t(PublishedFileId_t unPublishedFileId)
+        {
+            Initialize(unPublishedFileId);
+        }
+
+        PublishedFileId_t GetPublishedFileId() { return m_unPublishedFileId; }
+
+        void SetFile(const char *pchFile)
+        {
+            m_pchFile = pchFile;
+            m_bUpdateFile = true;
+        }
+
+        const char *GetFile() { return m_pchFile; }
+        bool BUpdateFile() { return m_bUpdateFile; }
+
+        void SetPreviewFile(const char *pchPreviewFile)
+        {
+            m_pchPreviewFile = pchPreviewFile;
+            m_bUpdatePreviewFile = true;
+        }
+
+        const char *GetPreviewFile() { return m_pchPreviewFile; }
+        bool BUpdatePreviewFile() { return m_bUpdatePreviewFile; }
+
+        void SetTitle(const char *pchTitle)
+        {
+            m_pchTitle = pchTitle;
+            m_bUpdateTitle = true;
+        }
+
+        const char *GetTitle() { return m_pchTitle; }
+        bool BUpdateTitle() { return m_bUpdateTitle; }
+
+        void SetDescription(const char *pchDescription)
+        {
+            m_pchDescription = pchDescription;
+            m_bUpdateDescription = true;
+        }
+
+        const char *GetDescription() { return m_pchDescription; }
+        bool BUpdateDescription() { return m_bUpdateDescription; }
+
+        void SetVisibility(ERemoteStoragePublishedFileVisibility eVisibility)
+        {
+            m_eVisibility = eVisibility;
+            m_bUpdateVisibility = true;
+        }
+
+        const ERemoteStoragePublishedFileVisibility GetVisibility() { return m_eVisibility; }
+        bool BUpdateVisibility() { return m_bUpdateVisibility; }
+
+        void SetTags(SteamParamStringArray_t *pTags)
+        {
+            m_pTags = pTags;
+            m_bUpdateTags = true;
+        }
+
+        SteamParamStringArray_t *GetTags() { return m_pTags; }
+        bool BUpdateTags() { return m_bUpdateTags; }
+        SteamParamStringArray_t **GetTagsPointer() { return &m_pTags; }
+
+        void Initialize(PublishedFileId_t unPublishedFileId)
+        {
+            m_unPublishedFileId = unPublishedFileId;
+            m_pchFile = 0;
+            m_pchPreviewFile = 0;
+            m_pchTitle = 0;
+            m_pchDescription = 0;
+            m_pTags = 0;
+
+            m_bUpdateFile = false;
+            m_bUpdatePreviewFile = false;
+            m_bUpdateTitle = false;
+            m_bUpdateDescription = false;
+            m_bUpdateTags = false;
+            m_bUpdateVisibility = false;
+        }
+    };
+
+    // Per-user storage directory.
+    std::string Storagepath(std::string_view Path)
+    {
+        static std::string Basepath{ []()
+        {
+            const auto Tmp = va("./Ayria/Storage/Steam/%16X/", Global.XUID.FullID);
+            std::filesystem::create_directories(Tmp.c_str());
+            return Tmp;
+        }() };
+
+        while (!Path.empty())
+        {
+            const auto Char = Path.front();
+            if (Char == '.' || Char == '/' || Char == '\\')
+                Path.remove_prefix(1);
+            else
+                break;
+        }
+
+        return Basepath + Path;
+    }
+
+    struct SteamRemotestorage
+    {
+        enum EWorkshopEnumerationType
+        {
+            k_EWorkshopEnumerationTypeRankedByVote = 0,
+            k_EWorkshopEnumerationTypeRecent = 1,
+            k_EWorkshopEnumerationTypeTrending = 2,
+            k_EWorkshopEnumerationTypeFavoritesOfFriends = 3,
+            k_EWorkshopEnumerationTypeVotedByFriends = 4,
+            k_EWorkshopEnumerationTypeContentByFriends = 5,
+            k_EWorkshopEnumerationTypeRecentFromFollowedUsers = 6,
+        };
+        enum EWorkshopVideoProvider
+        {
+            k_EWorkshopVideoProviderNone = 0,
+            k_EWorkshopVideoProviderYoutube = 1
+        };
+        enum ERemoteStoragePlatform
+        {
+            k_ERemoteStoragePlatformNone = 0,
+            k_ERemoteStoragePlatformWindows = (1 << 0),
+            k_ERemoteStoragePlatformOSX = (1 << 1),
+            k_ERemoteStoragePlatformPS3 = (1 << 2),
+            k_ERemoteStoragePlatformLinux = (1 << 3),
+            k_ERemoteStoragePlatformSwitch = (1 << 4),
+            k_ERemoteStoragePlatformAndroid = (1 << 5),
+            k_ERemoteStoragePlatformIOS = (1 << 6),
+            // NB we get one more before we need to widen some things
+
+            k_ERemoteStoragePlatformAll = 0xffffffff
+        };
+        enum EWorkshopFileAction
+        {
+            k_EWorkshopFileActionPlayed = 0,
+            k_EWorkshopFileActionCompleted = 1,
+        };
+        enum EWorkshopFileType
+        {
+            k_EWorkshopFileTypeFirst = 0,
+
+            k_EWorkshopFileTypeCommunity			  = 0,		// normal Workshop item that can be subscribed to
+            k_EWorkshopFileTypeMicrotransaction		  = 1,		// Workshop item that is meant to be voted on for the purpose of selling in-game
+            k_EWorkshopFileTypeCollection			  = 2,		// a collection of Workshop or Greenlight items
+            k_EWorkshopFileTypeArt					  = 3,		// artwork
+            k_EWorkshopFileTypeVideo				  = 4,		// external video
+            k_EWorkshopFileTypeScreenshot			  = 5,		// screenshot
+            k_EWorkshopFileTypeGame					  = 6,		// Greenlight game entry
+            k_EWorkshopFileTypeSoftware				  = 7,		// Greenlight software entry
+            k_EWorkshopFileTypeConcept				  = 8,		// Greenlight concept
+            k_EWorkshopFileTypeWebGuide				  = 9,		// Steam web guide
+            k_EWorkshopFileTypeIntegratedGuide		  = 10,		// application integrated guide
+            k_EWorkshopFileTypeMerch				  = 11,		// Workshop merchandise meant to be voted on for the purpose of being sold
+            k_EWorkshopFileTypeControllerBinding	  = 12,		// Steam Controller bindings
+            k_EWorkshopFileTypeSteamworksAccessInvite = 13,		// internal
+            k_EWorkshopFileTypeSteamVideo			  = 14,		// Steam video
+            k_EWorkshopFileTypeGameManagedItem		  = 15,		// managed completely by the game, not the user, and not shown on the web
+
+            // Update k_EWorkshopFileTypeMax if you add values.
+            k_EWorkshopFileTypeMax = 16
+        };
+        enum EUGCReadAction
+        {
+            // Keeps the file handle open unless the last byte is read.  You can use this when reading large files (over 100MB) in sequential chunks.
+            // If the last byte is read, this will behave the same as k_EUGCRead_Close.  Otherwise, it behaves the same as k_EUGCRead_ContinueReading.
+            // This value maintains the same behavior as before the EUGCReadAction parameter was introduced.
+            k_EUGCRead_ContinueReadingUntilFinished = 0,
+
+            // Keeps the file handle open.  Use this when using UGCRead to seek to different parts of the file.
+            // When you are done seeking around the file, make a final call with k_EUGCRead_Close to close it.
+            k_EUGCRead_ContinueReading = 1,
+
+            // Frees the file handle.  Use this when you're done reading the content.
+            // To read the file from Steam again you will need to call UGCDownload again.
+            k_EUGCRead_Close = 2,
+        };
+        enum EWorkshopVote
+        {
+            k_EWorkshopVoteUnvoted = 0,
+            k_EWorkshopVoteFor = 1,
+            k_EWorkshopVoteAgainst = 2,
+            k_EWorkshopVoteLater = 3,
+        };
+
+        ERemoteStoragePlatform GetSyncPlatforms(const char *pchFile)
+        {
+            return k_ERemoteStoragePlatformAll;
+        }
+        PublishedFileUpdateHandle_t CreatePublishedFileUpdateRequest(PublishedFileId_t unPublishedFileId);
+
+        SteamAPICall_t CommitPublishedFileUpdate(PublishedFileUpdateHandle_t updateHandle);
+        SteamAPICall_t DeletePublishedFile(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t EnumeratePublishedFilesByUserAction(EWorkshopFileAction eAction, uint32_t unStartIndex);
+        SteamAPICall_t EnumeratePublishedWorkshopFiles(EWorkshopEnumerationType eEnumerationType, uint32_t unStartIndex, uint32_t unCount, uint32_t unDays, SteamParamStringArray_t *pTags, SteamParamStringArray_t *pUserTags);
+        SteamAPICall_t EnumerateUserPublishedFiles(uint32_t unStartIndex);
+        SteamAPICall_t EnumerateUserSharedWorkshopFiles(SteamID_t steamId, uint32_t unStartIndex, SteamParamStringArray_t *pRequiredTags, SteamParamStringArray_t *pExcludedTags);
+        SteamAPICall_t EnumerateUserSubscribedFiles(uint32_t unStartIndex);
+        SteamAPICall_t FileReadAsync(const char *pchFile, uint32_t nOffset, uint32_t cubToRead);
+        SteamAPICall_t FileShare(const char *pchFile);
+        SteamAPICall_t FileWriteAsync(const char *pchFile, const void *pvData, uint32_t cubData);
+        SteamAPICall_t GetPublishedFileDetails0(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t GetPublishedFileDetails1(PublishedFileId_t unPublishedFileId, uint32_t unMaxSecondsOld);
+        SteamAPICall_t GetPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t GetUserPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t PublishFile(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
+        SteamAPICall_t PublishVideo0(const char *pchVideoURL, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
+        SteamAPICall_t PublishVideo1(EWorkshopVideoProvider eVideoProvider, const char *pchVideoAccount, const char *pchVideoIdentifier, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
+        SteamAPICall_t PublishWorkshopFile0(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, SteamParamStringArray_t *pTags);
+        SteamAPICall_t PublishWorkshopFile1(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags, EWorkshopFileType eWorkshopFileType);
+        SteamAPICall_t SetUserPublishedFileAction(PublishedFileId_t unPublishedFileId, EWorkshopFileAction eAction);
+        SteamAPICall_t SubscribePublishedFile(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t UGCDownload0(UGCHandle_t hContent);
+        SteamAPICall_t UGCDownload1(UGCHandle_t hContent, uint32_t unPriority);
+        SteamAPICall_t UGCDownloadToLocation(UGCHandle_t hContent, const char *pchLocation, uint32_t unPriority);
+        SteamAPICall_t UnsubscribePublishedFile(PublishedFileId_t unPublishedFileId);
+        SteamAPICall_t UpdatePublishedFile(RemoteStorageUpdatePublishedFileRequest_t updatePublishedFileRequest);
+        SteamAPICall_t UpdateUserPublishedItemVote(PublishedFileId_t unPublishedFileId, bool bVoteUp);
+
+        UGCFileWriteStreamHandle_t FileWriteStreamOpen(const char *pchFile)
+        {
+            return (UGCFileWriteStreamHandle_t)std::fopen(Storagepath(pchFile).c_str(), "RB");
+        }
+        UGCHandle_t GetCachedUGCHandle(int32_t iCachedContent) { return 0xFFFFFFFFFFFFFFFFULL; }
+
+        bool FileDelete(const char *pchFile)
+        {
+            return !!std::remove(Storagepath(pchFile).c_str());
+        }
+        bool FileExists(const char *pchFile)
+        {
+            return FS::Fileexists(Storagepath(pchFile));
+        }
+        bool FileFetch(const char *pchFile)
+        {
+            return FileExists(pchFile);
+        }
+        bool FileForget(const char *pchFile)
+        {
+            return FileExists(pchFile);
+        }
+        bool FilePersist(const char *pchFile)
+        {
+            return FileExists(pchFile);
+        }
+        bool FilePersisted(const char *pchFile)
+        {
+            return FileExists(pchFile);
+        }
+        bool FileReadAsyncComplete(SteamAPICall_t hReadCall, void *pvBuffer, uint32_t cubToRead);
+        bool FileWrite(const char *pchFile, const void *pvData, int32_t cubData)
+        {
+            return FS::Writefile(Storagepath(pchFile), std::string_view((const char *)pvData, cubData));
+        }
+        bool FileWriteStreamCancel(UGCFileWriteStreamHandle_t writeHandle)
+        {
+            std::fclose((std::FILE *)writeHandle);
+            return true;
+        }
+        bool FileWriteStreamClose(UGCFileWriteStreamHandle_t writeHandle)
+        {
+            std::fclose((std::FILE *)writeHandle);
+            return true;
+        }
+        bool FileWriteStreamWriteChunk(UGCFileWriteStreamHandle_t writeHandle, const void *pvData, int32_t cubData);
+        bool GetQuota(int32_t *pnTotalBytes, int32_t *puAvailableBytes)
+        {
+            *pnTotalBytes = *puAvailableBytes = INT32_MAX - 1;
+            return true;
+        }
+        bool GetUGCDetails(UGCHandle_t hContent, AppID_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, SteamID_t *pSteamIDOwner);
+        bool GetUGCDownloadProgress(UGCHandle_t hContent, uint32_t *puDownloadedBytes, uint32_t *puTotalBytes);
+        bool IsCloudEnabledForAccount()
+        { return false; }
+        bool IsCloudEnabledForApp()
+        { return false; }
+        bool ResetFileRequestState()
+        { return true; }
+        bool SetSyncPlatforms(const char *pchFile, ERemoteStoragePlatform eRemoteStoragePlatform)
+        {
+            return true;
+        }
+        bool SynchronizeToClient()
+        { return true; }
+        bool SynchronizeToServer()
+        { return true; }
+        bool UpdatePublishedFileDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchDescription);
+        bool UpdatePublishedFileFile(PublishedFileUpdateHandle_t updateHandle, const char *pchFile);
+        bool UpdatePublishedFilePreviewFile(PublishedFileUpdateHandle_t updateHandle, const char *pchPreviewFile);
+        bool UpdatePublishedFileSetChangeDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchChangeDescription);
+        bool UpdatePublishedFileTags(PublishedFileUpdateHandle_t updateHandle, SteamParamStringArray_t *pTags);
+        bool UpdatePublishedFileTitle(PublishedFileUpdateHandle_t updateHandle, const char *pchTitle);
+        bool UpdatePublishedFileVisibility(PublishedFileUpdateHandle_t updateHandle, ERemoteStoragePublishedFileVisibility eVisibility);
+
+        const char *GetFileNameAndSize(int iFile, int32_t *pnFileSizeInBytes)
+        {
+            const auto Files = FS::Findfiles(Storagepath(""), "");
+            if (iFile >= Files.size()) return "";
+
+            *pnFileSizeInBytes = GetFileSize(Files[iFile].c_str());
+
+            static std::string Cache;
+            Cache = Files[iFile];
+            return Cache.c_str();
+        }
+
+        int32_t FileRead(const char *pchFile, void *pvData, int32_t cubDataToRead)
+        {
+            const auto Filebuffer = FS::Readfile(Storagepath(pchFile));
+            const auto Min = std::min(int32_t(Filebuffer.size()), cubDataToRead);
+
+            std::memcpy(pvData, Filebuffer.data(), Min);
+            return Min;
+        }
+        int32_t GetCachedUGCCount()
+        {
+            return 0;
+        }
+        int32_t GetFileCount()
+        {
+            const auto Files = FS::Findfiles(Storagepath(""), "");
+            return Files.size();
+        }
+        int32_t GetFileSize(const char *pchFile)
+        {
+            return FS::Filesize(Storagepath(pchFile));
+        }
+        int32_t UGCRead0(UGCHandle_t hContent, void *pvData, int32_t cubDataToRead)
+        {
+            return UGCRead2(hContent, pvData, cubDataToRead, 0, k_EUGCRead_ContinueReadingUntilFinished);
+        }
+        int32_t UGCRead1(UGCHandle_t hContent, void *pvData, int32_t cubDataToRead, uint32_t cOffset)
+        {
+            return UGCRead2(hContent, pvData, cubDataToRead, cOffset, k_EUGCRead_ContinueReadingUntilFinished);
+        }
+        int32_t UGCRead2(UGCHandle_t hContent, void *pvData, int32_t cubDataToRead, uint32_t cOffset, EUGCReadAction eAction);
+
+        int64_t GetFileTimestamp(const char *pchFile)
+        {
+            return FS::Filestats(Storagepath(pchFile)).Modified;
+        }
+
+        void GetFileListFromServer()
+        {}
+        void SetCloudEnabledForApp(bool bEnabled)
+        {}
+    };
+
+
+
+
+
+
+
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
@@ -19,7 +400,7 @@ namespace Steam
         return Internal;
     }
 
-    struct SteamRemotestorage
+    struct SteamRemotestorage2
     {
         bool FileRead0(const char *filename, void *buffer, int size) const
         {
@@ -47,37 +428,37 @@ namespace Steam
             }
 
             // Leaky leaky..
-            *size = uint32_t(FS::Filesize(Filelist[index]));
+            *size = uint32_t_t(FS::Filesize(Filelist[index]));
             auto Leak = Filelist[index].substr(Filelist[index].find_last_of('/') + 1);
             const auto pLeak = new char[Leak.size() + 1]();
             std::memcpy(pLeak, Leak.data(), Leak.size());
             return pLeak;
         }
-        bool GetQuota(int32_t *pnTotalBytes, uint32_t *puAvailableBytes)
+        bool GetQuota(int32_t_t *pnTotalBytes, uint32_t_t *puAvailableBytes)
         {
             Traceprint();
 
             *pnTotalBytes = *puAvailableBytes = INT_MAX;
             return true;
         }
-        bool FileWrite(const char *pchFile, const void *pvData, int32_t cubData)
+        bool FileWrite(const char *pchFile, const void *pvData, int32_t_t cubData)
         {
             Traceprint();
             return true;
         }
-        int32_t GetFileSize(const char *pchFile)
+        int32_t_t GetFileSize(const char *pchFile)
         {
             Traceprint();
 
             return 0;
         }
-        int32_t FileRead1(const char *pchFile, void *pvData, int32_t cubDataToRead)
+        int32_t_t FileRead1(const char *pchFile, void *pvData, int32_t_t cubDataToRead)
         {
             Traceprint();
 
             return 0;
         }
-        int32_t GetFileCount()
+        int32_t_t GetFileCount()
         {
             Traceprint();
 
@@ -88,11 +469,11 @@ namespace Steam
             Traceprint();
             return false;
         }
-        int64_t GetFileTimestamp(const char *pchFile)
+        int64_t_t GetFileTimestamp(const char *pchFile)
         {
             Traceprint();
 
-            return uint32_t(time(NULL)) - 3000;
+            return uint32_t_t(time(NULL)) - 3000;
         }
         bool IsCloudEnabledForAccount()
         {
@@ -112,40 +493,40 @@ namespace Steam
 
             return true;
         }
-        uint64_t UGCDownload0(uint32_t hContent)
+        uint64_t_t UGCDownload0(uint32_t_t hContent)
         {
             Traceprint();
             return 0;
         }
-        bool GetUGCDetails(uint32_t hContent, uint32_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, CSteamID *pSteamIDOwner)
+        bool GetUGCDetails(uint32_t_t hContent, uint32_t_t *pnAppID, char **ppchName, int32_t_t *pnFileSizeInBytes, CSteamID *pSteamIDOwner)
         {
             Traceprint();
             return false;
         }
-        int32_t UGCRead0(uint32_t hContent, void *pvData, int32_t cubDataToRead)
+        int32_t_t UGCRead0(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead)
         {
             Traceprint();
             return 0;
         }
-        int32_t GetCachedUGCCount()
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint32_t GetCachedUGCHandle(int32_t iCachedContent)
+        int32_t_t GetCachedUGCCount()
         {
             Traceprint();
 
             return 0;
         }
-        bool SetSyncPlatforms(const char *pchFile, uint32_t eRemoteStoragePlatform)
+        uint32_t_t GetCachedUGCHandle(int32_t_t iCachedContent)
+        {
+            Traceprint();
+
+            return 0;
+        }
+        bool SetSyncPlatforms(const char *pchFile, uint32_t_t eRemoteStoragePlatform)
         {
             Traceprint();
 
             return true;
         }
-        uint32_t GetSyncPlatforms(const char *pchFile)
+        uint32_t_t GetSyncPlatforms(const char *pchFile)
         {
             Traceprint();
 
@@ -163,61 +544,61 @@ namespace Steam
 
             return;
         }
-        uint64_t PublishFile(const char *pchFile, const char *pchPreviewFile, uint32_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t eVisibility, struct SteamParamStringArray_t *pTags)
+        uint64_t_t PublishFile(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t PublishWorkshopFile0(const char *pchFile, const char *pchPreviewFile, uint32_t nConsumerAppId, const char *pchTitle, const char *pchDescription, struct SteamParamStringArray_t *pTags)
+        uint64_t_t PublishWorkshopFile0(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t UpdatePublishedFile(uint32_t updatePublishedFileRequest)
+        uint64_t_t UpdatePublishedFile(uint32_t_t updatePublishedFileRequest)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t GetPublishedFileDetails0(uint32_t unPublishedFileId)
+        uint64_t_t GetPublishedFileDetails0(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t DeletePublishedFile(uint32_t unPublishedFileId)
+        uint64_t_t DeletePublishedFile(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t EnumerateUserPublishedFiles(uint32_t unStartIndex)
+        uint64_t_t EnumerateUserPublishedFiles(uint32_t_t unStartIndex)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t SubscribePublishedFile(uint32_t unPublishedFileId)
+        uint64_t_t SubscribePublishedFile(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t EnumerateUserSubscribedFiles(uint32_t unStartIndex)
+        uint64_t_t EnumerateUserSubscribedFiles(uint32_t_t unStartIndex)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t UnsubscribePublishedFile(uint32_t unPublishedFileId)
+        uint64_t_t UnsubscribePublishedFile(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        bool GetUGCDownloadProgress(uint32_t hContent, uint32_t *puDownloadedBytes, uint32_t *puTotalBytes)
+        bool GetUGCDownloadProgress(uint32_t_t hContent, uint32_t_t *puDownloadedBytes, uint32_t_t *puTotalBytes)
         {
             Traceprint();
 
@@ -225,163 +606,163 @@ namespace Steam
             *puTotalBytes = 1;
             return true;
         }
-        uint64_t PublishWorkshopFile1(const char *pchFile, const char *pchPreviewFile, uint32_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t eVisibility, struct SteamParamStringArray_t *pTags, uint32_t eWorkshopFileType)
+        uint64_t_t PublishWorkshopFile1(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags, uint32_t_t eWorkshopFileType)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t CreatePublishedFileUpdateRequest(uint32_t unPublishedFileId)
+        uint64_t_t CreatePublishedFileUpdateRequest(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        bool UpdatePublishedFileFile(uint64_t hUpdateRequest, const char *pchFile)
+        bool UpdatePublishedFileFile(uint64_t_t hUpdateRequest, const char *pchFile)
         {
             Traceprint();
 
             return false;
         }
-        bool UpdatePublishedFilePreviewFile(uint64_t hUpdateRequest, const char *pchPreviewFile)
+        bool UpdatePublishedFilePreviewFile(uint64_t_t hUpdateRequest, const char *pchPreviewFile)
         {
             Traceprint();
 
             return false;
         }
-        bool UpdatePublishedFileTitle(uint64_t hUpdateRequest, const char *pchTitle)
+        bool UpdatePublishedFileTitle(uint64_t_t hUpdateRequest, const char *pchTitle)
         {
             Traceprint();
 
             return false;
         }
-        bool UpdatePublishedFileDescription(uint64_t hUpdateRequest, const char *pchDescription)
+        bool UpdatePublishedFileDescription(uint64_t_t hUpdateRequest, const char *pchDescription)
         {
             Traceprint();
 
             return false;
         }
-        bool UpdatePublishedFileVisibility(uint64_t hUpdateRequest, uint32_t eVisibility)
+        bool UpdatePublishedFileVisibility(uint64_t_t hUpdateRequest, uint32_t_t eVisibility)
         {
             Traceprint();
 
             return false;
         }
-        bool UpdatePublishedFileTags(uint64_t hUpdateRequest, struct SteamParamStringArray_t *pTags)
+        bool UpdatePublishedFileTags(uint64_t_t hUpdateRequest, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
             return false;
         }
-        uint64_t CommitPublishedFileUpdate(uint64_t hUpdateRequest)
+        uint64_t_t CommitPublishedFileUpdate(uint64_t_t hUpdateRequest)
         {
             Traceprint();
 
             return 0;
         }
-        bool UpdatePublishedFileSetChangeDescription(uint64_t hUpdateRequest, const char *cszDescription)
+        bool UpdatePublishedFileSetChangeDescription(uint64_t_t hUpdateRequest, const char *cszDescription)
         {
             Traceprint();
 
             return false;
         }
-        uint64_t GetPublishedItemVoteDetails(uint32_t unPublishedFileId)
+        uint64_t_t GetPublishedItemVoteDetails(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t UpdateUserPublishedItemVote(uint32_t unPublishedFileId, bool bVoteUp)
+        uint64_t_t UpdateUserPublishedItemVote(uint32_t_t unPublishedFileId, bool bVoteUp)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t GetUserPublishedItemVoteDetails(uint32_t unPublishedFileId)
+        uint64_t_t GetUserPublishedItemVoteDetails(uint32_t_t unPublishedFileId)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t EnumerateUserSharedWorkshopFiles(uint32_t nAppId, CSteamID creatorSteamID, uint32_t uStartIndex, struct SteamParamStringArray_t *pRequiredTags, struct SteamParamStringArray_t *pExcludedTags)
+        uint64_t_t EnumerateUserSharedWorkshopFiles(uint32_t_t nAppId, CSteamID creatorSteamID, uint32_t_t uStartIndex, struct SteamParamStringArray_t *pRequiredTags, struct SteamParamStringArray_t *pExcludedTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t PublishVideo0(const char *cszFileName, const char *cszPreviewFileName, uint32_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t eVisibility, struct SteamParamStringArray_t *pTags)
+        uint64_t_t PublishVideo0(const char *cszFileName, const char *cszPreviewFileName, uint32_t_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t SetUserPublishedFileAction(uint32_t unPublishedFileId, uint32_t eAction)
+        uint64_t_t SetUserPublishedFileAction(uint32_t_t unPublishedFileId, uint32_t_t eAction)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t EnumeratePublishedFilesByUserAction(uint32_t eAction, uint32_t uStartIndex)
+        uint64_t_t EnumeratePublishedFilesByUserAction(uint32_t_t eAction, uint32_t_t uStartIndex)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t EnumeratePublishedWorkshopFiles(uint32_t eType, uint32_t uStartIndex, uint32_t cDays, uint32_t cCount, struct SteamParamStringArray_t *pTags, struct SteamParamStringArray_t *pUserTags)
+        uint64_t_t EnumeratePublishedWorkshopFiles(uint32_t_t eType, uint32_t_t uStartIndex, uint32_t_t cDays, uint32_t_t cCount, struct SteamParamStringArray_t *pTags, struct SteamParamStringArray_t *pUserTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t PublishVideo1(uint32_t eVideoProvider, const char *cszVideoAccountName, const char *cszVideoIdentifier, const char *cszFileName, uint32_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t eVisibility, struct SteamParamStringArray_t *pTags)
+        uint64_t_t PublishVideo1(uint32_t_t eVideoProvider, const char *cszVideoAccountName, const char *cszVideoIdentifier, const char *cszFileName, uint32_t_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
         {
             Traceprint();
 
             return 0;
         }
-        uint64_t FileWriteStreamOpen(const char *pchFile)
+        uint64_t_t FileWriteStreamOpen(const char *pchFile)
         {
             Traceprint();
 
             return 0;
         }
-        EResult FileWriteStreamWriteChunk(uint64_t hStream, const void *pvData, int32_t cubData)
+        EResult FileWriteStreamWriteChunk(uint64_t_t hStream, const void *pvData, int32_t_t cubData)
         {
             Traceprint();
 
             return EResult::k_EResultOK;
         }
-        EResult FileWriteStreamClose(uint64_t hStream)
+        EResult FileWriteStreamClose(uint64_t_t hStream)
         {
             Traceprint();
 
             return EResult::k_EResultOK;
         }
-        EResult FileWriteStreamCancel(uint64_t hStream)
+        EResult FileWriteStreamCancel(uint64_t_t hStream)
         {
             Traceprint();
 
             return EResult::k_EResultOK;
         }
-        int32_t UGCRead1(uint32_t hContent, void *pvData, int32_t cubDataToRead, uint32_t uOffset)
+        int32_t_t UGCRead1(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead, uint32_t_t uOffset)
         {
             return UGCRead0(hContent, pvData, cubDataToRead);
         }
-        uint64_t UGCDownload1(uint32_t hContent, uint32_t unPriority)
+        uint64_t_t UGCDownload1(uint32_t_t hContent, uint32_t_t unPriority)
         {
             return UGCDownload0(hContent);
         }
-        uint64_t UGCDownloadToLocation(uint32_t hContent, const char *cszLocation, uint32_t unPriority)
+        uint64_t_t UGCDownloadToLocation(uint32_t_t hContent, const char *cszLocation, uint32_t_t unPriority)
         {
             return UGCDownload0(hContent);
         }
-        uint64_t GetPublishedFileDetails1(uint32_t unPublishedFileId, uint32_t unMaxSecondsOld)
+        uint64_t_t GetPublishedFileDetails1(uint32_t_t unPublishedFileId, uint32_t_t unMaxSecondsOld)
         {
             Traceprint();
 
             return 0;
         }
-        int32_t UGCRead2(uint32_t hContent, void *pvData, int32_t cubDataToRead, uint32_t uOffset, uint32_t eAction)
+        int32_t_t UGCRead2(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead, uint32_t_t uOffset, uint32_t_t eAction)
         {
             return UGCRead0(hContent, pvData, cubDataToRead);
         }
@@ -392,7 +773,7 @@ namespace Steam
 
             return true;
         }
-        uint64_t FileShare(const char *pchFile)
+        uint64_t_t FileShare(const char *pchFile)
         {
             Traceprint();
 
