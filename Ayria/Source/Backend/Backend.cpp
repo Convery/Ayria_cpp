@@ -240,6 +240,14 @@ namespace Backend
         // Initialize subsystems that plugins may need.
         Services::Initialize();
 
+        /*
+            TODO(tcn):
+            If the user has authenticated in the past, get 'Authhash' from the config.
+            Saved as Base64::Encode(AES::Encrypt(bcrypt/argon2(Password), Clientinfo::getHWID()));
+
+            Then authenticate in the background.
+        */
+
         // Workers.
         CreateThread(NULL, NULL, Graphicsthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
         CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);

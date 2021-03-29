@@ -117,7 +117,7 @@ namespace Steam
     };
 
     // Per-user storage directory.
-    std::string Storagepath(std::string_view Path)
+    static std::string Storagepath(std::string_view Path)
     {
         static std::string Basepath{ []()
         {
@@ -283,7 +283,8 @@ namespace Steam
         }
         bool FilePersisted(const char *pchFile)
         {
-            return FileExists(pchFile);
+            // Not available in cloud-storage, only locally.
+            return false;
         }
         bool FileReadAsyncComplete(SteamAPICall_t hReadCall, void *pvBuffer, uint32_t cubToRead);
         bool FileWrite(const char *pchFile, const void *pvData, int32_t cubData)
@@ -301,13 +302,53 @@ namespace Steam
             return true;
         }
         bool FileWriteStreamWriteChunk(UGCFileWriteStreamHandle_t writeHandle, const void *pvData, int32_t cubData);
-        bool GetQuota(int32_t *pnTotalBytes, int32_t *puAvailableBytes)
+        bool GetQuota0(int32_t *pnTotalBytes, int32_t *puAvailableBytes)
         {
-            *pnTotalBytes = *puAvailableBytes = INT32_MAX - 1;
+            *pnTotalBytes = 0;
+            *puAvailableBytes = INT32_MAX - 1;
             return true;
         }
-        bool GetUGCDetails(UGCHandle_t hContent, AppID_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, SteamID_t *pSteamIDOwner);
-        bool GetUGCDownloadProgress(UGCHandle_t hContent, uint32_t *puDownloadedBytes, uint32_t *puTotalBytes);
+        bool GetQuota1(uint64_t *pnTotalBytes, uint64_t *puAvailableBytes)
+        {
+            *pnTotalBytes = 0;
+            *puAvailableBytes = 20 * INT32_MAX - 1;
+            return true;
+        }
+        bool GetUGCDetails(UGCHandle_t hContent, AppID_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, SteamID_t *pSteamIDOwner)
+        {
+            if (hContent == NULL) return false;
+            static std::string Filename;
+            char Buffer[FILENAME_MAX]{};
+            Filename.clear();
+
+            // OS specific hackery to get the filename from stdio.
+            #if defined (_WIN32)
+                const auto FD = _fileno((FILE *)hContent);
+                const auto Handle = _get_osfhandle(FD);
+
+                GetFileInformationByHandleEx((HANDLE)Handle, FileNameInfo, &Buffer, FILENAME_MAX);
+                const auto Info = *(FILE_NAME_INFO *)Buffer;
+                Filename = Encoding::toNarrow(std::wstring_view{ Info.FileName, Info.FileNameLength });
+            #else
+                readlink(va("/proc/self/fd/%ull", hContent).c_str(), Buffer, FILENAME_MAX);
+                Filename = Buffer;
+            #endif
+
+            *pSteamIDOwner = Global.XUID;
+            *ppchName = (char *)Filename.c_str();
+            *pnAppID = Global.ApplicationID;
+
+            std::fseek((FILE *)hContent, 0, SEEK_END);
+            *pnFileSizeInBytes = std::ftell((FILE *)hContent);
+            std::rewind((FILE *)hContent);
+
+            return !Filename.empty();
+        }
+        bool GetUGCDownloadProgress(UGCHandle_t hContent, uint32_t *puDownloadedBytes, uint32_t *puTotalBytes)
+        {
+            *puDownloadedBytes = *puTotalBytes = 100;
+            return true;
+        }
         bool IsCloudEnabledForAccount()
         { return false; }
         bool IsCloudEnabledForApp()
@@ -371,7 +412,16 @@ namespace Steam
         {
             return UGCRead2(hContent, pvData, cubDataToRead, cOffset, k_EUGCRead_ContinueReadingUntilFinished);
         }
-        int32_t UGCRead2(UGCHandle_t hContent, void *pvData, int32_t cubDataToRead, uint32_t cOffset, EUGCReadAction eAction);
+        int32_t UGCRead2(UGCHandle_t hContent, void *pvData, int32_t cubDataToRead, uint32_t cOffset, EUGCReadAction eAction)
+        {
+            const auto Handle = (std::FILE *)hContent;
+            std::fseek(Handle, cOffset, SEEK_SET);
+
+            const auto Result = std::fread(pvData, 1, cubDataToRead, Handle);
+            if (eAction == k_EUGCRead_Close || (eAction == k_EUGCRead_ContinueReadingUntilFinished && Result < cubDataToRead))
+                std::fclose(Handle);
+            return Result;
+        }
 
         int64_t GetFileTimestamp(const char *pchFile)
         {
@@ -384,402 +434,8 @@ namespace Steam
         {}
     };
 
-
-
-
-
-
-
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
-
-    std::string Filepath()
-    {
-        static std::string Internal{ va("./Ayria/Assets/Platformwrapper/%u", Steam.ApplicationID) };
-        static bool doOnce{ [&]() { std::filesystem::create_directories(Internal.c_str()); return true; }() };
-        return Internal;
-    }
-
-    struct SteamRemotestorage2
-    {
-        bool FileRead0(const char *filename, void *buffer, int size) const
-        {
-            if(const auto Filebuffer = FS::Readfile(Filepath() + filename); !Filebuffer.empty())
-            {
-                std::memcpy(buffer, Filebuffer.data(), std::min(size_t(size), Filebuffer.size()));
-                return true;
-            }
-            return false;
-        }
-        bool FileExists(const char *filename)
-        {
-            return FS::Fileexists(Filepath() + filename);
-        }
-        bool FileDelete(const char *filename) const
-        {
-            return std::remove((Filepath() + filename).c_str());
-        }
-        const char *GetFileNameAndSize(int index, int *size)
-        {
-            const auto Filelist = FS::Findfiles(Filepath(), "");
-            if(Filelist.size() <= index)
-            {
-                *size = 0; return nullptr;
-            }
-
-            // Leaky leaky..
-            *size = uint32_t_t(FS::Filesize(Filelist[index]));
-            auto Leak = Filelist[index].substr(Filelist[index].find_last_of('/') + 1);
-            const auto pLeak = new char[Leak.size() + 1]();
-            std::memcpy(pLeak, Leak.data(), Leak.size());
-            return pLeak;
-        }
-        bool GetQuota(int32_t_t *pnTotalBytes, uint32_t_t *puAvailableBytes)
-        {
-            Traceprint();
-
-            *pnTotalBytes = *puAvailableBytes = INT_MAX;
-            return true;
-        }
-        bool FileWrite(const char *pchFile, const void *pvData, int32_t_t cubData)
-        {
-            Traceprint();
-            return true;
-        }
-        int32_t_t GetFileSize(const char *pchFile)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        int32_t_t FileRead1(const char *pchFile, void *pvData, int32_t_t cubDataToRead)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        int32_t_t GetFileCount()
-        {
-            Traceprint();
-
-            return 0;
-        }
-        bool FilePersisted(const char *pchFile)
-        {
-            Traceprint();
-            return false;
-        }
-        int64_t_t GetFileTimestamp(const char *pchFile)
-        {
-            Traceprint();
-
-            return uint32_t_t(time(NULL)) - 3000;
-        }
-        bool IsCloudEnabledForAccount()
-        {
-            Traceprint();
-
-            return true;
-        }
-        bool IsCloudEnabledThisApp()
-        {
-            Traceprint();
-
-            return true;
-        }
-        bool SetCloudEnabledThisApp(bool bEnable)
-        {
-            Traceprint();
-
-            return true;
-        }
-        uint64_t_t UGCDownload0(uint32_t_t hContent)
-        {
-            Traceprint();
-            return 0;
-        }
-        bool GetUGCDetails(uint32_t_t hContent, uint32_t_t *pnAppID, char **ppchName, int32_t_t *pnFileSizeInBytes, CSteamID *pSteamIDOwner)
-        {
-            Traceprint();
-            return false;
-        }
-        int32_t_t UGCRead0(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead)
-        {
-            Traceprint();
-            return 0;
-        }
-        int32_t_t GetCachedUGCCount()
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint32_t_t GetCachedUGCHandle(int32_t_t iCachedContent)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        bool SetSyncPlatforms(const char *pchFile, uint32_t_t eRemoteStoragePlatform)
-        {
-            Traceprint();
-
-            return true;
-        }
-        uint32_t_t GetSyncPlatforms(const char *pchFile)
-        {
-            Traceprint();
-
-            return 0xFFFFFFFF;
-        }
-        bool IsCloudEnabledForApp()
-        {
-            Traceprint();
-
-            return true;
-        }
-        void SetCloudEnabledForApp(bool bEnabled)
-        {
-            Traceprint();
-
-            return;
-        }
-        uint64_t_t PublishFile(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t PublishWorkshopFile0(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, struct SteamParamStringArray_t *pTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t UpdatePublishedFile(uint32_t_t updatePublishedFileRequest)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t GetPublishedFileDetails0(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t DeletePublishedFile(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t EnumerateUserPublishedFiles(uint32_t_t unStartIndex)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t SubscribePublishedFile(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t EnumerateUserSubscribedFiles(uint32_t_t unStartIndex)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t UnsubscribePublishedFile(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        bool GetUGCDownloadProgress(uint32_t_t hContent, uint32_t_t *puDownloadedBytes, uint32_t_t *puTotalBytes)
-        {
-            Traceprint();
-
-            *puDownloadedBytes = 1;
-            *puTotalBytes = 1;
-            return true;
-        }
-        uint64_t_t PublishWorkshopFile1(const char *pchFile, const char *pchPreviewFile, uint32_t_t nConsumerAppId, const char *pchTitle, const char *pchDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags, uint32_t_t eWorkshopFileType)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t CreatePublishedFileUpdateRequest(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        bool UpdatePublishedFileFile(uint64_t_t hUpdateRequest, const char *pchFile)
-        {
-            Traceprint();
-
-            return false;
-        }
-        bool UpdatePublishedFilePreviewFile(uint64_t_t hUpdateRequest, const char *pchPreviewFile)
-        {
-            Traceprint();
-
-            return false;
-        }
-        bool UpdatePublishedFileTitle(uint64_t_t hUpdateRequest, const char *pchTitle)
-        {
-            Traceprint();
-
-            return false;
-        }
-        bool UpdatePublishedFileDescription(uint64_t_t hUpdateRequest, const char *pchDescription)
-        {
-            Traceprint();
-
-            return false;
-        }
-        bool UpdatePublishedFileVisibility(uint64_t_t hUpdateRequest, uint32_t_t eVisibility)
-        {
-            Traceprint();
-
-            return false;
-        }
-        bool UpdatePublishedFileTags(uint64_t_t hUpdateRequest, struct SteamParamStringArray_t *pTags)
-        {
-            Traceprint();
-
-            return false;
-        }
-        uint64_t_t CommitPublishedFileUpdate(uint64_t_t hUpdateRequest)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        bool UpdatePublishedFileSetChangeDescription(uint64_t_t hUpdateRequest, const char *cszDescription)
-        {
-            Traceprint();
-
-            return false;
-        }
-        uint64_t_t GetPublishedItemVoteDetails(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t UpdateUserPublishedItemVote(uint32_t_t unPublishedFileId, bool bVoteUp)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t GetUserPublishedItemVoteDetails(uint32_t_t unPublishedFileId)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t EnumerateUserSharedWorkshopFiles(uint32_t_t nAppId, CSteamID creatorSteamID, uint32_t_t uStartIndex, struct SteamParamStringArray_t *pRequiredTags, struct SteamParamStringArray_t *pExcludedTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t PublishVideo0(const char *cszFileName, const char *cszPreviewFileName, uint32_t_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t SetUserPublishedFileAction(uint32_t_t unPublishedFileId, uint32_t_t eAction)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t EnumeratePublishedFilesByUserAction(uint32_t_t eAction, uint32_t_t uStartIndex)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t EnumeratePublishedWorkshopFiles(uint32_t_t eType, uint32_t_t uStartIndex, uint32_t_t cDays, uint32_t_t cCount, struct SteamParamStringArray_t *pTags, struct SteamParamStringArray_t *pUserTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t PublishVideo1(uint32_t_t eVideoProvider, const char *cszVideoAccountName, const char *cszVideoIdentifier, const char *cszFileName, uint32_t_t nConsumerAppId, const char *cszTitle, const char *cszDescription, uint32_t_t eVisibility, struct SteamParamStringArray_t *pTags)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        uint64_t_t FileWriteStreamOpen(const char *pchFile)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        EResult FileWriteStreamWriteChunk(uint64_t_t hStream, const void *pvData, int32_t_t cubData)
-        {
-            Traceprint();
-
-            return EResult::k_EResultOK;
-        }
-        EResult FileWriteStreamClose(uint64_t_t hStream)
-        {
-            Traceprint();
-
-            return EResult::k_EResultOK;
-        }
-        EResult FileWriteStreamCancel(uint64_t_t hStream)
-        {
-            Traceprint();
-
-            return EResult::k_EResultOK;
-        }
-        int32_t_t UGCRead1(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead, uint32_t_t uOffset)
-        {
-            return UGCRead0(hContent, pvData, cubDataToRead);
-        }
-        uint64_t_t UGCDownload1(uint32_t_t hContent, uint32_t_t unPriority)
-        {
-            return UGCDownload0(hContent);
-        }
-        uint64_t_t UGCDownloadToLocation(uint32_t_t hContent, const char *cszLocation, uint32_t_t unPriority)
-        {
-            return UGCDownload0(hContent);
-        }
-        uint64_t_t GetPublishedFileDetails1(uint32_t_t unPublishedFileId, uint32_t_t unMaxSecondsOld)
-        {
-            Traceprint();
-
-            return 0;
-        }
-        int32_t_t UGCRead2(uint32_t_t hContent, void *pvData, int32_t_t cubDataToRead, uint32_t_t uOffset, uint32_t_t eAction)
-        {
-            return UGCRead0(hContent, pvData, cubDataToRead);
-        }
-
-        bool FileForget(const char *pchFile)
-        {
-            Traceprint();
-
-            return true;
-        }
-        uint64_t_t FileShare(const char *pchFile)
-        {
-            Traceprint();
-
-            return 0;
-        }
-    };
 
     struct SteamRemotestorage001 : Interface_t
     {
@@ -787,12 +443,12 @@ namespace Steam
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
             Createmethod(1, SteamRemotestorage, GetFileSize);
-            Createmethod(2, SteamRemotestorage, FileRead0);
+            Createmethod(2, SteamRemotestorage, FileRead);
             Createmethod(3, SteamRemotestorage, FileExists);
             Createmethod(4, SteamRemotestorage, FileDelete);
             Createmethod(5, SteamRemotestorage, GetFileCount);
             Createmethod(6, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(7, SteamRemotestorage, GetQuota);
+            Createmethod(7, SteamRemotestorage, GetQuota0);
         };
     };
     struct SteamRemotestorage002 : Interface_t
@@ -801,11 +457,11 @@ namespace Steam
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
             Createmethod(1, SteamRemotestorage, GetFileSize);
-            Createmethod(2, SteamRemotestorage, FileRead1);
+            Createmethod(2, SteamRemotestorage, FileRead);
             Createmethod(3, SteamRemotestorage, FileExists);
             Createmethod(4, SteamRemotestorage, GetFileCount);
             Createmethod(5, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(6, SteamRemotestorage, GetQuota);
+            Createmethod(6, SteamRemotestorage, GetQuota0);
         };
     };
     struct SteamRemotestorage003 : Interface_t
@@ -813,7 +469,7 @@ namespace Steam
         SteamRemotestorage003()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -823,10 +479,10 @@ namespace Steam
             Createmethod(8, SteamRemotestorage, GetFileTimestamp);
             Createmethod(9, SteamRemotestorage, GetFileCount);
             Createmethod(10, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(11, SteamRemotestorage, GetQuota);
+            Createmethod(11, SteamRemotestorage, GetQuota0);
             Createmethod(12, SteamRemotestorage, IsCloudEnabledForAccount);
-            Createmethod(13, SteamRemotestorage, IsCloudEnabledThisApp);
-            Createmethod(14, SteamRemotestorage, SetCloudEnabledThisApp);
+            Createmethod(13, SteamRemotestorage, IsCloudEnabledForApp);
+            Createmethod(14, SteamRemotestorage, SetCloudEnabledForApp);
             Createmethod(15, SteamRemotestorage, UGCDownload0);
             Createmethod(16, SteamRemotestorage, GetUGCDetails);
             Createmethod(17, SteamRemotestorage, UGCRead0);
@@ -839,7 +495,7 @@ namespace Steam
         SteamRemotestorage004()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -849,17 +505,16 @@ namespace Steam
             Createmethod(8, SteamRemotestorage, GetFileSize);
             Createmethod(9, SteamRemotestorage, GetFileTimestamp);
             Createmethod(10, SteamRemotestorage, GetSyncPlatforms);
-            Createmethod(11, SteamRemotestorage, GetFileCount);
-            Createmethod(12, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(13, SteamRemotestorage, GetQuota);
-            Createmethod(14, SteamRemotestorage, IsCloudEnabledForAccount);
-            Createmethod(15, SteamRemotestorage, IsCloudEnabledForApp);
-            Createmethod(16, SteamRemotestorage, SetCloudEnabledForApp);
-            Createmethod(17, SteamRemotestorage, UGCDownload0);
-            Createmethod(18, SteamRemotestorage, GetUGCDetails);
-            Createmethod(19, SteamRemotestorage, UGCRead0);
-            Createmethod(20, SteamRemotestorage, GetCachedUGCCount);
-            Createmethod(21, SteamRemotestorage, GetCachedUGCHandle);
+            Createmethod(11, SteamRemotestorage, GetFileNameAndSize);
+            Createmethod(12, SteamRemotestorage, GetQuota0);
+            Createmethod(13, SteamRemotestorage, IsCloudEnabledForAccount);
+            Createmethod(14, SteamRemotestorage, IsCloudEnabledForApp);
+            Createmethod(15, SteamRemotestorage, SetCloudEnabledForApp);
+            Createmethod(16, SteamRemotestorage, UGCDownload0);
+            Createmethod(17, SteamRemotestorage, GetUGCDetails);
+            Createmethod(18, SteamRemotestorage, UGCRead0);
+            Createmethod(19, SteamRemotestorage, GetCachedUGCCount);
+            Createmethod(20, SteamRemotestorage, GetCachedUGCHandle);
         };
     };
     struct SteamRemotestorage005 : Interface_t
@@ -867,7 +522,7 @@ namespace Steam
         SteamRemotestorage005()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -879,7 +534,7 @@ namespace Steam
             Createmethod(10, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(11, SteamRemotestorage, GetFileCount);
             Createmethod(12, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(13, SteamRemotestorage, GetQuota);
+            Createmethod(13, SteamRemotestorage, GetQuota0);
             Createmethod(14, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(15, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(16, SteamRemotestorage, SetCloudEnabledForApp);
@@ -888,15 +543,21 @@ namespace Steam
             Createmethod(19, SteamRemotestorage, UGCRead0);
             Createmethod(20, SteamRemotestorage, GetCachedUGCCount);
             Createmethod(21, SteamRemotestorage, GetCachedUGCHandle);
-            Createmethod(22, SteamRemotestorage, PublishFile);
-            Createmethod(23, SteamRemotestorage, PublishWorkshopFile0);
-            Createmethod(24, SteamRemotestorage, UpdatePublishedFile);
-            Createmethod(25, SteamRemotestorage, GetPublishedFileDetails0);
-            Createmethod(26, SteamRemotestorage, DeletePublishedFile);
-            Createmethod(27, SteamRemotestorage, EnumerateUserPublishedFiles);
-            Createmethod(28, SteamRemotestorage, SubscribePublishedFile);
-            Createmethod(29, SteamRemotestorage, EnumerateUserSubscribedFiles);
-            Createmethod(30, SteamRemotestorage, UnsubscribePublishedFile);
+            Createmethod(22, SteamRemotestorage, GetFileListFromServer);
+            Createmethod(23, SteamRemotestorage, FileFetch);
+            Createmethod(24, SteamRemotestorage, FilePersist);
+            Createmethod(25, SteamRemotestorage, SynchronizeToClient);
+            Createmethod(26, SteamRemotestorage, SynchronizeToServer);
+            Createmethod(27, SteamRemotestorage, ResetFileRequestState);
+            Createmethod(28, SteamRemotestorage, PublishFile);
+            Createmethod(29, SteamRemotestorage, PublishWorkshopFile0);
+            Createmethod(30, SteamRemotestorage, UpdatePublishedFile);
+            Createmethod(31, SteamRemotestorage, GetPublishedFileDetails0);
+            Createmethod(32, SteamRemotestorage, DeletePublishedFile);
+            Createmethod(33, SteamRemotestorage, EnumerateUserPublishedFiles);
+            Createmethod(34, SteamRemotestorage, SubscribePublishedFile);
+            Createmethod(35, SteamRemotestorage, EnumerateUserSubscribedFiles);
+            Createmethod(36, SteamRemotestorage, UnsubscribePublishedFile);
         };
     };
     struct SteamRemotestorage006 : Interface_t
@@ -904,7 +565,7 @@ namespace Steam
         SteamRemotestorage006()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -916,7 +577,7 @@ namespace Steam
             Createmethod(10, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(11, SteamRemotestorage, GetFileCount);
             Createmethod(12, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(13, SteamRemotestorage, GetQuota);
+            Createmethod(13, SteamRemotestorage, GetQuota0);
             Createmethod(14, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(15, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(16, SteamRemotestorage, SetCloudEnabledForApp);
@@ -957,7 +618,7 @@ namespace Steam
         SteamRemotestorage007()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -969,7 +630,7 @@ namespace Steam
             Createmethod(10, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(11, SteamRemotestorage, GetFileCount);
             Createmethod(12, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(13, SteamRemotestorage, GetQuota);
+            Createmethod(13, SteamRemotestorage, GetQuota0);
             Createmethod(14, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(15, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(16, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1010,7 +671,7 @@ namespace Steam
         SteamRemotestorage008()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -1026,7 +687,7 @@ namespace Steam
             Createmethod(14, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(15, SteamRemotestorage, GetFileCount);
             Createmethod(16, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(17, SteamRemotestorage, GetQuota);
+            Createmethod(17, SteamRemotestorage, GetQuota0);
             Createmethod(18, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(19, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(20, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1067,7 +728,7 @@ namespace Steam
         SteamRemotestorage009()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -1083,7 +744,7 @@ namespace Steam
             Createmethod(14, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(15, SteamRemotestorage, GetFileCount);
             Createmethod(16, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(17, SteamRemotestorage, GetQuota);
+            Createmethod(17, SteamRemotestorage, GetQuota0);
             Createmethod(18, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(19, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(20, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1124,7 +785,7 @@ namespace Steam
         SteamRemotestorage010()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -1140,7 +801,7 @@ namespace Steam
             Createmethod(14, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(15, SteamRemotestorage, GetFileCount);
             Createmethod(16, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(17, SteamRemotestorage, GetQuota);
+            Createmethod(17, SteamRemotestorage, GetQuota0);
             Createmethod(18, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(19, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(20, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1182,7 +843,7 @@ namespace Steam
         SteamRemotestorage011()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -1198,7 +859,7 @@ namespace Steam
             Createmethod(14, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(15, SteamRemotestorage, GetFileCount);
             Createmethod(16, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(17, SteamRemotestorage, GetQuota);
+            Createmethod(17, SteamRemotestorage, GetQuota0);
             Createmethod(18, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(19, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(20, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1240,7 +901,7 @@ namespace Steam
         SteamRemotestorage012()
         {
             Createmethod(0, SteamRemotestorage, FileWrite);
-            Createmethod(1, SteamRemotestorage, FileRead1);
+            Createmethod(1, SteamRemotestorage, FileRead);
             Createmethod(2, SteamRemotestorage, FileForget);
             Createmethod(3, SteamRemotestorage, FileDelete);
             Createmethod(4, SteamRemotestorage, FileShare);
@@ -1256,7 +917,7 @@ namespace Steam
             Createmethod(14, SteamRemotestorage, GetSyncPlatforms);
             Createmethod(15, SteamRemotestorage, GetFileCount);
             Createmethod(16, SteamRemotestorage, GetFileNameAndSize);
-            Createmethod(17, SteamRemotestorage, GetQuota);
+            Createmethod(17, SteamRemotestorage, GetQuota0);
             Createmethod(18, SteamRemotestorage, IsCloudEnabledForAccount);
             Createmethod(19, SteamRemotestorage, IsCloudEnabledForApp);
             Createmethod(20, SteamRemotestorage, SetCloudEnabledForApp);
@@ -1266,31 +927,171 @@ namespace Steam
             Createmethod(24, SteamRemotestorage, UGCRead2);
             Createmethod(25, SteamRemotestorage, GetCachedUGCCount);
             Createmethod(26, SteamRemotestorage, GetCachedUGCHandle);
-            Createmethod(27, SteamRemotestorage, PublishWorkshopFile1);
-            Createmethod(28, SteamRemotestorage, CreatePublishedFileUpdateRequest);
-            Createmethod(29, SteamRemotestorage, UpdatePublishedFileFile);
-            Createmethod(30, SteamRemotestorage, UpdatePublishedFilePreviewFile);
-            Createmethod(31, SteamRemotestorage, UpdatePublishedFileTitle);
-            Createmethod(32, SteamRemotestorage, UpdatePublishedFileDescription);
-            Createmethod(33, SteamRemotestorage, UpdatePublishedFileVisibility);
-            Createmethod(34, SteamRemotestorage, UpdatePublishedFileTags);
-            Createmethod(35, SteamRemotestorage, CommitPublishedFileUpdate);
-            Createmethod(36, SteamRemotestorage, GetPublishedFileDetails1);
-            Createmethod(37, SteamRemotestorage, DeletePublishedFile);
-            Createmethod(38, SteamRemotestorage, EnumerateUserPublishedFiles);
-            Createmethod(39, SteamRemotestorage, SubscribePublishedFile);
-            Createmethod(40, SteamRemotestorage, EnumerateUserSubscribedFiles);
-            Createmethod(41, SteamRemotestorage, UnsubscribePublishedFile);
-            Createmethod(42, SteamRemotestorage, UpdatePublishedFileSetChangeDescription);
-            Createmethod(43, SteamRemotestorage, GetPublishedItemVoteDetails);
-            Createmethod(44, SteamRemotestorage, UpdateUserPublishedItemVote);
-            Createmethod(45, SteamRemotestorage, GetUserPublishedItemVoteDetails);
-            Createmethod(46, SteamRemotestorage, EnumerateUserSharedWorkshopFiles);
-            Createmethod(47, SteamRemotestorage, PublishVideo1);
-            Createmethod(48, SteamRemotestorage, SetUserPublishedFileAction);
-            Createmethod(49, SteamRemotestorage, EnumeratePublishedFilesByUserAction);
-            Createmethod(50, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
-            Createmethod(51, SteamRemotestorage, UGCDownloadToLocation);
+            Createmethod(27, SteamRemotestorage, GetFileListFromServer);
+            Createmethod(28, SteamRemotestorage, FileFetch);
+            Createmethod(29, SteamRemotestorage, FilePersist);
+            Createmethod(30, SteamRemotestorage, SynchronizeToClient);
+            Createmethod(31, SteamRemotestorage, SynchronizeToServer);
+            Createmethod(32, SteamRemotestorage, ResetFileRequestState);
+            Createmethod(33, SteamRemotestorage, PublishWorkshopFile1);
+            Createmethod(34, SteamRemotestorage, CreatePublishedFileUpdateRequest);
+            Createmethod(35, SteamRemotestorage, UpdatePublishedFileFile);
+            Createmethod(36, SteamRemotestorage, UpdatePublishedFilePreviewFile);
+            Createmethod(37, SteamRemotestorage, UpdatePublishedFileTitle);
+            Createmethod(38, SteamRemotestorage, UpdatePublishedFileDescription);
+            Createmethod(39, SteamRemotestorage, UpdatePublishedFileVisibility);
+            Createmethod(40, SteamRemotestorage, UpdatePublishedFileTags);
+            Createmethod(41, SteamRemotestorage, CommitPublishedFileUpdate);
+            Createmethod(42, SteamRemotestorage, GetPublishedFileDetails1);
+            Createmethod(43, SteamRemotestorage, DeletePublishedFile);
+            Createmethod(44, SteamRemotestorage, EnumerateUserPublishedFiles);
+            Createmethod(45, SteamRemotestorage, SubscribePublishedFile);
+            Createmethod(46, SteamRemotestorage, EnumerateUserSubscribedFiles);
+            Createmethod(47, SteamRemotestorage, UnsubscribePublishedFile);
+            Createmethod(48, SteamRemotestorage, UpdatePublishedFileSetChangeDescription);
+            Createmethod(49, SteamRemotestorage, GetPublishedItemVoteDetails);
+            Createmethod(50, SteamRemotestorage, UpdateUserPublishedItemVote);
+            Createmethod(51, SteamRemotestorage, GetUserPublishedItemVoteDetails);
+            Createmethod(52, SteamRemotestorage, EnumerateUserSharedWorkshopFiles);
+            Createmethod(53, SteamRemotestorage, PublishVideo1);
+            Createmethod(54, SteamRemotestorage, SetUserPublishedFileAction);
+            Createmethod(55, SteamRemotestorage, EnumeratePublishedFilesByUserAction);
+            Createmethod(56, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
+            Createmethod(57, SteamRemotestorage, UGCDownloadToLocation);
+        };
+    };
+    struct SteamRemotestorage013 : Interface_t
+    {
+        SteamRemotestorage013()
+        {
+            Createmethod(0, SteamRemotestorage, FileWrite);
+            Createmethod(1, SteamRemotestorage, FileRead);
+            Createmethod(2, SteamRemotestorage, FileWriteAsync);
+            Createmethod(3, SteamRemotestorage, FileReadAsync);
+            Createmethod(4, SteamRemotestorage, FileReadAsyncComplete);
+            Createmethod(5, SteamRemotestorage, FileForget);
+            Createmethod(6, SteamRemotestorage, FileDelete);
+            Createmethod(7, SteamRemotestorage, FileShare);
+            Createmethod(8, SteamRemotestorage, SetSyncPlatforms);
+            Createmethod(9, SteamRemotestorage, FileWriteStreamOpen);
+            Createmethod(10, SteamRemotestorage, FileWriteStreamWriteChunk);
+            Createmethod(11, SteamRemotestorage, FileWriteStreamClose);
+            Createmethod(12, SteamRemotestorage, FileWriteStreamCancel);
+            Createmethod(13, SteamRemotestorage, FileExists);
+            Createmethod(14, SteamRemotestorage, FilePersisted);
+            Createmethod(15, SteamRemotestorage, GetFileSize);
+            Createmethod(16, SteamRemotestorage, GetFileTimestamp);
+            Createmethod(17, SteamRemotestorage, GetSyncPlatforms);
+            Createmethod(18, SteamRemotestorage, GetFileCount);
+            Createmethod(19, SteamRemotestorage, GetFileNameAndSize);
+            Createmethod(20, SteamRemotestorage, GetQuota0);
+            Createmethod(21, SteamRemotestorage, IsCloudEnabledForAccount);
+            Createmethod(22, SteamRemotestorage, IsCloudEnabledForApp);
+            Createmethod(23, SteamRemotestorage, SetCloudEnabledForApp);
+            Createmethod(24, SteamRemotestorage, UGCDownload1);
+            Createmethod(25, SteamRemotestorage, GetUGCDownloadProgress);
+            Createmethod(26, SteamRemotestorage, GetUGCDetails);
+            Createmethod(27, SteamRemotestorage, UGCRead2);
+            Createmethod(28, SteamRemotestorage, GetCachedUGCCount);
+            Createmethod(29, SteamRemotestorage, GetCachedUGCHandle);
+            Createmethod(30, SteamRemotestorage, GetFileListFromServer);
+            Createmethod(31, SteamRemotestorage, FileFetch);
+            Createmethod(32, SteamRemotestorage, FilePersist);
+            Createmethod(33, SteamRemotestorage, SynchronizeToClient);
+            Createmethod(34, SteamRemotestorage, SynchronizeToServer);
+            Createmethod(35, SteamRemotestorage, ResetFileRequestState);
+            Createmethod(36, SteamRemotestorage, PublishWorkshopFile1);
+            Createmethod(37, SteamRemotestorage, CreatePublishedFileUpdateRequest);
+            Createmethod(38, SteamRemotestorage, UpdatePublishedFileFile);
+            Createmethod(39, SteamRemotestorage, UpdatePublishedFilePreviewFile);
+            Createmethod(40, SteamRemotestorage, UpdatePublishedFileTitle);
+            Createmethod(41, SteamRemotestorage, UpdatePublishedFileDescription);
+            Createmethod(42, SteamRemotestorage, UpdatePublishedFileVisibility);
+            Createmethod(43, SteamRemotestorage, UpdatePublishedFileTags);
+            Createmethod(44, SteamRemotestorage, CommitPublishedFileUpdate);
+            Createmethod(45, SteamRemotestorage, GetPublishedFileDetails1);
+            Createmethod(46, SteamRemotestorage, DeletePublishedFile);
+            Createmethod(47, SteamRemotestorage, EnumerateUserPublishedFiles);
+            Createmethod(48, SteamRemotestorage, SubscribePublishedFile);
+            Createmethod(49, SteamRemotestorage, EnumerateUserSubscribedFiles);
+            Createmethod(50, SteamRemotestorage, UnsubscribePublishedFile);
+            Createmethod(51, SteamRemotestorage, UpdatePublishedFileSetChangeDescription);
+            Createmethod(52, SteamRemotestorage, GetPublishedItemVoteDetails);
+            Createmethod(53, SteamRemotestorage, UpdateUserPublishedItemVote);
+            Createmethod(54, SteamRemotestorage, GetUserPublishedItemVoteDetails);
+            Createmethod(55, SteamRemotestorage, EnumerateUserSharedWorkshopFiles);
+            Createmethod(56, SteamRemotestorage, PublishVideo1);
+            Createmethod(57, SteamRemotestorage, SetUserPublishedFileAction);
+            Createmethod(58, SteamRemotestorage, EnumeratePublishedFilesByUserAction);
+            Createmethod(59, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
+            Createmethod(60, SteamRemotestorage, UGCDownloadToLocation);
+        };
+    };
+    struct SteamRemotestorage014 : Interface_t
+    {
+        SteamRemotestorage014()
+        {
+            Createmethod(0, SteamRemotestorage, FileWrite);
+            Createmethod(1, SteamRemotestorage, FileRead);
+            Createmethod(2, SteamRemotestorage, FileWriteAsync);
+            Createmethod(3, SteamRemotestorage, FileReadAsync);
+            Createmethod(4, SteamRemotestorage, FileReadAsyncComplete);
+            Createmethod(5, SteamRemotestorage, FileForget);
+            Createmethod(6, SteamRemotestorage, FileDelete);
+            Createmethod(7, SteamRemotestorage, FileShare);
+            Createmethod(8, SteamRemotestorage, SetSyncPlatforms);
+            Createmethod(9, SteamRemotestorage, FileWriteStreamOpen);
+            Createmethod(10, SteamRemotestorage, FileWriteStreamWriteChunk);
+            Createmethod(11, SteamRemotestorage, FileWriteStreamClose);
+            Createmethod(12, SteamRemotestorage, FileWriteStreamCancel);
+            Createmethod(13, SteamRemotestorage, FileExists);
+            Createmethod(14, SteamRemotestorage, FilePersisted);
+            Createmethod(15, SteamRemotestorage, GetFileSize);
+            Createmethod(16, SteamRemotestorage, GetFileTimestamp);
+            Createmethod(17, SteamRemotestorage, GetSyncPlatforms);
+            Createmethod(18, SteamRemotestorage, GetFileCount);
+            Createmethod(19, SteamRemotestorage, GetFileNameAndSize);
+            Createmethod(20, SteamRemotestorage, GetQuota1);
+            Createmethod(21, SteamRemotestorage, IsCloudEnabledForAccount);
+            Createmethod(22, SteamRemotestorage, IsCloudEnabledForApp);
+            Createmethod(23, SteamRemotestorage, SetCloudEnabledForApp);
+            Createmethod(24, SteamRemotestorage, UGCDownload1);
+            Createmethod(25, SteamRemotestorage, GetUGCDownloadProgress);
+            Createmethod(26, SteamRemotestorage, GetUGCDetails);
+            Createmethod(27, SteamRemotestorage, UGCRead2);
+            Createmethod(28, SteamRemotestorage, GetCachedUGCCount);
+            Createmethod(29, SteamRemotestorage, GetCachedUGCHandle);
+            Createmethod(30, SteamRemotestorage, GetFileListFromServer);
+            Createmethod(31, SteamRemotestorage, FileFetch);
+            Createmethod(32, SteamRemotestorage, FilePersist);
+            Createmethod(33, SteamRemotestorage, SynchronizeToClient);
+            Createmethod(34, SteamRemotestorage, SynchronizeToServer);
+            Createmethod(35, SteamRemotestorage, ResetFileRequestState);
+            Createmethod(36, SteamRemotestorage, PublishWorkshopFile1);
+            Createmethod(37, SteamRemotestorage, CreatePublishedFileUpdateRequest);
+            Createmethod(38, SteamRemotestorage, UpdatePublishedFileFile);
+            Createmethod(39, SteamRemotestorage, UpdatePublishedFilePreviewFile);
+            Createmethod(40, SteamRemotestorage, UpdatePublishedFileTitle);
+            Createmethod(41, SteamRemotestorage, UpdatePublishedFileDescription);
+            Createmethod(42, SteamRemotestorage, UpdatePublishedFileVisibility);
+            Createmethod(43, SteamRemotestorage, UpdatePublishedFileTags);
+            Createmethod(44, SteamRemotestorage, CommitPublishedFileUpdate);
+            Createmethod(45, SteamRemotestorage, GetPublishedFileDetails1);
+            Createmethod(46, SteamRemotestorage, DeletePublishedFile);
+            Createmethod(47, SteamRemotestorage, EnumerateUserPublishedFiles);
+            Createmethod(48, SteamRemotestorage, SubscribePublishedFile);
+            Createmethod(49, SteamRemotestorage, EnumerateUserSubscribedFiles);
+            Createmethod(50, SteamRemotestorage, UnsubscribePublishedFile);
+            Createmethod(51, SteamRemotestorage, UpdatePublishedFileSetChangeDescription);
+            Createmethod(52, SteamRemotestorage, GetPublishedItemVoteDetails);
+            Createmethod(53, SteamRemotestorage, UpdateUserPublishedItemVote);
+            Createmethod(54, SteamRemotestorage, GetUserPublishedItemVoteDetails);
+            Createmethod(55, SteamRemotestorage, EnumerateUserSharedWorkshopFiles);
+            Createmethod(56, SteamRemotestorage, PublishVideo1);
+            Createmethod(57, SteamRemotestorage, SetUserPublishedFileAction);
+            Createmethod(58, SteamRemotestorage, EnumeratePublishedFilesByUserAction);
+            Createmethod(59, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
+            Createmethod(60, SteamRemotestorage, UGCDownloadToLocation);
         };
     };
 
@@ -1311,6 +1112,8 @@ namespace Steam
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage010", SteamRemotestorage010);
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage011", SteamRemotestorage011);
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage012", SteamRemotestorage012);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage013", SteamRemotestorage013);
+            Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage014", SteamRemotestorage014);
         }
     };
     static Steamremotestorageloader Interfaceloader{};
