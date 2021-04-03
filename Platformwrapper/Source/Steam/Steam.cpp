@@ -76,14 +76,14 @@ namespace Steam
                 if (ERROR_SUCCESS == RegOpenKeyW(HKEY_LOCAL_MACHINE, Steamregistry, &Registrykey))
                 {
                     {
-                        wchar_t Buffer[260]{}; long Size{ 260 };
+                        wchar_t Buffer[260]{}; DWORD Size{ 260 };
                         if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"InstallPath", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                            Global.Installpath = std::make_unique(Encoding::toNarrow(std::wstring(Buffer)));
+                            Global.Installpath = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer)));
                     }
                     {
-                        wchar_t Buffer[260]{}; long Size{ 260 };
+                        wchar_t Buffer[260]{}; DWORD Size{ 260 };
                         if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"Language", nullptr, nullptr, (LPBYTE)Buffer, &Size))
-                            Global.Locale = std::make_unique(Encoding::toNarrow(std::wstring(Buffer)));
+                            Global.Locale = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer)));
                     }
                     RegCloseKey(Registrykey);
                 }
@@ -106,14 +106,14 @@ namespace Steam
 
                 std::memcpy(Global.Username, Username.data(), std::min(sizeof(Global.Username), Username.size()));
                 Global.XUID = { 0x0110000100000000ULL | AccountID };
-                Global.Locale = std::make_unique(Locale);
+                Global.Locale = std::make_unique<std::string>(Locale);
 
                 // Ensure that we have a path available.
                 if (!Global.Installpath)
                 {
                     wchar_t Buffer[260]{};
                     const auto Size = GetCurrentDirectoryW(260, Buffer);
-                    Global.Installpath = std::make_unique(Encoding::toNarrow(std::wstring(Buffer, Size)));
+                    Global.Installpath = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer, Size)));
                 }
             }
 
@@ -175,7 +175,7 @@ namespace Steam
 
             // Notify the game that it's properly connected.
             const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::SteamServersConnected_t, nullptr);
+            Callbacks::Completerequest(RequestID, Callbacks::Types::SteamServersConnected_t, nullptr);
 
             // Notify the plugins that we are initialized.
             if (const auto Callback = Ayria.onInitialized) Callback(false);
@@ -186,7 +186,7 @@ namespace Steam
         EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
         EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
         EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Global.ApplicationID = unOwnAppID; return false; }
-        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { Global.Installpath->c_str(); }
+        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { return Global.Installpath->c_str(); }
 
         // Callback management.
         EXPORT_ATTR void SteamAPI_RunCallbacks()

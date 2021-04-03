@@ -90,7 +90,7 @@ namespace Steam
 
         EBeginAuthSessionResult BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, SteamID_t steamID)
         {
-            Debugprint(va("%s for 0x%llx", __func__, steamID));
+            Debugprint(va("%s for 0x%llx", __func__, steamID.FullID));
             const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
             Request->m_eAuthSessionResponse = 0; // k_EBeginAuthSessionResultOK
             Request->m_OwnerSteamID = steamID;

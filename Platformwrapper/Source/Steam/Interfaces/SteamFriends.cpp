@@ -25,7 +25,7 @@ namespace Steam
         try
         {
             sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READWRITE | sqlite::OpenFlags::FULLMUTEX;
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
             return sqlite::database("./Ayria/Client.db", Config);
         }
         catch (std::exception &e)
@@ -277,7 +277,7 @@ namespace Steam
                     Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
                                << groupID.UserID >> MemberIDs;
 
-                    if (MemberIDs.contains(Global.XUID.UserID))
+                    if (MemberIDs.cend() != std::find(MemberIDs.cbegin(), MemberIDs.cend(), Global.XUID.UserID))
                     {
                         const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
                         Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseSuccess;
@@ -364,7 +364,7 @@ namespace Steam
             // Could probably make a better SQL query for this.
             Database() << "SELECT (SourceID, TargetID, Flags) FROM Relationships WHERE SourceID = ? OR TargetID = ?;"
                        << Global.XUID.UserID << Global.XUID.UserID
-                       >> [&](uint32_t &SourceID, uint32_t &TargetID, uint8_t Flags)
+                       >> [&](uint32_t SourceID, uint32_t TargetID, uint8_t Flags)
                        {
                            if (Global.XUID.UserID == SourceID) Source[TargetID] = { Flags };
                            if (Global.XUID.UserID == TargetID) Target[SourceID] = { Flags };
@@ -463,11 +463,11 @@ namespace Steam
             });
             Ayriarequest("Relationships::Update", Request);
 
-            const auto Request = new Callbacks::FriendAdded_t();
-            Request->m_m_ulSteamID = steamIDFriend.FullID;
-            Request->m_result = EResult::k_EResultOK;
+            const auto SRequest = new Callbacks::FriendAdded_t();
+            SRequest->m_ulSteamID = steamIDFriend.FullID;
+            SRequest->m_eResult = EResult::k_EResultOK;
 
-            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::Types::FriendAdded_t, Request);
+            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::Types::FriendAdded_t, SRequest);
             return true;
         }
         bool CloseClanChatWindowInSteam(SteamID_t groupID)
@@ -562,7 +562,7 @@ namespace Steam
         {
             const auto Message = JSON::Object_t({
                 { "ClanID", steamIDclan.FullID },
-                { "Type", "Steam_Claninvite" }
+                { "Type", "Steam_Claninvite"s }
             });
 
             const auto Request = JSON::Object_t({
@@ -578,7 +578,7 @@ namespace Steam
         {
             const auto Message = JSON::Object_t({
                 { "Connectstring", std::string(pchConnectString) },
-                { "Type", "Steam_Gameinvite" }
+                { "Type", "Steam_Gameinvite"s }
             });
             const auto Request = JSON::Object_t({
                 { "B64Message", Base64::Encode(JSON::Dump(Message)) },
@@ -633,7 +633,7 @@ namespace Steam
             const auto Request = JSON::Object_t({
                 { "B64Message", Base64::Encode(pchMsgToSend) },
                 { "ProviderID", Hash::WW32("Steam") },
-                { "TargetID", steamIDfriend.UserID },
+                { "TargetID", steamIDFriend.UserID },
                 { "isPrivate", true },
                 { "Save", true }
             });
@@ -663,7 +663,7 @@ namespace Steam
                 return false;
 
             const auto Request = JSON::Object_t({
-                { "B64Message", Base64::Encode(pvMsgBody, cubMsgBody) },
+                { "B64Message", Base64::Encode(std::string_view((const char *)pvMsgBody, cubMsgBody)) },
                 { "ProviderID", Hash::WW32("Steam") },
                 { "TargetID", steamIDFriend.UserID },
                 { "isPrivate", true },
@@ -776,7 +776,7 @@ namespace Steam
             Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
                        << groupID.FullID >> MemberIDs;
 
-            return MemberIDs.size();
+            return (int)MemberIDs.size();
         }
         int GetClanChatMessage(SteamID_t groupID, int iMessage, void *prgchText, int cchTextMax, EChatEntryType *peChatEntryType, SteamID_t *pSteamIDChatter)
         {
@@ -821,7 +821,7 @@ namespace Steam
         }
         int GetFriendAvatar0(SteamID_t steamIDFriend)
         {
-            return GetFriendAvatar0(steamIDFriend, 128);
+            return GetFriendAvatar1(steamIDFriend, 128);
         }
         int GetFriendAvatar1(SteamID_t steamIDFriend, int eAvatarSize)
         {
@@ -889,11 +889,11 @@ namespace Steam
         }
         int GetLargeFriendAvatar(SteamID_t steamIDFriend)
         {
-            return GetFriendAvatar0(steamIDFriend, 184);
+            return GetFriendAvatar1(steamIDFriend, 184);
         }
         int GetMediumFriendAvatar(SteamID_t steamIDFriend)
         {
-            return GetFriendAvatar0(steamIDFriend, 64);
+            return GetFriendAvatar1(steamIDFriend, 64);
         }
         int GetNumChatsWithUnreadPriorityMessages()
         {
@@ -901,7 +901,7 @@ namespace Steam
         }
         int GetSmallFriendAvatar(SteamID_t steamIDFriend)
         {
-            return GetFriendAvatar0(steamIDFriend, 32);
+            return GetFriendAvatar1(steamIDFriend, 32);
         }
 
         uint32_t GetBlockedFriendCount()
@@ -977,7 +977,7 @@ namespace Steam
         {}
         void SendMsgToFriend0(SteamID_t steamIDFriend, EChatEntryType eFriendMsgType, const char *pchMsgBody)
         {
-            SendMsgToFriend1(steamIDFriend, eFriendMsgType, pchMsgBody, std::strlen(pchMsgBody));
+            SendMsgToFriend1(steamIDFriend, eFriendMsgType, pchMsgBody, (int)std::strlen(pchMsgBody));
         }
         void SetChatHistoryStart(SteamID_t steamIDFriend, int iChatID)
         {}
@@ -1826,7 +1826,7 @@ namespace Steam
             Createmethod(5, SteamFriends,    GetFriendRelationship);
             Createmethod(6, SteamFriends,    GetFriendPersonaState);
             Createmethod(7, SteamFriends,    GetFriendPersonaName);
-            Createmethod(8, SteamFriends,    GetFriendGamePlayed);
+            Createmethod(8, SteamFriends,    GetFriendGamePlayed1);
             Createmethod(9, SteamFriends,    GetFriendPersonaNameHistory);
             Createmethod(10, SteamFriends,   GetFriendSteamLevel);
             Createmethod(11, SteamFriends,   GetPlayerNickname);

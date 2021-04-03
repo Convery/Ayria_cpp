@@ -9,6 +9,25 @@
 
 namespace Steam
 {
+    enum EMatchMakingServerResponse
+    {
+        eServerResponded = 0,
+        eServerFailedToRespond,
+        eNoServersListedOnMasterServer // for the Internet query type, returned in response callback if no servers of this type match
+    };
+    enum ESteamPartyBeaconLocationType
+    {
+        k_ESteamPartyBeaconLocationType_Invalid = 0,
+        k_ESteamPartyBeaconLocationType_ChatGroup = 1,
+
+        k_ESteamPartyBeaconLocationType_Max,
+    };
+    struct SteamPartyBeaconLocation_t
+    {
+        ESteamPartyBeaconLocationType m_eType;
+        uint64_t m_ulLocationID;
+    };
+
     struct ISteamMatchmakingPingResponse
     {
         // Server has responded successfully and has updated data
@@ -54,32 +73,7 @@ namespace Steam
         // (ie, you won't get anymore RulesResponded callbacks)
         virtual void RulesRefreshComplete() = 0;
     };
-    struct MatchMakingKeyValuePair_t
-    {
-        MatchMakingKeyValuePair_t() { m_szKey[0] = m_szValue[0] = 0; }
-        MatchMakingKeyValuePair_t(const char *pchKey, const char *pchValue)
-        {
-            strncpy(m_szKey, pchKey, sizeof(m_szKey)); // this is a public header, use basic c library string funcs only!
-            m_szKey[sizeof(m_szKey) - 1] = '\0';
-            strncpy(m_szValue, pchValue, sizeof(m_szValue));
-            m_szValue[sizeof(m_szValue) - 1] = '\0';
-        }
-        char m_szKey[256];
-        char m_szValue[256];
-    };
 
-    enum ESteamPartyBeaconLocationType
-    {
-        k_ESteamPartyBeaconLocationType_Invalid = 0,
-        k_ESteamPartyBeaconLocationType_ChatGroup = 1,
-
-        k_ESteamPartyBeaconLocationType_Max,
-    };
-    struct SteamPartyBeaconLocation_t
-    {
-        ESteamPartyBeaconLocationType m_eType;
-        uint64_t m_ulLocationID;
-    };
 
     struct SteamMatchmaking
     {
@@ -156,12 +150,6 @@ namespace Steam
             //k_EChatEntryTypeReserved1 = 12, // No longer used
             //k_EChatEntryTypeReserved2 = 13, // No longer used
             k_EChatEntryTypeLinkBlocked = 14, // a link was removed by the chat filter.
-        };
-        enum EMatchMakingServerResponse
-        {
-            eServerResponded = 0,
-            eServerFailedToRespond,
-            eNoServersListedOnMasterServer // for the Internet query type, returned in response callback if no servers of this type match
         };
 
         Callbacks::gameserveritem_t *GetServerDetails(HServerListRequest hRequest, int iServer);

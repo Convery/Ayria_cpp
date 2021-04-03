@@ -34,7 +34,7 @@ namespace Steam
 
         RemoteStorageUpdatePublishedFileRequest_t()
         {
-            Initialize(k_GIDNil);
+            Initialize(0xFFFFFFFFFFFFFFFFULL);
         }
         RemoteStorageUpdatePublishedFileRequest_t(PublishedFileId_t unPublishedFileId)
         {
@@ -135,7 +135,7 @@ namespace Steam
                 break;
         }
 
-        return Basepath + Path;
+        return Basepath + std::string(Path);
     }
 
     struct SteamRemotestorage

@@ -5,8 +5,7 @@
 */
 
 #pragma once
-#include "Resultcodes.hpp"
-#include "Callbackdata.hpp"
+#include <Stdinclude.hpp>
 
 namespace Steam
 {
@@ -96,3 +95,6 @@ namespace Steam
 
     using FriendsGroupID_t = int16_t;
 }
+
+#include "Resultcodes.hpp"
+#include "Callbackdata.hpp"

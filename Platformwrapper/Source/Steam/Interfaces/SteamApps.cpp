@@ -15,7 +15,7 @@ namespace Steam
         try
         {
             sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READWRITE| sqlite::OpenFlags::FULLMUTEX;
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE| sqlite::OpenFlags::FULLMUTEX;
             auto DB = sqlite::database("./Ayria/Steam.db", Config);
 
             if (!Initialized)

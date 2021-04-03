@@ -27,7 +27,7 @@ namespace Steam
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
-    using Interface_t = struct { void *VTABLE[80]{}; };
+    using Interface_t = struct { void *VTABLE[80]; };
 
     // The types of interfaces provided as of writing.
     enum class Interfacetype_t

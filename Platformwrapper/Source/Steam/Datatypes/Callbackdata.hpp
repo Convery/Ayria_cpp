@@ -17,7 +17,7 @@ namespace Steam::Callbacks
     struct AvatarImageLoaded_t { SteamID_t m_steamID; int m_iImage; int m_iWide; int m_iTall; };
     struct BroadcastUploadStop_t { enum EBroadcastUploadResult : uint32_t m_eResult; };
     struct CallbackMsg_t { int32_t m_hSteamUser; int m_iCallback; uint8_t *m_pubParam; int m_cubParam; };
-    struct CheckFileSignature_t { enum ECheckFileSignature : uint32_t m_eCheckFileSignature; };
+    struct CheckFileSignature_t { uint32_t m_eCheckFileSignature; };
     struct ClanOfficerListResponse_t { SteamID_t m_steamIDClan; int m_cOfficers; uint8_t m_bSuccess; };
     struct ClientAppNewsItemUpdate_t { uint8_t m_eNewsUpdateType; uint32_t m_uNewsID; uint32_t m_uAppID; };
     struct ClientGameServerDeny_t { uint32_t m_uAppID; uint32_t m_unGameServerIP; uint16_t m_usGameServerPort; uint16_t m_bSecure; uint32_t m_uReason; };
@@ -35,6 +35,7 @@ namespace Steam::Callbacks
     struct FavoritesListAccountsUpdated_t { EResult m_eResult; };
     struct FavoritesListChanged_t { uint32_t m_nIP; uint32_t m_nQueryPort; uint32_t m_nConnPort; uint32_t m_nAppID; uint32_t m_nFlags; bool m_bAdd; uint32_t m_unAccountId; };
     struct FileDetailsResult_t { EResult m_eResult; uint64_t m_ulFileSize; uint8_t m_FileSHA[20]; uint32_t m_unFlags; };
+    struct FriendAdded_t { EResult m_eResult; uint64_t m_ulSteamID; };
     struct FriendGameInfo_t { GameID_t m_gameID; uint32_t m_unGameIP; uint16_t m_usGamePort; uint16_t m_usQueryPort; SteamID_t m_steamIDLobby; };
     struct FriendRichPresenceUpdate_t { SteamID_t m_steamIDFriend; uint32_t m_nAppID; };
     struct FriendSessionStateInfo_t { uint32_t m_uiOnlineSessionInstances; uint8_t m_uiPublishedToFriendsSessionInstance; };
@@ -185,8 +186,8 @@ namespace Steam::Callbacks
     struct UserStatsUnloaded_t { SteamID_t m_steamIDUser; };
     struct ValidateAuthTicketResponse_t { SteamID_t m_SteamID; uint32_t m_eAuthSessionResponse; SteamID_t m_OwnerSteamID; };
     struct VolumeHasChanged_t { float m_flNewVolume; };
-    struct gameserveritem_t { servernetadr_t m_NetAdr; int m_nPing; bool m_bHadSuccessfulResponse; bool m_bDoNotRefresh; char m_szGameDir[32]; char m_szMap[32]; char m_szGameDescription[64]; uint32_t m_nAppID; int m_nPlayers; int m_nMaxPlayers; int m_nBotPlayers; bool m_bPassword; bool m_bSecure; uint32_t m_ulTimeLastPlayed; int m_nServerVersion; char m_szServerName[64]; char m_szGameTags[128]; SteamID_t m_steamID; };
     struct servernetadr_t { uint16_t m_usConnectionPort; uint16_t m_usQueryPort; uint32_t m_unIP; };
+    struct gameserveritem_t { servernetadr_t m_NetAdr; int m_nPing; bool m_bHadSuccessfulResponse; bool m_bDoNotRefresh; char m_szGameDir[32]; char m_szMap[32]; char m_szGameDescription[64]; uint32_t m_nAppID; int m_nPlayers; int m_nMaxPlayers; int m_nBotPlayers; bool m_bPassword; bool m_bSecure; uint32_t m_ulTimeLastPlayed; int m_nServerVersion; char m_szServerName[64]; char m_szGameTags[128]; SteamID_t m_steamID; };
     #pragma endregion
 
     #pragma region Callbacktypes
@@ -199,14 +200,10 @@ namespace Steam::Callbacks
             SteamServerConnectFailure_t = k_iSteamUserCallbacks + 2,
             SteamServersDisconnected_t = k_iSteamUserCallbacks + 3,
             BeginLogonRetry_t = k_iSteamUserCallbacks + 4,
-            Steam2TicketChanged_t = k_iSteamUserCallbacks + 6,
-            ClientAppNewsItemUpdate_t = k_iSteamUserCallbacks + 10,
-            ClientSteamNewsItemUpdate_t = k_iSteamUserCallbacks + 12,
             ClientGameServerDeny_t = k_iSteamUserCallbacks + 13,
             PrimaryChatDestinationSetOld_t = k_iSteamUserCallbacks + 14,
             GSPolicyResponse_t = k_iSteamUserCallbacks + 15,
-            ClientSteamNewsClientUpdate_t = k_iSteamUserCallbacks + 16,
-            CallbackPipeFailure_t = k_iSteamUserCallbacks + 17,
+            IPCFailure_t = k_iSteamUserCallbacks + 17,
             LicensesUpdated_t = k_iSteamUserCallbacks + 25,
             AppLifetimeNotice_t = k_iSteamUserCallbacks + 30,
             DRMSDKFileTransferResult_t = k_iSteamUserCallbacks + 41,
@@ -689,7 +686,7 @@ namespace Steam::Callbacks
             k_iSteamChatCallbacks = 5900,
         };
 
-        constexpr std::string asString(ECallbackType Code)
+        constexpr const char *asString(ECallbackType Code)
         {
             switch (Code)
             {

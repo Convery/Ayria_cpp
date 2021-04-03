@@ -13,11 +13,11 @@ namespace Steam
     constexpr uint32_t Steamaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
     constexpr uint16_t Steamport = Hash::FNV1_32("Steam") & 0xFFFF;  // 51527
 
-    struct Endpoint_t { uint32_t vPort, Socket; uint64_t HostID; };
+    struct Endpoint_t { uint32_t vPort, Socket; mutable uint64_t HostID; };
 
     static sockaddr_in Multicast{ AF_INET, htons(Steamport), {{.S_addr = htonl(Steamaddress)}} };
     static Hashset<Endpoint_t, decltype(WW::Hash), decltype(WW::Equal)> Endpoints;
-    static Hashmap<uint32_t, Blob> Incomingdata;
+    static Hashmap<uint32_t, std::string> Incomingdata;
     static size_t Sendersocket, Receiversocket;
     static uint32_t RandomID{};
 
@@ -61,7 +61,7 @@ namespace Steam
         });
 
         const auto Packet = std::string((char *)&RandomID, sizeof(RandomID)) + Base64::Encode(JSON::Dump(Request));
-        sendto(Sendersocket, Packet.datat(), int(Packet.size()), 0, (sockaddr *)&Multicast, sizeof(Multicast));
+        sendto(Sendersocket, Packet.data(), int(Packet.size()), 0, (sockaddr *)&Multicast, sizeof(Multicast));
     }
     static void Pollnetwork()
     {
@@ -91,7 +91,8 @@ namespace Steam
             if (Packet->RandomID == RandomID) [[likely]] continue;
 
             // Parse the request.
-            const auto Request = JSON::Parse(Base64::Decode(Packet->Payload));
+            const auto Payloadlength = Packetlength - sizeof(RandomID);
+            const auto Request = JSON::Parse(Base64::Decode(std::string_view(Packet->Payload, Payloadlength)));
             const auto SenderID = Request.value<uint64_t>("SenderID");
             const auto TargetID = Request.value<uint64_t>("TargetID");
             const auto vPort = Request.value<uint32_t>("vPort");
@@ -202,7 +203,7 @@ namespace Steam
         SNetSocket_t CreateP2PConnectionSocket0(SteamID_t steamIDTarget, int32_t nVirtualPort, int32_t nTimeoutSec)
         {
             const uint32_t Socket = GetTickCount();
-            Endpoints.insert({ nVirtualPort, Socket, steamIDTarget.FullID });
+            Endpoints.insert({ (uint32_t)nVirtualPort, Socket, steamIDTarget.FullID });
             return Socket;
         }
         SNetSocket_t CreateP2PConnectionSocket1(SteamID_t steamIDTarget, int32_t nVirtualPort, int32_t nTimeoutSec, bool bAllowUseOfPacketRelay)

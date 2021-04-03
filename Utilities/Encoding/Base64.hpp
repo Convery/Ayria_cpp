@@ -209,6 +209,57 @@ namespace Base64
         return Result;
     }
 
+    [[nodiscard]] inline std::string Encode(const std::string_view &Input)
+    {
+        std::string Result(((Input.size() + 2) / 3 * 4), '=');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition] = B64Internal::Table[Accumulator & 0x3F];
+        }
+
+        return Result;
+    }
+
+    [[nodiscard]] inline std::string Decode(const std::string_view &Input)
+    {
+        std::string Result(( 3 * Input.size() / 4), '\0');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (const auto &Item : Input)
+        {
+            if (Item == '=') continue;
+
+            Accumulator = Accumulator << 6 | B64Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = static_cast<char>(Accumulator >> Bits & 0xFF);
+            }
+        }
+
+        return Result;
+    }
+
     // No need for extra allocations.
     template <B64Internal::Bytealigned_t T>
     constexpr std::basic_string_view<T> Decode_inplace(T *Input, size_t Length)

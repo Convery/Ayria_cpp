@@ -9,21 +9,13 @@
 
 namespace Steam
 {
-    struct LeaderboardEntry_t
-    {
-        SteamID_t m_steamIDUser;    // user with the entry - use SteamFriends()->GetFriendPersonaName() & SteamFriends()->GetFriendAvatar() to get more info
-        int32_t m_nGlobalRank;	    // [1..N], where N is the number of users with an entry in the leaderboard
-        int32_t m_nScore;			// score as set in the leaderboard
-        int32_t m_cDetails;		    // number of int32 details available for this entry
-        UGCHandle_t m_hUGC;		    // handle for UGC attached to the entry
-    };
     struct Entry_t : LeaderboardEntry_t
     {
         std::vector<int32_t> Details;
 
-        operator LeaderboardEntry_t() const
+        operator LeaderboardEntry_t()
         {
-            m_cDetails = Details.size();
+            m_cDetails = (int32_t)Details.size();
             return *this;
         }
     };
@@ -35,7 +27,7 @@ namespace Steam
         try
         {
             sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READWRITE| sqlite::OpenFlags::FULLMUTEX;
+            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
             auto DB = sqlite::database("./Ayria/Steam.db", Config);
 
             if (!Initialized)
@@ -181,10 +173,10 @@ namespace Steam
             try
             {
                 sqlite::sqlite_config Config{};
-                Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::SQLITE_OPEN_READWRITE| sqlite::OpenFlags::FULLMUTEX;
+                Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
                 sqlite::database("./Ayria/Client.db", Config) << "SELECT COUNT(*) FROM Onlineclients;" >> Count;
             }
-            catch (std::exception &e) {}
+            catch (...) {}
 
             auto Result = new Callbacks::NumberOfCurrentPlayers_t();
             Result->m_cPlayers = Count;
@@ -356,13 +348,10 @@ namespace Steam
             bool hasResult{};
 
             Database() << "SELECT Value FROM Globalstats WHERE Statname = ? LIMIT 1;" << std::string(pchStatName)
-                       >> [&](std::variant<int64_t, double> Value)
+                       >> [&](double Value)
                        {
-                           if (Value.index() == 2)
-                           {
-                               *pData = std::get<double>(Value);
-                               hasResult = true;
-                           }
+                            *pData = Value;
+                            hasResult = true;
                        };
 
             return hasResult;
@@ -372,13 +361,10 @@ namespace Steam
             bool hasResult{};
 
             Database() << "SELECT Value FROM Globalstats WHERE Statname = ? LIMIT 1;" << std::string(pchStatName)
-                       >> [&](std::variant<int64_t, double> Value)
+                       >> [&](int64_t Value)
                        {
-                           if (Value.index() == 1)
-                           {
-                               *pData = std::get<int64_t>(Value);
-                               hasResult = true;
-                           }
+                            *pData = Value;
+                            hasResult = true;
                        };
 
             return hasResult;
@@ -399,13 +385,10 @@ namespace Steam
 
             Database() << "SELECT Value FROM Userstat WHERE Statname = ? AND ClientID = ? AND AppID = ? LIMIT 1;"
                        << std::string(pchName) << Global.XUID.UserID << nGameID.AppID
-                       >> [&](std::variant<int32_t, float> Value)
+                       >> [&](float Value)
                        {
-                           if (Value.index() == 2)
-                           {
-                               *pData = std::get<float>(Value);
-                               hasResult = true;
-                           }
+                            *pData = Value;
+                            hasResult = true;
                        };
 
             return hasResult;
@@ -416,13 +399,10 @@ namespace Steam
 
             Database() << "SELECT Value FROM Userstat WHERE Statname = ? AND ClientID = ? AND AppID = ? LIMIT 1;"
                        << std::string(pchName) << Global.XUID.UserID << nGameID.AppID
-                       >> [&](std::variant<int32_t, float> Value)
+                       >> [&](int32_t Value)
                        {
-                           if (Value.index() == 1)
-                           {
-                               *pData = std::get<int32_t>(Value);
-                               hasResult = true;
-                           }
+                            *pData = Value;
+                            hasResult = true;
                        };
 
             return hasResult;
@@ -491,7 +471,7 @@ namespace Steam
 
         bool SetAchievement0(GameID_t nGameID, const char *pchName)
         {
-            float Mi{}, Max{};
+            float Min{}, Max{};
             GetAchievementProgressLimitsFLOAT(pchName, &Min, &Max);
 
             Database() << "REPLACE (AppID, ClientID, Currentprogress, Name, Unlocktime) INTO Achievementprogress VALUES (?,?,?,?,?);"
@@ -707,7 +687,7 @@ namespace Steam
             Createmethod(17, SteamUserstats, StoreStats0);
             Createmethod(18, SteamUserstats, ClearAchievement0);
             Createmethod(19, SteamUserstats, ClearGroupAchievement);
-            Createmethod(20, SteamUserstats, GetAchClearGroupAchievementievementIcon0);
+            Createmethod(20, SteamUserstats, GetAchievementIcon0);
             Createmethod(21, SteamUserstats, GetAchievementDisplayAttribute0);
         };
     };
@@ -1091,7 +1071,7 @@ namespace Steam
             Createmethod(28, SteamUserstats, DownloadLeaderboardEntries);
             Createmethod(29, SteamUserstats, DownloadLeaderboardEntriesForUsers);
             Createmethod(30, SteamUserstats, GetDownloadedLeaderboardEntry);
-            Createmethod(31, SteamUserstats, UploadLeaderboardScore);
+            Createmethod(31, SteamUserstats, UploadLeaderboardScore1);
             Createmethod(32, SteamUserstats, AttachLeaderboardUGC);
             Createmethod(33, SteamUserstats, GetNumberOfCurrentPlayers);
             Createmethod(34, SteamUserstats, RequestGlobalAchievementPercentages);

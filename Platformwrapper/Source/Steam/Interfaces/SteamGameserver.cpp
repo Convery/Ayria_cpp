@@ -43,7 +43,7 @@ namespace Steam
         std::string Servername, Mapname, Spectatorname;
         std::string Moddir, Region, Product, Version;
 
-        Hashmap<std::string, std::string> Keyvalues;
+        std::unordered_map<std::string, std::string> Keyvalues;
         Hashmap<uint64_t, std::pair<std::string, uint32_t>> Userdata;
     };
     Steamserver_t Localserver{};
@@ -54,8 +54,10 @@ namespace Steam
         {
             JSON::Array_t Userdata;
             Userdata.reserve(Localserver.Userdata.size());
-            for (const auto &[UserID, [Username, Userscore]] : Localserver.Userdata)
+            for (const auto &[UserID, Pair] : Localserver.Userdata)
             {
+                const auto &[Username, Userscore] = Pair;
+
                 Userdata.emplace_back(JSON::Object_t({
                     { "Userscore", Userscore },
                     { "Username", Username },
@@ -248,7 +250,7 @@ namespace Steam
         bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, SteamID_t *pSteamIDUser);
         bool SendUserDisconnect0(SteamID_t steamID, uint32_t unUserID)
         {
-            SendUserDisconnect0(steamID);
+            SendUserDisconnect1(steamID);
             return true;
         }
         bool SendUserStatusResponse(SteamID_t steamID, int nSecondsConnected, int nSecondsSinceLast);
