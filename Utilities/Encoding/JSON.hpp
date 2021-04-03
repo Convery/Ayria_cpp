@@ -285,7 +285,7 @@ namespace JSON
                               Internal::isDerived<T, std::vector>{})
                 {
                     Array_t Array(Input.size());
-                    for (const auto &[Index, _Value] : Enumerate(Input))
+                    for (auto Items = Enumerate(Input); const auto &[Index, _Value] : Items)
                         Array[Index] = _Value;
 
                     Type = Type_t::Array;
@@ -324,7 +324,7 @@ namespace JSON
                     case simdjson::dom::element_type::OBJECT:
                     {
                         Object_t Object; Object.reserve(Item.get_object().value().size());
-                        for (const auto &[Key, Value] : Item.get_object())
+                        for (const auto Items = Item.get_object(); const auto &[Key, Value] : Items)
                         {
                             Object.emplace(Key, Parse(Value));
                         }
@@ -333,7 +333,7 @@ namespace JSON
                     case simdjson::dom::element_type::ARRAY:
                     {
                         Array_t Array; Array.reserve(Item.get_array().value().size());
-                        for (const auto &Subitem : Item.get_array())
+                        for (const auto Items = Item.get_array(); const auto &Subitem : Items)
                         {
                             Array.push_back(Parse(Subitem));
                         }
@@ -362,7 +362,7 @@ namespace JSON
                 if (Item.is_object())
                 {
                     Object_t Object; Object.reserve(Item.size());
-                    for (const auto &[Key, Value] : Item.items())
+                    for (const auto Items = Item.items(); const auto &[Key, Value] : Items)
                     {
                         Object.emplace(Key, Parse(Value));
                     }

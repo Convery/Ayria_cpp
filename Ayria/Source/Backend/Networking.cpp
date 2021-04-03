@@ -98,7 +98,7 @@ namespace Backend::Network
                     const auto Decoded = Base64::Decode_inplace(Decodebuffer.get(), Decodesize);
 
                     // May have multiple listeners for the same messageID.
-                    for (const auto Callback : Result->second)
+                    for (const auto Results = Result->second; const auto Callback : Results)
                     {
                         Callback(Packet->RandomID, Decoded.data(), (unsigned int)Decoded.size());
                     }

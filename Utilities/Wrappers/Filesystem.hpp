@@ -192,7 +192,7 @@ namespace FS
 
         if (!Recursive)
         {
-            for (const auto &File : std::filesystem::directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -203,7 +203,7 @@ namespace FS
         }
         else
         {
-            for (const auto &File : std::filesystem::recursive_directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::recursive_directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -221,7 +221,7 @@ namespace FS
 
         if (!Recursive)
         {
-            for (const auto &File : std::filesystem::directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -232,7 +232,7 @@ namespace FS
         }
         else
         {
-            for (const auto &File : std::filesystem::recursive_directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::recursive_directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 

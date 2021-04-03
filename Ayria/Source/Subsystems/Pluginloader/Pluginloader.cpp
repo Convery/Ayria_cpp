@@ -153,7 +153,7 @@ namespace Plugins
     void Initialize()
     {
         // Load all plugins from disk.
-        for (const auto &Item : FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"))
+        for (const auto Items = FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"); const auto &Item : Items)
         {
             if (const auto Module = LoadLibraryW((L"./Ayria/Plugins/"s + Item).c_str()))
             {

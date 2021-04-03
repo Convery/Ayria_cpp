@@ -42,7 +42,7 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        for (const auto &String : Tokenizestring_s(Message, '\n'))
+        for (const auto Results = Tokenizestring_s(Message, '\n'); const auto &String : Results)
             if (!String.empty())
                 Consolelog.push_back(Logline_t{ Encoding::toWide(String), Colour });
     }
@@ -175,7 +175,7 @@ namespace Console
         static const auto List = [](int, const char **)
         {
             std::string Commands; Commands.reserve(16 * Functions.size());
-            for (const auto &[Index, Pair] : Enumerate(Functions, 1))
+            for (auto Items = Enumerate(Functions, 1); const auto &[Index, Pair] : Items)
             {
                 Commands += "    ";
                 Commands += Pair.first;

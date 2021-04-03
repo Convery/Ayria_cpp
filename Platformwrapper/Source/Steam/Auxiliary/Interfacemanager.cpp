@@ -135,7 +135,7 @@ namespace Steam
 
         // Scan through the binary for interface-names.
         const Patternscan::Range_t Range = { size_t(Filebuffer.data()), size_t(Filebuffer.data()) + Filebuffer.size() };
-        for(const auto Address : Patternscan::Findpatterns(Range, "53")) // 'S' in hexadecimal.
+        for (const auto Items = Patternscan::Findpatterns(Range, "53");  const auto Address : Items) // 'S' in hexadecimal.
         {
             // Match against the scan-strings.
             for(const auto &[Scanstring, Name] : Scanstrings)

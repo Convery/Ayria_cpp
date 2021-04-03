@@ -129,7 +129,7 @@ namespace Console::Windows
                     std::wstring Concatenated;
                     Lastmessage = Hash;
 
-                    for (const auto &[String, Colour] : Console::getLoglines(999, Console::getFilter()))
+                    for (const auto Items = Console::getLoglines(999, Console::getFilter()); const auto &[String, Colour] : Items)
                     {
                         if (String.empty()) continue;
                         Concatenated += String;

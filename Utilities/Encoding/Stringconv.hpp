@@ -315,7 +315,7 @@ namespace Encoding
         std::string Result;
         Result.reserve(Input.size() * sizeof(wchar_t));
 
-        for (const auto &Char : toWide(Input))
+        for (const auto Items = toWide(Input); const auto &Char : Items)
         {
             if (Char < 0x80) [[likely]]
                 Result.push_back(Char & 0x7F);

@@ -336,7 +336,7 @@ namespace Localnetworking
         else CreateThread(NULL, NULL, Pollsockets, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 
         // Load all plugins from disk.
-        for (const auto &Item : FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"))
+        for (const auto Items = FS::Findfiles(L"./Ayria/Plugins", Build::is64bit ? L"64" : L"32"); const auto &Item : Items)
         {
             if (const auto Module = LoadLibraryW(va(L"./Ayria/Plugins/%s", Item.c_str()).c_str()))
             {
