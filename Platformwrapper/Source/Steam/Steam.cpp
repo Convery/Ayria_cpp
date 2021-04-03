@@ -13,11 +13,17 @@ namespace Steam
     // Global state.
     Globalstate_t Global{};
 
+    // Contained in SteamGameserver.cpp
+    extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
+        uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion);
+    extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
+        uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion);
+
     // Exported Steam interface.
     extern "C"
     {
         // Initialization and shutdown.
-        bool isInitialized{};
+        static bool isInitialized{};
         EXPORT_ATTR bool SteamAPI_Init()
         {
             if (isInitialized) return true;
@@ -209,9 +215,10 @@ namespace Steam
         EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); }
         EXPORT_ATTR void SteamGameServer_RunCallbacks() { Callbacks::Runcallbacks(); }
         EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Global.XUID.FullID; }
-        EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
+
+        EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, ...)
         {
-            // For AppID.
+            // Ensure that we are initialized.
             SteamAPI_Init();
 
             // Per-version initialization.
@@ -226,49 +233,18 @@ namespace Steam
                     const uint16_t usQueryPort = va_arg(Args, uint16_t);
                     const uint32_t eServerMode = va_arg(Args, uint32_t);
                     const char *pchGameDir = va_arg(Args, char *);
-                    const char *pchVersionString = va_arg(Args, char *);
+                    const char *pchVersion = va_arg(Args, char *);
 
-                    Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
-                        ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
-                        usPort, usGamePort, usSpectatorPort, usQueryPort, pchVersionString));
-
-                    // New session for the server.
-                    auto Session = Matchmaking::getLocalsession();
-                    Session->Steam.Gamemod = Encoding::toUTF8(pchGameDir);
-                    Session->Steam.Spectatorport = usSpectatorPort;
-                    Session->Steam.Queryport = usQueryPort;
-                    Session->Steam.Gameport = usGamePort;
-                    Session->Steam.Authport = usPort;
-                    Session->Steam.IPAddress = unIP;
-
-                    uint32_t a{}, b{}, c{}, d{};
-                    std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Steam.Versionint = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Steam.Versionstring = Encoding::toUTF8(pchVersionString);
-                    Matchmaking::Invalidatesession();
+                    Initgameserver(unIP, usSteamPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode,
+                                   pchGameDir, pchVersion);
                 }
-                if (Version == 11 || Version == 12)
+                if (Version == 11 || Version == 12 || Version == 13)
                 {
                     const uint16_t usQueryPort = va_arg(Args, uint16_t);
                     const uint32_t eServerMode = va_arg(Args, uint32_t);
-                    const char *pchVersionString = va_arg(Args, char *);
+                    const char *pchVersion = va_arg(Args, char *);
 
-                    Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Query-port: %u\n> Version \"%s\"",
-                        ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
-                        usPort, usGamePort, usQueryPort, pchVersionString));
-
-                    // New session for the server.
-                    auto Session = Matchmaking::getLocalsession();
-                    Session->Steam.Queryport = usQueryPort;
-                    Session->Steam.Gameport = usGamePort;
-                    Session->Steam.Authport = usPort;
-                    Session->Steam.IPAddress = unIP;
-
-                    uint32_t a{}, b{}, c{}, d{};
-                    std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Steam.Versionint = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Steam.Versionstring = Encoding::toUTF8(pchVersionString);
-                    Matchmaking::Invalidatesession();
+                    Initgameserver(unIP, usSteamPort, usGamePort, usQueryPort, eServerMode, Global.ApplicationID, pchVersion);
                 }
 
                 va_end(Args);
@@ -276,13 +252,20 @@ namespace Steam
 
             return true;
         }
-        EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
+        EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersion)
         {
-            return SteamGameServer_Init(unIP, usPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode, pchGameDir, pchVersionString);
+            // Ensure that we are initialized.
+            SteamAPI_Init();
+
+            return Initgameserver(unIP, usSteamPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode,
+                pchGameDir, pchVersion);
         }
-        EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString)
+        EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersion)
         {
-            return SteamGameServer_Init(unIP, usSteamPort, usGamePort, 0, usQueryPort, eServerMode, "", pchVersionString);
+            // Ensure that we are initialized.
+            SteamAPI_Init();
+
+            return Initgameserver(unIP, usSteamPort, usGamePort, usQueryPort, eServerMode, Global.ApplicationID, pchVersion);
         }
 
         // For debugging interface access.
