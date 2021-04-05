@@ -112,13 +112,12 @@ namespace Steam
             Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n> Product: %s\n> Description: %s\n> Maxplayers: %u",
                 bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
 
-            Localsession["Description"] = std::string(pGameDescription);
+            Localsession["Gamedescription"] = std::string(pGameDescription);
             Localsession["isPasswordprotected"] = bPasswordProtected;
-            Localsession["Protocolversion"] = nProtocolVersion;
             Localsession["Protocolversion"] = nProtocolVersion;
             Localsession["Product"] = std::string(pProductName);
             Localsession["Region"] = std::string(pRegionName);
-            Localsession["Maxclients"] = nMaxReportedClients;
+            Localsession["Playermax"] = nMaxReportedClients;
             Localsession["isDedicated"] = bDedicatedServer;
         }
         void SetHeartbeatInterval(int iHeartbeatInterval)

@@ -23,7 +23,7 @@ namespace Steam
             Consoleuser = 9,
             Anonymous = 10
         };
-        enum class Environment_t : uint8_t
+        enum class Universe_t : uint8_t
         {
             Invalid = 0,
             Public = 1,
@@ -36,11 +36,10 @@ namespace Steam
             uint64_t FullID;
             struct
             {
-                uint64_t
-                    Universe : 8,
-                    Accounttype : 4,
-                    SessionID : 20,
-                    UserID : 32;
+                Universe_t Universe : 8;
+                Accounttype_t Accounttype : 4;
+                uint32_t SessionID : 20;
+                uint32_t UserID : 32;
             };
         };
     };
@@ -67,7 +66,7 @@ namespace Steam
         };
     };
 
-    using HServerListRequest = void *;
+    using HServerListRequest = size_t; // void *
 
     using PublishedFileUpdateHandle_t = uint64_t;
     using UGCFileWriteStreamHandle_t = uint64_t;

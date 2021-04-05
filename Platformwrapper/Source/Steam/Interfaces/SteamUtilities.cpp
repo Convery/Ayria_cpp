@@ -79,7 +79,7 @@ namespace Steam
         }
         uint8_t GetConnectedUniverse()
         {
-            return Global.XUID.Universe;
+            return (uint8_t)Global.XUID.Universe;
         }
 
         SteamAPICall_t CheckFileSignature(const char *szFileName)
