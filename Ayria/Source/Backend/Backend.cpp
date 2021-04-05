@@ -11,6 +11,7 @@ namespace Backend
 {
     using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
+    static Defaultmutex Threadsafe;
 
     // Get the client-database.
     sqlite::database Database()
@@ -31,6 +32,7 @@ namespace Backend
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
     {
+        std::scoped_lock _(Threadsafe);
         Backgroundtasks.push_back({ 0, PeriodMS, Callback });
     }
 
@@ -44,13 +46,17 @@ namespace Backend
         while (true)
         {
             // Notify the subsystems about a new frame.
-            const auto Currenttime = GetTickCount();
-            for (auto &Task : Backgroundtasks)
             {
-                if ((Task.Last + Task.Period) < Currenttime) [[unlikely]]
+                const auto Currenttime = GetTickCount();
+                std::scoped_lock _(Threadsafe);
+
+                for (auto &Task : Backgroundtasks)
                 {
-                    Task.Last = Currenttime;
-                    Task.Callback();
+                    if ((Task.Last + Task.Period) < Currenttime) [[unlikely]]
+                    {
+                        Task.Last = Currenttime;
+                        Task.Callback();
+                    }
                 }
             }
 

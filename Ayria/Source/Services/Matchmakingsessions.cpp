@@ -30,11 +30,14 @@ namespace Services::Matchmakingsessions
         const auto Mapname = Request.value<std::u8string>("Mapname");
         const auto HostID = Request.value<uint32_t>("HostID");
         const auto GameID = Request.value<uint32_t>("GameID");
-        const auto IPv4 = Request.value<uint32_t>("IPv4");
         const auto Port = Request.value<uint16_t>("Port");
+        auto IPv4 = Request.value<uint32_t>("IPv4");
 
         // No fuckery allowed.
         if (Clientinfo::getClientID(NodeID) != HostID) return;
+
+        // If there's no IP provided, re-use the clients.
+        if (!IPv4) IPv4 = Backend::Network::Nodeaddress(NodeID).S_un.S_addr;
 
         // Add the entry to the database.
         Backend::Database() << "REPLACE INTO Matchmakingsessions (ProviderID, HostID, Lastupdate, B64Gamedata, "
@@ -86,6 +89,7 @@ namespace Services::Matchmakingsessions
             Session->GameID = Request.value("GameID", Session->GameID);
             Session->IPv4 = Request.value("IPv4", Session->IPv4);
             Session->Port = Request.value("Port", Session->Port);
+            Session->HostID = Global.ClientID;
             Session->ProviderID = ProviderID;
 
             const auto B64Gamedata = Request.value<std::u8string>("B64Gamedata");
@@ -94,7 +98,6 @@ namespace Services::Matchmakingsessions
                 Session->B64Gamedata = B64Gamedata;
             }
 
-            Session->HostID = Global.ClientID;
             return "{}";
         }
         static std::string __cdecl Terminate(JSON::Value_t &&Request)
