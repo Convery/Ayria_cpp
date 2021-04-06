@@ -105,6 +105,7 @@ namespace Steam
                 if (!vPort || vPort == vPort)
                 {
                     Item.HostID = SenderID;
+                    Endpoints.rehash(Endpoints.size());
                     Incomingdata[Item.Socket].append(Base64::Decode(Request.value<std::string>("B64Message")));
                     break;
                 }
