@@ -9,55 +9,55 @@
 
 namespace Steam
 {
+    enum ELobbyDistanceFilter
+    {
+        k_ELobbyDistanceFilterClose,		// only lobbies in the same immediate region will be returned
+        k_ELobbyDistanceFilterDefault,		// only lobbies in the same region or near by regions
+        k_ELobbyDistanceFilterFar,			// for games that don't have many latency requirements, will return lobbies about half-way around the globe
+        k_ELobbyDistanceFilterWorldwide,	// no filtering, will match lobbies as far as India to NY (not recommended, expect multiple seconds of latency between the clients)
+    };
+    enum ELobbyComparison
+    {
+        k_ELobbyComparisonEqualToOrLessThan = -2,
+        k_ELobbyComparisonLessThan = -1,
+        k_ELobbyComparisonEqual = 0,
+        k_ELobbyComparisonGreaterThan = 1,
+        k_ELobbyComparisonEqualToOrGreaterThan = 2,
+        k_ELobbyComparisonNotEqual = 3,
+    };
+    enum EChatEntryType
+    {
+        k_EChatEntryTypeInvalid = 0,
+        k_EChatEntryTypeChatMsg = 1,		    // Normal text message from another user
+        k_EChatEntryTypeTyping = 2,			    // Another user is typing (not used in multi-user chat)
+        k_EChatEntryTypeInviteGame = 3,		    // Invite from other user into that users current game
+        k_EChatEntryTypeEmote = 4,			    // text emote message (deprecated, should be treated as ChatMsg)
+        //k_EChatEntryTypeLobbyGameStart = 5,	// lobby game is starting (dead - listen for LobbyGameCreated_t callback instead)
+        k_EChatEntryTypeLeftConversation = 6,   // user has left the conversation ( closed chat window )
+        // Above are previous FriendMsgType entries, now merged into more generic chat entry types
+        k_EChatEntryTypeEntered = 7,		    // user has entered the conversation (used in multi-user chat and group chat)
+        k_EChatEntryTypeWasKicked = 8,		    // user was kicked (data: 64-bit steamid of actor performing the kick)
+        k_EChatEntryTypeWasBanned = 9,		    // user was banned (data: 64-bit steamid of actor performing the ban)
+        k_EChatEntryTypeDisconnected = 10,	    // user disconnected
+        k_EChatEntryTypeHistoricalChat = 11,	// a chat message from user's chat history or offilne message
+        //k_EChatEntryTypeReserved1 = 12,       // No longer used
+        //k_EChatEntryTypeReserved2 = 13,       // No longer used
+        k_EChatEntryTypeLinkBlocked = 14,       // a link was removed by the chat filter.
+    };
+    enum ELobbyType
+    {
+        k_ELobbyTypePrivate = 0,		// only way to join the lobby is to invite to someone else
+        k_ELobbyTypeFriendsOnly = 1,	// shows for friends or invitees, but not in lobby list
+        k_ELobbyTypePublic = 2,			// visible for friends and in lobby list
+        k_ELobbyTypeInvisible = 3,		// returned by search, but not visible to other friends
+                                        //    useful if you want a user in two lobbies, for example matching groups together
+                                        //	  a user can be in only one regular lobby, and up to two invisible lobbies
+        k_ELobbyTypePrivateUnique = 4,	// private, unique and does not delete when empty - only one of these may exist per unique keypair set
+                                        // can only create from webapi
+    };
+
     struct SteamMatchmaking
     {
-        enum ELobbyDistanceFilter
-        {
-            k_ELobbyDistanceFilterClose,		// only lobbies in the same immediate region will be returned
-            k_ELobbyDistanceFilterDefault,		// only lobbies in the same region or near by regions
-            k_ELobbyDistanceFilterFar,			// for games that don't have many latency requirements, will return lobbies about half-way around the globe
-            k_ELobbyDistanceFilterWorldwide,	// no filtering, will match lobbies as far as India to NY (not recommended, expect multiple seconds of latency between the clients)
-        };
-        enum ELobbyComparison
-        {
-            k_ELobbyComparisonEqualToOrLessThan = -2,
-            k_ELobbyComparisonLessThan = -1,
-            k_ELobbyComparisonEqual = 0,
-            k_ELobbyComparisonGreaterThan = 1,
-            k_ELobbyComparisonEqualToOrGreaterThan = 2,
-            k_ELobbyComparisonNotEqual = 3,
-        };
-        enum EChatEntryType
-        {
-            k_EChatEntryTypeInvalid = 0,
-            k_EChatEntryTypeChatMsg = 1,		// Normal text message from another user
-            k_EChatEntryTypeTyping = 2,			// Another user is typing (not used in multi-user chat)
-            k_EChatEntryTypeInviteGame = 3,		// Invite from other user into that users current game
-            k_EChatEntryTypeEmote = 4,			// text emote message (deprecated, should be treated as ChatMsg)
-            //k_EChatEntryTypeLobbyGameStart = 5,	// lobby game is starting (dead - listen for LobbyGameCreated_t callback instead)
-            k_EChatEntryTypeLeftConversation = 6, // user has left the conversation ( closed chat window )
-            // Above are previous FriendMsgType entries, now merged into more generic chat entry types
-            k_EChatEntryTypeEntered = 7,		// user has entered the conversation (used in multi-user chat and group chat)
-            k_EChatEntryTypeWasKicked = 8,		// user was kicked (data: 64-bit steamid of actor performing the kick)
-            k_EChatEntryTypeWasBanned = 9,		// user was banned (data: 64-bit steamid of actor performing the ban)
-            k_EChatEntryTypeDisconnected = 10,	// user disconnected
-            k_EChatEntryTypeHistoricalChat = 11,	// a chat message from user's chat history or offilne message
-            //k_EChatEntryTypeReserved1 = 12, // No longer used
-            //k_EChatEntryTypeReserved2 = 13, // No longer used
-            k_EChatEntryTypeLinkBlocked = 14, // a link was removed by the chat filter.
-        };
-        enum ELobbyType
-        {
-            k_ELobbyTypePrivate = 0,		// only way to join the lobby is to invite to someone else
-            k_ELobbyTypeFriendsOnly = 1,	// shows for friends or invitees, but not in lobby list
-            k_ELobbyTypePublic = 2,			// visible for friends and in lobby list
-            k_ELobbyTypeInvisible = 3,		// returned by search, but not visible to other friends
-                                            //    useful if you want a user in two lobbies, for example matching groups together
-                                            //	  a user can be in only one regular lobby, and up to two invisible lobbies
-            k_ELobbyTypePrivateUnique = 4,	// private, unique and does not delete when empty - only one of these may exist per unique keypair set
-                                            // can only create from webapi
-        };
-
         SteamAPICall_t CreateLobby2(ELobbyType eLobbyType);
         SteamAPICall_t CreateLobby3(ELobbyType eLobbyType, int cMaxMembers);
         SteamAPICall_t JoinLobby1(SteamID_t steamIDLobby);
@@ -67,15 +67,25 @@ namespace Steam
         SteamID_t GetLobbyOwner(SteamID_t steamIDLobby);
 
         bool DeleteLobbyData(SteamID_t steamIDLobby, const char *pchKey);
-        bool GetFavoriteGame0(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer);
-        bool GetFavoriteGame1(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint16_t *pnQueryPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer);
+        bool GetFavoriteGame0(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer)
+        { return false;}
+        bool GetFavoriteGame1(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint16_t *pnQueryPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer)
+        { return false; }
         bool GetLobbyDataByIndex(SteamID_t steamIDLobby, int iLobbyData, char *pchKey, int cchKeyBufferSize, char *pchValue, int cchValueBufferSize);
         bool GetLobbyGameServer(SteamID_t steamIDLobby, uint32_t *punGameServerIP, uint16_t *punGameServerPort, SteamID_t *psteamIDGameServer);
         bool InviteUserToLobby(SteamID_t steamIDLobby, SteamID_t steamIDInvitee);
-        bool RemoveFavoriteGame0(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags);
-        bool RemoveFavoriteGame1(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags);
-        bool RequestFriendsLobbies();
-        bool RequestLobbyData(SteamID_t steamIDLobby);
+        bool RemoveFavoriteGame0(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags)
+        { return true; }
+        bool RemoveFavoriteGame1(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags)
+        { return true; }
+        bool RequestFriendsLobbies()
+        {
+            return true;
+        }
+        bool RequestLobbyData(SteamID_t steamIDLobby)
+        {
+            return true;
+        }
         bool SendLobbyChatMsg(SteamID_t steamIDLobby, const void *pvMsgBody, int cubMsgBody);
         bool SetLinkedLobby(SteamID_t steamIDLobby, SteamID_t steamIDLobbyDependent);
         bool SetLobbyData1(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
@@ -95,7 +105,11 @@ namespace Steam
         int GetLobbyMemberLimit(SteamID_t steamIDLobby);
         int GetNumLobbyMembers(SteamID_t steamIDLobby);
 
-        double GetLobbyDistance(SteamID_t steamIDLobby);
+        double GetLobbyDistance(SteamID_t steamIDLobby)
+        {
+            // DEPRECATED
+            return 0.0;
+        }
 
         void AddRequestLobbyListCompatibleMembersFilter(SteamID_t steamIDLobby);
         void AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter eLobbyDistanceFilter);
@@ -109,11 +123,21 @@ namespace Steam
         void ChangeLobbyAdmin(SteamID_t steamIDLobby, SteamID_t steamIDNewAdmin);
         void CreateLobby0(uint64_t ulGameID, bool bPrivate);
         void CreateLobby1(bool bPrivate);
-        void JoinLobby0(SteamID_t steamIDLobby);
+        void JoinLobby0(SteamID_t steamIDLobby)
+        {
+            JoinLobby1(steamIDLobby);
+        }
         void LeaveLobby(SteamID_t steamIDLobby);
-        void RequestLobbyList0(uint64_t ulGameID, MatchMakingKeyValuePair_t *pFilters, uint32_t nFilters);
-        void RequestLobbyList1();
-        void SetLobbyData0(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        void RequestLobbyList0(uint64_t ulGameID, MatchMakingKeyValuePair_t *pFilters, uint32_t nFilters)
+        {
+        }
+        void RequestLobbyList1()
+        {
+        }
+        void SetLobbyData0(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue)
+        {
+            SetLobbyData1(steamIDLobby, pchKey, pchValue);
+        }
         void SetLobbyGameServer(SteamID_t steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, SteamID_t steamIDGameServer);
         void SetLobbyMemberData(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
         void SetLobbyVoiceEnabled(SteamID_t steamIDLobby, bool bEnabled);
