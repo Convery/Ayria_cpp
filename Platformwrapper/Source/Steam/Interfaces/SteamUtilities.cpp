@@ -179,8 +179,10 @@ namespace Steam
         int FilterText0(char *pchOutFilteredText, uint32_t nByteSizeOutFilteredText, const char *pchInputMessage, bool bLegalOnly)
         {
             const auto Input = std::string_view(pchInputMessage);
-            std::memcpy(pchOutFilteredText, Input.data(), std::min(size_t(nByteSizeOutFilteredText), Input.size()));
-            return std::min(size_t(nByteSizeOutFilteredText), Input.size());
+            const auto Length = std::min(nByteSizeOutFilteredText, (uint32_t)Input.size());
+
+            std::memcpy(pchOutFilteredText, Input.data(), Length);
+            return Length;
         }
         int FilterText1(ETextFilteringContext eContext, SteamID_t sourceSteamID, const char *pchInputMessage, char *pchOutFilteredText, uint32_t nByteSizeOutFilteredText)
         {

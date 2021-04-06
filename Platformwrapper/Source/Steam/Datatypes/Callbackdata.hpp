@@ -195,7 +195,71 @@ namespace Steam::Callbacks
     {
         enum ECallbackType : int32_t
         {
+            // Base callbacks.
             k_iSteamUserCallbacks = 100,
+            k_iSteamGameServerCallbacks = 200,
+            k_iSteamFriendsCallbacks = 300,
+            k_iSteamBillingCallbacks = 400,
+            k_iSteamMatchmakingCallbacks = 500,
+            k_iSteamContentServerCallbacks = 600,
+            k_iSteamUtilsCallbacks = 700,
+            k_iClientFriendsCallbacks = 800,
+            k_iClientUserCallbacks = 900,
+            k_iSteamAppsCallbacks = 1000,
+            k_iSteamUserStatsCallbacks = 1100,
+            k_iSteamNetworkingCallbacks = 1200,
+            k_iSteamNetworkingSocketsCallbacks = 1220,
+            k_iSteamNetworkingMessagesCallbacks = 1250,
+            k_iSteamNetworkingUtilsCallbacks = 1280,
+            k_iClientRemoteStorageCallbacks = 1300,
+            k_iClientDepotBuilderCallbacks = 1400,
+            k_iSteamGameServerItemsCallbacks = 1500,
+            k_iClientUtilsCallbacks = 1600,
+            k_iSteamGameCoordinatorCallbacks = 1700,
+            k_iSteamGameServerStatsCallbacks = 1800,
+            k_iSteam2AsyncCallbacks = 1900,
+            k_iSteamGameStatsCallbacks = 2000,
+            k_iClientHTTPCallbacks = 2100,
+            k_iClientScreenshotsCallbacks = 2200,
+            k_iSteamScreenshotsCallbacks = 2300,
+            k_iClientAudioCallbacks = 2400,
+            k_iClientUnifiedMessagesCallbacks = 2500,
+            k_iSteamStreamLauncherCallbacks = 2600,
+            k_iClientControllerCallbacks = 2700,
+            k_iSteamControllerCallbacks = 2800,
+            k_iClientParentalSettingsCallbacks = 2900,
+            k_iClientDeviceAuthCallbacks = 3000,
+            k_iClientNetworkDeviceManagerCallbacks = 3100,
+            k_iClientMusicCallbacks = 3200,
+            k_iClientRemoteClientManagerCallbacks = 3300,
+            k_iClientUGCCallbacks = 3400,
+            k_iSteamStreamClientCallbacks = 3500,
+            k_IClientProductBuilderCallbacks = 3600,
+            k_iClientShortcutsCallbacks = 3700,
+            k_iClientRemoteControlManagerCallbacks = 3800,
+            k_iSteamAppListCallbacks = 3900,
+            k_iSteamMusicCallbacks = 4000,
+            k_iSteamMusicRemoteCallbacks = 4100,
+            k_iClientVRCallbacks = 4200,
+            k_iClientGameNotificationCallbacks = 4300,
+            k_iSteamGameNotificationCallbacks = 4400,
+            k_iSteamHTMLSurfaceCallbacks = 4500,
+            k_iClientVideoCallbacks = 4600,
+            k_iClientInventoryCallbacks = 4700,
+            k_iClientBluetoothManagerCallbacks = 4800,
+            k_iClientSharedConnectionCallbacks = 4900,
+            k_ISteamParentalSettingsCallbacks = 5000,
+            k_iClientShaderCallbacks = 5100,
+            k_iSteamGameSearchCallbacks = 5200,
+            k_iSteamPartiesCallbacks = 5300,
+            k_iClientPartiesCallbacks = 5400,
+            k_iSteamSTARCallbacks = 5500,
+            k_iClientSTARCallbacks = 5600,
+            k_iSteamRemotePlayCallbacks = 5700,
+            k_iClientCompatCallbacks = 5800,
+            k_iSteamChatCallbacks = 5900,
+
+
             SteamServersConnected_t = k_iSteamUserCallbacks + 1,
             SteamServerConnectFailure_t = k_iSteamUserCallbacks + 2,
             SteamServersDisconnected_t = k_iSteamUserCallbacks + 3,
@@ -216,7 +280,7 @@ namespace Steam::Callbacks
             MarketEligibilityResponse_t = k_iSteamUserCallbacks + 66,
             DurationControl_t = k_iSteamUserCallbacks + 67,
 
-            k_iSteamGameServerCallbacks = 200,
+
             GSClientApprove_t = k_iSteamGameServerCallbacks + 1,
             GSClientDeny_t = k_iSteamGameServerCallbacks + 2,
             GSClientKick_t = k_iSteamGameServerCallbacks + 3,
@@ -229,7 +293,6 @@ namespace Steam::Callbacks
             AssociateWithClanResult_t = k_iSteamGameServerCallbacks + 10,
             ComputeNewPlayerCompatibilityResult_t = k_iSteamGameServerCallbacks + 11,
 
-            k_iSteamFriendsCallbacks = 300,
             PersonaStateChange_t = k_iSteamFriendsCallbacks + 4,
             GameOverlayActivated_t = k_iSteamFriendsCallbacks + 31,
             GameServerChangeRequested_t = k_iSteamFriendsCallbacks + 32,
@@ -251,11 +314,9 @@ namespace Steam::Callbacks
             UnreadChatMessagesChanged_t = k_iSteamFriendsCallbacks + 48,
             OverlayBrowserProtocolNavigation_t = k_iSteamFriendsCallbacks + 49,
 
-            k_iSteamBillingCallbacks = 400,
             FinalPriceMsg_t = k_iSteamBillingCallbacks + 1,
             PurchaseMsg_t = k_iSteamBillingCallbacks + 2,
 
-            k_iSteamMatchmakingCallbacks = 500,
             FavoritesListChangedOld_t = k_iSteamMatchmakingCallbacks + 1,
             FavoritesListChanged_t = k_iSteamMatchmakingCallbacks + 2,
             LobbyInvite_t = k_iSteamMatchmakingCallbacks + 3,
@@ -273,11 +334,9 @@ namespace Steam::Callbacks
             PSNGameBootInviteResult_t = k_iSteamMatchmakingCallbacks + 15,
             FavoritesListAccountsUpdated_t = k_iSteamMatchmakingCallbacks + 16,
 
-            k_iSteamContentServerCallbacks = 600,
             CSClientApprove_t = k_iSteamContentServerCallbacks + 1,
             CSClientDeny_t = k_iSteamContentServerCallbacks + 2,
 
-            k_iSteamUtilsCallbacks = 700,
             IPCountry_t = k_iSteamUtilsCallbacks + 1,
             LowBatteryPower_t = k_iSteamUtilsCallbacks + 2,
             SteamAPICallCompleted_t = k_iSteamUtilsCallbacks + 3,
@@ -286,7 +345,6 @@ namespace Steam::Callbacks
             SteamConfigStoreChanged_t = k_iSteamUtilsCallbacks + 11,
             GamepadTextInputDismissed_t = k_iSteamUtilsCallbacks + 14,
 
-            k_iClientFriendsCallbacks = 800,
             GameOverlayActivateRequested_t = k_iClientFriendsCallbacks + 1,
             ClanEventReceived_t = k_iClientFriendsCallbacks + 2,
             FriendAdded_t = k_iClientFriendsCallbacks + 3,
@@ -335,7 +393,6 @@ namespace Steam::Callbacks
             FriendsGroupMemberRemoved_t = k_iClientFriendsCallbacks + 46,
             NameHistoryResponse_t = k_iClientFriendsCallbacks + 47,
 
-            k_iClientUserCallbacks = 900,
             SystemIM_t = k_iClientUserCallbacks + 1,
             GuestPassGiftTarget_t = k_iClientUserCallbacks + 2,
             PrimaryChatDestinationSet_t = k_iClientUserCallbacks + 3,
@@ -397,7 +454,6 @@ namespace Steam::Callbacks
             TestAvailablePasswordResponse_t = k_iClientUserCallbacks + 64,
             GetSteamGuardDetailsResponse_t = k_iClientUserCallbacks + 66,
 
-            k_iSteamAppsCallbacks = 1000,
             AppDataChanged_t = k_iSteamAppsCallbacks + 1,
             RequestAppCallbacksComplete_t = k_iSteamAppsCallbacks + 2,
             AppInfoUpdateComplete_t = k_iSteamAppsCallbacks + 3,
@@ -416,7 +472,6 @@ namespace Steam::Callbacks
             FileDetailsResult_t = k_iSteamAppsCallbacks + 23,
             TimedTrialStatus_t = k_iSteamAppsCallbacks + 30,
 
-            k_iSteamUserStatsCallbacks = 1100,
             UserStatsReceived_t = k_iSteamUserStatsCallbacks + 1,
             UserStatsStored_t = k_iSteamUserStatsCallbacks + 2,
             UserAchievementStored_t = k_iSteamUserStatsCallbacks + 3,
@@ -430,7 +485,6 @@ namespace Steam::Callbacks
             LeaderboardUGCSet_t = k_iSteamUserStatsCallbacks + 11,
             GlobalStatsReceived_t = k_iSteamUserStatsCallbacks + 12,
 
-            k_iSteamNetworkingCallbacks = 1200,
             SocketStatusCallback_t = k_iSteamNetworkingCallbacks + 1,
             P2PSessionRequest_t = k_iSteamNetworkingCallbacks + 2,
             P2PSessionConnectFail_t = k_iSteamNetworkingCallbacks + 3,
@@ -439,18 +493,14 @@ namespace Steam::Callbacks
             SteamNetworkingSocketsRecvP2PFailure_t = k_iSteamNetworkingCallbacks + 97,
             SteamNetworkingSocketsRecvP2PRendezvous_t = k_iSteamNetworkingCallbacks + 98,
 
-            k_iSteamNetworkingSocketsCallbacks = 1220,
             SteamNetConnectionStatusChangedCallback_t = k_iSteamNetworkingSocketsCallbacks + 1,
             SteamNetAuthenticationStatus_t = k_iSteamNetworkingSocketsCallbacks + 2,
 
-            k_iSteamNetworkingMessagesCallbacks = 1250,
             SteamNetworkingMessagesSessionRequest_t = k_iSteamNetworkingMessagesCallbacks + 1,
             SteamNetworkingMessagesSessionFailed_t = k_iSteamNetworkingMessagesCallbacks + 2,
 
-            k_iSteamNetworkingUtilsCallbacks = 1280,
             SteamRelayNetworkStatus_t = k_iSteamNetworkingUtilsCallbacks + 1,
 
-            k_iClientRemoteStorageCallbacks = 1300,
             RemoteStorageAppSyncedClient_t = k_iClientRemoteStorageCallbacks + 1,
             RemoteStorageAppSyncedServer_t = k_iClientRemoteStorageCallbacks + 2,
             RemoteStorageAppSyncProgress_t = k_iClientRemoteStorageCallbacks + 3,
@@ -484,35 +534,21 @@ namespace Steam::Callbacks
             RemoteStorageFileWriteAsyncComplete_t = k_iClientRemoteStorageCallbacks + 31,
             RemoteStorageFileReadAsyncComplete_t = k_iClientRemoteStorageCallbacks + 32,
 
-            k_iClientDepotBuilderCallbacks = 1400,
-
-            k_iSteamUserItemsCallbacks = 1400,
-
-            k_iSteamGameServerItemsCallbacks = 1500,
-
-            k_iClientUtilsCallbacks = 1600,
             CellIDChanged_t = k_iClientUtilsCallbacks + 3,
 
-            k_iSteamGameCoordinatorCallbacks = 1700,
             GCMessageAvailable_t = k_iSteamGameCoordinatorCallbacks + 1,
             GCMessageFailed_t = k_iSteamGameCoordinatorCallbacks + 2,
 
-            k_iSteamGameServerStatsCallbacks = 1800,
             GSStatsReceived_t = k_iSteamGameServerStatsCallbacks + 0,
             GSStatsStored_t = k_iSteamGameServerStatsCallbacks + 1,
 
-            k_iSteam2AsyncCallbacks = 1900,
-
-            k_iSteamGameStatsCallbacks = 2000,
             GameStatsSessionIssued_t = k_iSteamGameStatsCallbacks + 1,
             GameStatsSessionClosed_t = k_iSteamGameStatsCallbacks + 2,
 
-            k_iClientHTTPCallbacks = 2100,
             HTTPRequestCompleted_t = k_iClientHTTPCallbacks + 1,
             HTTPRequestHeadersReceived_t = k_iClientHTTPCallbacks + 2,
             HTTPRequestDataReceived_t = k_iClientHTTPCallbacks + 3,
 
-            k_iClientScreenshotsCallbacks = 2200,
             ScreenshotUploadProgress_t = k_iClientScreenshotsCallbacks + 1,
             ScreenshotWritten_t = k_iClientScreenshotsCallbacks + 2,
             ScreenshotUploaded_t = k_iClientScreenshotsCallbacks + 3,
@@ -520,32 +556,11 @@ namespace Steam::Callbacks
             ScreenshotDeleted_t = k_iClientScreenshotsCallbacks + 5,
             ScreenshotTriggered_t = k_iClientScreenshotsCallbacks + 6,
 
-            k_iSteamScreenshotsCallbacks = 2300,
             ScreenshotReady_t = k_iSteamScreenshotsCallbacks + 1,
             ScreenshotRequested_t = k_iSteamScreenshotsCallbacks + 2,
 
-            k_iClientAudioCallbacks = 2400,
-
-            k_iClientUnifiedMessagesCallbacks = 2500,
             SteamUnifiedMessagesSendMethodResult_t = k_iClientUnifiedMessagesCallbacks + 1,
 
-            k_iSteamStreamLauncherCallbacks = 2600,
-
-            k_iClientControllerCallbacks = 2700,
-
-            k_iSteamControllerCallbacks = 2800,
-
-            k_iClientParentalSettingsCallbacks = 2900,
-
-            k_iClientDeviceAuthCallbacks = 3000,
-
-            k_iClientNetworkDeviceManagerCallbacks = 3100,
-
-            k_iClientMusicCallbacks = 3200,
-
-            k_iClientRemoteClientManagerCallbacks = 3300,
-
-            k_iClientUGCCallbacks = 3400,
             SteamUGCQueryCompleted_t = k_iClientUGCCallbacks + 1,
             SteamUGCRequestUGCDetailsResult_t = k_iClientUGCCallbacks + 2,
             CreateItemResult_t = k_iClientUGCCallbacks + 3,
@@ -564,26 +579,15 @@ namespace Steam::Callbacks
             GetAppDependenciesResult_t = k_iClientUGCCallbacks + 16,
             DeleteItemResult_t = k_iClientUGCCallbacks + 17,
 
-            k_iSteamStreamClientCallbacks = 3500,
-
-            k_IClientProductBuilderCallbacks = 3600,
-
-            k_iClientShortcutsCallbacks = 3700,
-
-            k_iClientRemoteControlManagerCallbacks = 3800,
-
-            k_iSteamAppListCallbacks = 3900,
             SteamAppInstalled_t = k_iSteamAppListCallbacks + 1,
             SteamAppUninstalled_t = k_iSteamAppListCallbacks + 2,
 
-            k_iSteamMusicCallbacks = 4000,
             PlaybackStatusHasChanged_t = k_iSteamMusicCallbacks + 1,
             VolumeHasChanged_t = k_iSteamMusicCallbacks + 2,
             MusicPlayerWantsVolume_t = k_iSteamMusicCallbacks + 11,
             MusicPlayerSelectsQueueEntry_t = k_iSteamMusicCallbacks + 12,
             MusicPlayerSelectsPlaylistEntry_t = k_iSteamMusicCallbacks + 13,
 
-            k_iSteamMusicRemoteCallbacks = 4100,
             MusicPlayerRemoteWillActivate_t = k_iSteamMusicRemoteCallbacks + 1,
             MusicPlayerRemoteWillDeactivate_t = k_iSteamMusicRemoteCallbacks + 2,
             MusicPlayerRemoteToFront_t = k_iSteamMusicRemoteCallbacks + 3,
@@ -596,17 +600,6 @@ namespace Steam::Callbacks
             MusicPlayerWantsLooped_t = k_iSteamMusicRemoteCallbacks + 10,
             MusicPlayerWantsPlayingRepeatStatus_t = k_iSteamMusicRemoteCallbacks + 14,
 
-            k_iClientVRCallbacks = 4200,
-
-            k_iClientGameNotificationCallbacks = 4300,
-
-            k_iClientReservedCallbacks = 4300,
-
-            k_iSteamGameNotificationCallbacks = 4400,
-
-            k_iSteamReservedCallbacks = 4400,
-
-            k_iSteamHTMLSurfaceCallbacks = 4500,
             HTML_BrowserReady_t = k_iSteamHTMLSurfaceCallbacks + 1,
             HTML_NeedsPaint_t = k_iSteamHTMLSurfaceCallbacks + 2,
             HTML_StartRequest_t = k_iSteamHTMLSurfaceCallbacks + 3,
@@ -631,13 +624,11 @@ namespace Steam::Callbacks
             HTML_HideToolTip_t = k_iSteamHTMLSurfaceCallbacks + 26,
             HTML_BrowserRestarted_t = k_iSteamHTMLSurfaceCallbacks + 27,
 
-            k_iClientVideoCallbacks = 4600,
             BroadcastUploadStart_t = k_iClientVideoCallbacks + 4,
             BroadcastUploadStop_t = k_iClientVideoCallbacks + 5,
             GetVideoURLResult_t = k_iClientVideoCallbacks + 11,
             GetOPFSettingsResult_t = k_iClientVideoCallbacks + 24,
 
-            k_iClientInventoryCallbacks = 4700,
             SteamInventoryResultReady_t = k_iClientInventoryCallbacks + 0,
             SteamInventoryFullUpdate_t = k_iClientInventoryCallbacks + 1,
             SteamInventoryDefinitionUpdate_t = k_iClientInventoryCallbacks + 2,
@@ -645,16 +636,8 @@ namespace Steam::Callbacks
             SteamInventoryStartPurchaseResult_t = k_iClientInventoryCallbacks + 4,
             SteamInventoryRequestPricesResult_t = k_iClientInventoryCallbacks + 5,
 
-            k_iClientBluetoothManagerCallbacks = 4800,
-
-            k_iClientSharedConnectionCallbacks = 4900,
-
-            k_ISteamParentalSettingsCallbacks = 5000,
             SteamParentalSettingsChanged_t = k_ISteamParentalSettingsCallbacks + 1,
 
-            k_iClientShaderCallbacks = 5100,
-
-            k_iSteamGameSearchCallbacks = 5200,
             SearchForGameProgressCallback_t = k_iSteamGameSearchCallbacks + 1,
             SearchForGameResultCallback_t = k_iSteamGameSearchCallbacks + 2,
             RequestPlayersForGameProgressCallback_t = k_iSteamGameSearchCallbacks + 11,
@@ -663,7 +646,6 @@ namespace Steam::Callbacks
             SubmitPlayerResultResultCallback_t = k_iSteamGameSearchCallbacks + 14,
             EndGameResultCallback_t = k_iSteamGameSearchCallbacks + 15,
 
-            k_iSteamPartiesCallbacks = 5300,
             JoinPartyCallback_t = k_iSteamPartiesCallbacks + 1,
             CreateBeaconCallback_t = k_iSteamPartiesCallbacks + 2,
             ReservationNotificationCallback_t = k_iSteamPartiesCallbacks + 3,
@@ -671,19 +653,8 @@ namespace Steam::Callbacks
             AvailableBeaconLocationsUpdated_t = k_iSteamPartiesCallbacks + 5,
             ActiveBeaconsUpdated_t = k_iSteamPartiesCallbacks + 6,
 
-            k_iClientPartiesCallbacks = 5400,
-
-            k_iSteamSTARCallbacks = 5500,
-
-            k_iClientSTARCallbacks = 5600,
-
-            k_iSteamRemotePlayCallbacks = 5700,
             SteamRemotePlaySessionConnected_t = k_iSteamRemotePlayCallbacks + 1,
             SteamRemotePlaySessionDisconnected_t = k_iSteamRemotePlayCallbacks + 2,
-
-            k_iClientCompatCallbacks = 5800,
-
-            k_iSteamChatCallbacks = 5900,
         };
 
         constexpr const char *asString(ECallbackType Code)
@@ -1047,10 +1018,6 @@ namespace Steam::Callbacks
                 case MusicPlayerWantsLooped_t: return "MusicPlayerWantsLooped_t";
                 case MusicPlayerWantsPlayingRepeatStatus_t: return "MusicPlayerWantsPlayingRepeatStatus_t";
                 case k_iClientVRCallbacks: return "k_iClientVRCallbacks";
-                    //case k_iClientGameNotificationCallbacks: return "k_iClientGameNotificationCallbacks";
-                case k_iClientReservedCallbacks: return "k_iClientReservedCallbacks";
-                    //case k_iSteamGameNotificationCallbacks: return "k_iSteamGameNotificationCallbacks";
-                case k_iSteamReservedCallbacks: return "k_iSteamReservedCallbacks";
                 case k_iSteamHTMLSurfaceCallbacks: return "k_iSteamHTMLSurfaceCallbacks";
                 case HTML_BrowserReady_t: return "HTML_BrowserReady_t";
                 case HTML_NeedsPaint_t: return "HTML_NeedsPaint_t";

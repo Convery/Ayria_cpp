@@ -153,7 +153,7 @@ namespace Steam
                        << nAppID << pchKey >> [&](const std::string &Value)
                        {
                            std::strncpy(pchValue, Value.c_str(), cchValueMax);
-                           Result = std::min(Value.size(), size_t(cchValueMax));
+                           Result = std::min((int32_t)Value.size(), cchValueMax);
                        };
 
             return Result;

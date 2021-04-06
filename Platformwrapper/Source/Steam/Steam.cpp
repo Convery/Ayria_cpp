@@ -236,7 +236,7 @@ namespace Steam
                     const char *pchVersion = va_arg(Args, char *);
 
                     Initgameserver(unIP, usSteamPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode,
-                                   pchGameDir, pchVersion);
+                        pchGameDir, pchVersion);
                 }
                 if (Version == 11 || Version == 12 || Version == 13)
                 {
@@ -281,6 +281,7 @@ namespace Steam
         EXPORT_ATTR void *SteamClient() { Printcaller(); return Fetchinterface(Interfacetype_t::CLIENT); }
         EXPORT_ATTR void *SteamController() { Printcaller(); return Fetchinterface(Interfacetype_t::CONTROLLER); }
         EXPORT_ATTR void *SteamFriends() { Printcaller(); return Fetchinterface(Interfacetype_t::FRIENDS); }
+        EXPORT_ATTR void *SteamGameSearch() { Printcaller(); return Fetchinterface(Interfacetype_t::GAMESEARCH); }
         EXPORT_ATTR void *SteamGameServer() { Printcaller(); return Fetchinterface(Interfacetype_t::GAMESERVER); }
         EXPORT_ATTR void *SteamGameServerHTTP() { Printcaller(); return Fetchinterface(Interfacetype_t::HTTP); }
         EXPORT_ATTR void *SteamGameServerInventory() { Printcaller(); return Fetchinterface(Interfacetype_t::INVENTORY); }
@@ -364,6 +365,7 @@ namespace Steam
         Hook(SteamClient);
         Hook(SteamController);
         Hook(SteamFriends);
+        Hook(SteamGameSearch);
         Hook(SteamGameServer);
         Hook(SteamGameServerHTTP);
         Hook(SteamGameServerInventory);

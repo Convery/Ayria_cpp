@@ -46,6 +46,7 @@ namespace Steam
         USERSTATS,
         CONTROLLER,
         GAMESERVER,
+        GAMESEARCH,
         NETWORKING,
         HTMLSURFACE,
         MUSICREMOTE,
