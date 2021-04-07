@@ -11,7 +11,7 @@ namespace Steam
 {
     struct SteamID_t
     {
-        enum class Accounttype_t : uint8_t
+        enum class Accounttype_t : uint64_t
         {
             Invalid = 0,
             Individual = 1,
@@ -23,14 +23,13 @@ namespace Steam
             Consoleuser = 9,
             Anonymous = 10
         };
-        enum class Universe_t : uint8_t
+        enum class Universe_t : uint64_t
         {
             Invalid = 0,
             Public = 1,
             Beta = 2,
             Dev = 4
         };
-
         union
         {
             uint64_t FullID;
@@ -38,11 +37,53 @@ namespace Steam
             {
                 Universe_t Universe : 8;
                 Accounttype_t Accounttype : 4;
-                uint32_t SessionID : 20;
-                uint32_t UserID : 32;
+
+                uint64_t isClan : 1;
+                uint64_t isLobby : 1;
+                uint64_t isMMSLobby : 1;
+                uint64_t RESERVED : 4;
+                uint64_t SessionID : 12;
+
+                uint64_t UserID : 32;
             };
         };
+
+        SteamID_t toChatID() const
+        {
+            if (Accounttype == Accounttype_t::Clanaccount)
+            {
+                return SteamID_t
+                {
+                    .Universe = Universe, .Accounttype = Accounttype_t::Chataccount, .isClan = true,
+                    .SessionID = SessionID, .UserID = UserID
+                };
+            }
+            if (Accounttype == Accounttype_t::Chataccount)
+            {
+                return *this;
+            }
+
+            return {};
+        }
+        SteamID_t toClanID() const
+        {
+            if (Accounttype == Accounttype_t::Chataccount && isClan)
+            {
+                return SteamID_t
+                {
+                    .Universe = Universe, .Accounttype = Accounttype_t::Clanaccount,
+                    .SessionID = SessionID, .UserID = UserID
+                };
+            }
+            if(Accounttype == Accounttype_t::Clanaccount)
+            {
+                return *this;
+            }
+
+            return {};
+        }
     };
+
     struct GameID_t
     {
         enum class Gametype_t : uint8_t

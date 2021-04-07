@@ -311,7 +311,7 @@ namespace Steam
         bool GetQuota1(uint64_t *pnTotalBytes, uint64_t *puAvailableBytes)
         {
             *pnTotalBytes = 0;
-            *puAvailableBytes = 20 * INT32_MAX - 1;
+            *puAvailableBytes = 20ULL * INT32_MAX - 1ULL;
             return true;
         }
         bool GetUGCDetails(UGCHandle_t hContent, AppID_t *pnAppID, char **ppchName, int32_t *pnFileSizeInBytes, SteamID_t *pSteamIDOwner)
