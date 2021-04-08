@@ -84,38 +84,31 @@ namespace Console
     static std::vector<std::pair<std::string, Callback_t>> Functions;
 
     // Evaluate the string, optionally add to the history.
-    void execCommandline(std::string_view Commandline, bool logCommand)
+    void execCommandline(const std::string &Commandline, bool logCommand)
     {
+        static const std::regex rxCommands("(\"[^\"]+\"|[^\\s\"]+)", std::regex_constants::optimize);
+        auto It = std::sregex_iterator(Commandline.cbegin(), Commandline.cend(), rxCommands);
+        const auto Size = std::distance(It, std::sregex_iterator());
+
         // Why would you do this?
-        if (Commandline.empty() || Commandline.front() == '\r' || Commandline.front() == '\n') [[unlikely]]
-            return;
-
-        // Remove line-break characters.
-        while (Commandline.back() == '\r' || Commandline.back() == '\n')
-            Commandline.remove_suffix(1);
-
-        // Split into arguments.
-        bool isQuoted = false;
-        Inlinedvector<std::string, 8> Arguments{ "" };
-        for (const auto &Char : Commandline)
-            if (Char == ' ' && !isQuoted) Arguments.push_back("");
-            else if (Char == '\"') { isQuoted ^= 1; Arguments.push_back(""); }
-            else Arguments.back().push_back(Char);
+        if (Size == 0) return;
 
         // Format as a C-array with the last pointer being null.
-        const auto Array = (const char **)alloca((Arguments.size() + 1) * sizeof(char *));
-        for (size_t i = 0; i < Arguments.size(); i++)
-            Array[i] = Arguments[i].c_str();
+        std::vector<std::string> Heapstorage; Heapstorage.reserve(Size);
+        const auto Arguments = (const char **)alloca((Size + 1) * sizeof(char *));
+        for (ptrdiff_t i = 0; i < Size; ++i)
+        {
+            // Hackery because STL regex doesn't support lookahead/behind.
+            std::string Temp((It++)->str());
+            if (Temp.back() == '\"') Temp.pop_back();
+            if (Temp.front() == '\"') Temp.erase(0, 1);
+            Arguments[i] = Heapstorage.emplace_back(std::move(Temp)).c_str();
+        }
+        Arguments[Size] = NULL;
 
         // Find the function we are interested in.
-        const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
-        {
-            if (Pair.first.size() != Arguments[0].size()) return false;
-            for (size_t i = 0; i < Pair.first.size(); i++)
-                if (std::toupper(Pair.first[i]) != std::toupper(Arguments[0][i]))
-                    return false;
-            return true;
-        });
+        const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(),
+                              [&](const auto &Pair) { return 0 == _strnicmp(Pair.first.c_str(), Arguments[0], Pair.first.size()); });
 
         // Print the command to the console and evaluate.
         if (logCommand)
@@ -124,7 +117,7 @@ namespace Console
         }
         if (Callback != Functions.end())
         {
-            Callback->second((int)Arguments.size(), Array);
+            Callback->second(Size - 1, Arguments + 1);
         }
     }
 
@@ -132,14 +125,9 @@ namespace Console
     void addConsolecommand(std::string_view Name, Callback_t Callback)
     {
         // Check if we already have this command.
-        if (std::any_of(std::execution::par_unseq, Functions.begin(), Functions.end(), [&](const auto &Pair)
-        {
-            if (Pair.first.size() != Name.size()) return false;
-            for (size_t i = 0; i < Pair.first.size(); i++)
-                if (std::toupper(Pair.first[i]) != std::toupper(Name[i]))
-                    return false;
-            return true;
-        })) return;
+        if (std::any_of(std::execution::par_unseq, Functions.begin(), Functions.end(),
+                        [&](const auto &Pair) { return 0 == _strnicmp(Pair.first.c_str(), Name.data(), Pair.first.size()); }))
+            return;
 
         Functions.emplace_back(Name, Callback);
     }
@@ -155,6 +143,14 @@ namespace Console
     {
         const auto Commandline = Request.value<std::string>("Commandline");
         execCommandline(Commandline, false);
+        return "{}";
+    }
+    static std::string __cdecl printLine(JSON::Value_t &&Request)
+    {
+        const auto Color = std::max(Request.value<uint32_t>("Color"), Request.value<uint32_t>("Colour"));
+        const auto Message = Request.value<std::string>("Message");
+
+        addConsolemessage(Message, Color);
         return "{}";
     }
 

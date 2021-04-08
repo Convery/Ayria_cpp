@@ -64,7 +64,7 @@ struct HTTPRequest_t
         // Parse the header.
         if (!hasHeader)
         {
-            static const std::regex rxHeader("^(\\w+) *(.*) +(.*)$",  std::regex_constants::optimize);
+            static const std::regex rxHeader("^(\\w+) *(.*) +(.*)$", std::regex_constants::optimize);
             static const std::regex rxFields("^(.+): *(.+)$", std::regex_constants::optimize);
             const auto End = std::sregex_iterator();
 
@@ -174,7 +174,7 @@ struct IHTTPServer : IStreamserver
                         Errorprint(va("HTTP server got a request for %s, but there's no handler for the type.", Parsedrequest.URL.c_str()).c_str());
                         return true;
                 }
-                StreamOUT += {Result.begin(), Result.end()};
+                StreamOUT.append(Result);
             }
 
             // Clear the state for the next request.

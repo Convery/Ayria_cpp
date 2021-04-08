@@ -27,7 +27,7 @@ namespace Console
     void addConsolecommand(std::string_view Name, Callback_t Callback);
 
     // Evaluate the string, optionally add to the history.
-    void execCommandline(std::string_view Commandline, bool logCommand = true);
+    void execCommandline(const std::string &Commandline, bool logCommand = true);
 
     // Quake-style console.
     namespace Windows
