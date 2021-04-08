@@ -99,14 +99,14 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamParties001 : Interface_t
+    struct SteamParties001 : Interface_t<>
     {
         SteamParties001()
         {
             /* Missing SDK info */
         }
     };
-    struct SteamParties002 : Interface_t
+    struct SteamParties002 : Interface_t<12>
     {
         SteamParties002()
         {
@@ -129,7 +129,7 @@ namespace Steam
     {
         Steamgamesearchloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::GAMESEARCH , "SteamParties001", SteamParties001);
             Register(Interfacetype_t::GAMESEARCH , "SteamParties002", SteamParties002);
         }

@@ -311,14 +311,14 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamApps001 : Interface_t
+    struct SteamApps001 : Interface_t<1>
     {
         SteamApps001()
         {
             Createmethod(0, SteamApps, GetAppData);
         }
     };
-    struct SteamApps002 : Interface_t
+    struct SteamApps002 : Interface_t<7>
     {
         SteamApps002()
         {
@@ -331,7 +331,7 @@ namespace Steam
             Createmethod(6, SteamApps, BIsSubscribedApp);
         };
     };
-    struct SteamApps003 : Interface_t
+    struct SteamApps003 : Interface_t<8>
     {
         SteamApps003()
         {
@@ -345,7 +345,7 @@ namespace Steam
             Createmethod(7, SteamApps, BIsDlcInstalled);
         };
     };
-    struct SteamApps004 : Interface_t
+    struct SteamApps004 : Interface_t<15>
     {
         SteamApps004()
         {
@@ -366,7 +366,7 @@ namespace Steam
             Createmethod(14, SteamApps, RegisterActivationCode);
         };
     };
-    struct SteamApps005 : Interface_t
+    struct SteamApps005 : Interface_t<21>
     {
         SteamApps005()
         {
@@ -393,7 +393,7 @@ namespace Steam
             Createmethod(20, SteamApps, RegisterActivationCode);
         };
     };
-    struct SteamApps006 : Interface_t
+    struct SteamApps006 : Interface_t<23>
     {
         SteamApps006()
         {
@@ -422,7 +422,7 @@ namespace Steam
             Createmethod(22, SteamApps, RegisterActivationCode);
         };
     };
-    struct SteamApps007 : Interface_t
+    struct SteamApps007 : Interface_t<25>
     {
         SteamApps007()
         {
@@ -453,7 +453,7 @@ namespace Steam
             Createmethod(24, SteamApps, RegisterActivationCode);
         };
     };
-    struct SteamApps008 : Interface_t
+    struct SteamApps008 : Interface_t<29>
     {
         SteamApps008()
         {
@@ -493,7 +493,7 @@ namespace Steam
     {
         Steamappsloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::APPS, "SteamApps001", SteamApps001);
             Register(Interfacetype_t::APPS, "SteamApps002", SteamApps002);
             Register(Interfacetype_t::APPS, "SteamApps003", SteamApps003);

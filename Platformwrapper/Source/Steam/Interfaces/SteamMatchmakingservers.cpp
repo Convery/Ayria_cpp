@@ -419,7 +419,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamMatchmakingservers001 : Interface_t
+    struct SteamMatchmakingservers001 : Interface_t<16>
     {
         SteamMatchmakingservers001()
         {
@@ -441,7 +441,7 @@ namespace Steam
             Createmethod(15, SteamMatchmakingServers, CancelServerQuery);
         };
     };
-    struct SteamMatchmakingservers002 : Interface_t
+    struct SteamMatchmakingservers002 : Interface_t<17>
     {
         SteamMatchmakingservers002()
         {
@@ -469,7 +469,7 @@ namespace Steam
     {
         Steammatchmakingserverloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers001", SteamMatchmakingservers001);
             Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers002", SteamMatchmakingservers002);
         }

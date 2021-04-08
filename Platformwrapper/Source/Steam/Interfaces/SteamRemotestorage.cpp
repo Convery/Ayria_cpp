@@ -437,7 +437,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamRemotestorage001 : Interface_t
+    struct SteamRemotestorage001 : Interface_t<8>
     {
         SteamRemotestorage001()
         {
@@ -451,7 +451,7 @@ namespace Steam
             Createmethod(7, SteamRemotestorage, GetQuota0);
         };
     };
-    struct SteamRemotestorage002 : Interface_t
+    struct SteamRemotestorage002 : Interface_t<7>
     {
         SteamRemotestorage002()
         {
@@ -464,7 +464,7 @@ namespace Steam
             Createmethod(6, SteamRemotestorage, GetQuota0);
         };
     };
-    struct SteamRemotestorage003 : Interface_t
+    struct SteamRemotestorage003 : Interface_t<20>
     {
         SteamRemotestorage003()
         {
@@ -490,7 +490,7 @@ namespace Steam
             Createmethod(19, SteamRemotestorage, GetCachedUGCHandle);
         };
     };
-    struct SteamRemotestorage004 : Interface_t
+    struct SteamRemotestorage004 : Interface_t<21>
     {
         SteamRemotestorage004()
         {
@@ -517,7 +517,7 @@ namespace Steam
             Createmethod(20, SteamRemotestorage, GetCachedUGCHandle);
         };
     };
-    struct SteamRemotestorage005 : Interface_t
+    struct SteamRemotestorage005 : Interface_t<37>
     {
         SteamRemotestorage005()
         {
@@ -560,7 +560,7 @@ namespace Steam
             Createmethod(36, SteamRemotestorage, UnsubscribePublishedFile);
         };
     };
-    struct SteamRemotestorage006 : Interface_t
+    struct SteamRemotestorage006 : Interface_t<47>
     {
         SteamRemotestorage006()
         {
@@ -613,7 +613,7 @@ namespace Steam
             Createmethod(46, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
         };
     };
-    struct SteamRemotestorage007 : Interface_t
+    struct SteamRemotestorage007 : Interface_t<47>
     {
         SteamRemotestorage007()
         {
@@ -666,7 +666,7 @@ namespace Steam
             Createmethod(46, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
         };
     };
-    struct SteamRemotestorage008 : Interface_t
+    struct SteamRemotestorage008 : Interface_t<51>
     {
         SteamRemotestorage008()
         {
@@ -723,7 +723,7 @@ namespace Steam
             Createmethod(50, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
         };
     };
-    struct SteamRemotestorage009 : Interface_t
+    struct SteamRemotestorage009 : Interface_t<51>
     {
         SteamRemotestorage009()
         {
@@ -780,7 +780,7 @@ namespace Steam
             Createmethod(50, SteamRemotestorage, EnumeratePublishedWorkshopFiles);
         };
     };
-    struct SteamRemotestorage010 : Interface_t
+    struct SteamRemotestorage010 : Interface_t<52>
     {
         SteamRemotestorage010()
         {
@@ -838,7 +838,7 @@ namespace Steam
             Createmethod(51, SteamRemotestorage, UGCDownloadToLocation);
         };
     };
-    struct SteamRemotestorage011 : Interface_t
+    struct SteamRemotestorage011 : Interface_t<52>
     {
         SteamRemotestorage011()
         {
@@ -896,7 +896,7 @@ namespace Steam
             Createmethod(51, SteamRemotestorage, UGCDownloadToLocation);
         };
     };
-    struct SteamRemotestorage012 : Interface_t
+    struct SteamRemotestorage012 : Interface_t<58>
     {
         SteamRemotestorage012()
         {
@@ -960,7 +960,7 @@ namespace Steam
             Createmethod(57, SteamRemotestorage, UGCDownloadToLocation);
         };
     };
-    struct SteamRemotestorage013 : Interface_t
+    struct SteamRemotestorage013 : Interface_t<61>
     {
         SteamRemotestorage013()
         {
@@ -1027,7 +1027,7 @@ namespace Steam
             Createmethod(60, SteamRemotestorage, UGCDownloadToLocation);
         };
     };
-    struct SteamRemotestorage014 : Interface_t
+    struct SteamRemotestorage014 : Interface_t<61>
     {
         SteamRemotestorage014()
         {
@@ -1099,7 +1099,7 @@ namespace Steam
     {
         Steamremotestorageloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage001", SteamRemotestorage001);
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage002", SteamRemotestorage002);
             Register(Interfacetype_t::REMOTESTORAGE, "SteamRemotestorage003", SteamRemotestorage003);

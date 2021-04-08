@@ -230,7 +230,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamClient001 : Interface_t
+    struct SteamClient001 : Interface_t<>
     {
         SteamClient001()
         {
@@ -239,7 +239,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient002 : Interface_t
+    struct SteamClient002 : Interface_t<>
     {
         SteamClient002()
         {
@@ -248,7 +248,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient003 : Interface_t
+    struct SteamClient003 : Interface_t<>
     {
         SteamClient003()
         {
@@ -257,7 +257,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient004 : Interface_t
+    struct SteamClient004 : Interface_t<>
     {
         SteamClient004()
         {
@@ -266,7 +266,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient005 : Interface_t
+    struct SteamClient005 : Interface_t<>
     {
         SteamClient005()
         {
@@ -275,7 +275,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient006 : Interface_t
+    struct SteamClient006 : Interface_t<21>
     {
         SteamClient006()
         {
@@ -302,7 +302,7 @@ namespace Steam
             Createmethod(20, SteamClient, GetIPCCallCount);
         };
     };
-    struct SteamClient007 : Interface_t
+    struct SteamClient007 : Interface_t<22>
     {
         SteamClient007()
         {
@@ -330,7 +330,7 @@ namespace Steam
             Createmethod(21, SteamClient, GetISteamRemoteStorage);
         };
     };
-    struct SteamClient008 : Interface_t
+    struct SteamClient008 : Interface_t<21>
     {
         SteamClient008()
         {
@@ -357,7 +357,7 @@ namespace Steam
             Createmethod(20, SteamClient, SetWarningMessageHook);
         };
     };
-    struct SteamClient009 : Interface_t
+    struct SteamClient009 : Interface_t<22>
     {
         SteamClient009()
         {
@@ -385,7 +385,7 @@ namespace Steam
             Createmethod(21, SteamClient, SetWarningMessageHook);
         };
     };
-    struct SteamClient010 : Interface_t
+    struct SteamClient010 : Interface_t<24>
     {
         SteamClient010()
         {
@@ -415,7 +415,7 @@ namespace Steam
             Createmethod(23, SteamClient, GetISteamHTTP);
         };
     };
-    struct SteamClient011 : Interface_t
+    struct SteamClient011 : Interface_t<25>
     {
         SteamClient011()
         {
@@ -446,7 +446,7 @@ namespace Steam
             Createmethod(24, SteamClient, GetISteamHTTP);
         };
     };
-    struct SteamClient012 : Interface_t
+    struct SteamClient012 : Interface_t<26>
     {
         SteamClient012()
         {
@@ -478,7 +478,7 @@ namespace Steam
             Createmethod(25, SteamClient, GetISteamController);
         };
     };
-    struct SteamClient013 : Interface_t
+    struct SteamClient013 : Interface_t<30>
     {
         SteamClient013()
         {
@@ -514,7 +514,7 @@ namespace Steam
             Createmethod(29, SteamClient, GetISteamAppList);
         };
     };
-    struct SteamClient014 : Interface_t
+    struct SteamClient014 : Interface_t<31>
     {
         SteamClient014()
         {
@@ -551,7 +551,7 @@ namespace Steam
             Createmethod(30, SteamClient, GetISteamMusic);
         };
     };
-    struct SteamClient015 : Interface_t
+    struct SteamClient015 : Interface_t<32>
     {
         SteamClient015()
         {
@@ -589,7 +589,7 @@ namespace Steam
             Createmethod(31, SteamClient, GetISteamMusicRemote);
         };
     };
-    struct SteamClient016 : Interface_t
+    struct SteamClient016 : Interface_t<36>
     {
         SteamClient016()
         {
@@ -631,7 +631,7 @@ namespace Steam
             Createmethod(35, SteamClient, Set_SteamAPI_CCheckCallbackRegisteredInProcess);
         };
     };
-    struct SteamClient017 : Interface_t
+    struct SteamClient017 : Interface_t<36>
     {
         SteamClient017()
         {
@@ -673,7 +673,7 @@ namespace Steam
             Createmethod(35, SteamClient, GetISteamVideo);
         };
     };
-    struct SteamClient018 : Interface_t
+    struct SteamClient018 : Interface_t<40>
     {
         SteamClient018()
         {
@@ -720,7 +720,7 @@ namespace Steam
 
         };
     };
-    struct SteamClient019 : Interface_t
+    struct SteamClient019 : Interface_t<41>
     {
         SteamClient019()
         {
@@ -767,7 +767,7 @@ namespace Steam
             Createmethod(40, SteamClient, GetISteamRemotePlay);
         };
     };
-    struct SteamClient020 : Interface_t
+    struct SteamClient020 : Interface_t<42>
     {
         SteamClient020()
         {
@@ -820,7 +820,7 @@ namespace Steam
     {
         Steamclientloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::CLIENT, "SteamClient001", SteamClient001);
             Register(Interfacetype_t::CLIENT, "SteamClient002", SteamClient002);
             Register(Interfacetype_t::CLIENT, "SteamClient003", SteamClient003);

@@ -324,28 +324,28 @@ namespace Steam
         }
     };
 
-    struct SteamUser001 : Interface_t
+    struct SteamUser001 : Interface_t<>
     {
         SteamUser001()
         {
             // Missing SDK info.
         };
     };
-    struct SteamUser002 : Interface_t
+    struct SteamUser002 : Interface_t<>
     {
         SteamUser002()
         {
             // Missing SDK info.
         };
     };
-    struct SteamUser003 : Interface_t
+    struct SteamUser003 : Interface_t<>
     {
         SteamUser003()
         {
             // Missing SDK info.
         };
     };
-    struct SteamUser004 : Interface_t
+    struct SteamUser004 : Interface_t<26>
     {
         SteamUser004()
         {
@@ -377,7 +377,7 @@ namespace Steam
             Createmethod(25, SteamUser, RequestLegacyCDKey);
         };
     };
-    struct SteamUser005 : Interface_t
+    struct SteamUser005 : Interface_t<39>
     {
         SteamUser005()
         {
@@ -422,7 +422,7 @@ namespace Steam
             Createmethod(38, SteamUser, SetAccountCreationTime);
         };
     };
-    struct SteamUser006 : Interface_t
+    struct SteamUser006 : Interface_t<12>
     {
         SteamUser006()
         {
@@ -440,7 +440,7 @@ namespace Steam
             Createmethod(11, SteamUser, TrackAppUsageEvent);
         };
     };
-    struct SteamUser007 : Interface_t
+    struct SteamUser007 : Interface_t<13>
     {
         SteamUser007()
         {
@@ -459,7 +459,7 @@ namespace Steam
             Createmethod(12, SteamUser, RefreshSteam2Login);
         };
     };
-    struct SteamUser008 : Interface_t
+    struct SteamUser008 : Interface_t<7>
     {
         SteamUser008()
         {
@@ -472,7 +472,7 @@ namespace Steam
             Createmethod(6, SteamUser, RefreshSteam2Login);
         };
     };
-    struct SteamUser009 : Interface_t
+    struct SteamUser009 : Interface_t<7>
     {
         SteamUser009()
         {
@@ -485,7 +485,7 @@ namespace Steam
             Createmethod(6, SteamUser, RefreshSteam2Login);
         };
     };
-    struct SteamUser010 : Interface_t
+    struct SteamUser010 : Interface_t<6>
     {
         SteamUser010()
         {
@@ -497,7 +497,7 @@ namespace Steam
             Createmethod(5, SteamUser, TrackAppUsageEvent);
         };
     };
-    struct SteamUser011 : Interface_t
+    struct SteamUser011 : Interface_t<11>
     {
         SteamUser011()
         {
@@ -514,7 +514,7 @@ namespace Steam
             Createmethod(10, SteamUser, DecompressVoice0);
         };
     };
-    struct SteamUser012 : Interface_t
+    struct SteamUser012 : Interface_t<16>
     {
         SteamUser012()
         {
@@ -536,7 +536,7 @@ namespace Steam
             Createmethod(15, SteamUser, UserHasLicenseForApp);
         };
     };
-    struct SteamUser013 : Interface_t
+    struct SteamUser013 : Interface_t<18>
     {
         SteamUser013()
         {
@@ -560,7 +560,7 @@ namespace Steam
             Createmethod(17, SteamUser, BIsBehindNAT);
         };
     };
-    struct SteamUser014 : Interface_t
+    struct SteamUser014 : Interface_t<21>
     {
         SteamUser014()
         {
@@ -587,7 +587,7 @@ namespace Steam
             Createmethod(20, SteamUser, GetEncryptedAppTicket);
         };
     };
-    struct SteamUser015 : Interface_t
+    struct SteamUser015 : Interface_t<22>
     {
         SteamUser015()
         {
@@ -615,7 +615,7 @@ namespace Steam
             Createmethod(21, SteamUser, GetEncryptedAppTicket);
         };
     };
-    struct SteamUser016 : Interface_t
+    struct SteamUser016 : Interface_t<22>
     {
         SteamUser016()
         {
@@ -643,7 +643,7 @@ namespace Steam
             Createmethod(21, SteamUser, GetEncryptedAppTicket);
         };
     };
-    struct SteamUser017 : Interface_t
+    struct SteamUser017 : Interface_t<25>
     {
         SteamUser017()
         {
@@ -673,7 +673,7 @@ namespace Steam
             Createmethod(24, SteamUser, GetPlayerSteamLevel);
         };
     };
-    struct SteamUser018 : Interface_t
+    struct SteamUser018 : Interface_t<25>
     {
         SteamUser018()
         {
@@ -704,7 +704,7 @@ namespace Steam
             Createmethod(24, SteamUser, RequestStoreAuthURL);
         };
     };
-    struct SteamUser019 : Interface_t
+    struct SteamUser019 : Interface_t<29>
     {
         SteamUser019()
         {
@@ -739,7 +739,7 @@ namespace Steam
             Createmethod(28, SteamUser, BIsPhoneRequiringVerification);
         };
     };
-    struct SteamUser020 : Interface_t
+    struct SteamUser020 : Interface_t<31>
     {
         SteamUser020()
         {
@@ -776,7 +776,7 @@ namespace Steam
             Createmethod(30, SteamUser, GetDurationControl);
         };
     };
-    struct SteamUser021 : Interface_t
+    struct SteamUser021 : Interface_t<32>
     {
         SteamUser021()
         {
@@ -819,7 +819,7 @@ namespace Steam
     {
         Steamuserloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::USER, "SteamUser001", SteamUser001);
             Register(Interfacetype_t::USER, "SteamUser002", SteamUser002);
             Register(Interfacetype_t::USER, "SteamUser003", SteamUser003);

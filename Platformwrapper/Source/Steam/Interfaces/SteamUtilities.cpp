@@ -234,7 +234,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamUtilities001 : Interface_t
+    struct SteamUtilities001 : Interface_t<4>
     {
         SteamUtilities001()
         {
@@ -244,7 +244,7 @@ namespace Steam
             Createmethod(3, SteamUtilities, GetServerRealTime);
         }
     };
-    struct SteamUtilities002 : Interface_t
+    struct SteamUtilities002 : Interface_t<9>
     {
         SteamUtilities002()
         {
@@ -259,7 +259,7 @@ namespace Steam
             Createmethod(8, SteamUtilities, GetCurrentBatteryPower);
         }
     };
-    struct SteamUtilities003 : Interface_t
+    struct SteamUtilities003 : Interface_t<17>
     {
         SteamUtilities003()
         {
@@ -282,7 +282,7 @@ namespace Steam
             Createmethod(16, SteamUtilities, SetWarningMessageHook);
         }
     };
-    struct SteamUtilities004 : Interface_t
+    struct SteamUtilities004 : Interface_t<18>
     {
         SteamUtilities004()
         {
@@ -306,7 +306,7 @@ namespace Steam
             Createmethod(17, SteamUtilities, IsOverlayEnabled);
         }
     };
-    struct SteamUtilities005 : Interface_t
+    struct SteamUtilities005 : Interface_t<23>
     {
         SteamUtilities005()
         {
@@ -335,7 +335,7 @@ namespace Steam
             Createmethod(22, SteamUtilities, GetEnteredGamepadTextInput);
         };
     };
-    struct SteamUtilities006 : Interface_t
+    struct SteamUtilities006 : Interface_t<25>
     {
         SteamUtilities006()
         {
@@ -366,7 +366,7 @@ namespace Steam
             Createmethod(24, SteamUtilities, IsSteamRunningInVR);
         };
     };
-    struct SteamUtilities007 : Interface_t
+    struct SteamUtilities007 : Interface_t<25>
     {
         SteamUtilities007()
         {
@@ -397,7 +397,7 @@ namespace Steam
             Createmethod(24, SteamUtilities, IsSteamRunningInVR);
         };
     };
-    struct SteamUtilities008 : Interface_t
+    struct SteamUtilities008 : Interface_t<27>
     {
         SteamUtilities008()
         {
@@ -430,7 +430,7 @@ namespace Steam
             Createmethod(26, SteamUtilities, StartVRDashboard);
         };
     };
-    struct SteamUtilities009 : Interface_t
+    struct SteamUtilities009 : Interface_t<33>
     {
         SteamUtilities009()
         {
@@ -465,10 +465,11 @@ namespace Steam
             Createmethod(28, SteamUtilities, SetVRHeadsetStreamingEnabled);
             Createmethod(29, SteamUtilities, IsSteamChinaLauncher);
             Createmethod(30, SteamUtilities, InitFilterText0);
+            Createmethod(31, SteamUtilities, FilterText0);
             Createmethod(32, SteamUtilities, GetIPv6ConnectivityState);
         };
     };
-    struct SteamUtilities010 : Interface_t
+    struct SteamUtilities010 : Interface_t<33>
     {
         SteamUtilities010()
         {
@@ -503,6 +504,7 @@ namespace Steam
             Createmethod(28, SteamUtilities, SetVRHeadsetStreamingEnabled);
             Createmethod(29, SteamUtilities, IsSteamChinaLauncher);
             Createmethod(30, SteamUtilities, InitFilterText1);
+            Createmethod(31, SteamUtilities, FilterText1);
             Createmethod(32, SteamUtilities, GetIPv6ConnectivityState);
         };
     };
@@ -511,7 +513,7 @@ namespace Steam
     {
         Steamutilitiesloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::UTILS, "SteamUtilities001", SteamUtilities001);
             Register(Interfacetype_t::UTILS, "SteamUtilities002", SteamUtilities002);
             Register(Interfacetype_t::UTILS, "SteamUtilities003", SteamUtilities003);

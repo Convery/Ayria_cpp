@@ -65,7 +65,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamScreenshots001 : Interface_t
+    struct SteamScreenshots001 : Interface_t<6>
     {
         SteamScreenshots001()
         {
@@ -77,7 +77,7 @@ namespace Steam
             Createmethod(5, SteamScreenshots, TagUser);
         };
     };
-    struct SteamScreenshots002 : Interface_t
+    struct SteamScreenshots002 : Interface_t<7>
     {
         SteamScreenshots002()
         {
@@ -91,7 +91,7 @@ namespace Steam
         };
     };
 
-    struct SteamScreenshots003 : Interface_t
+    struct SteamScreenshots003 : Interface_t<9>
     {
         SteamScreenshots003()
         {
@@ -111,7 +111,7 @@ namespace Steam
     {
         Steamscreenshotsloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots001", SteamScreenshots001);
             Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots002", SteamScreenshots002);
             Register(Interfacetype_t::SCREENSHOTS, "SteamScreenshots003", SteamScreenshots003);

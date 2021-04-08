@@ -604,7 +604,7 @@ namespace Steam
         }
     }; */
 
-    struct SteamMatchmaking001 : Interface_t
+    struct SteamMatchmaking001 : Interface_t<23>
     {
         SteamMatchmaking001()
         {
@@ -633,7 +633,7 @@ namespace Steam
             Createmethod(22, SteamMatchmaking, RequestLobbyData);
         };
     };
-    struct SteamMatchmaking002 : Interface_t
+    struct SteamMatchmaking002 : Interface_t<20>
     {
         SteamMatchmaking002()
         {
@@ -658,7 +658,7 @@ namespace Steam
             Createmethod(19, SteamMatchmaking, SetLobbyGameServer);
         };
     };
-    struct SteamMatchmaking003 : Interface_t
+    struct SteamMatchmaking003 : Interface_t<28>
     {
         SteamMatchmaking003()
         {
@@ -692,7 +692,7 @@ namespace Steam
             Createmethod(27, SteamMatchmaking, RequestFriendsLobbies);
         };
     };
-    struct SteamMatchmaking004 : Interface_t
+    struct SteamMatchmaking004 : Interface_t<27>
     {
         SteamMatchmaking004()
         {
@@ -725,7 +725,7 @@ namespace Steam
             Createmethod(26, SteamMatchmaking, RequestFriendsLobbies);
         };
     };
-    struct SteamMatchmaking005 : Interface_t
+    struct SteamMatchmaking005 : Interface_t<31>
     {
         SteamMatchmaking005()
         {
@@ -762,7 +762,7 @@ namespace Steam
             Createmethod(30, SteamMatchmaking, GetLobbyDistance);
         };
     };
-    struct SteamMatchmaking006 : Interface_t
+    struct SteamMatchmaking006 : Interface_t<28>
     {
         SteamMatchmaking006()
         {
@@ -796,7 +796,7 @@ namespace Steam
             Createmethod(27, SteamMatchmaking, GetLobbyOwner);
         };
     };
-    struct SteamMatchmaking007 : Interface_t
+    struct SteamMatchmaking007 : Interface_t<34>
     {
         SteamMatchmaking007()
         {
@@ -836,7 +836,7 @@ namespace Steam
             Createmethod(33, SteamMatchmaking, SetLobbyOwner);
         };
     };
-    struct SteamMatchmaking008 : Interface_t
+    struct SteamMatchmaking008 : Interface_t<36>
     {
         SteamMatchmaking008()
         {
@@ -878,7 +878,7 @@ namespace Steam
             Createmethod(35, SteamMatchmaking, SetLobbyOwner);
         };
     };
-    struct SteamMatchmaking009 : Interface_t
+    struct SteamMatchmaking009 : Interface_t<38>
     {
         SteamMatchmaking009()
         {
@@ -927,7 +927,7 @@ namespace Steam
     {
         Steammatchmakingloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking001", SteamMatchmaking001);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking002", SteamMatchmaking002);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking003", SteamMatchmaking003);

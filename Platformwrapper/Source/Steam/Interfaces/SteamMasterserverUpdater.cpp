@@ -132,7 +132,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamMasterserverupdater001 : Interface_t
+    struct SteamMasterserverupdater001 : Interface_t<14>
     {
         SteamMasterserverupdater001()
         {
@@ -157,7 +157,7 @@ namespace Steam
     {
         SteamMasterserverupdaterloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MASTERSERVERUPDATER, "SteamMasterserverupdater001", SteamMasterserverupdater001);
         }
     };

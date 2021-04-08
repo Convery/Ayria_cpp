@@ -8,13 +8,13 @@
 
 namespace Steam
 {
-    std::deque<std::pair<Interfacetype_t, Interface_t *>> *Interfacestore;
-    std::unordered_map<Interfacetype_t, Interface_t *> Currentinterfaces;
-    std::unordered_map<std::string_view, Interface_t *> *Interfacenames;
+    std::deque<std::pair<Interfacetype_t, Interface_t<> *>> *Interfacestore;
+    std::unordered_map<Interfacetype_t, Interface_t<> *> Currentinterfaces;
+    std::unordered_map<std::string_view, Interface_t<> *> *Interfacenames;
     extern const Hashmap<std::string, std::string> Scanstrings;
 
     // A nice little dummy interface for debugging.
-    struct Dummyinterface : Interface_t
+    struct Dummyinterface : Interface_t<71>
     {
         template<int N> void Dummyfunc() { Errorprint(__FUNCSIG__); assert(false); };
         Dummyinterface()
@@ -43,7 +43,7 @@ namespace Steam
     };
 
     // Return a specific version of the interface by name or the latest by their category / type.
-    void Registerinterface(Interfacetype_t Type, std::string_view Name, Interface_t *Interface)
+    void Registerinterface(Interfacetype_t Type, std::string_view Name, Interface_t<> *Interface)
     {
         if (!Interfacestore) Interfacestore = new std::remove_pointer_t<decltype(Interfacestore)>;
         if (!Interfacenames) Interfacenames = new std::remove_pointer_t<decltype(Interfacenames)>;
@@ -51,7 +51,7 @@ namespace Steam
         Interfacestore->push_front(std::make_pair(Type, Interface));
         Interfacenames->emplace(Name, Interface);
     }
-    Interface_t **Fetchinterface(std::string_view Name)
+    Interface_t<> **Fetchinterface(std::string_view Name)
     {
         // See if we got a Steam name.
         if (Scanstrings.contains(Name))
@@ -63,8 +63,8 @@ namespace Steam
         {
             // Return the dummy interface for debugging.
             Errorprint(va("Interface missing for interface-name %*s", Name.size(), Name.data()));
-            static auto Debug = new Dummyinterface();
-            return (Interface_t **)&Debug;
+            static const auto Debug = new Dummyinterface();
+            return (Interface_t<> **)&Debug;
         }
 
         // Find the type from the store.
@@ -80,7 +80,7 @@ namespace Steam
         // This should never be hit.
         assert(false); return nullptr;
     }
-    Interface_t **Fetchinterface(Interfacetype_t Type)
+    Interface_t<> **Fetchinterface(Interfacetype_t Type)
     {
         // See if we have any interface selected for this type.
         if (const auto Result = Currentinterfaces.find(Type); Result != Currentinterfaces.end())
@@ -102,8 +102,8 @@ namespace Steam
 
         // Return the dummy interface for debugging.
         Errorprint(va("Interface missing for interface-type %i", Type));
-        static auto Debug = new Dummyinterface();
-        return (Interface_t **)&Debug;
+        static const auto Debug = new Dummyinterface();
+        return (Interface_t<> **)&Debug;
     }
     size_t Getinterfaceversion(Interfacetype_t Type)
     {

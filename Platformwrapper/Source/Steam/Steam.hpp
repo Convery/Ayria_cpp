@@ -27,7 +27,7 @@ namespace Steam
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
-    using Interface_t = struct { void *VTABLE[80]; };
+    template <size_t N = 1> struct Interface_t { void *VTABLE[N]; };
 
     // The types of interfaces provided as of writing.
     enum class Interfacetype_t
@@ -63,9 +63,9 @@ namespace Steam
     };
 
     // Return a specific version of the interface by name or the latest by their category / type.
-    void Registerinterface(Interfacetype_t Type, std::string_view Name, Interface_t *Interface);
-    Interface_t **Fetchinterface(std::string_view Name);
-    Interface_t **Fetchinterface(Interfacetype_t Type);
+    void Registerinterface(Interfacetype_t Type, std::string_view Name, Interface_t<> *Interface);
+    Interface_t<> **Fetchinterface(std::string_view Name);
+    Interface_t<> **Fetchinterface(Interfacetype_t Type);
     bool Scanforinterfaces(std::string_view Filename);
     size_t Getinterfaceversion(Interfacetype_t Type);
     void Initializeinterfaces();

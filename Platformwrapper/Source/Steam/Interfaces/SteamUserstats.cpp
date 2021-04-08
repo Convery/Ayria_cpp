@@ -663,7 +663,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamUserstats001 : Interface_t
+    struct SteamUserstats001 : Interface_t<22>
     {
         SteamUserstats001()
         {
@@ -691,7 +691,7 @@ namespace Steam
             Createmethod(21, SteamUserstats, GetAchievementDisplayAttribute0);
         };
     };
-    struct SteamUserstats002 : Interface_t
+    struct SteamUserstats002 : Interface_t<18>
     {
         SteamUserstats002()
         {
@@ -715,7 +715,7 @@ namespace Steam
             Createmethod(17, SteamUserstats, IndicateAchievementProgress0);
         };
     };
-    struct SteamUserstats003 : Interface_t
+    struct SteamUserstats003 : Interface_t<13>
     {
         SteamUserstats003()
         {
@@ -735,7 +735,7 @@ namespace Steam
 
         };
     };
-    struct SteamUserstats004 : Interface_t
+    struct SteamUserstats004 : Interface_t<17>
     {
         SteamUserstats004()
         {
@@ -758,7 +758,7 @@ namespace Steam
             Createmethod(16, SteamUserstats, GetUserAchievement);
         };
     };
-    struct SteamUserstats005 : Interface_t
+    struct SteamUserstats005 : Interface_t<27>
     {
         SteamUserstats005()
         {
@@ -792,7 +792,7 @@ namespace Steam
 
         };
     };
-    struct SteamUserstats006 : Interface_t
+    struct SteamUserstats006 : Interface_t<28>
     {
         SteamUserstats006()
         {
@@ -826,7 +826,7 @@ namespace Steam
             Createmethod(27, SteamUserstats, GetNumberOfCurrentPlayers);
         };
     };
-    struct SteamUserstats007 : Interface_t
+    struct SteamUserstats007 : Interface_t<30>
     {
         SteamUserstats007()
         {
@@ -862,7 +862,7 @@ namespace Steam
             Createmethod(29, SteamUserstats, GetNumberOfCurrentPlayers);
         };
     };
-    struct SteamUserstats008 : Interface_t
+    struct SteamUserstats008 : Interface_t<31>
     {
         SteamUserstats008()
         {
@@ -899,7 +899,7 @@ namespace Steam
             Createmethod(30, SteamUserstats, GetNumberOfCurrentPlayers);
         };
     };
-    struct SteamUserstats009 : Interface_t
+    struct SteamUserstats009 : Interface_t<32>
     {
         SteamUserstats009()
         {
@@ -937,7 +937,7 @@ namespace Steam
             Createmethod(31, SteamUserstats, GetNumberOfCurrentPlayers);
         };
     };
-    struct SteamUserstats010 : Interface_t
+    struct SteamUserstats010 : Interface_t<41>
     {
         SteamUserstats010()
         {
@@ -984,7 +984,7 @@ namespace Steam
             Createmethod(40, SteamUserstats, GetGlobalStatHistoryFLOAT);
         };
     };
-    struct SteamUserstats011 : Interface_t
+    struct SteamUserstats011 : Interface_t<45>
     {
         SteamUserstats011()
         {
@@ -1033,10 +1033,9 @@ namespace Steam
             Createmethod(42, SteamUserstats, GetTrophySpaceRequiredBeforeInstall);
             Createmethod(43, SteamUserstats, SetUserStatsData);
             Createmethod(44, SteamUserstats, GetUserStatsData);
-
         };
     };
-    struct SteamUserstats012 : Interface_t
+    struct SteamUserstats012 : Interface_t<45>
     {
         SteamUserstats012()
         {
@@ -1092,7 +1091,7 @@ namespace Steam
     {
         Steamuserstatsloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::USERSTATS, "SteamUserstats001", SteamUserstats001);
             Register(Interfacetype_t::USERSTATS, "SteamUserstats002", SteamUserstats002);
             Register(Interfacetype_t::USERSTATS, "SteamUserstats003", SteamUserstats003);

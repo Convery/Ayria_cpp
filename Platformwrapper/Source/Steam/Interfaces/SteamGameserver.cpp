@@ -411,14 +411,14 @@ namespace Steam
 
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
-    struct SteamGameserver001 : Interface_t
+    struct SteamGameserver001 : Interface_t<>
     {
         SteamGameserver001()
         {
             /* No steamworks SDK info */
         };
     };
-    struct SteamGameserver002 : Interface_t
+    struct SteamGameserver002 : Interface_t<21>
     {
         SteamGameserver002()
         {
@@ -445,7 +445,7 @@ namespace Steam
             Createmethod(20, SteamGameserver, SetGameType);
         };
     };
-    struct SteamGameserver003 : Interface_t
+    struct SteamGameserver003 : Interface_t<17>
     {
         SteamGameserver003()
         {
@@ -468,7 +468,7 @@ namespace Steam
             Createmethod(16, SteamGameserver, GetUserAchievementStatus);
         };
     };
-    struct SteamGameserver004 : Interface_t
+    struct SteamGameserver004 : Interface_t<14>
     {
         SteamGameserver004()
         {
@@ -488,7 +488,7 @@ namespace Steam
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
         };
     };
-    struct SteamGameserver005 : Interface_t
+    struct SteamGameserver005 : Interface_t<15>
     {
         SteamGameserver005()
         {
@@ -509,7 +509,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
         };
     };
-    struct SteamGameserver006 : Interface_t
+    struct SteamGameserver006 : Interface_t<15>
     {
         SteamGameserver006()
         {
@@ -530,7 +530,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
         };
     };
-    struct SteamGameserver007 : Interface_t
+    struct SteamGameserver007 : Interface_t<16>
     {
         SteamGameserver007()
         {
@@ -552,7 +552,7 @@ namespace Steam
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
         };
     };
-    struct SteamGameserver008 : Interface_t
+    struct SteamGameserver008 : Interface_t<17>
     {
         SteamGameserver008()
         {
@@ -575,7 +575,7 @@ namespace Steam
             Createmethod(16, SteamGameserver, GetPublicIP0);
         };
     };
-    struct SteamGameserver009 : Interface_t
+    struct SteamGameserver009 : Interface_t<19>
     {
         SteamGameserver009()
         {
@@ -598,10 +598,9 @@ namespace Steam
             Createmethod(16, SteamGameserver, GetPublicIP0);
             Createmethod(17, SteamGameserver, SetGameData);
             Createmethod(18, SteamGameserver, UserHasLicenseForApp);
-
         };
     };
-    struct SteamGameserver010 : Interface_t
+    struct SteamGameserver010 : Interface_t<23>
     {
         SteamGameserver010()
         {
@@ -630,7 +629,7 @@ namespace Steam
             Createmethod(22, SteamGameserver, CancelAuthTicket);
         };
     };
-    struct SteamGameserver011 : Interface_t
+    struct SteamGameserver011 : Interface_t<44>
     {
         SteamGameserver011()
         {
@@ -680,7 +679,7 @@ namespace Steam
             Createmethod(43, SteamGameserver, ComputeNewPlayerCompatibility);
         };
     };
-    struct SteamGameserver012 : Interface_t
+    struct SteamGameserver012 : Interface_t<44>
     {
         SteamGameserver012()
         {
@@ -730,7 +729,7 @@ namespace Steam
             Createmethod(43, SteamGameserver, ComputeNewPlayerCompatibility);
         };
     };
-    struct SteamGameserver013 : Interface_t
+    struct SteamGameserver013 : Interface_t<44>
     {
         SteamGameserver013()
         {
@@ -785,7 +784,7 @@ namespace Steam
     {
         Steamgameserverloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver001", SteamGameserver001);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver002", SteamGameserver002);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver003", SteamGameserver003);

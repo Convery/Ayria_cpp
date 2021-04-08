@@ -51,7 +51,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamMatchGameSearch001 : Interface_t
+    struct SteamMatchGameSearch001 : Interface_t<14>
     {
         SteamMatchGameSearch001()
         {
@@ -76,7 +76,7 @@ namespace Steam
     {
         Steamgamesearchloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::GAMESEARCH , "SteamMatchGameSearch001", SteamMatchGameSearch001);
         }
     };

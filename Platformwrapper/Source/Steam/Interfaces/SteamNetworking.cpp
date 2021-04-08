@@ -412,7 +412,7 @@ namespace Steam
 
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
-    struct SteamNetworking001 : Interface_t
+    struct SteamNetworking001 : Interface_t<12>
     {
         SteamNetworking001()
         {
@@ -430,7 +430,7 @@ namespace Steam
             Createmethod(11, SteamNetworking, GetListenSocketInfo);
         };
     };
-    struct SteamNetworking002 : Interface_t
+    struct SteamNetworking002 : Interface_t<14>
     {
         SteamNetworking002()
         {
@@ -450,7 +450,7 @@ namespace Steam
             Createmethod(13, SteamNetworking, GetMaxPacketSize);
         };
     };
-    struct SteamNetworking003 : Interface_t
+    struct SteamNetworking003 : Interface_t<20>
     {
         SteamNetworking003()
         {
@@ -476,7 +476,7 @@ namespace Steam
             Createmethod(19, SteamNetworking, GetMaxPacketSize);
         };
     };
-    struct SteamNetworking004 : Interface_t
+    struct SteamNetworking004 : Interface_t<20>
     {
         SteamNetworking004()
         {
@@ -502,7 +502,7 @@ namespace Steam
             Createmethod(19, SteamNetworking, GetMaxPacketSize);
         };
     };
-    struct SteamNetworking005 : Interface_t
+    struct SteamNetworking005 : Interface_t<22>
     {
         SteamNetworking005()
         {
@@ -530,7 +530,7 @@ namespace Steam
             Createmethod(21, SteamNetworking, GetMaxPacketSize);
         };
     };
-    struct SteamNetworking006 : Interface_t
+    struct SteamNetworking006 : Interface_t<22>
     {
         SteamNetworking006()
         {
@@ -563,7 +563,7 @@ namespace Steam
     {
         Steamnetworkingloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::NETWORKING, "SteamNetworking001", SteamNetworking001);
             Register(Interfacetype_t::NETWORKING, "SteamNetworking002", SteamNetworking002);
             Register(Interfacetype_t::NETWORKING, "SteamNetworking003", SteamNetworking003);

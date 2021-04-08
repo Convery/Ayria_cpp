@@ -1009,7 +1009,7 @@ namespace Steam
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamFriends001 : Interface_t
+    struct SteamFriends001 : Interface_t<27>
     {
         SteamFriends001()
         {
@@ -1042,7 +1042,7 @@ namespace Steam
             Createmethod(26, SteamFriends, GetFriendGamePlayed2);
         };
     };
-    struct SteamFriends002 : Interface_t
+    struct SteamFriends002 : Interface_t<30>
     {
         SteamFriends002()
         {
@@ -1078,7 +1078,7 @@ namespace Steam
             Createmethod(29, SteamFriends, GetFriendFromSourceByIndex);
         };
     };
-    struct SteamFriends003 : Interface_t
+    struct SteamFriends003 : Interface_t<20>
     {
         SteamFriends003()
         {
@@ -1104,7 +1104,7 @@ namespace Steam
             Createmethod(19, SteamFriends, ActivateGameOverlay);
         };
     };
-    struct SteamFriends004 : Interface_t
+    struct SteamFriends004 : Interface_t<20>
     {
         SteamFriends004()
         {
@@ -1130,7 +1130,7 @@ namespace Steam
             Createmethod(19, SteamFriends, ActivateGameOverlay);
         };
     };
-    struct SteamFriends005 : Interface_t
+    struct SteamFriends005 : Interface_t<24>
     {
         SteamFriends005()
         {
@@ -1160,7 +1160,7 @@ namespace Steam
             Createmethod(23, SteamFriends, SetPlayedWith);
         };
     };
-    struct SteamFriends006 : Interface_t
+    struct SteamFriends006 : Interface_t<26>
     {
         SteamFriends006()
         {
@@ -1192,7 +1192,7 @@ namespace Steam
             Createmethod(25, SteamFriends, ActivateGameOverlayInviteDialog);
         };
     };
-    struct SteamFriends007 : Interface_t
+    struct SteamFriends007 : Interface_t<28>
     {
         SteamFriends007()
         {
@@ -1226,7 +1226,7 @@ namespace Steam
             Createmethod(27, SteamFriends, GetLargeFriendAvatar);
         };
     };
-    struct SteamFriends008 : Interface_t
+    struct SteamFriends008 : Interface_t<34>
     {
         SteamFriends008()
         {
@@ -1266,7 +1266,7 @@ namespace Steam
             Createmethod(33, SteamFriends, GetUserRestrictions);
         };
     };
-    struct SteamFriends009 : Interface_t
+    struct SteamFriends009 : Interface_t<43>
     {
         SteamFriends009()
         {
@@ -1316,7 +1316,7 @@ namespace Steam
             Createmethod(43, SteamFriends, GetFriendCoplayGame);
         };
     };
-    struct SteamFriends010 : Interface_t
+    struct SteamFriends010 : Interface_t<59>
     {
         SteamFriends010()
         {
@@ -1381,7 +1381,7 @@ namespace Steam
             Createmethod(58, SteamFriends, GetChatMessage);
         };
     };
-    struct SteamFriends011 : Interface_t
+    struct SteamFriends011 : Interface_t<63>
     {
         SteamFriends011()
         {
@@ -1450,7 +1450,7 @@ namespace Steam
             Createmethod(62, SteamFriends, EnumerateFollowingList);
         };
     };
-    struct SteamFriends012 : Interface_t
+    struct SteamFriends012 : Interface_t<63>
     {
         SteamFriends012()
         {
@@ -1519,7 +1519,7 @@ namespace Steam
             Createmethod(62, SteamFriends, EnumerateFollowingList);
         };
     };
-    struct SteamFriends013 : Interface_t
+    struct SteamFriends013 : Interface_t<63>
     {
         SteamFriends013()
         {
@@ -1588,7 +1588,7 @@ namespace Steam
             Createmethod(62, SteamFriends, EnumerateFollowingList);
         };
     };
-    struct SteamFriends014 : Interface_t
+    struct SteamFriends014 : Interface_t<64>
     {
         SteamFriends014()
         {
@@ -1658,7 +1658,7 @@ namespace Steam
             Createmethod(63, SteamFriends, EnumerateFollowingList);
         };
     };
-    struct SteamFriends015 : Interface_t
+    struct SteamFriends015 : Interface_t<70>
     {
         SteamFriends015()
         {
@@ -1734,7 +1734,7 @@ namespace Steam
             Createmethod(69, SteamFriends, EnumerateFollowingList);
         };
     };
-    struct SteamFriends016 : Interface_t
+    struct SteamFriends016 : Interface_t<73>
     {
         SteamFriends016()
         {
@@ -1814,7 +1814,7 @@ namespace Steam
             Createmethod(72, SteamFriends,   GetNumChatsWithUnreadPriorityMessages);
         };
     };
-    struct SteamFriends017 : Interface_t
+    struct SteamFriends017 : Interface_t<76>
     {
         SteamFriends017()
         {
@@ -1903,7 +1903,7 @@ namespace Steam
     {
         Steamfriendsloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::FRIENDS, "SteamFriends001", SteamFriends001);
             Register(Interfacetype_t::FRIENDS, "SteamFriends002", SteamFriends002);
             Register(Interfacetype_t::FRIENDS, "SteamFriends003", SteamFriends003);
