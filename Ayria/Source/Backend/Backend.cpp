@@ -161,6 +161,7 @@ namespace Backend
     static void Initializedatabase()
     {
         // Track available clients seen since startup.
+        Database() << "DROP TABLE IF EXISTS Onlineclients;";
         Database() << "CREATE TABLE Onlineclients ("
                       "Authenticated bool not null, "
                       "ClientID integer not null, "
@@ -177,6 +178,7 @@ namespace Backend
                       "Members blob );";
 
         // Track pending requests to groups we administrate.
+        Database() << "DROP TABLE IF EXISTS Grouprequests;";
         Database() << "CREATE TABLE Grouprequests ("
                       "GroupID integer not null, "
                       "UserID integer not null, "
@@ -196,6 +198,7 @@ namespace Backend
                       "Transient bool not null );";
 
         // Track player presence.
+        Database() << "DROP TABLE IF EXISTS Presence;";
         Database() << "CREATE TABLE Presence ("
                       "ClientID integer not null, "
                       "Key text not null, "
@@ -210,6 +213,7 @@ namespace Backend
                       "PRIMARY KEY(SourceID, TargetID) );";
 
         // Track available matchmaking sessions.
+        Database() << "DROP TABLE IF EXISTS Matchmakingsessions;";
         Database() << "CREATE TABLE Matchmakingsessions ("
                       "ProviderID integer not null, "
                       "HostID integer not null, "
