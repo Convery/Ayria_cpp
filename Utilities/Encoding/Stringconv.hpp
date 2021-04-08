@@ -341,99 +341,44 @@ namespace Encoding
     }
 }
 
-#if defined(HAS_ABSEIL)
-[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, char Needle)
+#if defined (HAS_ABSEIL)
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
 {
-    return absl::StrSplit(String, absl::ByChar(Needle));
+    return absl::StrSplit(String, absl::ByAnyChar(Needle), absl::SkipEmpty());
 }
-[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, std::string_view Needle)
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
 {
-    return absl::StrSplit(String, absl::ByAnyChar(Needle));
+    return absl::StrSplit(String, absl::ByChar(Needle), absl::SkipEmpty());
 }
-[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, char Needle)
-{
-    return absl::StrSplit(String, absl::ByChar(Needle));
-}
-[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, std::string_view Needle)
-{
-    return absl::StrSplit(String, absl::ByAnyChar(Needle));
-}
+
 #else
-[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, char Needle)
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
 {
-    std::vector<std::string_view> Results;
-    size_t Currentoffset = 0;
-    Results.reserve(8);
+    const std::regex rxFields("([^" + std::string(Needle) + "]*)", std::regex_constants::optimize);
+    auto It = std::sregex_iterator(String.cbegin(), String.cend(), rxFields);
+    const auto Size = std::distance(It, std::sregex_iterator());
+    std::vector<std::string> Results;
+    Results.reserve(Size);
 
-    do
+    for (ptrdiff_t i = 0; i < Size; ++i)
     {
-        const auto Nextoffset = String.find_first_of(Needle, Currentoffset);
-        Results.emplace_back(String.substr(Currentoffset, Nextoffset));
-        if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset + 1;
-    } while (true);
+        const auto Match = (It++)->str();
+        if (!Match.empty()) Results.emplace_back(std::move(Match));
+    }
 
     return Results;
 }
-[[nodiscard]] inline std::vector<std::string_view> Tokenizestring(std::string_view String, std::string_view Needle)
-{
-    std::vector<std::string_view> Results;
-    size_t Currentoffset = 0;
-    Results.reserve(8);
-
-    do
-    {
-        Inlinedvector<size_t, 4> Offsets;
-        for (const auto Char : Needle)
-            Offsets.emplace_back(String.find_first_of(Char, Currentoffset));
-
-        std::sort(Offsets.begin(), Offsets.end());
-        const auto Nextoffset = Offsets.front();
-
-        Results.emplace_back(String.substr(Currentoffset, Nextoffset));
-        if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset + 1;
-    } while (true);
-
-    return Results;
-}
-[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, char Needle)
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
 {
     std::vector<std::string> Results;
-    size_t Currentoffset = 0;
     Results.reserve(8);
 
-    do
+    while (!String.empty())
     {
-        const auto Nextoffset = String.find_first_of(Needle, Currentoffset);
-        const auto Substring = String.substr(Currentoffset, Nextoffset);
-        Results.emplace_back(Substring.data(), Substring.size());
-        if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset + 1;
-    } while (true);
-
-    return Results;
-}
-[[nodiscard]] inline std::vector<std::string> Tokenizestring_s(std::string_view String, std::string_view Needle)
-{
-    std::vector<std::string> Results;
-    size_t Currentoffset = 0;
-    Results.reserve(8);
-
-    do
-    {
-        Inlinedvector<size_t, 4> Offsets;
-        for (const auto Char : Needle)
-            Offsets.emplace_back(String.find_first_of(Char, Currentoffset));
-
-        std::sort(Offsets.begin(), Offsets.end());
-        const auto Nextoffset = Offsets.front();
-
-        const auto Substring = String.substr(Currentoffset, Nextoffset);
-        Results.emplace_back(Substring.data(), Substring.size());
-        if (Nextoffset == std::string_view::npos) break;
-        Currentoffset = Nextoffset + 1;
-    } while (true);
+        const auto Offset = String.find_first_of(Needle);
+        Results.emplace_back(String.substr(0, Offset));
+        String.remove_prefix(Offset);
+    }
 
     return Results;
 }

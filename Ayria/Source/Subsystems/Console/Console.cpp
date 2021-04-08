@@ -42,7 +42,7 @@ namespace Console
         const std::scoped_lock _(Writelock);
 
         // Split by newline.
-        for (const auto Results = Tokenizestring_s(Message, '\n'); const auto &String : Results)
+        for (const auto Results = Tokenizestring(Message, "\r\n"); const auto &String : Results)
             if (!String.empty())
                 Consolelog.push_back(Logline_t{ Encoding::toWide(String), Colour });
     }
@@ -193,6 +193,7 @@ namespace Console
         addConsolecommand("Filter", Changefilter);
 
         Backend::API::addEndpoint("Console::Exec", execCommand);
+        Backend::API::addEndpoint("Console::Print", printLine);
     }
 
     // Provide a C-API for external code.

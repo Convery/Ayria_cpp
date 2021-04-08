@@ -190,7 +190,7 @@ namespace Steam
             const auto Line = std::strstr(GetCommandLineA(), "?");
             if (!Line) return "";
 
-            const auto Tokens = Tokenizestring_s(Line + 1, "=;");
+            const auto Tokens = Tokenizestring(Line + 1, "=;");
             if (Tokens.size() & 1)
             {
                 Errorprint(va("%s: Malformed commandline.", __FUNCTION__));
