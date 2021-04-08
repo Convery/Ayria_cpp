@@ -7,18 +7,7 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-#pragma pack(push, 1)
 struct Address_t { unsigned int IPv4; unsigned short Port; };
-using Keyval = std::pair<std::string, std::string>;
-struct HTTPRequest_t
-{
-    bool Parsed;
-    std::string URL;
-    std::string Body;
-    std::string Method;
-    std::vector<Keyval> Headers;
-};
-#pragma pack(pop)
 
 // Server interfaces for localnetworking-plugins.
 // Callbacks return false on error or if there's no data.
@@ -52,58 +41,144 @@ struct IDatagramserver : IServer
     bool onStreamwrite(const void *, unsigned int) override { return false; }
 };
 
-// HTTP parsing.
-#if defined(HAS_HTTPPARSER)
 // The HTTP server just decodes the data and pass it to a callback.
+struct HTTPRequest_t
+{
+    std::string URL{};
+    std::string Body{};
+    std::string Method{};
+    Hashmap<std::string, std::string> Fields{};
+
+    size_t Expectedlength{};
+    bool isChunked{};
+    bool hasHeader{};
+    bool hasBody{};
+    bool isBad{};
+
+    void Clear()
+    {
+        *this = {};
+    }
+    void Parse(std::string_view Input)
+    {
+        // Parse the header.
+        if (!hasHeader)
+        {
+            static const std::regex rxHeader("^(\\w+) *(.*) +(.*)$",  std::regex_constants::optimize);
+            static const std::regex rxFields("^(.+): *(.+)$", std::regex_constants::optimize);
+            const auto End = std::sregex_iterator();
+
+            // Regex requires the copy until P0506 is accepted.
+            const auto Substring = Input.substr(0, Input.find_first_of("\r\n\r\n") + 4);
+            const auto Buffer = std::string(Substring.data(), Substring.size());
+            Input.remove_prefix(Substring.size());
+
+            // Incase more than one line in the header matches.
+            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), rxHeader); It != End; ++It)
+            {
+                const auto &Match = *It;
+                if (Match.size() >= 2)
+                {
+                    Method = Match[1].str();
+                    URL = Match[2].str();
+                    break;
+                }
+            }
+
+            // All fields up to \n\n
+            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), rxFields); It != End; ++It)
+            {
+                const auto &Match = *It;
+                if (Match.size() == 3)
+                {
+                    Fields[Match[1].str()] = Match[2].str();
+                }
+            }
+
+            // Extract data from the fields if available.
+            isChunked = Fields.contains("Transfer-Encoding") && Hash::WW32(Fields["Transfer-Encoding"]) == Hash::WW32("chunked");
+            Expectedlength = Fields.contains("Content-Length") ? std::strtoul(Fields["Content-Length"].c_str(), {}, 10) : 0;
+            hasHeader = true;
+        }
+
+        // Parse the data.
+        while (!Input.empty())
+        {
+            // Simple case.
+            if (!isChunked) [[likely]]
+            {
+                Body.append(Input);
+                break;
+            }
+
+            // Lovely chunked encoding.
+            const auto Size = std::strtoul(Input.data(), {}, 10);
+            Input.remove_prefix(Input.find_first_of("\n") + 1);
+
+            if (Size >= Input.size())
+            {
+                isBad = true;
+                break;
+            }
+            if (Size == 0)
+            {
+                Expectedlength = Body.size();
+                break;
+            }
+
+            Body.append(Input.data(), Size);
+            Input.remove_prefix(Size);
+            Input.remove_prefix(Input.find_first_of("\n") + 1);
+        }
+
+        // Are we done here?
+        hasBody = (Body.size() >= Expectedlength) && hasHeader;
+    }
+};
 struct IHTTPServer : IStreamserver
 {
     // HTTP parser information.
-    http_parser_settings Settings{};
     HTTPRequest_t Parsedrequest{};
     std::string StreamOUT{};
-    http_parser Parser{};
 
     // Callbacks on data, returns the response.
-    std::string(__cdecl *onGET)(HTTPRequest_t &){};
-    std::string(__cdecl *onPUT)(HTTPRequest_t &){};
-    std::string(__cdecl *onPOST)(HTTPRequest_t &){};
-    std::string(__cdecl *onCOPY)(HTTPRequest_t &){};
-    std::string(__cdecl *onDELETE)(HTTPRequest_t &){};
+    std::string(__cdecl *onGET)(HTTPRequest_t &) {};
+    std::string(__cdecl *onPUT)(HTTPRequest_t &) {};
+    std::string(__cdecl *onPOST)(HTTPRequest_t &) {};
+    std::string(__cdecl *onCOPY)(HTTPRequest_t &) {};
+    std::string(__cdecl *onDELETE)(HTTPRequest_t &) {};
 
     // On incoming data from Localnet.
     bool onStreamwrite(const void *Databuffer, const uint32_t Datasize) override
     {
         assert(Databuffer); assert(Datasize);
 
-        // Clear any old data.
-        if (Parsedrequest.Parsed)
-        {
-            Parsedrequest.URL.clear();
-            Parsedrequest.Body.clear();
-            Parsedrequest.Method.clear();
-            Parsedrequest.Headers.clear();
-            Parsedrequest.Parsed = false;
-        }
-
-        // Parse the incoming data.
-        http_parser_execute(&Parser, &Settings, (const char *)Databuffer, Datasize);
+        // Process the data.
+        Parsedrequest.Parse(std::string_view((char *)Databuffer, Datasize));
 
         // Forward to the callbacks if parsed.
-        if (Parsedrequest.Parsed)
+        if (Parsedrequest.hasBody)
         {
-            std::string Result{};
-            switch (Hash::WW32(Parsedrequest.Method.c_str()))
+            // Naturally we wont continue if the data is bad.
+            if (!Parsedrequest.isBad)
             {
-                case Hash::WW32("GET"): if (onGET) Result = onGET(Parsedrequest); break;
-                case Hash::WW32("PUT"): if (onPUT) Result = onPUT(Parsedrequest); break;
-                case Hash::WW32("POST"): if (onPOST) Result = onPOST(Parsedrequest); break;
-                case Hash::WW32("COPY"): if (onCOPY) Result = onCOPY(Parsedrequest); break;
-                case Hash::WW32("DELETE"): if (onDELETE) Result = onDELETE(Parsedrequest); break;
-                default:
-                    Errorprint(va("HTTP server got a request for %s, but there's no handler for the type.", Parsedrequest.URL.c_str()).c_str());
-                    return true;
+                std::string Result{};
+                switch (Hash::WW32(Parsedrequest.Method.c_str()))
+                {
+                    case Hash::WW32("GET"): if (onGET) Result = onGET(Parsedrequest); break;
+                    case Hash::WW32("PUT"): if (onPUT) Result = onPUT(Parsedrequest); break;
+                    case Hash::WW32("POST"): if (onPOST) Result = onPOST(Parsedrequest); break;
+                    case Hash::WW32("COPY"): if (onCOPY) Result = onCOPY(Parsedrequest); break;
+                    case Hash::WW32("DELETE"): if (onDELETE) Result = onDELETE(Parsedrequest); break;
+                    default:
+                        Errorprint(va("HTTP server got a request for %s, but there's no handler for the type.", Parsedrequest.URL.c_str()).c_str());
+                        return true;
+                }
+                StreamOUT += {Result.begin(), Result.end()};
             }
-            StreamOUT += {Result.begin(), Result.end()};
+
+            // Clear the state for the next request.
+            Parsedrequest.Clear();
         }
 
         return true;
@@ -121,52 +196,9 @@ struct IHTTPServer : IStreamserver
         *Datasize = Size;
         return true;
     }
-
-    // Initialize on startup.
-    IHTTPServer()
-    {
-        http_parser_init(&Parser, HTTP_REQUEST);
-        http_parser_settings_init(&Settings);
-        Parser.data = &Parsedrequest;
-
-        Settings.on_message_begin = [](http_parser *) -> int
-        {
-            return 0;
-        };
-        Settings.on_headers_complete = [](http_parser *Parser) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->Method = http_method_str(http_method(Parser->method));
-            return 0;
-        };
-        Settings.on_message_complete = [](http_parser *Parser) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->Parsed = true;
-            return 0;
-        };
-        Settings.on_url = [](http_parser *Parser, const char *Data, const size_t Length) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->URL = std::string(Data, Length);
-            return 0;
-        };
-        Settings.on_body = [](http_parser *Parser, const char *Data, const size_t Length) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->Body += std::string(Data, Length);
-            return 0;
-        };
-        Settings.on_header_field = [](http_parser *Parser, const char *Data, const size_t Length) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->Headers.emplace_back().first = std::string(Data, Length);
-            return 0;
-        };
-        Settings.on_header_value = [](http_parser *Parser, const char *Data, const size_t Length) -> int
-        {
-            ((HTTPRequest_t *)Parser->data)->Headers.back().second = std::string(Data, Length);
-            return 0;
-        };
-    }
 };
 
-#if defined(HAS_OPENSSL)
+#if defined (HAS_OPENSSL)
 #include <openssl/err.h>
 struct IHTTPSServer : IHTTPServer
 {
@@ -357,5 +389,4 @@ struct IHTTPSServer : IHTTPServer
         }
     }
 };
-#endif
 #endif

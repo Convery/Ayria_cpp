@@ -36,6 +36,7 @@
 #include <array>
 #include <mutex>
 #include <queue>
+#include <regex>
 #include <tuple>
 #include <span>
 #include <any>
