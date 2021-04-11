@@ -10,16 +10,49 @@
 namespace Steam
 {
     // Totally randomly selected constants..
-    constexpr uint32_t Steamaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
-    constexpr uint16_t Steamport = Hash::FNV1_32("Steam") & 0xFFFF;  // 51527
+    constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
+    constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
 
-    struct Endpoint_t { uint32_t vPort, Socket; mutable uint64_t HostID; };
-
-    static sockaddr_in Multicast{ AF_INET, htons(Steamport), {{.S_addr = htonl(Steamaddress)}} };
-    static Hashset<Endpoint_t, decltype(WW::Hash), decltype(WW::Equal)> Endpoints;
     static Hashmap<uint32_t, std::string> Incomingdata;
-    static size_t Sendersocket, Receiversocket;
-    static uint32_t RandomID{};
+    struct Endpoint_t { uint32_t vPort, Socket; mutable uint64_t HostID; };
+    static Hashset<Endpoint_t, decltype(WW::Hash), decltype(WW::Equal)> Endpoints;
+
+    static void __cdecl Networkhandler(uint32_t, const char *Message, uint32_t Length)
+    {
+        const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto SenderID = Request.value<uint64_t>("SenderID");
+        const auto TargetID = Request.value<uint64_t>("TargetID");
+        const auto vPort = Request.value<uint32_t>("vPort");
+
+        // Are we even interested in this?
+        if (TargetID != Global.XUID.FullID) return;
+
+        for (auto &Item : Endpoints)
+        {
+            if (!vPort || vPort == vPort)
+            {
+                Item.HostID = SenderID;
+                Endpoints.rehash(Endpoints.size());
+                Incomingdata[Item.Socket].append(Base64::Decode(Request.value<std::string>("B64Message")));
+                break;
+            }
+        }
+    }
+    static void Transmitmessage(uint32_t vPort, uint64_t TargetID, std::string &&B64Message)
+    {
+        const auto Payload = JSON::Object_t({
+            { "SenderID", Global.XUID.FullID },
+            { "B64Message", B64Message },
+            { "TargetID", TargetID },
+            { "vPort", vPort }
+        });
+        const auto Request = JSON::Object_t({
+            { "Messagetype", "Steam_Networkpacket"s },
+            { "Message", JSON::Dump(Payload) }
+        });
+
+        Ayriarequest("Network::Sendmessage", Request);
+    }
 
     static bool Initialized = false;
     static void Initialize()
@@ -27,90 +60,8 @@ namespace Steam
         if (Initialized) return;
         Initialized = true;
 
-        WSADATA WSAData;
-        unsigned long Error{ 0 };
-        unsigned long Argument{ 1 };
-        sockaddr_in Localhost{ AF_INET, htons(Steamport), {{.S_addr = htonl(INADDR_ANY)}} };
-
-        // We only need WS 1.1, no need for more.
-        Error |= WSAStartup(MAKEWORD(1, 1), &WSAData);
-        Sendersocket = socket(AF_INET, SOCK_DGRAM, 0);
-        Receiversocket = socket(AF_INET, SOCK_DGRAM, 0);
-        Error |= ioctlsocket(Sendersocket, FIONBIO, &Argument);
-        Error |= ioctlsocket(Receiversocket, FIONBIO, &Argument);
-
-        // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for devs).
-        const auto Request = ip_mreq{ {{.S_addr = htonl(Steamaddress)}}, {{.S_addr = htonl(INADDR_ANY)}} };
-        Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&Request, sizeof(Request));
-        Error |= setsockopt(Receiversocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
-        Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
-
-        // Make a unique identifier for later.
-        RandomID = Hash::WW32(GetTickCount64() ^ Sendersocket);
-
-        // TODO(tcn): Error checking.
-        if (Error) [[unlikely]] { assert(false); }
-    }
-    static void Transmitmessage(uint32_t vPort, uint64_t TargetID, std::string &&B64Message)
-    {
-        const auto Request = JSON::Object_t({
-            { "SenderID", Global.XUID.FullID },
-            { "B64Message", B64Message },
-            { "TargetID", TargetID },
-            { "vPort", vPort }
-        });
-
-        const auto Packet = std::string((char *)&RandomID, sizeof(RandomID)) + Base64::Encode(JSON::Dump(Request));
-        sendto(Sendersocket, Packet.data(), int(Packet.size()), 0, (sockaddr *)&Multicast, sizeof(Multicast));
-    }
-    static void Pollnetwork()
-    {
-        constexpr timeval Defaulttimeout{ NULL, 1 };
-        constexpr auto Buffersizelimit = 4096;
-        auto Timeout{ Defaulttimeout };
-        auto Count{ 1 };
-
-        // Check for data on the active socket.
-        FD_SET ReadFD{}; FD_SET(Receiversocket, &ReadFD);
-        if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]] return;
-
-        // Allocate data on the stack rather than heap as it's only 4Kb.
-        const auto Buffer = alloca(Buffersizelimit);
-
-        // Get all available packets.
-        while (true)
-        {
-            const auto Packetlength = recvfrom(Receiversocket, (char *)Buffer, Buffersizelimit, NULL, NULL, NULL);
-            if (Packetlength < 4) break;
-
-            // For slightly cleaner code, should be optimized out.
-            using Message_t = struct { uint32_t RandomID; char Payload[1]; };
-            const auto Packet = (Message_t *)Buffer;
-
-            // To ensure that we don't process our own packets.
-            if (Packet->RandomID == RandomID) [[likely]] continue;
-
-            // Parse the request.
-            const auto Payloadlength = Packetlength - sizeof(RandomID);
-            const auto Request = JSON::Parse(Base64::Decode(std::string_view(Packet->Payload, Payloadlength)));
-            const auto SenderID = Request.value<uint64_t>("SenderID");
-            const auto TargetID = Request.value<uint64_t>("TargetID");
-            const auto vPort = Request.value<uint32_t>("vPort");
-
-            // Are we even interested in this?
-            if (TargetID != Global.XUID.FullID) return;
-
-            for (auto &Item : Endpoints)
-            {
-                if (!vPort || vPort == vPort)
-                {
-                    Item.HostID = SenderID;
-                    Endpoints.rehash(Endpoints.size());
-                    Incomingdata[Item.Socket].append(Base64::Decode(Request.value<std::string>("B64Message")));
-                    break;
-                }
-            }
-        }
+        if (const auto Callback = Ayria.addMessagehandler)
+            Callback("Steam_Networkpacket", Networkhandler);
     }
 
     struct SteamNetworking
@@ -189,7 +140,8 @@ namespace Steam
         }
         SNetListenSocket_t CreateListenSocket0(int32_t nVirtualP2PPort, uint32_t nIP, uint16_t nPort)
         {
-            return Receiversocket & 0xFFFFFFFF;
+            Initialize();
+            return GetTickCount() & 0xFFFFFFFF;
         }
         SNetListenSocket_t CreateListenSocket1(int32_t nVirtualP2PPort, uint32_t nIP, uint16_t nPort, bool bAllowUseOfPacketRelay)
         {
@@ -197,12 +149,16 @@ namespace Steam
         }
         SNetSocket_t CreateConnectionSocket(uint32_t nIP, uint16_t nPort, int32_t nTimeoutSec)
         {
+            Initialize();
+
             const uint32_t Socket = GetTickCount();
             Endpoints.insert({ nPort, Socket, 0 });
             return Socket;
         }
         SNetSocket_t CreateP2PConnectionSocket0(SteamID_t steamIDTarget, int32_t nVirtualPort, int32_t nTimeoutSec)
         {
+            Initialize();
+
             const uint32_t Socket = GetTickCount();
             Endpoints.insert({ (uint32_t)nVirtualPort, Socket, steamIDTarget.FullID });
             return Socket;
@@ -238,8 +194,8 @@ namespace Steam
         }
         bool GetListenSocketInfo(SNetListenSocket_t hListenSocket, uint32_t *pnIP, uint16_t *pnPort)
         {
-            *pnIP = Steamaddress;
-            *pnPort = Steamport;
+            *pnIP = Syncaddress;
+            *pnPort = Syncport;
             return true;
         }
         bool GetP2PSessionState(SteamID_t steamIDRemote, P2PSessionState_t *pConnectionState)
@@ -250,16 +206,16 @@ namespace Steam
                 {
                     if (Incomingdata.contains(Item.Socket))
                     {
-                        pConnectionState->m_nBytesQueuedForSend = Incomingdata[Item.Socket].size() / GetMaxPacketSize(0);
-                        pConnectionState->m_nPacketsQueuedForSend = Incomingdata[Item.Socket].size();
+                        pConnectionState->m_nBytesQueuedForSend = (int32_t)Incomingdata[Item.Socket].size() / GetMaxPacketSize(0);
+                        pConnectionState->m_nPacketsQueuedForSend = (int32_t)Incomingdata[Item.Socket].size();
                     }
 
                     break;
                 }
             }
 
-            pConnectionState->m_nRemoteIP = Steamaddress;
-            pConnectionState->m_nRemotePort = Steamport;
+            pConnectionState->m_nRemoteIP = Syncaddress;
+            pConnectionState->m_nRemotePort = Syncport;
             pConnectionState->m_bConnectionActive = 1;
             pConnectionState->m_eP2PSessionError = 0;
             pConnectionState->m_bUsingRelay = false;
@@ -278,8 +234,8 @@ namespace Steam
             }
 
             *peSocketStatus = k_ESNetSocketStateConnected;
-            *punIPRemote = Steamaddress;
-            *punPortRemote = Steamport;
+            *punIPRemote = Syncaddress;
+            *punPortRemote = Syncport;
             return false;
         }
         bool IsDataAvailable(SNetListenSocket_t hListenSocket, uint32_t *pcubMsgSize, SNetSocket_t *phSocket)
@@ -288,7 +244,7 @@ namespace Steam
             {
                 if (!Data.empty())
                 {
-                    *pcubMsgSize = Data.size();
+                    *pcubMsgSize = (uint32_t)Data.size();
                     *phSocket = Socket;
                     return true;
                 }
@@ -301,7 +257,7 @@ namespace Steam
             if (!Incomingdata.contains(hSocket)) return false;
             if (Incomingdata[hSocket].empty()) return false;
 
-            *pcubMsgSize = Incomingdata[hSocket].size();
+            *pcubMsgSize = (uint32_t)Incomingdata[hSocket].size();
             return true;
         }
         bool IsP2PPacketAvailable0(uint32_t *pcubMsgSize)
