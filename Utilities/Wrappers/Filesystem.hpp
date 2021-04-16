@@ -23,6 +23,85 @@ inline Blob S2B(std::string &&Input) { return Blob(Input.begin(), Input.end()); 
 
 namespace FS
 {
+    class MMappedfile_t
+    {
+        // Internal.
+        void *Nativehandle;
+        int NativeFD;
+
+        public:
+        size_t Size;
+        void *Data;
+
+        explicit MMappedfile_t(const std::string &Path)
+        {
+            #if defined(_WIN32)
+            NativeFD = _open(Path.c_str(), 0x800, 0);
+            if (NativeFD == -1) return;
+
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            if (!Nativehandle) return;
+
+            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+
+            MEMORY_BASIC_INFORMATION Info{};
+            VirtualQuery(Data, &Info, sizeof(Info));
+
+            Size = Info.RegionSize;
+
+            #else
+
+            NativeFD = open(Path.c_str(), 0, 0);
+            if (NativeFD == -1) return {};
+
+            Size = lseek(NativeFD, 0, SEEK_END);
+            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
+
+            #endif
+        }
+        explicit MMappedfile_t(const std::wstring &Path)
+        {
+            #if defined(_WIN32)
+            NativeFD = _wopen(Path.c_str(), 0x800, 0);
+            if (NativeFD == -1) return;
+
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            if (!Nativehandle) return;
+
+            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+
+            MEMORY_BASIC_INFORMATION Info{};
+            VirtualQuery(Data, &Info, sizeof(Info));
+
+            Size = Info.RegionSize;
+
+            #else
+
+            NativeFD = open(Encoding::toNarrow(Path).c_str(), 0, 0);
+            if (NativeFD == -1) return {};
+
+            Size = lseek(NativeFD, 0, SEEK_END);
+            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
+
+            #endif
+        }
+        ~MMappedfile_t()
+        {
+            #if defined(_WIN32)
+            UnmapViewOfFile(Data);
+            CloseHandle(Nativehandle);
+            _close(NativeFD);
+
+            #else
+
+            munmap((void *)Data, Size);
+            close(NativeFD);
+            #endif
+        }
+    };
+
     [[nodiscard]] inline bool Fileexists(std::string_view Path)
     {
         return std::filesystem::exists(Path);
@@ -142,6 +221,7 @@ namespace FS
     [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
     {
         const auto Size = Filesize(Path);
+
         if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
         else return Internal::Readfile_small<T>(Path, Size);
     }
