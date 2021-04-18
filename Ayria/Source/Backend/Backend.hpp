@@ -13,6 +13,9 @@ namespace Backend
     // Get the client-database.
     sqlite::database Database();
 
+    // Intercept update operations and process them later, might be some minor chance of a data-race.
+    std::unordered_map<std::string, std::unordered_set<uint64_t>> getDatabasechanges();
+
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)());
 

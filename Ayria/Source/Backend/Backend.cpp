@@ -13,20 +13,35 @@ namespace Backend
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
     static Defaultmutex Threadsafe;
 
+    // Intercept update operations and process them later, might be some minor chance of a data-race.
+    static std::unordered_map<std::string, std::unordered_set<uint64_t>> Databasechanges;
+    static void Updatehook(void *, int, char const *, char const *Table, sqlite3_int64 RowID)
+    {
+        Databasechanges[Table].insert(RowID);
+    }
+    std::unordered_map<std::string, std::unordered_set<uint64_t>> getDatabasechanges()
+    {
+        std::unordered_map<std::string, std::unordered_set<uint64_t>> Clean{};
+        std::swap(Clean, Databasechanges);
+        return Clean;
+    }
+
     // Get the client-database.
     sqlite::database Database()
     {
-        try
+        static std::shared_ptr<sqlite3> Database{};
+        if (!Database)
         {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            return sqlite::database("./Ayria/Client.db", Config);
+            sqlite3 *Ptr{};
+            const auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+
+            sqlite3_update_hook(Ptr, Updatehook, nullptr);
+            sqlite3_extended_result_codes(Ptr, true);
+
+            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
         }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()));
-            return sqlite::database(":memory:");
-        }
+        return sqlite::database(Database);
     }
 
     // Add a recurring task to the worker thread.
@@ -160,75 +175,107 @@ namespace Backend
     // Ensure that all tables for the database is available.
     static void Initializedatabase()
     {
-        // Track available clients seen since startup.
-        Database() << "DROP TABLE IF EXISTS Onlineclients;";
-        Database() << "CREATE TABLE Onlineclients ("
-                      "Authenticated bool not null, "
-                      "ClientID integer not null, "
-                      "Lastupdate integer, "
+        // Clients, optionally free-range and locally sourced.
+        Database() << "CREATE TABLE IF NOT EXISTS Clientinfo ("
+                      "ClientID integer primary key unique not null, "
+                      "Lastupdate integer not null, "
+                      "B64Authticket text, "
                       "B64Sharedkey text, "
+                      "GameID integer, "
                       "Username text, "
-                      "PRIMARY KEY (ClientID, Authenticated) );";
+                      "isLocal bool )";
 
-        // Track group memberships.
+        // Client-info providers, can be queried for Clientinfo by ID.
+        Database() << "DROP TABLE IF EXISTS Remoteclients;";
+        Database() << "CREATE TABLE Remoteclients ("
+                      "Relayaddress integer primary key unique not null, "
+                      "Relayport integer not null, "
+                      "ClientIDs blob )";
+
+        // Stats-tracking definition per game.
+        Database() << "CREATE TABLE IF NOT EXISTS Leaderboard ("
+                      "LeaderboardID integer not null, "
+                      "Leaderboardname text not null, "
+                      "isDecending bool not null, "
+                      "GameID integer not null, "
+                      "PRIMARY KEY (LeaderboardID, GameID) )";
+
+        // Stats-entry, optionally validated by some authority.
+        Database() << "CREATE TABLE IF NOT EXISTS Leaderboardentry ("
+                      "LeaderboardID integer not null, "
+                      "Timestamp integer not null, "
+                      "ClientID integer not null, "
+                      "GameID integer not null, "
+                      "Score integer not null, "
+                      "isValid bool not null"
+                      "PRIMARY KEY (LeaderboardID, GameID, ClientID) )";
+
+        // Transient messages are cleared on restart.
+        Database() << "CREATE TABLE IF NOT EXISTS Usermessages ("
+                      "Messagetype integer not null, "
+                      "Timestamp integer not null, "
+                      "SenderID integer not null, "
+                      "TargetID integer not null, "
+                      "B64Message text not null, "
+                      "Transient bool not null )";
+
+        // Optionally cleared when the user leaves a group.
+        Database() << "CREATE TABLE IF NOT EXISTS Groupmessages ("
+                      "Messagetype integer not null, "
+                      "Timestamp integer not null, "
+                      "SenderID integer not null, "
+                      "GroupID integer not null, "
+                      "B64Message text not null, "
+                      "Transient bool not null )";
+
+        // Simply represents a collection of users, base for derived tables.
         Database() << "CREATE TABLE IF NOT EXISTS Usergroups ("
                       "GroupID integer primary key unique not null, "
-                      "Lastupdate integer, "
-                      "Groupname text, "
-                      "Members blob );";
+                      "Lastupdate integer not null, "
+                      "GameID integer not null, "
+                      "MemberIDs blob )";
 
-        // Track pending requests to groups we administrate.
-        Database() << "DROP TABLE IF EXISTS Grouprequests;";
-        Database() << "CREATE TABLE Grouprequests ("
-                      "GroupID integer not null, "
-                      "UserID integer not null, "
-                      "ProviderID integer, "
-                      "Timestamp integer, "
-                      "B64Extradata text, "
-                      "PRIMARY KEY (UserID, GroupID));";
+        // A request to join a group, extra data can contain passwords or such.
+        Database() << "CREATE TABLE IF NOT EXISTS Grouprequests ("
+                      "GroupID integer not null,"
+                      "UserID integer not null,"
+                      "Timestamp integer,"
+                      "Extradata text," // JSON data.
+                      "PRIMARY KEY (UserID, GroupID) )";
 
-        // Track messages for chat-history and such.
-        Database() << "CREATE TABLE IF NOT EXISTS Messages ("
-                      "SourceID integer not null, "
-                      "B64Message text not null, "
-                      "ProviderID integer, "
-                      "Timestamp integer, "
-                      "TargetID integer, "
-                      "GroupID integer, "
-                      "Transient bool not null );";
-
-        // Track player presence.
-        Database() << "DROP TABLE IF EXISTS Presence;";
-        Database() << "CREATE TABLE Presence ("
-                      "ClientID integer not null, "
-                      "Key text not null, "
-                      "Value text, "
-                      "PRIMARY KEY (ClientID, Key) );";
-
-        // Track friendships and blocked users.
+        // If a user is blocked, they may not receive other types of messages.
         Database() << "CREATE TABLE IF NOT EXISTS Relationships ("
                       "SourceID integer not null, "
                       "TargetID integer not null, "
-                      "Flags integer not null, "
-                      "PRIMARY KEY(SourceID, TargetID) );";
+                      "isBlocked bool not null, "
+                      "isFriend bool not null, "
+                      "PRIMARY KEY (SourceID, TargetID) )";
 
-        // Track available matchmaking sessions.
+        // Session-related presence info, mainly for friends.
+        Database() << "DROP TABLE IF EXISTS Matchmakingsessions;";
+        Database() << "CREATE TABLE Userpresence ("
+                      "ClientID integer not null, "
+                      "Key text not null, "
+                      "Value text, "
+                      "PRIMARY KEY (ClientID, Key) )";
+
+        // Simply track active sessions, best practices for gamedata to come.
         Database() << "DROP TABLE IF EXISTS Matchmakingsessions;";
         Database() << "CREATE TABLE Matchmakingsessions ("
-                      "ProviderID integer not null, "
-                      "HostID integer not null, "
-                      "Lastupdate integer, "
-                      "B64Gamedata text, "
-                      "Servername text, "
-                      "GameID integer, "
-                      "Mapname text, "
-                      "IPv4 integer not null, "
-                      "Port integer not null, "
-                      "PRIMARY KEY (ProviderID, HostID) );";
+                      "HostID integer primary key unique not null, "
+                      "Lastupdate integer not null, "
+                      "GameID integer not null, "
+                      "Hostaddress integer, "
+                      "Hostport integer, "
+                      "Gamedata text )"; // JSON data.
 
-        // Clean up the database from the last session.
-        Database() << "DELETE FROM Messages WHERE Transient = true;";
-        Database() << "DELETE FROM Relationships WHERE Flags = 0;";
+        // Clean up the database from the last session, and some some old tables.
+        Database() << "DELETE FROM Matchmakingsessions WHERE Lastupdate < ?;" << time(NULL) - 1800; // 15 minutes.
+        Database() << "DELETE FROM Grouprequests WHERE Timestamp < ?;" << time(NULL) - 1800;        // 15 minutes.
+        Database() << "DELETE FROM Clientinfo WHERE Lastupdate < ?;" << time(NULL) - 2592000;       // 30 days of inactivity.
+        Database() << "DELETE FROM Usergroups WHERE Lastupdate < ?;" << time(NULL) - 2592000;       // 30 days of inactivity.
+        Database() << "DELETE FROM Groupmessages WHERE Transient = true;";
+        Database() << "DELETE FROM Usermessages WHERE Transient = true;";
         Database() << "PRAGMA VACUUM;";
     }
 
