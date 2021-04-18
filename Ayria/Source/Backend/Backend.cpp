@@ -246,15 +246,17 @@ namespace Backend
                       "GroupID integer primary key unique not null, "
                       "Lastupdate integer not null, "
                       "GameID integer not null, "
-                      "MemberIDs blob )";
+                      "MemberIDs blob, "
+                      "Memberdata text, " // JSON data.
+                      "Groupdata text )"; // JSON data.
 
         // A request to join a group, extra data can contain passwords or such.
         Database() << "CREATE TABLE IF NOT EXISTS Grouprequests ("
+                      "ClientID integer not null,"
                       "GroupID integer not null,"
-                      "UserID integer not null,"
                       "Timestamp integer,"
                       "Extradata text," // JSON data.
-                      "PRIMARY KEY (UserID, GroupID) )";
+                      "PRIMARY KEY (ClientID, GroupID) )";
 
         // If a user is blocked, they may not receive other types of messages.
         Database() << "CREATE TABLE IF NOT EXISTS Relationships ("

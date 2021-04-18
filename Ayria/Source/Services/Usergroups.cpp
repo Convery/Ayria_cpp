@@ -9,111 +9,163 @@
 
 namespace Services::Usergroups
 {
-    static Hashmap<uint64_t /* GroupID */, std::unordered_set<uint32_t>> Groupmembers;
-    static Hashmap<uint64_t /* GroupID */, std::u8string> Groupnames;
+    static Hashmap<uint64_t /* GroupID */, Hashset<uint32_t>> Groupmembers;
 
     // Helper functionallity.
     bool isMember(uint64_t GroupID, uint32_t ClientID)
     {
-        if (GroupID_t{ GroupID }.AdminID == Global.ClientID)
-            return Groupmembers[GroupID].contains(ClientID);
+        if (GroupID_t{ GroupID }.AdminID == ClientID)
+            return true;
 
-        std::vector<uint32_t> Members{};
-        Backend::Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                            << GroupID >> Members;
-
-        return Members.cend() != std::find(Members.cbegin(), Members.cend(), ClientID);
+        for (const auto &ID : Groupmembers[GroupID])
+        {
+            if (ID == ClientID)
+                return true;
+        }
+        return false;
     }
 
-    // Send requests to local clients.
-    static void Sendupdate(uint64_t GroupID)
-    {
-        if (GroupID == 0)
-        {
-            for (const auto &[ID, _] : Groupnames)
-            {
-                const auto Response = JSON::Object_t({
-                    { "Groupname", Groupnames[ID] },
-                    { "Members", Groupmembers[ID] },
-                    { "GroupID", ID }
-                });
-                Backend::Network::Transmitmessage("Usergroups::Update", Response);
-            }
-        }
-        else
-        {
-            const auto Response = JSON::Object_t({
-                { "Groupname", Groupnames[GroupID] },
-                { "Members", Groupmembers[GroupID] },
-                { "GroupID", GroupID }
-            });
-            Backend::Network::Transmitmessage("Usergroups::Update", Response);
-        }
-    }
-
-    // Handle local client-requests.
+    // Updates about other groups.
     static void __cdecl Leavehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
         const auto GroupID = Request.value<uint64_t>("GroupID");
 
-        // If we are even intested in this group.
+        // We only care about requests for our groups.
+        if (!isMember(GroupID, Global.ClientID)) return;
+
+        // No need to force an update, other clients are notified later.
+        const auto ClientID = Clientinfo::getClientID(NodeID);
+        Groupmembers[GroupID].erase(ClientID);
+
+        // TODO(tcn): Notify the plugins.
+    }
+    static void __cdecl Updatehandler(unsigned int NodeID, const char *Message, unsigned int Length)
+    {
+        const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto MemberIDs = Request.value<std::vector<uint32_t>>("MemberIDs");
+        const auto Memberdata = Request.value<std::string>("Memberdata");
+        const auto Groupdata = Request.value<std::string>("Groupdata");
+        const auto GroupID = Request.value<uint64_t>("GroupID");
+        const auto GameID = Request.value<uint32_t>("GameID");
+        const auto Sender = Clientinfo::getClientID(NodeID);
+
+        // We only accept updates from the host.
+        if (GroupID_t{ GroupID }.AdminID != Sender) return;
+
+        // Update the database so the plugins can partake.
+        try
+        {
+            Backend::Database()
+                << "REPLACE INTO Usergroups (GroupID, Lastupdate, GameID, MemberIDs, Memberdata, Groupdata) "
+                   "VALUES (?, ?, ?, ?, ?, ?);"
+                << GroupID << time(NULL) << GameID << MemberIDs << Memberdata << Groupdata;
+        } catch (...) {}
+    }
+    static void __cdecl Joinrequesthandler(unsigned int NodeID, const char *Message, unsigned int Length)
+    {
+        const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto Extradata = Request.value<std::string>("Extradata");
+        const auto GroupID = Request.value<uint64_t>("GroupID");
+
+        // We only care about requests for our groups.
         if (GroupID_t{ GroupID }.AdminID != Global.ClientID) return;
 
-        Groupmembers[GroupID].erase(Clientinfo::getClientID(NodeID));
-        Sendupdate(GroupID);
-    }
-    static void __cdecl Statushandler(unsigned int NodeID, const char *Message, unsigned int Length)
-    {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto Members = Request.value<std::vector<uint32_t>>("Members");
-        const auto Groupname = Request.value<std::string>("Groupname");
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-
-        // Let's not bother with fuckery.
-        if (GroupID_t{ GroupID }.AdminID != Clientinfo::getClientID(NodeID))
+        // Update the database so the plugins can process this.
+        try
         {
-            Backend::Network::Blockclient(NodeID);
-            return;
+            Backend::Database()
+                << "INSERT INTO Grouprequests (ClientID, GroupID, Timestamp, Extradata) VALUES (?, ?, ?, ?);"
+                << Clientinfo::getClientID(NodeID) << GroupID << time(NULL) << Extradata;
+        } catch (...) {}
+    }
+
+    // Poll for changes and notify the other clients.
+    static void Updatestate()
+    {
+        // Process group updates.
+        const auto Groupupdates = Backend::getDatabasechanges("Usergroups");
+        for (const auto &Row : Groupupdates)
+        {
+            try
+            {
+                uint64_t GroupID; std::vector<uint32_t> vMemberIDs;
+
+                Backend::Database() << "SELECT GroupID, MemberIDs FROM Usergroups WHERE rowid = ?;"
+                                    << Row >> std::tie(GroupID, vMemberIDs);
+
+                Hashset<uint32_t> MemberIDs;
+                MemberIDs.reserve(vMemberIDs.size());
+                for (const auto &Item : vMemberIDs)
+                    MemberIDs.insert(Item);
+
+                auto Oldmembers = Groupmembers[GroupID];
+                Groupmembers[GroupID] = MemberIDs;
+
+                // Check for changes in the members.
+                for (const auto &Item : Oldmembers) MemberIDs.erase(Item);
+                for (const auto &Item : MemberIDs) Oldmembers.erase(Item);
+
+                // TODO(tcn): Notify the plugins about clients joining.
+                if (!MemberIDs.empty()) {}
+
+                // TODO(tcn): Notify the plugins about clients leaving.
+                if (!Oldmembers.empty()) {}
+            }
+            catch (...) {}
         }
 
-        // Ensure that the groups are available to the plugins.
-        Backend::Database() << "REPLACE ( GroupID, Lastupdate, Groupname, Members ) INTO Usergroups VALUES (?, ?, ?, ?);"
-                            << GroupID << uint32_t(time(NULL)) << Groupname << Members;
-    }
-    static void __cdecl Requesthandler(unsigned int NodeID, const char *Message, unsigned int Length)
-    {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto B64Extradata = Request.value<std::string>("B64Extradata");
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-
-        // Are we even interested in this?
-        if (GroupID_t{ GroupID }.AdminID != Global.ClientID) return;
-
-        // Ensure that the requests are available to the plugins.
-        Backend::Database() << "REPLACE ( GroupID, UserID, ProviderID, Timestamp, B64Extradata ) INTO Grouprequests VALUES (?, ?, ?, ?, ?);"
-                            << GroupID << Clientinfo::getClientID(NodeID) << ProviderID << uint32_t(time(NULL)) << B64Extradata;
-    }
-    static void __cdecl Responsehandler(unsigned int NodeID, const char *Message, unsigned int Length)
-    {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
-        const auto isAccepted = Request.value<bool>("isAccepted");
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-
-        // Let's not bother with fuckery.
-        if (GroupID_t{ GroupID }.AdminID != Clientinfo::getClientID(NodeID))
+        // Process new group requests.
+        const auto Grouprequests = Backend::getDatabasechanges("Grouprequests");
+        for (const auto &Item : Grouprequests)
         {
-            Backend::Network::Blockclient(NodeID);
-            return;
+            try
+            {
+                Backend::Database()
+                    << "SELECT * FROM Grouprequests WHERE rowid = ?"
+                    << Item << Global.ClientID
+                    >> [](uint32_t ClientID, uint64_t GroupID, uint32_t, const std::string &Extradata)
+                    {
+                        if (ClientID == Global.ClientID)
+                        {
+                            const auto Request = JSON::Object_t({
+                                { "Extradata", Extradata },
+                                { "GroupID", GroupID }
+                            });
+                            Backend::Network::Transmitmessage("Usergroups::Joinrequest", Request);
+                        }
+                        else
+                        {
+                            // TODO(tcn): Notify the plugins.
+                        }
+                    };
+            }
+            catch (...) {}
         }
 
-        // TODO(tcn): Create some notification system.
+        // Notify the clients about our current groups.
+        for (const auto &[GroupID, _] : Groupmembers)
+        {
+            if (GroupID_t{ GroupID }.AdminID != Global.ClientID) continue;
 
-        // Clean up the database.
-        Backend::Database() << "DELETE FROM Grouprequests WHERE GroupID = ? AND UserID = ? AND ProviderID = ?;"
-                            << GroupID << Clientinfo::getClientID(NodeID) << ProviderID;
+            try
+            {
+                Backend::Database() << "SELECT * FROM Usergroups WHERE GroupID = ?;" << GroupID
+                    >> [](uint64_t GroupID, uint32_t, uint32_t GameID, std::vector<uint32_t> MemberIDs,
+                          const std::string &Memberdata, const std::string &Groupdata)
+                    {
+                        const auto Request = JSON::Object_t({
+                            { "Memberdata", Memberdata },
+                            { "Groupdata", Groupdata },
+                            { "MemberIDs", MemberIDs },
+                            { "GroupID", GroupID },
+                            { "GameID", GameID }
+                        });
+                        Backend::Network::Transmitmessage("Usergroups::Update", Request);
+                    };
+            }
+            catch (...) {}
+        }
     }
 
     // JSON API access for the plugins.
@@ -125,116 +177,79 @@ namespace Services::Usergroups
     }
     static std::string __cdecl Requestjoin(JSON::Value_t &&Request)
     {
-        const auto B64Extradata = Request.value<std::string>("B64Extradata");
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
+        const auto Extradata = Request.value<std::string>("Extradata");
         const auto GroupID = Request.value<uint64_t>("GroupID");
 
         // Notify the other clients.
         const auto Response = JSON::Object_t({
-            { "B64Extradata", B64Extradata },
-            { "ProviderID", ProviderID },
+            { "Extradata", Extradata },
             { "GroupID", GroupID }
         });
         Backend::Network::Transmitmessage("Usergroups::Joinrequest", Response);
 
-        // Ensure that the requests are available to the plugins.
-        Backend::Database() << "REPLACE ( GroupID, UserID, ProviderID, Timestamp, B64Extradata ) INTO Grouprequests VALUES (?, ?, ?, ?, ?);"
-                            << GroupID << Global.ClientID << ProviderID << uint32_t(time(NULL)) << B64Extradata;
+        // Add a copy to the database incase plugins want to verify.
+        try
+        {
+            Backend::Database()
+                << "INSERT INTO Grouprequests (ClientID, GroupID, Timestamp, Extradata) VALUES (?, ?, ?, ?);"
+                << Global.ClientID << GroupID << time(NULL) << Extradata;
+        } catch (...) {}
 
         return "{}";
     }
     static std::string __cdecl Creategroup(JSON::Value_t &&Request)
     {
-        const auto Groupname = Request.value<std::u8string>("Groupname");
+        const auto Groupdata = Request.value<std::string>("Groupdata");
         const auto Memberlimit = Request.value<uint8_t>("Memberlimit");
         const auto Grouptype = Request.value<uint8_t>("Grouptype");
+        const auto GameID = Request.value<uint32_t>("GameID");
 
         GroupID_t GroupID{};
         GroupID.Type = Grouptype;
         GroupID.Limit = Memberlimit;
         GroupID.AdminID = Global.ClientID;
         GroupID.RoomID = GetTickCount() & 0xFFFF;
-        Groupnames[GroupID.Raw] = Groupname;
 
-        Backend::Database() << "REPLACE ( GroupID, Lastupdate, Groupname ) INTO Usergroups VALUES (?, ?, ?);"
-                            << GroupID.Raw << uint32_t(time(NULL)) << Encoding::toNarrow(Groupname);
+        // TODO(tcn): Depending on grouptype, request hosting and update the GroupID.
 
-        return "{}";
-    }
-    static std::string __cdecl updateStatus(JSON::Value_t &&Request)
-    {
-        const auto Members = Request.value<std::vector<uint32_t>>("Members");
-        const auto Groupname = Request.value<std::string>("Groupname");
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-
-        // Ensure that the groups are available to the plugins.
-        Backend::Database() << "REPLACE ( GroupID, Lastupdate, Groupname, Members ) INTO Usergroups VALUES (?, ?, ?, ?);"
-                            << GroupID << uint32_t(time(NULL)) << Groupname << Members;
-
-        // Notify the other clients.
-        auto Set = &Groupmembers[GroupID]; Set->clear();
-        for (const auto &Item : Members) Set->insert(Item);
-        Sendupdate(GroupID);
+        // Add the group to the database.
+        try
+        {
+            Backend::Database() << "REPLACE INTO Usergroups (GroupID, Lastupdate, GameID, Groupdata) VALUES (?, ?, ?, ?);"
+                                << GroupID.Raw << time(NULL) << GameID << Groupdata;
+        } catch (...) {}
 
         return "{}";
-    }
-    static std::string __cdecl answerRequest(JSON::Value_t &&Request)
-    {
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
-        const auto isAccepted = Request.value<bool>("isAccepted");
-        const auto ClientID = Request.value<uint32_t>("ClientID");
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-
-        // Notify the other clients.
-        const auto Response = JSON::Object_t({
-            { "ProviderID", ProviderID },
-            { "isAccepted", isAccepted },
-            { "GroupID", GroupID }
-        });
-        Backend::Network::Transmitmessage("Usergroups::Joinresponse", Response);
-
-        // Clean up the database.
-        Backend::Database() << "DELETE FROM Grouprequests WHERE GroupID = ? AND UserID = ? AND ProviderID = ?;"
-                            << GroupID << ClientID << ProviderID;
-
-        // Notify the other clients.
-        Groupmembers[GroupID].insert(ClientID);
-        Sendupdate(GroupID);
-
-        return JSON::Value_t(Groupmembers[GroupID]).dump();
     }
 
     // Set up the service.
     void Initialize()
     {
         // Register the callback for client-requests.
-        Backend::Network::Registerhandler("Usergroups::Joinresponse", Responsehandler);
-        Backend::Network::Registerhandler("Usergroups::Joinrequest", Requesthandler);
+        Backend::Network::Registerhandler("Usergroups::Joinrequest", Joinrequesthandler);
         Backend::Network::Registerhandler("Usergroups::Notifyleave", Leavehandler);
-        Backend::Network::Registerhandler("Usergroups::Update", Statushandler);
+        Backend::Network::Registerhandler("Usergroups::Update", Updatehandler);
 
         // Register the JSON API for plugins.
-        Backend::API::addEndpoint("Usergroups::Answerrequest", answerRequest);
         Backend::API::addEndpoint("Usergroups::Requestjoin", Requestjoin);
         Backend::API::addEndpoint("Usergroups::Leavegroup", Leavegroup);
-        Backend::API::addEndpoint("Usergroups::Update", updateStatus);
         Backend::API::addEndpoint("Usergroups::Create", Creategroup);
 
         // Send an update once in a while.
-        Backend::Enqueuetask(5000, []() { Sendupdate(0); });
+        Backend::Enqueuetask(5000, Updatestate);
 
-        // Load all the clients from the database.
-        Backend::Database() << "SELECT GroupID, Members FROM Usergroups;"
-                            >> [](const uint64_t &GroupID, const std::vector<uint32_t> &Members)
-                            {
-                                if (GroupID_t{ GroupID }.AdminID == Global.ClientID)
-                                {
-                                    auto Set = &Groupmembers[GroupID];
-                                    Set->reserve(Members.size());
-
-                                    for (const auto &Item : Members)
-                                        Set->insert(Item);
-                                }
-                            };
+        // Load all the groups from the database.
+        try
+        {
+            Backend::Database()
+                << "SELECT GroupID, Members FROM Usergroups;"
+                >> [](uint64_t GroupID, const std::vector<uint32_t> &Members)
+                {
+                    auto Entry = &Groupmembers[GroupID];
+                    Entry->reserve(Members.size());
+                    for (const auto &Item : Members) Entry->insert(Item);
+                };
+        }
+        catch (...) {}
     }
 }
