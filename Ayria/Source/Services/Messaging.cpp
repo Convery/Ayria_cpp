@@ -14,30 +14,27 @@ namespace Services::Messaging
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
         const auto B64Message = Request.value<std::string>("B64Message");
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
-        const auto TargetID = Request.value<uint64_t>("TargetID");
+        const auto Messagetype = Request.value<uint32_t>("Messagetype");
+        const auto Transient = Request.value<bool>("Transient");
         const auto GroupID = Request.value<uint64_t>("GroupID");
-        const auto Transient = !Request.value<bool>("Save");
 
         // Only track valid messages relevant to us.
         if (!GroupID || B64Message.empty() || !Usergroups::isMember(GroupID, Global.ClientID)) return;
 
-        // Ensure that the message are available to the plugins.
-        Backend::Database() << "REPLACE (SourceID, B64Message, ProviderID, Timestamp, TargetID, GroupID, Transient) "
-                               "INTO Messages VALUES (?, ?, ?, ?, ?, ?, ?);"
-                            << Clientinfo::getClientID(NodeID) << B64Message << ProviderID << uint32_t(time(NULL))
-                            << TargetID << GroupID << Transient;
-
-        // TODO(tcn): Create some notification system.
+        // Add the message to the database so the plugins can access it.
+        try { Backend::Database() << "REPLACE INTO Groupmessages (Messagetype, Timestamp, SenderID, GroupID, B64Message, Transient)"
+                                     "VALUES (?, ?, ?, ?, ?, ?);"
+                                  << Messagetype << time(NULL) << Clientinfo::getClientID(NodeID) << GroupID << B64Message << Transient;
+        } catch (...) {}
     }
     static void __cdecl Usermessagehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto ProviderID = Request.value<uint64_t>("ProviderID");
+        const auto Messagetype = Request.value<uint32_t>("Messagetype");
         auto B64Message = Request.value<std::string>("B64Message");
         const auto TargetID = Request.value<uint64_t>("TargetID");
+        const auto Transient = !Request.value<bool>("Transient");
         const auto isPrivate = Request.value<bool>("isPrivate");
-        const auto Transient = !Request.value<bool>("Save");
 
         // Only track valid messages relevant to us.
         if (TargetID != Global.ClientID) return;
@@ -50,37 +47,33 @@ namespace Services::Messaging
             B64Message = PK_RSA::Decrypt(Decoded, Global.Cryptokeys);
         }
 
-        // Ensure that the message are available to the plugins.
-        Backend::Database() << "REPLACE (SourceID, B64Message, ProviderID, Timestamp, TargetID, GroupID, Transient) "
-                               "INTO Messages VALUES (?, ?, ?, ?, ?, ?, ?);"
-                            << Clientinfo::getClientID(NodeID) << B64Message << ProviderID << uint32_t(time(NULL))
-                            << TargetID << 0 << Transient;
-
-        // TODO(tcn): Create some notification system.
+        // Add the message to the database so the plugins can access it.
+        try { Backend::Database() << "REPLACE INTO Usermessages (Messagetype, Timestamp, SenderID, TargetID, B64Message, Transient)"
+                                     "VALUES (?, ?, ?, ?, ?, ?);"
+                                  << Messagetype << time(NULL) << Clientinfo::getClientID(NodeID) << TargetID << B64Message << Transient;
+        } catch (...) {}
     }
 
     // JSON API access for the plugins.
     static std::string __cdecl Sendtogroup(JSON::Value_t &&Request)
     {
         const auto B64Message = Request.value<std::string>("B64Message");
-        const auto ProviderID = Request.value<uint32_t>("ProviderID");
-        const auto TargetID = Request.value<uint64_t>("TargetID");
+        const auto Messagetype = Request.value<uint32_t>("Messagetype");
+        const auto Transient = Request.value<bool>("Transient");
         const auto GroupID = Request.value<uint64_t>("GroupID");
-        const auto Transient = !Request.value<bool>("Save");
 
-        // Ensure that the message are available to the plugins.
-        Backend::Database() << "REPLACE (SourceID, B64Message, ProviderID, Timestamp, TargetID, GroupID, Transient) "
-                               "INTO Messages VALUES (?, ?, ?, ?, ?, ?, ?);"
-                            << Global.ClientID << B64Message << ProviderID << uint32_t(time(NULL))
-                            << TargetID << GroupID << Transient;
+        // Add the message to the database so the plugins can access it.
+        try { Backend::Database() << "REPLACE INTO Groupmessages (Messagetype, Timestamp, SenderID, GroupID, B64Message, Transient)"
+                                     "VALUES (?, ?, ?, ?, ?, ?);"
+                                     << Messagetype << time(NULL) << Global.ClientID << GroupID << B64Message << Transient;
+        } catch (...) {}
 
         // Notify the clients.
         const auto Object = JSON::Object_t({
-            { "ProviderID", ProviderID },
+            { "Messagetype", Messagetype },
             { "B64Message", B64Message },
-            { "TargetID", TargetID },
-            { "GroupID", GroupID },
-            { "Save", !Transient }
+            { "Transient", Transient },
+            { "GroupID", GroupID }
         });
         Backend::Network::Transmitmessage("Messaging::Sendtogroup", Object);
 
@@ -88,37 +81,47 @@ namespace Services::Messaging
     }
     static std::string __cdecl Sendtouser(JSON::Value_t &&Request)
     {
-        const auto ProviderID = Request.value<uint32_t>("ProviderID");
+        const auto Messagetype = Request.value<uint32_t>("Messagetype");
         auto B64Message = Request.value<std::string>("B64Message");
         const auto TargetID = Request.value<uint64_t>("TargetID");
+        const auto Transient = !Request.value<bool>("Transient");
         const auto isPrivate = Request.value<bool>("isPrivate");
-        const auto Transient = !Request.value<bool>("Save");
 
-        // Ensure that the message are available to the plugins.
-        Backend::Database() << "REPLACE (SourceID, B64Message, ProviderID, Timestamp, TargetID, GroupID, Transient) "
-                               "INTO Messages VALUES (?, ?, ?, ?, ?, ?, ?);"
-                            << Global.ClientID << B64Message << ProviderID << uint32_t(time(NULL))
-                            << TargetID << 0 << Transient;
+        // Add the message to the database so the plugins can access it.
+        try { Backend::Database() << "REPLACE INTO Usermessages (Messagetype, Timestamp, SenderID, TargetID, B64Message, Transient)"
+                                     "VALUES (?, ?, ?, ?, ?, ?);"
+                                  << Messagetype << time(NULL) << Global.ClientID << TargetID << B64Message << Transient;
+        } catch (...) {}
 
         // Encrypt with the targets shared key.
         if (isPrivate)
         {
-            const auto Cryptokey = Base64::Decode(Clientinfo::getSharedkey(TargetID));
-            const auto Encrypted = PK_RSA::Encrypt(B64Message, Cryptokey);
+            const auto Encrypted = PK_RSA::Encrypt(B64Message, Clientinfo::getSharedkey(TargetID));
             B64Message = Base64::Encode(Encrypted);
         }
 
         // Notify the clients.
         const auto Object = JSON::Object_t({
-            { "ProviderID", ProviderID },
+            { "Messagetype", Messagetype },
             { "B64Message", B64Message },
+            { "Transient", Transient },
             { "isPrivate", isPrivate },
-            { "TargetID", TargetID },
-            { "Save", !Transient }
+            { "TargetID", TargetID }
         });
         Backend::Network::Transmitmessage("Messaging::Sendtouser", Object);
 
         return "{}";
+    }
+
+    // Check for updates and notify the plugins.
+    static void Checkmessages()
+    {
+        const auto Groupmessages = Backend::getDatabasechanges("Groupmessages");
+        const auto Usermessages = Backend::getDatabasechanges("Usermessages");
+
+        // TODO(tcn): Query by rowid when notifications are implemented.
+        for (const auto &Item : Groupmessages) {}
+        for (const auto &Item : Usermessages) {}
     }
 
     // Set up the service.
@@ -131,5 +134,8 @@ namespace Services::Messaging
         // Register the JSON API for plugins.
         Backend::API::addEndpoint("Messaging::Sendtogroup", Sendtogroup);
         Backend::API::addEndpoint("Messaging::Sendtouser", Sendtouser);
+
+        // Notify the plugins when we have a new message.
+        Backend::Enqueuetask(300, Checkmessages);
     }
 }
