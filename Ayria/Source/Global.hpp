@@ -12,10 +12,10 @@
 // Global system information, 56 bytes on x64.
 struct Globalstate_t
 {
+    uint32_t GameID;
     uint32_t ClientID;
     uint32_t Publicaddress;
-    char8_t Username[20];
-    char8_t Locale[10];
+    char8_t Username[22];
 
     union
     {
@@ -45,4 +45,7 @@ struct Globalstate_t
     RSA *Cryptokeys;
     std::string *B64Authticket;
 };
+
+// Let's not cross a cache-line.
+static_assert(sizeof(Globalstate_t) <= 64);
 extern Globalstate_t Global;
