@@ -73,8 +73,8 @@ namespace Backend::Network
             // To ensure that we don't process our own packets.
             if (Packet->RandomID == RandomID) [[likely]] continue;
 
-            // Blocked clients shouldn't be processed.
-            if (Blacklistedclients.contains(Packet->RandomID)) [[unlikely]] continue;
+            // Blocked / invalid clients shouldn't be processed.
+            if (!Packet->RandomID || Blacklistedclients.contains(Packet->RandomID)) [[unlikely]] continue;
 
             // Save the address in-case some service needs it.
             Nodes[Packet->RandomID] = Clientaddress.sin_addr;
