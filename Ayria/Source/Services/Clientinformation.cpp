@@ -12,8 +12,8 @@ static std::string GenerateHWID();
 
 namespace Services::Clientinfo
 {
-    using Client_t = struct { uint32_t NodeID; LZString_t Sharedkey; LZString_t Username; bool Authenticated; };
-    static Hashmap<uint32_t /* ClientID */, Client_t> Onlineclients;
+    static Hashmap<uint32_t /* NodeID */, uint32_t /* ClientID */> Onlineclients;
+    static Hashset<uint64_t> Verifiedtickets;
     static std::string ClienthardwareID;
 
     // Helper functionallity.
@@ -26,93 +26,113 @@ namespace Services::Clientinfo
     }
     uint32_t getClientID(uint32_t NodeID)
     {
-        for (const auto &[Key, Value] : Onlineclients)
-            if (Value.NodeID == NodeID)
-                return Key;
-        return 0;
+        return Onlineclients[NodeID];
     }
     std::string getSharedkey(uint32_t ClientID)
     {
-        if (!Onlineclients.contains(ClientID)) return {};
-        return Onlineclients[ClientID].Sharedkey;
+        try
+        {
+            std::string Sharedkey;
+            Backend::Database() << "SELECT B64Sharedkey FROM Clientinfo WHERE ClientID = ?;" << ClientID
+                                >> Sharedkey;
+            return Base64::Decode(Sharedkey);
+        }
+        catch (...) {}
+
+        return {};
     }
 
     // Handle local client-requests.
     static void __cdecl Discoveryhandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
+        const auto B64Authticket = Request.value<std::string>("B64Authticket");
         const auto B64Sharedkey = Request.value<std::string>("B64Sharedkey");
-        const auto B64Ticket = Request.value<std::string>("B64Ticket");
         const auto Username = Request.value<std::u8string>("Username");
+        const auto PublicIP = Request.value<uint32_t>("PublicIP");
         const auto ClientID = Request.value<uint32_t>("ClientID");
+        const auto GameID = Request.value<uint32_t>("GameID");
 
-        // If the client can't even format a simple request, block them.
+        // The sender didn't include essential information, so we block them for this session.
         if (!ClientID || Username.empty()) [[unlikely]]
         {
-            Infoprint(va("Blocking client %08X due to invalid discovery request.", ClientID));
+            Debugprint(va("Blocking client %08X for this session due to an invalid discovery request.", ClientID));
             Backend::Network::Blockclient(NodeID);
             return;
         }
 
-        // Insert the new client if neeeded.
-        auto Client = &Onlineclients[ClientID];
-        if (!Client->NodeID)
+        // Is this a new client?
+        if (!Onlineclients.contains(NodeID)) [[unlikely]]
         {
-            *Client = { NodeID, B64Sharedkey, Username };
-
             // Notify developers about the progress.
-            Debugprint(va("Found a new LAN client with ID %08X and name %s", ClientID, Encoding::toNarrow(Username).c_str()));
+            Infoprint(va("Found a new client with ID %08X and name %s.", ClientID, Encoding::toNarrow(Username).c_str()));
 
-            // If the user doesn't want to be associated, block them.
+            // If the client has blocked the other, we should not waste time processing updates.
             if (Relationships::isBlocked(Global.ClientID, ClientID)) [[unlikely]]
             {
-                Infoprint(va("Blocking client %08X due to relationship status.", ClientID));
+                Debugprint(va("Blocking client %08X due to relationship status.", ClientID));
                 Backend::Network::Blockclient(NodeID);
-                Onlineclients.erase(ClientID);
                 return;
             }
+
+            // Add the client to the list.
+            Onlineclients[NodeID] = ClientID;
         }
 
-        // Verify authentication ticket if provided.
-        if (!Client->Authenticated && !B64Ticket.empty())
-        {
-            // TODO(tcn): Implement some online service.
-            assert(false);
-        }
-
-        // Update the clients database entry.
-        Backend::Database() << "REPLACE INTO Onlineclients ( Authenticated, ClientID, Lastupdate, B64Sharedkey, Username ) VALUES ( ?, ?, ?, ?, ? );"
-                            << Client->Authenticated << ClientID << uint32_t(time(NULL)) << Client->Sharedkey << Client->Username;
+        // Insert or replace into the database any new/changed values.
+        try { Backend::Database() << "REPLACE INTO Clientinfo (ClientID, Lastupdate, B64Authticket, B64Sharedkey, "
+                                     "PublicIP, GameID, Username, isLocal) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+                                  << ClientID << time(NULL) << B64Authticket << B64Sharedkey << PublicIP
+                                  << GameID << Encoding::toNarrow(Username) << true;
+        } catch (...) {}
     }
     static void __cdecl Terminationhandler(unsigned int NodeID, const char *, unsigned int)
     {
-        const auto ClientID = getClientID(NodeID);
+        if constexpr (Build::isDebug)
+        {
+            try
+            {
+                std::string Username; const auto ClientID = getClientID(NodeID);
+                Backend::Database() << "SELECT Username FROM Clientinfo WHERE ClientID = ?;" << ClientID >> Username;
 
-        // Remove the clients database entry.
-        if (Onlineclients[ClientID].Authenticated)
-            Backend::Database() << "DELETE FROM Onlineclients WHERE ClientID = ?;" << ClientID;
-        else
-            Backend::Database() << "DELETE FROM Onlineclients WHERE ClientID = ? AND Authenticated = false;" << ClientID;
+                Debugprint(va("Client %08X \"%s\" has terminated.", ClientID, Username.c_str()));
+            }
+            catch (...) {}
+        }
 
-        Onlineclients.erase(ClientID);
+        Onlineclients.erase(NodeID);
     }
 
     // Send requests to local clients.
     static void Senddiscovery()
     {
-        // If the client is AFK, don't send any updates.
-        if (Global.Stateflags.isAway) return;
+        // If the client is private, don't send updates.
+        if (Global.Stateflags.isPrivate) [[unlikely]] return;
 
+        // If the client is AFK, don't send any updates.
+        if (Global.Stateflags.isAway) [[unlikely]] return;
+
+        // The key needs to be Base64 else it'll be encoded as a massive array.
         static const auto B64Sharedkey = Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys));
+
+        // Auth-ticket is only provided if we are authenticated.
         auto Request = JSON::Object_t({
+            { "B64Authticket", Global.B64Authticket ? *Global.B64Authticket : ""s },
             { "Username", std::u8string(Global.Username) },
+            { "PublicIP", Global.Publicaddress },
             { "B64Sharedkey", B64Sharedkey },
-            { "ClientID", Global.ClientID }
+            { "ClientID", Global.ClientID },
+            { "GameID", Global.GameID },
         });
 
-        // Only if we have authenticated.
-        if (Global.B64Authticket) Request["B64Ticket"] = *Global.B64Authticket;
+        // On startup, also insert our own info for easier lookups.
+        static bool doOnce = [&](){
+            const auto Message = JSON::Dump(Request);
+            Discoveryhandler(0, Message.c_str(), (unsigned int)Message.size());
+            return true;
+        }();
 
+        // Notify all LAN clients.
         Backend::Network::Transmitmessage("Clientinfo::Discovery", Request);
     }
     static void Sendterminate()
@@ -120,19 +140,33 @@ namespace Services::Clientinfo
         Backend::Network::Transmitmessage("Clientinfo::Terminate", {});
     }
 
-    // JSON API access for the plugins.
-    static std::string __cdecl Accountinfo(JSON::Value_t &&)
+    // Check for new states once in a while.
+    static void Updatestate()
     {
-        auto Response = JSON::Object_t({
-            { "Username", std::u8string(Global.Username) },
-            { "Locale", std::u8string(Global.Locale) },
-            { "AccountID", Global.ClientID }
-        });
+        const auto Changes = Backend::getDatabasechanges("Clientinfo");
+        for (const auto &Item : Changes)
+        {
+            try
+            {
+                Backend::Database() << "SELECT ClientID, B64Authticket, GameID from Clientinfo WHERE rowid = ?;"
+                                    << Item >> [](uint32_t ClientID, std::string B64Authticket, uint32_t GameID)
+                {
+                    if (ClientID == Global.ClientID) Global.GameID = GameID;
+                    else
+                    {
+                        const auto Tickethash = Hash::WW64(B64Authticket);
+                        if (!Verifiedtickets.contains(Tickethash)) [[unlikely]]
+                        {
+                            // TODO(tcn): Validate the ticket.
+                        }
+                    }
+                };
+            }
+            catch (...) {};
+        }
 
-        // Only if we have authenticated.
-        if (Global.B64Authticket) Response["B64Ticket"] = *Global.B64Authticket;
-
-        return JSON::Dump(Response);
+        // Notify the other clients that we are alive.
+        Senddiscovery();
     }
 
     // Set up the service.
@@ -145,11 +179,8 @@ namespace Services::Clientinfo
         Backend::Network::Registerhandler("Clientinfo::Terminate", Terminationhandler);
         Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
 
-        // Register the JSON API for plugins.
-        Backend::API::addEndpoint("getAccountinfo", Accountinfo);
-
         // Notify other clients once in a while.
-        Backend::Enqueuetask(5000, Senddiscovery);
+        Backend::Enqueuetask(5000, Updatestate);
         std::atexit(Sendterminate);
     }
 }
