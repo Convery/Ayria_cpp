@@ -14,16 +14,25 @@ namespace Backend
     static Defaultmutex Threadsafe;
 
     // Intercept update operations and process them later, might be some minor chance of a data-race.
-    static std::unordered_map<std::string, std::unordered_set<uint64_t>> Databasechanges;
-    static void Updatehook(void *, int, char const *, char const *Table, sqlite3_int64 RowID)
+    static Hashmap<std::string, std::unordered_set<uint64_t>> Databasechanges;
+    static void Updatehook(void *, int Operation, char const *, char const *Table, sqlite3_int64 RowID)
     {
-        Databasechanges[Table].insert(RowID);
+        // Someone reported a bug with SQLite, probably fixed but better check.
+        assert(Table);
+
+        if (Operation != SQLITE_DELETE) Databasechanges[Table].insert(RowID);
     }
-    std::unordered_map<std::string, std::unordered_set<uint64_t>> getDatabasechanges()
+    std::unordered_set<uint64_t> getDatabasechanges(const std::string &Tablename)
     {
-        std::unordered_map<std::string, std::unordered_set<uint64_t>> Clean{};
-        std::swap(Clean, Databasechanges);
+        std::unordered_set<uint64_t> Clean{};
+        std::swap(Clean, Databasechanges[Tablename]);
         return Clean;
+    }
+
+    // For debugging.
+    static void SQLErrorlog(void *, int error_code, const char *errstr)
+    {
+        Debugprint(va("SQL error %i: %s", error_code, errstr));
     }
 
     // Get the client-database.
@@ -33,11 +42,17 @@ namespace Backend
         if (!Database)
         {
             sqlite3 *Ptr{};
+
+            // Needs to be the first call to sqlite.
+            if constexpr (Build::isDebug) sqlite3_config(SQLITE_CONFIG_LOG, SQLErrorlog, nullptr);
+
+            // :memory: should never fail unless the client has more serious problems.
             const auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
 
+            // Intercept updates from plugins writing to the DB.
             sqlite3_update_hook(Ptr, Updatehook, nullptr);
-            sqlite3_extended_result_codes(Ptr, true);
+            sqlite3_extended_result_codes(Ptr, false);
 
             Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
         }
@@ -146,7 +161,6 @@ namespace Backend
         Config["enableExternalconsole"] = Global.Applicationsettings.enableExternalconsole;
         Config["enableIATHooking"] = Global.Applicationsettings.enableIATHooking;
         Config["Username"] = std::u8string(Global.Username);
-        Config["Locale"] = std::u8string(Global.Locale);
         Config["UserID"] = Global.ClientID;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
@@ -160,9 +174,7 @@ namespace Backend
         Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
         Global.ClientID = Config.value("UserID", 0xDEADC0DE);
 
-        const auto Locale = Config.value("Locale", u8"english"s);
-        const auto Username = Config.value("Username", u8"AYRIA"s);
-        std::memcpy(Global.Locale, Locale.data(), std::min(Locale.size(), sizeof(Global.Locale) - 1));
+        const auto Username = Config.value("Username", u8"AYRIA"s);;
         std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
 
         // Sanity checking, force save if nothing was parsed.
@@ -181,6 +193,7 @@ namespace Backend
                       "Lastupdate integer not null, "
                       "B64Authticket text, "
                       "B64Sharedkey text, "
+                      "PublicIP integer, "
                       "GameID integer, "
                       "Username text, "
                       "isLocal bool )";
