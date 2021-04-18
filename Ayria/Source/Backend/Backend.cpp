@@ -265,7 +265,7 @@ namespace Backend
                       "PRIMARY KEY (SourceID, TargetID) )";
 
         // Session-related presence info, mainly for friends.
-        Database() << "DROP TABLE IF EXISTS Matchmakingsessions;";
+        Database() << "DROP TABLE IF EXISTS Userpresence;";
         Database() << "CREATE TABLE Userpresence ("
                       "ClientID integer not null, "
                       "Key text not null, "

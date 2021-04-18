@@ -149,7 +149,7 @@ namespace Services::Clientinfo
             try
             {
                 Backend::Database() << "SELECT ClientID, B64Authticket, GameID from Clientinfo WHERE rowid = ?;"
-                                    << Item >> [](uint32_t ClientID, std::string B64Authticket, uint32_t GameID)
+                                    << Item >> [](uint32_t ClientID, const std::string &B64Authticket, uint32_t GameID)
                 {
                     if (ClientID == Global.ClientID) Global.GameID = GameID;
                     else

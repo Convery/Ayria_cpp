@@ -11,7 +11,7 @@ namespace Services::Presence
 {
     static Hashmap<std::string, LZString_t> Clientpresence;
 
-    // Handle local client-requests.
+    // Handle incoming client-updates.
     static void __cdecl Updatehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const JSON::Object_t Keyvalues = JSON::Parse(std::string_view(Message, Length));
@@ -19,51 +19,33 @@ namespace Services::Presence
 
         for (const auto &[Key, Value] : Keyvalues)
         {
-            // Ensure that the values are available to the plugins.
-            Backend::Database() << "REPLACE (ClientID, Key, Value) INTO Presence VALUES (?, ?, ?);"
-                                << ClientID << Key << Value.get<std::string>();
+            // Update the database so that the plugins can access this info.
+            try { Backend::Database() << "REPLACE INTO Userpresence (ClientID, Key, Value) VALUES (?, ?, ?);"
+                                      << ClientID << Key << Value.get<std::string>();
+            } catch (...) {}
         }
     }
 
-    // Send requests to local clients.
-    static void Sendupdate(const std::unordered_set<std::string> &&Keys)
+    // Notify the other clients about our state.
+    static void Updatestate()
     {
-        JSON::Object_t Keyvalues{};
+        const auto Updates = Backend::getDatabasechanges("Userpresence");
 
-        if (Keys.empty())
+        for (const auto &Item : Updates)
         {
-            for (const auto &[Key, Value] : Clientpresence)
-                Keyvalues[Key] = (std::string)Value;
+            try
+            {
+                Backend::Database() << "SELECT * FROM Userpresence WHERE rowid = ?;" << Item
+                >> [](uint32_t ClientID, const std::string &Key, const std::string &Value)
+                   { if (ClientID == Global.ClientID) Clientpresence[Key] = Value; };
+            } catch (...) {}
         }
-        else
-        {
-            for(const auto &Key : Keys)
-                Keyvalues[Key] = (std::string)Clientpresence[Key];
-        }
+
+        JSON::Object_t Keyvalues{};
+        for (const auto &[Key, Value] : Clientpresence)
+            Keyvalues[Key] = (std::string)Value;
 
         Backend::Network::Transmitmessage("Presence::Update", Keyvalues);
-    }
-
-    // JSON API access for the plugins.
-    static std::string __cdecl Updatepresence(JSON::Value_t &&Request)
-    {
-        const JSON::Object_t Keyvalues = Request;
-        std::unordered_set<std::string> Keys;
-        Keys.reserve(Keyvalues.size());
-
-        for (const auto &[Key, Value] : Keyvalues)
-        {
-            // Ensure that the values are available to the plugins.
-            Backend::Database() << "REPLACE (ClientID, Key, Value) INTO Presence VALUES (?, ?, ?);"
-                                << Global.ClientID << Key << Value.get<std::string>();
-
-            // Save the precense for easy access.
-            Clientpresence[Key] = Value;
-            Keys.insert(Key);
-        }
-
-        Sendupdate(std::move(Keys));
-        return "{}";
     }
 
     // Set up the service.
@@ -72,10 +54,7 @@ namespace Services::Presence
         // Register the callback for client-requests.
         Backend::Network::Registerhandler("Presence::Update", Updatehandler);
 
-        // Register the JSON API for plugins.
-        Backend::API::addEndpoint("Presence::Update", Updatepresence);
-
         // Notify other clients once in a while.
-        Backend::Enqueuetask(5000, []() { Sendupdate({}); });
+        Backend::Enqueuetask(5000, Updatestate);
     }
 }
