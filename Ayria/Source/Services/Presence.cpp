@@ -35,9 +35,10 @@ namespace Services::Presence
         {
             try
             {
-                Backend::Database() << "SELECT * FROM Userpresence WHERE rowid = ?;" << Item
-                >> [](uint32_t ClientID, const std::string &Key, const std::string &Value)
-                   { if (ClientID == Global.ClientID) Clientpresence[Key] = Value; };
+                Backend::Database() << "SELECT Key, Value FROM Userpresence WHERE rowid = ? AND ClientID = ?;"
+                                    << Item << Global.ClientID
+                                    >> [](const std::string &Key, const std::string &Value)
+                                       { Clientpresence[Key] = Value; };
             } catch (...) {}
         }
 

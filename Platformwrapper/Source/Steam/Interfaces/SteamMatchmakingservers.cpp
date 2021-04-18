@@ -59,7 +59,7 @@ namespace Steam
     };
 
     // SQL <-> Steam management.
-    static Hashmap<uint32_t, gameserveritem_t> Gameservers{};
+    static Hashmap<uint32_t, gameserveritem_t, decltype(WW::Hash), decltype(WW::Equal)> Gameservers{};
     static sqlite::database Database()
     {
         try

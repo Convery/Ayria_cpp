@@ -9,6 +9,8 @@
 
 namespace Steam
 {
+    static Hashmap<std::string, Hashset<std::string>> Searchparams, Hostparams;
+
     struct Steamgamesearch
     {
         enum EGameSearchErrorCode_t
@@ -33,18 +35,42 @@ namespace Steam
         };
 
         EGameSearchErrorCode_t AcceptGame();
-        EGameSearchErrorCode_t AddGameSearchParams(const char *pchKeyToFind, const char *pchValuesToFind);
-        EGameSearchErrorCode_t CancelRequestPlayersForGame();
+        EGameSearchErrorCode_t AddGameSearchParams(const char *pchKeyToFind, const char *pchValuesToFind)
+        {
+            auto Entry = &Searchparams[pchKeyToFind];
+            const auto Values = Tokenizestring(pchValuesToFind, ',');
+
+            for (const auto &Item : Values)
+                Entry->insert(Item);
+
+            return k_EGameSearchErrorCode_OK;
+        }
+        EGameSearchErrorCode_t CancelRequestPlayersForGame()
+        {
+            return k_EGameSearchErrorCode_OK;
+        }
         EGameSearchErrorCode_t DeclineGame();
         EGameSearchErrorCode_t EndGame(uint64_t ullUniqueGameID);
-        EGameSearchErrorCode_t EndGameSearch();
+        EGameSearchErrorCode_t EndGameSearch()
+        {
+            return k_EGameSearchErrorCode_OK;
+        }
         EGameSearchErrorCode_t HostConfirmGameStart(uint64_t ullUniqueGameID);
         EGameSearchErrorCode_t RequestPlayersForGame(int nPlayerMin, int nPlayerMax, int nMaxTeamSize);
         EGameSearchErrorCode_t RetrieveConnectionDetails(SteamID_t steamIDHost, char *pchConnectionDetails, int cubConnectionDetails);
         EGameSearchErrorCode_t SearchForGameSolo(int nPlayerMin, int nPlayerMax);
         EGameSearchErrorCode_t SearchForGameWithLobby(SteamID_t steamIDLobby, int nPlayerMin, int nPlayerMax);
         EGameSearchErrorCode_t SetConnectionDetails(const char *pchConnectionDetails, int cubConnectionDetails);
-        EGameSearchErrorCode_t SetGameHostParams(const char *pchKey, const char *pchValue);
+        EGameSearchErrorCode_t SetGameHostParams(const char *pchKey, const char *pchValue)
+        {
+            auto Entry = &Hostparams[pchKey];
+            const auto Values = Tokenizestring(pchValue, ',');
+
+            for (const auto &Item : Values)
+                Entry->insert(Item);
+
+            return k_EGameSearchErrorCode_OK;
+        }
         EGameSearchErrorCode_t SubmitPlayerResult(uint64_t ullUniqueGameID, SteamID_t steamIDPlayer, EPlayerResult_t EPlayerResult);
     };
 

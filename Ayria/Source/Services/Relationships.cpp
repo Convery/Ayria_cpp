@@ -9,7 +9,6 @@
 
 namespace Services::Relationships
 {
-    using Relationflags_t = union { uint8_t Raw; struct { uint8_t isFriend : 1, isBlocked : 1; }; };
     static Hashset<uint32_t> Friendlyclients, Blockedclients;
 
     // Helper functionallity.
@@ -18,92 +17,95 @@ namespace Services::Relationships
         if (SourceID == Global.ClientID) [[likely]]
             return Blockedclients.contains(TargetID);
 
-        Relationflags_t Flags{};
-        Backend::Database() << "SELECT Flags FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
-                            << SourceID << TargetID >> Flags.Raw;
+        try
+        {
+            bool isBlocked{};
+            Backend::Database() << "SELECT isBlocked FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
+                                << SourceID << TargetID >> isBlocked;
+            return isBlocked;
+        } catch (...) {}
 
-        return Flags.isBlocked;
+        return false;
     }
     bool isFriend(uint32_t SourceID, uint32_t TargetID)
     {
         if (SourceID == Global.ClientID) [[likely]]
             return Friendlyclients.contains(TargetID);
 
-        Relationflags_t Flags{};
-        Backend::Database() << "SELECT Flags FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
-            << SourceID << TargetID >> Flags.Raw;
+        try
+        {
+            bool isFriend{};
+            Backend::Database() << "SELECT isFriend FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
+                                << SourceID << TargetID >> isFriend;
+            return isFriend;
+        } catch (...) {}
 
-        return Flags.isFriend;
+        return false;
     }
 
     // Handle local client-requests.
     static void __cdecl Updatehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto SourceID = Request.value<uint32_t>("SourceID");
-        const auto TargetID = Request.value<uint32_t>("TargetID");
-        const auto isBlocked = Request.value<bool>("isBlocked");
-        const auto isFriend = Request.value<bool>("isFriend");
-        Relationflags_t Flags{};
+        const JSON::Array_t Request = JSON::Parse(std::string_view(Message, Length));
+        const auto SourceID = Clientinfo::getClientID(NodeID);
 
-        // Let's not bother with fuckery.
-        if (SourceID != Clientinfo::getClientID(NodeID))
+        for (const auto &Object : Request)
         {
-            Backend::Network::Blockclient(NodeID);
-            return;
+            const auto TargetID = Object.value<uint32_t>("TargetID");
+            const auto isBlocked = Object.value<bool>("isBlocked");
+            const auto isFriend = Object.value<bool>("isFriend");
+
+            // Update the relationships in the database for the plugins.
+            try
+            {
+                if (Object.contains("isFriend") && Object.contains("isBlocked"))
+                {
+                    Backend::Database() << "REPLACE INTO Relationships (SourceID, TargetID, isBlocked, isFriend) "
+                                           "VALUES (?, ?, ?, ?);" << SourceID << TargetID << isBlocked << isFriend;
+                }
+                else if (Object.contains("isFriend"))
+                {
+                    Backend::Database() << "REPLACE INTO Relationships (SourceID, TargetID, isBlocked, isFriend) "
+                                           "VALUES (?, ?, ?, ?);" << SourceID << TargetID << false << isFriend;
+                }
+                else if (Object.contains("isBlocked"))
+                {
+                    Backend::Database() << "REPLACE INTO Relationships (SourceID, TargetID, isBlocked, isFriend) "
+                                           "VALUES (?, ?, ?, ?);" << SourceID << TargetID << isBlocked << false;
+                }
+            }
+            catch (...) {}
+        }
+    }
+
+    // Notify the other clients about our state.
+    static void Updatestate()
+    {
+        const auto Changes = Backend::getDatabasechanges("Relationships");
+        for (const auto &Item : Changes)
+        {
+            try
+            {
+                Backend::Database() << "SELECT * FROM Relationships WHERE rowid = ? AND SourceID = ?;"
+                                    << Item << Global.ClientID
+                                    >> [](uint32_t, uint32_t TargetID, bool isBlocked, bool isFriend)
+                                    {
+                                        if (isBlocked) Blockedclients.insert(TargetID);
+                                        if (isFriend) Friendlyclients.insert(TargetID);
+                                    };
+            } catch (...) {}
         }
 
-        // Get the current set of flags.
-        Backend::Database() << "SELECT Flags FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
-                            << SourceID << TargetID >> Flags.Raw;
+        // Share our relationship with the world.
+        JSON::Array_t Relations;
+        Relations.reserve(Friendlyclients.size() + Blockedclients.size());
 
-        // Update the flags.
-        Flags.isFriend = isFriend;
-        Flags.isBlocked = isBlocked;
+        for (const auto &Item : Friendlyclients)
+            Relations.emplace_back(JSON::Object_t({ { "TargetID", Item }, { "isFriend", true } }));
+        for (const auto &Item : Blockedclients)
+            Relations.emplace_back(JSON::Object_t({ { "TargetID", Item }, { "isBlocked", true } }));
 
-        // Ensure that the flags are available to the plugins.
-        Backend::Database() << "REPLACE ( SourceID, TargetID, Flags ) INTO Relationships VALUES (?, ?, ?);"
-                            << SourceID << TargetID << Flags.Raw;
-    }
-
-    // Send requests to local clients.
-    static void Sendupdate(uint32_t TargetID, Relationflags_t Flags)
-    {
-        // Update the internal state for quicker lookups.
-        if (Flags.isBlocked) { Blockedclients.insert(TargetID); Friendlyclients.erase(TargetID); }
-        if (Flags.isFriend) { Blockedclients.erase(TargetID); Friendlyclients.insert(TargetID); }
-
-        // Ensure that the flags are available to the plugins.
-        Backend::Database() << "REPLACE Flags INTO Relationships ( SourceID, TargetID, Flags ) VALUES (?, ?, ?);"
-                            << Global.ClientID << TargetID << Flags.Raw;
-
-        // Notify the other clients.
-        const auto Request = JSON::Object_t({
-            { "isBlocked", Flags.isBlocked },
-            { "SourceID", Global.ClientID },
-            { "isFriend", Flags.isFriend },
-            { "TargetID", TargetID }
-        });
-        Backend::Network::Transmitmessage("Relationships::Update", Request);
-    }
-
-    // JSON API access for the plugins.
-    static std::string __cdecl updateStatus(JSON::Value_t &&Request)
-    {
-        const auto TargetID = Request.value<uint32_t>("TargetID");
-        const auto isBlocked = Request.value<bool>("isBlocked");
-        const auto isFriend = Request.value<bool>("isFriend");
-
-        Sendupdate(TargetID, { .isFriend = isFriend, .isBlocked = isBlocked });
-
-        return "{}";
-    }
-    static std::string __cdecl clearStatus(JSON::Value_t &&Request)
-    {
-        const auto TargetID = Request.value<uint32_t>("TargetID");
-
-        Sendupdate(TargetID, {});
-        return "{}";
+        Backend::Network::Transmitmessage("Relationships::Update", Relations);
     }
 
     // Set up the service.
@@ -112,16 +114,18 @@ namespace Services::Relationships
         // Register the callback for client-requests.
         Backend::Network::Registerhandler("Relationship::Update", Updatehandler);
 
-        // Register the JSON API for plugins.
-        Backend::API::addEndpoint("Relationships::Update", updateStatus);
-        Backend::API::addEndpoint("Relationships::Clear", clearStatus);
+        // Periodically check for changes.
+        Backend::Enqueuetask(30000, Updatestate);
 
         // Load all the clients relations from the database.
-        Backend::Database() << "SELECT TargetID, Flags FROM Relationships WHERE SourceID = ?;" << Global.ClientID
-                            >> [](uint32_t TargetID, uint8_t Flags)
-                            {
-                                if (Relationflags_t{ Flags }.isFriend) Friendlyclients.insert(TargetID);
-                                if (Relationflags_t{ Flags }.isBlocked) Blockedclients.insert(TargetID);
-                            };
+        try
+        {
+            Backend::Database() << "SELECT * FROM Relationships WHERE SourceID = ?;" << Global.ClientID
+                                >> [](uint32_t, uint32_t TargetID, bool isBlocked, bool isFriend)
+                                {
+                                    if (isBlocked) Blockedclients.insert(TargetID);
+                                    if (isFriend) Friendlyclients.insert(TargetID);
+                                };
+        } catch (...) {}
     }
 }
