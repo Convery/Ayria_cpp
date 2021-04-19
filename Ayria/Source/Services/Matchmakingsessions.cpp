@@ -9,103 +9,132 @@
 
 namespace Services::Matchmakingsessions
 {
-    struct Session_t
+    struct Localsession_t
     {
-        uint32_t IPv4;
+        bool Active;
         uint16_t Port;
-
-        LZString_t B64Gamedata;
-        std::u8string Servername, Mapname;
-        uint32_t HostID, GameID, ProviderID;
+        uint32_t HostID, GameID, Address;
+        LZString_t Gamedata;
     };
-    static Hashmap<uint32_t, Session_t> Localsession{};
+    static Localsession_t Localsession{};
 
-    // Insert new data into the database.
+    // Handle incoming updates from the other clients.
     static void __cdecl Updatehandler(unsigned int NodeID, const char *Message, unsigned int Length)
     {
         const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto B64Gamedata = Request.value<std::string>("B64Gamedata");
-        const auto Servername = Request.value<std::u8string>("Servername");
-        const auto ProviderID = Request.value<uint32_t>("ProviderID");
-        const auto Mapname = Request.value<std::u8string>("Mapname");
-        const auto HostID = Request.value<uint32_t>("HostID");
+        const auto Gamedata = Request.value<std::string>("Gamedata");
+        const auto Hostport = Request.value<uint16_t>("Hostport");
         const auto GameID = Request.value<uint32_t>("GameID");
-        const auto Port = Request.value<uint16_t>("Port");
-        auto IPv4 = Request.value<uint32_t>("IPv4");
+        const auto HostID = Clientinfo::getClientID(NodeID);
 
-        // No fuckery allowed.
-        if (Clientinfo::getClientID(NodeID) != HostID) return;
+        // Re-use the clients local address if no public one is provided.
+        auto Hostaddress = Request.value<uint32_t>("Hostaddress");
+        if (!Hostaddress) Hostaddress = Backend::Network::Nodeaddress(NodeID).S_un.S_addr;
 
-        // If there's no IP provided, re-use the clients.
-        if (!IPv4) IPv4 = Backend::Network::Nodeaddress(NodeID).S_un.S_addr;
-
-        // Add the entry to the database.
-        Backend::Database() << "REPLACE INTO Matchmakingsessions (ProviderID, HostID, Lastupdate, B64Gamedata, "
-                               "Servername, GameID, Mapname, IPv4, Port) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? );"
-                            << ProviderID << HostID << uint32_t(time(NULL)) << B64Gamedata << Encoding::toNarrow(Servername)
-                            << GameID << Encoding::toNarrow(Mapname) << IPv4 << Port;
+        // Add the entry so that the plugins can query for it.
+        try
+        {
+            Backend::Database()
+                << "REPLACE INTO Matchmakingsessions (HostID, Lastupdate, GameID, Hostaddress, Hostport, Gamedata) "
+                   "VALUES (?, ?, ?, ?, ?, ?);"
+                << HostID << time(NULL) << GameID << Hostaddress << Hostport << Gamedata;
+        } catch (...) {}
     }
-    static void __cdecl Terminationhandler(unsigned int NodeID, const char *Message, unsigned int Length)
+    static void __cdecl Terminationhandler(unsigned int NodeID, const char *, unsigned int)
     {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto ProviderID = Request.value<uint32_t>("ProviderID");
+        // TODO(tcn): Notify the plugins about this event.
+        const auto HostID = Clientinfo::getClientID(NodeID);
 
-       Backend::Database() << "DELETE FROM Matchmakingsessions WHERE HostID = ? AND ProviderID = ?;"
-                           << Clientinfo::getClientID(NodeID) << ProviderID;
+        try { Backend::Database() << "DELETE FROM Matchmakingsessions WHERE HostID = ?;" << HostID; }
+        catch (...) {}
     }
 
-    // Send an update if we are active.
-    static void Matchmakingupdate()
+    // Notify the other clients about our state once in a while.
+    static void Updatestate()
     {
-        if (Localsession.empty()) return;
+        const auto Sessionchanges = Backend::getDatabasechanges("Matchmakingsessions");
 
-        for (const auto &[_, Session] : Localsession)
+        // TODO(tcn): Maybe notify the plugins about changes rather than just checking ours.
+        if (Localsession.Active)
+        {
+            for (const auto &Item : Sessionchanges)
+            {
+                try
+                {
+                    Backend::Database()
+                        << "SELECT * FROM Matchmakingsessions WHERE rowid = ? AND HostID = ?;"
+                        << Item << Global.ClientID
+                        >> [](uint32_t, uint32_t, uint32_t GameID, uint32_t Hostaddress, uint16_t Hostport, std::string &&Gamedata)
+                        {
+                            Localsession.Address = Hostaddress;
+                            Localsession.Gamedata = Gamedata;
+                            Localsession.GameID = GameID;
+                            Localsession.Port = Hostport;
+                        };
+                }
+                catch (...) {}
+            }
+        }
+
+        // Notify the other clients about our session.
+        if (Localsession.Active)
         {
             const auto Request = JSON::Object_t({
-                { "B64Gamedata", (std::u8string)Session.B64Gamedata },
-                { "Servername", Session.Servername },
-                { "ProviderID", Session.ProviderID },
-                { "Mapname", Session.Mapname },
-                { "HostID", Session.HostID },
-                { "GameID", Session.GameID },
-                { "IPv4", Session.IPv4 },
-                { "Port", Session.Port }
+                { "Gamedata", (std::string)Localsession.Gamedata },
+                { "Hostaddress", Localsession.Address },
+                { "Hostport", Localsession.Port },
+                { "GameID", Localsession.GameID }
             });
-
-            Backend::Network::Transmitmessage("Matchmaking::Update", Request);
+            Backend::Network::Transmitmessage("Matchmakingsessions::Update", Request);
         }
     }
 
     // JSON interface for the plugins.
     namespace API
     {
-        static std::string __cdecl Update(JSON::Value_t &&Request)
+        static std::string __cdecl Starthosting(JSON::Value_t &&Request)
         {
-            const auto ProviderID = Request.value<uint32_t>("ProviderID");
-            auto Session = &Localsession[ProviderID];
+            const auto Gamedata = Request.value<std::string>("Gamedata");
+            const auto Hostport = Request.value<uint16_t>("Hostport");
+            const auto HostID = Global.ClientID;
 
-            Session->Servername = Request.value("Servername", Session->Servername);
-            Session->Mapname = Request.value("Mapname", Session->Mapname);
-            Session->GameID = Request.value("GameID", Session->GameID);
-            Session->IPv4 = Request.value("IPv4", Session->IPv4);
-            Session->Port = Request.value("Port", Session->Port);
-            Session->HostID = Global.ClientID;
-            Session->ProviderID = ProviderID;
+            // Re-use the clients local address if no public one is provided.
+            auto Hostaddress = Request.value<uint32_t>("Hostaddress");
+            if (!Hostaddress) Hostaddress = Global.Publicaddress;
 
-            const auto B64Gamedata = Request.value<std::u8string>("B64Gamedata");
-            if (!B64Gamedata.empty())
+            // A game-ID is required.
+            auto GameID = Request.value<uint32_t>("GameID");
+            if (!GameID) GameID = Global.GameID;
+
+            // Active needs to be set last incase of data-races.
+            Localsession.Address = Hostaddress;
+            Localsession.Gamedata = Gamedata;
+            Localsession.GameID = GameID;
+            Localsession.HostID = HostID;
+            Localsession.Port = Hostport;
+            Localsession.Active = true;
+
+            // Add the entry so that the plugins can query for it.
+            try
             {
-                Session->B64Gamedata = B64Gamedata;
-            }
+                Backend::Database()
+                    << "REPLACE INTO Matchmakingsessions (HostID, Lastupdate, GameID, Hostaddress, Hostport, Gamedata) "
+                       "VALUES (?, ?, ?, ?, ?, ?);"
+                    << HostID << 0 << GameID << Hostaddress << Hostport << Gamedata;
+            } catch (...) {}
 
+            // TODO(tcn): Maybe notify the other plugins about this?
             return "{}";
         }
-        static std::string __cdecl Terminate(JSON::Value_t &&Request)
+        static std::string __cdecl Terminate(JSON::Value_t &&)
         {
-            const auto ProviderID = Request.value<uint32_t>("ProviderID");
+            Localsession.Active = false;
+            Backend::Network::Transmitmessage("Matchmaking::Terminate", {});
 
-            Backend::Network::Transmitmessage("Matchmaking::Terminate", JSON::Object_t({ { "ProviderID", ProviderID } }));
-            Localsession.erase(ProviderID);
+            try { Backend::Database() << "DELETE FROM Matchmakingsessions WHERE HostID = ?;" << Global.ClientID; }
+            catch (...) {}
+
+            // TODO(tcn): Notify the other plugins about this.
             return "{}";
         }
     }
@@ -118,10 +147,10 @@ namespace Services::Matchmakingsessions
         Backend::Network::Registerhandler("Matchmakingsessions::Update", Updatehandler);
 
         // Register the JSON API for plugins.
+        Backend::API::addEndpoint("Matchmakingsessions::Starthosting", API::Starthosting);
         Backend::API::addEndpoint("Matchmakingsessions::Terminate", API::Terminate);
-        Backend::API::addEndpoint("Matchmakingsessions::Update", API::Update);
 
         // Notify other clients once in a while.
-        Backend::Enqueuetask(5000, Matchmakingupdate);
+        Backend::Enqueuetask(5000, Updatestate);
     }
 }
