@@ -87,6 +87,7 @@ using namespace std::literals;
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
+#include <Utilities/AyriaDB.hpp>
 #include <Utilities/Localnetservers.hpp>
 
 // Temporary includes.
