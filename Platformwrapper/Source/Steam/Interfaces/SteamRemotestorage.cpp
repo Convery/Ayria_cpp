@@ -392,7 +392,16 @@ namespace Steam
         }
         SteamAPICall_t UpdatePublishedFile(RemoteStorageUpdatePublishedFileRequest_t updatePublishedFileRequest)
         {
-            return {};
+            const auto Handle = CreatePublishedFileUpdateRequest(updatePublishedFileRequest.m_unPublishedFileId);
+
+            if (updatePublishedFileRequest.m_bUpdatePreviewFile) UpdatePublishedFilePreviewFile(Handle, updatePublishedFileRequest.m_pchPreviewFile);
+            if (updatePublishedFileRequest.m_bUpdateDescription) UpdatePublishedFileDescription(Handle, updatePublishedFileRequest.m_pchDescription);
+            if (updatePublishedFileRequest.m_bUpdateVisibility) UpdatePublishedFileVisibility(Handle, updatePublishedFileRequest.m_eVisibility);
+            if (updatePublishedFileRequest.m_bUpdateTitle) UpdatePublishedFileTitle(Handle, updatePublishedFileRequest.m_pchTitle);
+            if (updatePublishedFileRequest.m_bUpdateFile) UpdatePublishedFileFile(Handle, updatePublishedFileRequest.m_pchFile);
+            if (updatePublishedFileRequest.m_bUpdateTags) UpdatePublishedFileTags(Handle, updatePublishedFileRequest.m_pTags);
+
+            return CommitPublishedFileUpdate(Handle);
         }
         SteamAPICall_t UpdateUserPublishedItemVote(PublishedFileId_t unPublishedFileId, bool bVoteUp)
         {
