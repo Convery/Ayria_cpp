@@ -41,26 +41,44 @@ namespace Steam
 
             // Initialize the database with the interfaces tables.
             {
-                // Needed for
-                sqlite::database(Database)
-                    << "CREATE TABLE IF NOT EXISTS DLCInfo ("
-                       "DLCID integer not null, "
-                       "AppID integer not null, "
-                       "Checkfile text, "
-                       "Name text, "
-                       "PRIMARY KEY (DLCID, AppID) );";
+                // Steamapps tables.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS DLCInfo ("
+                           "DLCID integer not null, "
+                           "AppID integer not null, "
+                           "Checkfile text, "   // Relative path to a file in the DLC.
+                           "Name text, "
+                           "PRIMARY KEY (DLCID, AppID) );";
 
-                sqlite::database(Database)
-                    << "CREATE TABLE IF NOT EXISTS DLCData ("
-                       "AppID integer not null, "
-                       "Key text not null, "
-                       "Value text, "
-                       "PRIMARY KEY (AppID, Key) );";
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS DLCData ("
+                           "AppID integer not null, "
+                           "Key text not null, "
+                           "Value text, "
+                           "PRIMARY KEY (AppID, Key) );";
 
-                sqlite::database(Database)
-                    << "CREATE TABLE IF NOT EXISTS Appinfo ("
-                       "AppID integer primary key unique not null, "
-                       "Languages text not null);";
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Appinfo ("
+                           "AppID integer primary key unique not null, "
+                           "Languages text not null);";
+                }
+
+                // Steam remote-storage.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Clientfiles ("
+                           "Visibility integer, "
+                           "Thumbnailfile text, "
+                           "Description text, "
+                           "Changelog text, "
+                           "Filename text, "
+                           "FileID integer, "
+                           "AppID integer, "
+                           "Title text, "
+                           "Tags text, "
+                           "PRIMARY KEY (AppID, FileID) );";
+                }
             }
         }
         return sqlite::database(Database);
@@ -139,21 +157,13 @@ namespace Steam
 
             // Ask Ayria nicely for data on the client.
             {
-                uint32_t AccountID = 0xDEADC0DE;
-                auto Username = "Ayria"s;
-                auto Locale = "english"s;
-
-                if (const auto Callback = Ayria.JSONRequest) [[likely]]
-                {
-                    const auto Object = JSON::Parse(Callback("Clientinfo::getAccountinfo", nullptr));
-                    AccountID = Object.value("AccountID", 0xDEADC0DE);
-                    Username = Object.value("Username", "Ayria"s);
-                    Locale = Object.value("Locale", "english"s);
-                }
+                const auto Object = JSON::Parse(Ayriarequest("Clientinfo::getSelf", {}));
+                const auto AccountID = Object.value("AccountID", uint32_t(0xDEADC0DEU));
+                const auto Username = Object.value("Username", "Steam_user"s);
 
                 std::memcpy(Global.Username, Username.data(), std::min(sizeof(Global.Username), Username.size()));
+                Global.Locale = std::make_unique<std::string>("english");
                 Global.XUID = { 0x0110000100000000ULL | AccountID };
-                Global.Locale = std::make_unique<std::string>(Locale);
 
                 // Ensure that we have a path available.
                 if (!Global.Installpath)
@@ -162,6 +172,9 @@ namespace Steam
                     const auto Size = GetCurrentDirectoryW(260, Buffer);
                     Global.Installpath = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer, Size)));
                 }
+
+                // Update the client info with the AppID.
+                AyriaDB::Clientinfo::Set::GameID(AccountID, Global.ApplicationID);
             }
 
             // Some legacy applications query the application info from the environment.
@@ -222,7 +235,7 @@ namespace Steam
 
             // Notify the game that it's properly connected.
             const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::Types::SteamServersConnected_t, nullptr);
+            Completerequest(RequestID, Types::SteamServersConnected_t, nullptr);
 
             // Notify the plugins that we are initialized.
             if (const auto Callback = Ayria.onInitialized) Callback(false);

@@ -122,15 +122,8 @@ namespace Services::Clientinfo
             { "PublicIP", Global.Publicaddress },
             { "B64Sharedkey", B64Sharedkey },
             { "ClientID", Global.ClientID },
-            { "GameID", Global.GameID },
+            { "GameID", Global.GameID }
         });
-
-        // On startup, also insert our own info for easier lookups.
-        static bool doOnce = [&](){
-            const auto Message = JSON::Dump(Request);
-            Discoveryhandler(0, Message.c_str(), (unsigned int)Message.size());
-            return true;
-        }();
 
         // Notify all LAN clients.
         Backend::Network::Transmitmessage("Clientinfo::Discovery", Request);
@@ -140,13 +133,32 @@ namespace Services::Clientinfo
         Backend::Network::Transmitmessage("Clientinfo::Terminate", {});
     }
 
-    // Modify the clients state.
+    // JSON access to the state.
     static std::string __cdecl setClientstate(JSON::Value_t &&Request)
     {
         if (Request.contains("isPrivate")) Global.Stateflags.isPrivate = Request.value<bool>("isPrivate");
         if (Request.contains("isIngame")) Global.Stateflags.isIngame = Request.value<bool>("isIngame");
         if (Request.contains("isAway")) Global.Stateflags.isAway = Request.value<bool>("isAway");
         return "{}";
+    }
+    static std::string __cdecl getClientinfo(JSON::Value_t &&)
+    {
+        // The key needs to be Base64 else it'll be encoded as a massive array.
+        static const auto B64Sharedkey = Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys));
+
+        // Auth-ticket is only provided if we are authenticated.
+        auto Response = JSON::Object_t({
+            { "B64Authticket", Global.B64Authticket ? *Global.B64Authticket : ""s },
+            { "Username", std::u8string(Global.Username) },
+            { "isPrivate", Global.Stateflags.isPrivate },
+            { "isOnline", Global.Stateflags.isOnline },
+            { "PublicIP", Global.Publicaddress },
+            { "B64Sharedkey", B64Sharedkey },
+            { "AccountID", Global.ClientID },
+            { "GameID", Global.GameID }
+        });
+
+        return JSON::Dump(Response);
     }
 
     // Check for new states once in a while.
@@ -157,7 +169,7 @@ namespace Services::Clientinfo
         {
             try
             {
-                Backend::Database() << "SELECT ClientID, B64Authticket, GameID from Clientinfo WHERE rowid = ?;"
+                Backend::Database() << "SELECT (ClientID, B64Authticket, GameID) from Clientinfo WHERE rowid = ?;"
                                     << Item >> [](uint32_t ClientID, const std::string &B64Authticket, uint32_t GameID)
                 {
                     if (ClientID == Global.ClientID) Global.GameID = GameID;
@@ -189,11 +201,31 @@ namespace Services::Clientinfo
         Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
 
         // Register the JSON endpoints.
+        Backend::API::addEndpoint("Clientinfo::getSelf", getClientinfo);
         Backend::API::addEndpoint("Clientinfo::setState", setClientstate);
 
         // Notify other clients once in a while.
         Backend::Enqueuetask(5000, Updatestate);
         std::atexit(Sendterminate);
+
+        // On startup, insert our own info for easier lookups.
+        {
+            // The key needs to be Base64 else it'll be encoded as a massive array.
+            static const auto B64Sharedkey = Base64::Encode(PK_RSA::getPublickey(Global.Cryptokeys));
+
+            // Auth-ticket is only provided if we are authenticated.
+            auto Request = JSON::Object_t({
+                { "B64Authticket", Global.B64Authticket ? *Global.B64Authticket : ""s },
+                { "Username", std::u8string(Global.Username) },
+                { "PublicIP", Global.Publicaddress },
+                { "B64Sharedkey", B64Sharedkey },
+                { "ClientID", Global.ClientID },
+                { "GameID", Global.GameID }
+            });
+
+            const auto Message = JSON::Dump(Request);
+            Discoveryhandler(0, Message.c_str(), (unsigned int)Message.size());
+        }
     }
 }
 
