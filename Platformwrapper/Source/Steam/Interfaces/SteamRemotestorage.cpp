@@ -9,7 +9,7 @@
 
 namespace Steam
 {
-    enum ERemoteStoragePublishedFileVisibility
+    enum ERemoteStoragePublishedFileVisibility : uint32_t
     {
         k_ERemoteStoragePublishedFileVisibilityPublic = 0,
         k_ERemoteStoragePublishedFileVisibilityFriendsOnly = 1,
@@ -31,109 +31,34 @@ namespace Steam
         bool m_bUpdateDescription;
         bool m_bUpdateVisibility;
         bool m_bUpdateTags;
-
-        RemoteStorageUpdatePublishedFileRequest_t()
-        {
-            Initialize(0xFFFFFFFFFFFFFFFFULL);
-        }
-        RemoteStorageUpdatePublishedFileRequest_t(PublishedFileId_t unPublishedFileId)
-        {
-            Initialize(unPublishedFileId);
-        }
-
-        PublishedFileId_t GetPublishedFileId() { return m_unPublishedFileId; }
-
-        void SetFile(const char *pchFile)
-        {
-            m_pchFile = pchFile;
-            m_bUpdateFile = true;
-        }
-
-        const char *GetFile() { return m_pchFile; }
-        bool BUpdateFile() { return m_bUpdateFile; }
-
-        void SetPreviewFile(const char *pchPreviewFile)
-        {
-            m_pchPreviewFile = pchPreviewFile;
-            m_bUpdatePreviewFile = true;
-        }
-
-        const char *GetPreviewFile() { return m_pchPreviewFile; }
-        bool BUpdatePreviewFile() { return m_bUpdatePreviewFile; }
-
-        void SetTitle(const char *pchTitle)
-        {
-            m_pchTitle = pchTitle;
-            m_bUpdateTitle = true;
-        }
-
-        const char *GetTitle() { return m_pchTitle; }
-        bool BUpdateTitle() { return m_bUpdateTitle; }
-
-        void SetDescription(const char *pchDescription)
-        {
-            m_pchDescription = pchDescription;
-            m_bUpdateDescription = true;
-        }
-
-        const char *GetDescription() { return m_pchDescription; }
-        bool BUpdateDescription() { return m_bUpdateDescription; }
-
-        void SetVisibility(ERemoteStoragePublishedFileVisibility eVisibility)
-        {
-            m_eVisibility = eVisibility;
-            m_bUpdateVisibility = true;
-        }
-
-        const ERemoteStoragePublishedFileVisibility GetVisibility() { return m_eVisibility; }
-        bool BUpdateVisibility() { return m_bUpdateVisibility; }
-
-        void SetTags(SteamParamStringArray_t *pTags)
-        {
-            m_pTags = pTags;
-            m_bUpdateTags = true;
-        }
-
-        SteamParamStringArray_t *GetTags() { return m_pTags; }
-        bool BUpdateTags() { return m_bUpdateTags; }
-        SteamParamStringArray_t **GetTagsPointer() { return &m_pTags; }
-
-        void Initialize(PublishedFileId_t unPublishedFileId)
-        {
-            m_unPublishedFileId = unPublishedFileId;
-            m_pchFile = 0;
-            m_pchPreviewFile = 0;
-            m_pchTitle = 0;
-            m_pchDescription = 0;
-            m_pTags = 0;
-
-            m_bUpdateFile = false;
-            m_bUpdatePreviewFile = false;
-            m_bUpdateTitle = false;
-            m_bUpdateDescription = false;
-            m_bUpdateTags = false;
-            m_bUpdateVisibility = false;
-        }
     };
+
+    struct Pendingfile_t
+    {
+        uint64_t FileID;
+        std::vector<std::string> Tags;
+        std::string Title, Filename, Changelog;
+        std::string Thumbnailfile, Description;
+        ERemoteStoragePublishedFileVisibility Visibility;
+    };
+    static Hashmap<uint64_t, JSON::Object_t> Pendingchanges;
+    static Hashmap<uint64_t, Blob> Asyncreads;
 
     // Per-user storage directory.
     static std::string Storagepath(std::string_view Path)
     {
         static std::string Basepath{ []()
         {
-            const auto Tmp = va("./Ayria/Storage/Steam/%16X/", Global.XUID.FullID);
+            const auto Tmp = va("./Ayria/Storage/Steam/%08X/%i", Global.XUID.UserID, Global.ApplicationID);
             std::filesystem::create_directories(Tmp.c_str());
             return Tmp;
         }() };
 
-        while (!Path.empty())
-        {
-            const auto Char = Path.front();
-            if (Char == '.' || Char == '/' || Char == '\\')
-                Path.remove_prefix(1);
-            else
-                break;
-        }
+        // We only care about the filename.
+        Path = Path.substr(0, Path.find_last_of('/'));
+        Path = Path.substr(0, Path.find_last_of('\\'));
+        while (!Path.empty() && (Path.front() == '.' || Path.front() == '/' || Path.front() == '\\'))
+            Path.remove_prefix(1);
 
         return Basepath + std::string(Path);
     }
@@ -174,7 +99,7 @@ namespace Steam
             k_EWorkshopFileActionPlayed = 0,
             k_EWorkshopFileActionCompleted = 1,
         };
-        enum EWorkshopFileType
+        enum EWorkshopFileType : uint32_t
         {
             k_EWorkshopFileTypeFirst = 0,
 
@@ -225,35 +150,254 @@ namespace Steam
         {
             return k_ERemoteStoragePlatformAll;
         }
-        PublishedFileUpdateHandle_t CreatePublishedFileUpdateRequest(PublishedFileId_t unPublishedFileId);
+        PublishedFileUpdateHandle_t CreatePublishedFileUpdateRequest(PublishedFileId_t unPublishedFileId)
+        {
+            const auto Filelist = FS::Findfiles(Storagepath(""), "", false);
+            for (const auto &File : Filelist)
+            {
+                const auto FileID = Hash::WW64(File);
+                if (FileID == unPublishedFileId)
+                {
+                    const auto Handle = GetTickCount64();
+                    Pendingchanges.emplace(Handle, JSON::Object_t({ { "FileID", FileID } }));
+                    return Handle;
+                }
+            }
 
-        SteamAPICall_t CommitPublishedFileUpdate(PublishedFileUpdateHandle_t updateHandle);
-        SteamAPICall_t DeletePublishedFile(PublishedFileId_t unPublishedFileId);
-        SteamAPICall_t EnumeratePublishedFilesByUserAction(EWorkshopFileAction eAction, uint32_t unStartIndex);
-        SteamAPICall_t EnumeratePublishedWorkshopFiles(EWorkshopEnumerationType eEnumerationType, uint32_t unStartIndex, uint32_t unCount, uint32_t unDays, SteamParamStringArray_t *pTags, SteamParamStringArray_t *pUserTags);
-        SteamAPICall_t EnumerateUserPublishedFiles(uint32_t unStartIndex);
-        SteamAPICall_t EnumerateUserSharedWorkshopFiles(SteamID_t steamId, uint32_t unStartIndex, SteamParamStringArray_t *pRequiredTags, SteamParamStringArray_t *pExcludedTags);
-        SteamAPICall_t EnumerateUserSubscribedFiles(uint32_t unStartIndex);
-        SteamAPICall_t FileReadAsync(const char *pchFile, uint32_t nOffset, uint32_t cubToRead);
-        SteamAPICall_t FileShare(const char *pchFile);
-        SteamAPICall_t FileWriteAsync(const char *pchFile, const void *pvData, uint32_t cubData);
-        SteamAPICall_t GetPublishedFileDetails0(PublishedFileId_t unPublishedFileId);
-        SteamAPICall_t GetPublishedFileDetails1(PublishedFileId_t unPublishedFileId, uint32_t unMaxSecondsOld);
-        SteamAPICall_t GetPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId);
-        SteamAPICall_t GetUserPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId);
+            return {};
+        };
+
+        SteamAPICall_t CommitPublishedFileUpdate(PublishedFileUpdateHandle_t updateHandle)
+        {
+            const JSON::Value_t &Entry = Pendingchanges[updateHandle];
+            const auto FileID = Entry.value<uint64_t>("FileID");
+            if (!FileID) return {};
+
+            try
+            {
+                if (Entry.contains("Title"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Title) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<std::string>("Title");
+
+                if (Entry.contains("Changelog"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Changelog) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<std::string>("Changelog");
+
+                if (Entry.contains("Thumbnailfile"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Thumbnailfile) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<std::string>("Thumbnailfile");
+
+                if (Entry.contains("Description"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Description) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<std::string>("Description");
+
+                if (Entry.contains("Tags"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Tags) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<std::string>("Tags");
+
+                if (Entry.contains("Visibility"))
+                    Database() << "REPLACE INTO Clientfiles (AppID, FileID, Visibility) VALUES (?, ?, ?);"
+                               << Global.ApplicationID << FileID << Entry.value<uint32_t>("Visibility");
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new RemoteStorageUpdatePublishedFileResult_t();
+            Request->m_bUserNeedsToAcceptWorkshopLegalAgreement = false;
+            Request->m_eResult = EResult::k_EResultOK;
+            Request->m_nPublishedFileId = FileID;
+
+            Callbacks::Completerequest(RequestID, Types::RemoteStorageUpdatePublishedFileResult_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t DeletePublishedFile(PublishedFileId_t unPublishedFileId)
+        {
+            const auto Filelist = FS::Findfiles(Storagepath(""), "", false);
+            for (const auto &File : Filelist)
+            {
+                const auto FileID = Hash::WW64(File);
+                if (FileID == unPublishedFileId)
+                {
+                    std::remove(Storagepath(File).c_str());
+
+                    try { Database() << "DELETE FROM Clientfiles WHERE (AppID = ? AND FileID = ?);" << Global.ApplicationID << FileID; }
+                    catch (...) {}
+
+                    const auto RequestID = Callbacks::Createrequest();
+                    auto Request = new RemoteStorageDeletePublishedFileResult_t();
+                    Request->m_eResult = EResult::k_EResultOK;
+                    Request->m_nPublishedFileId = FileID;
+
+                    Callbacks::Completerequest(RequestID, Types::RemoteStorageDeletePublishedFileResult_t, Request);
+                    return RequestID;
+                }
+            }
+
+            return {};
+        }
+        SteamAPICall_t EnumeratePublishedFilesByUserAction(EWorkshopFileAction eAction, uint32_t unStartIndex)
+        {
+            return {};
+        }
+        SteamAPICall_t EnumeratePublishedWorkshopFiles(EWorkshopEnumerationType eEnumerationType, uint32_t unStartIndex, uint32_t unCount, uint32_t unDays, SteamParamStringArray_t *pTags, SteamParamStringArray_t *pUserTags)
+        {
+            return {};
+        }
+        SteamAPICall_t EnumerateUserPublishedFiles(uint32_t unStartIndex)
+        {
+            std::unordered_set<uint64_t> FileIDs;
+
+            try
+            {
+                Database()
+                    << "SELECT FileID FROM Clientfiles WHERE AppID = ? OFFSET ?;"
+                    << Global.ApplicationID << unStartIndex
+                    >> [&](uint64_t FileID) { FileIDs.insert(FileID); };
+            } catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new RemoteStorageEnumerateUserPublishedFilesResult_t();
+            Request->m_nTotalResultCount = (int)FileIDs.size();
+            Request->m_eResult = EResult::k_EResultOK;
+            Request->m_nResultsReturned = 0;
+
+            std::for_each_n(FileIDs.begin(), std::min(FileIDs.size(), size_t(49)),
+                [&](uint64_t ID) { Request->m_rgPublishedFileId[Request->m_nResultsReturned++] = ID; });
+
+            Callbacks::Completerequest(RequestID, Types::RemoteStorageEnumerateUserPublishedFilesResult_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t EnumerateUserSharedWorkshopFiles(SteamID_t steamId, uint32_t unStartIndex, SteamParamStringArray_t *pRequiredTags, SteamParamStringArray_t *pExcludedTags)
+        {
+            return {};
+        }
+        SteamAPICall_t EnumerateUserSubscribedFiles(uint32_t unStartIndex)
+        {
+            return {};
+        }
+        SteamAPICall_t FileReadAsync(const char *pchFile, uint32_t nOffset, uint32_t cubToRead)
+        {
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new RemoteStorageFileReadAsyncComplete_t();
+            Request->m_eResult = EResult::k_EResultOK;
+            Request->m_hFileReadAsync = RequestID;
+            Request->m_cubRead = cubToRead;
+            Request->m_nOffset = nOffset;
+
+            // Much async..
+            Blob Buffer = FS::Readfile(Storagepath(pchFile));
+            if (nOffset) Buffer.erase(0, nOffset);
+            Asyncreads[RequestID] = Buffer;
+
+            Callbacks::Completerequest(RequestID, Types::RemoteStorageFileReadAsyncComplete_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t FileShare(const char *pchFile)
+        {
+            return {};
+        }
+        SteamAPICall_t FileWriteAsync(const char *pchFile, const void *pvData, uint32_t cubData)
+        {
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new RemoteStorageFileWriteAsyncComplete_t();
+            Request->m_eResult = EResult::k_EResultOK;
+
+            FileWrite(pchFile, pvData, cubData);
+
+            Callbacks::Completerequest(RequestID, Types::RemoteStorageFileWriteAsyncComplete_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t GetPublishedFileDetails0(PublishedFileId_t unPublishedFileId)
+        {
+            return GetPublishedFileDetails1(unPublishedFileId, 0xFFFFFFFF);
+        }
+        SteamAPICall_t GetPublishedFileDetails1(PublishedFileId_t unPublishedFileId, uint32_t unMaxSecondsOld)
+        {
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new RemoteStorageGetPublishedFileDetailsResult_t();
+
+            try
+            {
+                Database()
+                    << "SELECT * FROM Clientfiles WHERE (AppID = ? AND FileID = ?);"
+                    << Global.ApplicationID << unPublishedFileId
+                    >> [&](uint32_t Visibility, std::string &&Thumbnail, std::string &&Description,
+                        std::string &&Changelog, std::string &&Filename, uint64_t, uint32_t,
+                        std::string &&Title, std::string &&Tags)
+                {
+                    Request->m_nConsumerAppID = Global.ApplicationID;
+                    Request->m_nPublishedFileId = unPublishedFileId;
+                    Request->m_nCreatorAppID = Global.ApplicationID;
+                    Request->m_ulSteamIDOwner = Global.XUID.FullID;
+                    Request->m_rtimeUpdated = Global.Startuptime;
+                    Request->m_eVisibility =  Visibility;
+                    Request->m_bAcceptedForUse = true;
+
+                    Request->m_bTagsTruncated = Tags.size() > 1025;
+                    Request->m_nFileSize = FS::Filesize(Storagepath(Filename));
+                    Request->m_eFileType = k_EWorkshopFileTypeGameManagedItem;
+
+                    std::memcpy(Request->m_rgchDescription, Description.c_str(), std::min(Description.size(), size_t(8000)));
+                    std::memcpy(Request->m_pchFileName, Filename.c_str(), std::min(Filename.size(), size_t(260)));
+                    std::memcpy(Request->m_rgchTitle, Title.c_str(), std::min(Title.size(), size_t(129)));
+                    std::memcpy(Request->m_rgchTags, Tags.c_str(), std::min(Tags.size(), size_t(1025)));
+
+                    Request->m_eResult = EResult::k_EResultOK;
+                };
+            }
+            catch (...)
+            {
+                Request->m_eResult = EResult::k_EResultFileNotFound;
+            }
+
+            Callbacks::Completerequest(RequestID, Types::RemoteStorageGetPublishedFileDetailsResult_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t GetPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId)
+        {
+            return {};
+        }
+        SteamAPICall_t GetUserPublishedItemVoteDetails(PublishedFileId_t unPublishedFileId)
+        {
+            return {};
+        }
         SteamAPICall_t PublishFile(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
         SteamAPICall_t PublishVideo0(const char *pchVideoURL, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
         SteamAPICall_t PublishVideo1(EWorkshopVideoProvider eVideoProvider, const char *pchVideoAccount, const char *pchVideoIdentifier, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags);
         SteamAPICall_t PublishWorkshopFile0(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, SteamParamStringArray_t *pTags);
         SteamAPICall_t PublishWorkshopFile1(const char *pchFile, const char *pchPreviewFile, AppID_t nConsumerAppId, const char *pchTitle, const char *pchDescription, ERemoteStoragePublishedFileVisibility eVisibility, SteamParamStringArray_t *pTags, EWorkshopFileType eWorkshopFileType);
-        SteamAPICall_t SetUserPublishedFileAction(PublishedFileId_t unPublishedFileId, EWorkshopFileAction eAction);
-        SteamAPICall_t SubscribePublishedFile(PublishedFileId_t unPublishedFileId);
-        SteamAPICall_t UGCDownload0(UGCHandle_t hContent);
-        SteamAPICall_t UGCDownload1(UGCHandle_t hContent, uint32_t unPriority);
-        SteamAPICall_t UGCDownloadToLocation(UGCHandle_t hContent, const char *pchLocation, uint32_t unPriority);
-        SteamAPICall_t UnsubscribePublishedFile(PublishedFileId_t unPublishedFileId);
-        SteamAPICall_t UpdatePublishedFile(RemoteStorageUpdatePublishedFileRequest_t updatePublishedFileRequest);
-        SteamAPICall_t UpdateUserPublishedItemVote(PublishedFileId_t unPublishedFileId, bool bVoteUp);
+        SteamAPICall_t SetUserPublishedFileAction(PublishedFileId_t unPublishedFileId, EWorkshopFileAction eAction)
+        {
+            return {};
+        }
+        SteamAPICall_t SubscribePublishedFile(PublishedFileId_t unPublishedFileId)
+        {
+            return {};
+        }
+        SteamAPICall_t UGCDownload0(UGCHandle_t hContent)
+        {
+            return {};
+        }
+        SteamAPICall_t UGCDownload1(UGCHandle_t hContent, uint32_t unPriority)
+        {
+            return {};
+        }
+        SteamAPICall_t UGCDownloadToLocation(UGCHandle_t hContent, const char *pchLocation, uint32_t unPriority)
+        {
+            return {};
+        }
+        SteamAPICall_t UnsubscribePublishedFile(PublishedFileId_t unPublishedFileId)
+        {
+            return {};
+        }
+        SteamAPICall_t UpdatePublishedFile(RemoteStorageUpdatePublishedFileRequest_t updatePublishedFileRequest)
+        {
+            return {};
+        }
+        SteamAPICall_t UpdateUserPublishedItemVote(PublishedFileId_t unPublishedFileId, bool bVoteUp)
+        {
+            return {};
+        }
 
         UGCFileWriteStreamHandle_t FileWriteStreamOpen(const char *pchFile)
         {
@@ -286,7 +430,14 @@ namespace Steam
             // Not available in cloud-storage, only locally.
             return false;
         }
-        bool FileReadAsyncComplete(SteamAPICall_t hReadCall, void *pvBuffer, uint32_t cubToRead);
+        bool FileReadAsyncComplete(SteamAPICall_t hReadCall, void *pvBuffer, uint32_t cubToRead)
+        {
+            const auto Buffer = &Asyncreads[hReadCall];
+
+            std::memcpy(pvBuffer, Buffer->data(), std::min(Buffer->size(), size_t(cubToRead)));
+            Asyncreads.erase(hReadCall);
+            return true;
+        }
         bool FileWrite(const char *pchFile, const void *pvData, int32_t cubData)
         {
             return FS::Writefile(Storagepath(pchFile), std::string_view((const char *)pvData, cubData));
@@ -301,7 +452,11 @@ namespace Steam
             std::fclose((std::FILE *)writeHandle);
             return true;
         }
-        bool FileWriteStreamWriteChunk(UGCFileWriteStreamHandle_t writeHandle, const void *pvData, int32_t cubData);
+        bool FileWriteStreamWriteChunk(UGCFileWriteStreamHandle_t writeHandle, const void *pvData, int32_t cubData)
+        {
+            std::fwrite(pvData, cubData, 1, (FILE *)writeHandle);
+            return true;
+        }
         bool GetQuota0(int32_t *pnTotalBytes, int32_t *puAvailableBytes)
         {
             *pnTotalBytes = 0;
@@ -363,13 +518,48 @@ namespace Steam
         { return true; }
         bool SynchronizeToServer()
         { return true; }
-        bool UpdatePublishedFileDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchDescription);
-        bool UpdatePublishedFileFile(PublishedFileUpdateHandle_t updateHandle, const char *pchFile);
-        bool UpdatePublishedFilePreviewFile(PublishedFileUpdateHandle_t updateHandle, const char *pchPreviewFile);
-        bool UpdatePublishedFileSetChangeDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchChangeDescription);
-        bool UpdatePublishedFileTags(PublishedFileUpdateHandle_t updateHandle, SteamParamStringArray_t *pTags);
-        bool UpdatePublishedFileTitle(PublishedFileUpdateHandle_t updateHandle, const char *pchTitle);
-        bool UpdatePublishedFileVisibility(PublishedFileUpdateHandle_t updateHandle, ERemoteStoragePublishedFileVisibility eVisibility);
+        bool UpdatePublishedFileDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchDescription)
+        {
+            Pendingchanges[updateHandle]["Description"] = std::string(pchDescription);
+            return true;
+        }
+        bool UpdatePublishedFileFile(PublishedFileUpdateHandle_t updateHandle, const char *pchFile)
+        {
+            Pendingchanges[updateHandle]["Filename"] = std::string(pchFile);
+            return true;
+        }
+        bool UpdatePublishedFilePreviewFile(PublishedFileUpdateHandle_t updateHandle, const char *pchPreviewFile)
+        {
+            Pendingchanges[updateHandle]["Thumbnailfile"] = std::string(pchPreviewFile);
+            return true;
+        }
+        bool UpdatePublishedFileSetChangeDescription(PublishedFileUpdateHandle_t updateHandle, const char *pchChangeDescription)
+        {
+            Pendingchanges[updateHandle]["Changelog"] = std::string(pchChangeDescription);
+            return true;
+        }
+        bool UpdatePublishedFileTags(PublishedFileUpdateHandle_t updateHandle, SteamParamStringArray_t *pTags)
+        {
+            std::string CSV = pTags->m_ppStrings[0];
+            for (int i = 1; i < pTags->m_nNumStrings; ++i)
+            {
+                CSV += ",";
+                CSV += pTags->m_ppStrings[i];
+            }
+
+            Pendingchanges[updateHandle]["Tags"] = CSV;
+            return true;
+        }
+        bool UpdatePublishedFileTitle(PublishedFileUpdateHandle_t updateHandle, const char *pchTitle)
+        {
+            Pendingchanges[updateHandle]["Title"] = std::string(pchTitle);
+            return true;
+        }
+        bool UpdatePublishedFileVisibility(PublishedFileUpdateHandle_t updateHandle, ERemoteStoragePublishedFileVisibility eVisibility)
+        {
+            Pendingchanges[updateHandle]["Visibility"] = uint32_t(eVisibility);
+            return true;
+        }
 
         const char *GetFileNameAndSize(int iFile, int32_t *pnFileSizeInBytes)
         {
@@ -398,7 +588,7 @@ namespace Steam
         int32_t GetFileCount()
         {
             const auto Files = FS::Findfiles(Storagepath(""), "");
-            return Files.size();
+            return (int)Files.size();
         }
         int32_t GetFileSize(const char *pchFile)
         {
@@ -420,7 +610,7 @@ namespace Steam
             const auto Result = std::fread(pvData, 1, cubDataToRead, Handle);
             if (eAction == k_EUGCRead_Close || (eAction == k_EUGCRead_ContinueReadingUntilFinished && Result < cubDataToRead))
                 std::fclose(Handle);
-            return Result;
+            return (int)Result;
         }
 
         int64_t GetFileTimestamp(const char *pchFile)

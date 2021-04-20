@@ -67,7 +67,8 @@ namespace Steam
             try
             {
                 Database()
-                    << "SELECT Checkfile FROM DLCInfo WHERE AppID = ? LIMIT 1;" << Global.ApplicationID
+                    << "SELECT Checkfile FROM DLCInfo WHERE (AppID = ? AND DLCID = ?) LIMIT 1;"
+                    << Global.ApplicationID << appID
                     >> [&](const std::string &Checkfile) { Result = FS::Fileexists(Checkfile); };
             } catch (...) {}
             if (!Result) Result = FS::Fileexists(L"./Ayria/DEV_DLC");
