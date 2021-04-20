@@ -171,8 +171,7 @@ namespace Services::Usergroups
     // JSON API access for the plugins.
     static std::string __cdecl Leavegroup(JSON::Value_t &&Request)
     {
-        const auto GroupID = Request.value<uint64_t>("GroupID");
-        Backend::Network::Transmitmessage("Usergroups::Notifyleave", JSON::Object_t({ { "GroupID", GroupID } }));
+        Backend::Network::Transmitmessage("Usergroups::Notifyleave", std::move(Request));
         return "{}";
     }
     static std::string __cdecl Requestjoin(JSON::Value_t &&Request)
