@@ -9,46 +9,6 @@
 
 namespace Steam
 {
-    static bool Initialized = false;
-    static sqlite::database Database()
-    {
-        try
-        {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE| sqlite::OpenFlags::FULLMUTEX;
-            auto DB = sqlite::database("./Ayria/Steam.db", Config);
-
-            if (!Initialized)
-            {
-                DB << "CREATE TABLE IF NOT EXISTS DLCInfo ("
-                      "DLCID integer not null, "
-                      "AppID integer not null, "
-                      "Checkfile text, "
-                      "Name text, "
-                      "PRIMARY KEY (DLCID, AppID) );";
-
-                DB << "CREATE TABLE IF NOT EXISTS DLCData ("
-                      "AppID integer not null, "
-                      "Key text not null, "
-                      "Value text, "
-                      "PRIMARY KEY (AppID, Key));";
-
-                DB << "CREATE TABLE IF NOT EXISTS Appinfo ("
-                      "AppID integer primary key unique not null, "
-                      "Languages text not null);";
-
-                Initialized = true;
-            }
-
-            return DB;
-        }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()));
-            return sqlite::database(":memory:");
-        }
-    }
-
     struct SteamApps
     {
         enum ERegisterActivationCodeResult : uint32_t
@@ -64,14 +24,18 @@ namespace Steam
         {
             bool Result{};
 
-            Database() << "SELECT * FROM DLCInfo WHERE AppID = ? LIMIT 1 OFFSET ?;" << Global.ApplicationID << iDLC
-                       >> [&](uint32_t DLCID, uint32_t AppID, const std::string &Checkfile, const std::string &Name)
-                       {
-                           if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
-                           *pbAvailable = FS::Fileexists(Checkfile);
-                           *pAppID = AppID;
-                           Result = true;
-                       };
+            try
+            {
+                Database()
+                    << "SELECT * FROM DLCInfo WHERE AppID = ? LIMIT 1 OFFSET ?;" << Global.ApplicationID << iDLC
+                    >> [&](uint32_t DLCID, uint32_t AppID, const std::string &Checkfile, const std::string &Name)
+                    {
+                        if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
+                        *pbAvailable = FS::Fileexists(Checkfile);
+                        *pAppID = AppID;
+                        Result = true;
+                    };
+            } catch (...) {}
 
             return Result;
         }
@@ -100,12 +64,12 @@ namespace Steam
         {
             bool Result{};
 
-            Database() << "SELECT Checkfile FROM DLCInfo WHERE AppID = ? LIMIT 1;" << Global.ApplicationID
-                       >> [&](const std::string &Checkfile)
-                       {
-                           Result = FS::Fileexists(Checkfile);
-                       };
-
+            try
+            {
+                Database()
+                    << "SELECT Checkfile FROM DLCInfo WHERE AppID = ? LIMIT 1;" << Global.ApplicationID
+                    >> [&](const std::string &Checkfile) { Result = FS::Fileexists(Checkfile); };
+            } catch (...) {}
             if (!Result) Result = FS::Fileexists(L"./Ayria/DEV_DLC");
             return Result;
         }
@@ -141,7 +105,8 @@ namespace Steam
         int32_t GetDLCCount()
         {
             int32_t Count{};
-            Database() << "SELECT COUNT(*) FROM DLCInfo WHERE AppID = ?;" << Global.ApplicationID >> Count;
+            try { Database() << "SELECT COUNT(*) FROM DLCInfo WHERE AppID = ?;" << Global.ApplicationID >> Count; }
+            catch (...) {}
             return Count;
         }
 
@@ -149,12 +114,16 @@ namespace Steam
         {
             int32_t Result{};
 
-            Database() << "SELECT Value FROM DLCData WHERE AppID = ? AND Key = ? LIMIT 1;"
-                       << nAppID << pchKey >> [&](const std::string &Value)
-                       {
-                           std::strncpy(pchValue, Value.c_str(), cchValueMax);
-                           Result = std::min((int32_t)Value.size(), cchValueMax);
-                       };
+            try
+            {
+                Database()
+                    << "SELECT Value FROM DLCData WHERE AppID = ? AND Key = ? LIMIT 1;"
+                    << nAppID << pchKey >> [&](const std::string &Value)
+                    {
+                        std::strncpy(pchValue, Value.c_str(), cchValueMax);
+                        Result = std::min((int32_t)Value.size(), cchValueMax);
+                    };
+            } catch (...) {}
 
             return Result;
         }
@@ -262,7 +231,9 @@ namespace Steam
         {
             static std::string Cache;
 
-            Database() << "SELECT Languages FROM Appinfo WHERE AppID = ? LIMIT 1;" >> Cache;
+            try { Database() << "SELECT Languages FROM Appinfo WHERE AppID = ? LIMIT 1;" >> Cache; }
+            catch (...) {}
+
             if (Cache.empty()) Cache = *Global.Locale;
             return Cache.c_str();
         }
