@@ -15,13 +15,13 @@
 namespace AyriaDB
 {
     // For unfiltered access to the DB, use with care.
-    inline sqlite::database Query(const std::string Path = "./Ayria/Client.db")
+    inline sqlite::database Query()
     {
         try
         {
             sqlite::sqlite_config Config{};
             Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            return sqlite::database(Path.c_str(), Config);
+            return sqlite::database("./Ayria/Client.db", Config);
         }
         catch (std::exception &e)
         {
@@ -62,6 +62,33 @@ namespace AyriaDB
 
                 return Result;
             }
+            inline JSON::Object_t byName(const std::string &Name)
+            {
+                JSON::Object_t Result{};
+
+                try
+                {
+                    Query()
+                        << "SELECT * FROM Clientinfo WHERE Username = ? LIMIT 1;" << Name
+                        >> [&](uint32_t ClientID, uint32_t Lastupdate, std::string &&B64Authticket,
+                            std::string &&B64Sharedkey, uint32_t PublicIP, uint32_t GameID,
+                            std::string &&Username, bool isLocal)
+                        {
+                            Result = JSON::Object_t({
+                                { "B64Authticket", B64Authticket },
+                                { "B64Sharedkey", B64Sharedkey },
+                                { "Lastupdate", Lastupdate },
+                                { "ClientID", ClientID },
+                                { "Username", Username },
+                                { "PublicIP", PublicIP },
+                                { "isLocal", isLocal },
+                                { "GameID", GameID }
+                                });
+                        };
+                } catch (...) {}
+
+                return Result;
+            }
             inline std::unordered_set<uint32_t> byGame(uint32_t GameID)
             {
                 std::unordered_set<uint32_t> Result{};
@@ -94,6 +121,12 @@ namespace AyriaDB
     // Key-value storage of what the user is doing.
     namespace Userpresence
     {
+        inline void Clear(uint32_t ClientID)
+        {
+            try { Query() << "DELETE FROM Userpresence WHERE ClientID = ?;" << ClientID; }
+            catch (...) {}
+        }
+
         namespace Get
         {
             inline std::unordered_map<std::string, std::string> All(uint32_t ClientID)
@@ -166,6 +199,11 @@ namespace AyriaDB
 
             return isFriend;
         }
+        inline void Clear(uint32_t SourceID, uint32_t TargetID)
+        {
+            try { Query() << "DELETE FROM Relationships WHERE SourceID = ? AND TargetID = ?;" << SourceID << TargetID; }
+            catch (...) {}
+        }
 
         namespace Get
         {
@@ -192,6 +230,20 @@ namespace AyriaDB
                             >> [&](uint32_t BlockedID) { Result.insert(BlockedID); };
                 }
                 catch (...) {}
+
+                return Result;
+            }
+
+            inline std::unordered_set<uint32_t> Friendrequests(uint32_t ClientID)
+            {
+                std::unordered_set<uint32_t> Result{};
+
+                try
+                {
+                    Query()
+                        << "SELECT TargetID FROM Relationships WHERE TargetID = ? AND isFriend = true;" << ClientID
+                        >> [&](uint32_t FriendID) { Result.insert(FriendID); };
+                } catch (...) {}
 
                 return Result;
             }
@@ -284,6 +336,18 @@ namespace AyriaDB
                 {
                     Query() << "SELECT GroupID FROM Usergroups WHERE GameID = ?;" << GameID
                             >> [&](uint64_t GroupID) { Result.insert(GroupID); };
+                } catch (...) {}
+
+                return Result;
+            }
+            inline std::unordered_set<uint64_t> byType(uint8_t Type)
+            {
+                std::unordered_set<uint64_t> Result{};
+
+                try
+                {
+                    Query() << "SELECT GroupID FROM Usergroups WHERE (GroupID & ?) = true;" << Type
+                        >> [&](uint64_t GroupID) { Result.insert(GroupID); };
                 } catch (...) {}
 
                 return Result;

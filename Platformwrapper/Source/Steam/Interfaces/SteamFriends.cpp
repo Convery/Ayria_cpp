@@ -20,20 +20,8 @@ namespace Steam
     static Hashmap<uint64_t, GameInfo_t> Friendsgames;
     uint32_t Personastate;
 
-    static sqlite::database Database()
-    {
-        try
-        {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            return sqlite::database("./Ayria/Client.db", Config);
-        }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()));
-            return sqlite::database(":memory:");
-        }
-    }
+    using GroupID_t = AyriaDB::Usergroups::GroupID_t;
+    using Grouptype_t = AyriaDB::Usergroups::Grouptype_t;
 
     struct SteamFriends
     {
@@ -140,42 +128,15 @@ namespace Steam
             k_EFriendFlagAll = 0xFFFF,
         };
 
-        using Relationflags_t = union { uint8_t Raw; struct { uint8_t isFriend : 1, isBlocked : 1; }; };
-        union Grouptype_t
-        {
-            uint8_t Raw;
-            struct
-            {
-                uint8_t
-                    isClan : 1,
-                    isPublic : 1,
-                    isGamelobby : 1,
-                    isLocalhost : 1,
-                    isChatgroup : 1,
-                    isFriendgroup : 1;
-            };
-        };
-        union GroupID_t
-        {
-            uint64_t Raw;
-            struct
-            {
-                uint32_t AdminID;   // Creator.
-                uint16_t RoomID;    // Random.
-                uint8_t Limit;      // Users.
-                uint8_t Type;       // Server, localhost, or clan.
-            };
-        };
-
-        // Simple helper to check permutations.
-        static EFriendRelationship Steamrelation(Relationflags_t Client, Relationflags_t Friend)
+        // Simple helper to check permutations, pair<isFriend, isBlocked>
+        static EFriendRelationship Steamrelation(std::pair<bool, bool> A, std::pair<bool, bool> B)
         {
             // Only 6 possible states for the flags.. currently.
-            if (!Client.isFriend && Friend.isFriend) return k_EFriendRelationshipRequestRecipient;
-            if (Client.isFriend && !Friend.isFriend) return k_EFriendRelationshipRequestInitiator;
-            if (Client.isFriend && Friend.isFriend) return k_EFriendRelationshipFriend;
-            if (Friend.isBlocked) return k_EFriendRelationshipIgnored;
-            if (Client.isBlocked) return k_EFriendRelationshipBlocked;
+            if (!A.second && B.second) return k_EFriendRelationshipRequestRecipient;
+            if (A.second && !B.second) return k_EFriendRelationshipRequestInitiator;
+            if (A.second && B.second) return k_EFriendRelationshipFriend;
+            if (B.first) return k_EFriendRelationshipIgnored;
+            if (A.first) return k_EFriendRelationshipBlocked;
             return k_EFriendRelationshipNone;
         }
 
@@ -188,23 +149,27 @@ namespace Steam
         }
         EFriendRelationship GetFriendRelationship(SteamID_t steamIDFriend)
         {
-            Relationflags_t Clientflags{}, Friendflags{};
+            std::pair<bool, bool> Client{}, Friend{};
 
-            // Check the database for any flags related to the clients.
-            Database() << "SELECT Flags FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
-                       << Global.XUID.UserID << steamIDFriend.UserID >> Clientflags.Raw;
-            Database() << "SELECT Flags FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
-                       << steamIDFriend.UserID << Global.XUID.UserID >> Friendflags.Raw;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isFriend, isBlocked FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
+                    << Global.XUID.UserID << steamIDFriend.UserID
+                    >> std::tie(Client.first, Client.second);
 
-            return Steamrelation(Clientflags, Friendflags);
+                AyriaDB::Query()
+                    << "SELECT isFriend, isBlocked FROM Relationships WHERE SourceID = ? AND TargetID = ?;"
+                    << steamIDFriend.UserID << Global.XUID.UserID
+                    >> std::tie(Friend.first, Friend.second);
+            }
+            catch (...) {}
+
+            return Steamrelation(Client, Friend);
         }
         EPersonaState GetFriendPersonaState(SteamID_t steamIDFriend)
         {
-            uint32_t Lastupdate{};
-
-            // If the client is in the database, they are online.
-            Database() << "SELECT Lastupdate FROM Onlineclients WHERE ClientID = ? ORDER BY Authenticated DESC LIMIT 1;"
-                       << steamIDFriend.UserID >> Lastupdate;
+            const uint32_t Lastupdate = AyriaDB::Clientinfo::Get::byID(steamIDFriend.UserID)["Lastupdate"];
 
             // Status is inferred by activity.
             if (time(NULL) - Lastupdate < 15) return k_EPersonaStateOnline;
@@ -221,23 +186,19 @@ namespace Steam
         }
         FriendsGroupID_t GetFriendsGroupIDByIndex(int iFG)
         {
-            return GroupID_t{ GetClanByIndex(iFG).FullID }.RoomID;
+            Grouptype_t Flags{}; Flags.isFriendgroup = true;
+            const auto List = AyriaDB::Usergroups::Get::byType(Flags.Raw);
+            if (List.size() <= iFG) return 0;
+
+            for (const auto &Item : List) if (iFG-- == 0) return GroupID_t{ Item }.RoomID;
+            return {};
         }
 
         HSteamCall AddFriendByName(const char *pchEmailOrAccountName)
         {
-            uint32_t AccountID{};
+            const uint32_t ClientID = AyriaDB::Clientinfo::Get::byName(pchEmailOrAccountName)["ClientID"];
 
-            Database() << "SELECT ClientID FROM Onlineclients WHERE Username = ? ORDER BY Authenticated LIMIT 1;"
-                       << std::string(pchEmailOrAccountName) >> AccountID;
-
-            if (AccountID)
-            {
-                SteamID_t ID;
-                ID.UserID = AccountID;
-                AddFriend(ID);
-            }
-
+            if (ClientID) AddFriend({ .UserID = ClientID });
             return 0;
         }
         HSteamCall InviteFriendByEmail0(const char *pchEmailOrAccountName)
@@ -263,21 +224,32 @@ namespace Steam
         }
         SteamAPICall_t JoinClanChatRoom(SteamID_t groupID)
         {
-            Ayriarequest("Usergroup::Requestjoin", JSON::Object_t({ { "GroupID", groupID.FullID }, { "ProviderID", Hash::WW32("Steam") } }));
+            Ayriarequest("Usergroup::Requestjoin", JSON::Object_t({ { "GroupID", groupID.FullID } }));
             const auto RequestID = Callbacks::Createrequest();
 
             // Poll in the background.
             std::thread([=]()
             {
-                for (size_t i = 0; i < 120; ++i)
+                for (size_t i = 0; i < 180; ++i)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(333));
 
-                    std::vector<uint32_t> MemberIDs{};
-                    Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                               << groupID.UserID >> MemberIDs;
+                    auto Groupinfo = AyriaDB::Usergroups::Get::byID(groupID.FullID);
 
-                    if (MemberIDs.cend() != std::find(MemberIDs.cbegin(), MemberIDs.cend(), Global.XUID.UserID))
+                    // Does the group even exist?
+                    if (Groupinfo.empty())
+                    {
+                        const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
+                        Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseDoesntExist;
+                        Response->m_steamIDClanChat = groupID;
+
+                        Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
+                        return;
+                    }
+
+                    // Did we join the group?
+                    const std::vector<uint32_t> Memberlist = Groupinfo["MemberIDs"];
+                    if (Memberlist.cend() != std::find(Memberlist.cbegin(), Memberlist.cend(), Global.XUID.UserID))
                     {
                         const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
                         Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseSuccess;
@@ -286,10 +258,22 @@ namespace Steam
                         Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
                         return;
                     }
+
+                    // Is the group full?
+                    const uint32_t Memberlimit = Groupinfo["Memberlimit"];
+                    if (Memberlimit <= Memberlist.size())
+                    {
+                        const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
+                        Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseFull;
+                        Response->m_steamIDClanChat = groupID;
+
+                        Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
+                        return;
+                    }
                 }
 
                 const auto Response = new Callbacks::JoinClanChatRoomCompletionResult_t();
-                Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseFull;
+                Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseError;
                 Response->m_steamIDClanChat = groupID;
                 Callbacks::Completerequest(RequestID, Callbacks::Types::JoinClanChatRoomCompletionResult_t, Response);
 
@@ -316,27 +300,20 @@ namespace Steam
 
         SteamID_t GetChatMemberByIndex(SteamID_t groupID, int iIndex)
         {
+            const std::vector<uint32_t> Members = AyriaDB::Usergroups::Get::MemberIDs(groupID.FullID);
+            if (Members.size() < iIndex) return {};
+
             SteamID_t Result = Global.XUID;
-
-            std::vector<uint32_t> MemberIDs{};
-            Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                       << groupID.FullID >> MemberIDs;
-
-            if (MemberIDs.size() < iIndex) return {};
-            Result.UserID = MemberIDs[iIndex];
+            Result.UserID = Members[iIndex];
             return Result;
         }
         SteamID_t GetClanByIndex(int iClan)
         {
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID FROM Usergroups;" >> GroupIDs;
+            Grouptype_t Flags{}; Flags.isClan = true;
+            const auto List = AyriaDB::Usergroups::Get::byType(Flags.Raw);
+            if (List.size() <= iClan) return {};
 
-            for (const auto &Item : GroupIDs)
-            {
-                if (Grouptype_t{ GroupID_t{ Item }.Type }.isFriendgroup && iClan-- == 0)
-                    return { Item };
-            }
-
+            for (const auto &Item : List) if (iClan-- == 0) return { Item };
             return {};
         }
         SteamID_t GetClanOfficerByIndex(SteamID_t steamIDClan, int iOfficer)
@@ -357,56 +334,32 @@ namespace Steam
         }
         SteamID_t GetFriendByIndex1(int iFriend, EFriendFlags iFriendFlags)
         {
-            Hashmap<uint32_t, Relationflags_t> Source, Target;
-            SteamID_t Result{ 0x1100001DEADC0DEULL };
-            Hashset<uint32_t> Results;
+            std::unordered_set<uint32_t> Results{};
 
-            // Could probably make a better SQL query for this.
-            Database() << "SELECT (SourceID, TargetID, Flags) FROM Relationships WHERE SourceID = ? OR TargetID = ?;"
-                       << Global.XUID.UserID << Global.XUID.UserID
-                       >> [&](uint32_t SourceID, uint32_t TargetID, uint8_t Flags)
-                       {
-                           if (Global.XUID.UserID == SourceID) Source[TargetID] = { Flags };
-                           if (Global.XUID.UserID == TargetID) Target[SourceID] = { Flags };
-                       };
-
-            // Match the requested flags.
-            for (const auto &[FriendID, Flags] : Source)
+            // Blocked and ignored work the same in Ayria, just stops messages going through.
+            if (iFriendFlags & k_EFriendFlagBlocked || iFriendFlags & k_EFriendFlagIgnored)
             {
-                const auto Relation = Steamrelation(Flags, Target[FriendID]);
+                auto Blocked = AyriaDB::Relationships::Get::Blocked(Global.XUID.UserID);
+                Results.merge(Blocked);
+            }
 
-                switch (Relation)
-                {
-                    case k_EFriendRelationshipRequestRecipient:
-                        if (iFriendFlags & k_EFriendFlagRequestingFriendship)
-                            Results.insert(FriendID);
-                                break;
+            // k_EFriendFlagImmediate = mutual friendship.
+            const auto Friends = AyriaDB::Relationships::Get::Friends(Global.XUID.UserID);
+            for (const auto Friend : Friends)
+            {
+                const auto isMutual = AyriaDB::Relationships::isFriend(Friend, Global.XUID.UserID);
 
-                    case k_EFriendRelationshipRequestInitiator:
-                        if (iFriendFlags & k_EFriendFlagFriendshipRequested)
-                            Results.insert(FriendID);
-                                break;
+                if (iFriendFlags & k_EFriendFlagFriendshipRequested && !isMutual)
+                    Results.insert(Friend);
+                if (iFriendFlags & k_EFriendFlagImmediate && isMutual)
+                    Results.insert(Friend);
+            }
 
-                    case k_EFriendRelationshipFriend:
-                        if (iFriendFlags & k_EFriendFlagImmediate)
-                            Results.insert(FriendID);
-                                break;
-
-                    case k_EFriendRelationshipIgnored:
-                        if (iFriendFlags & k_EFriendFlagIgnored)
-                            Results.insert(FriendID);
-                                break;
-
-                    case k_EFriendRelationshipBlocked:
-                        if (iFriendFlags & k_EFriendFlagBlocked)
-                            Results.insert(FriendID);
-                                break;
-
-                    case k_EFriendRelationshipNone:
-                        if (iFriendFlags & k_EFriendFlagNone)
-                            Results.insert(FriendID);
-                                break;
-                }
+            // Only the other client wants to be friends.
+            if (iFriendFlags & k_EFriendFlagRequestingFriendship)
+            {
+                auto Requests = AyriaDB::Relationships::Get::Friendrequests(Global.XUID.UserID);
+                Results.merge(Requests);
             }
 
             // By offset.
@@ -414,6 +367,7 @@ namespace Steam
             {
                 if (0 == iFriend--)
                 {
+                    auto Result = Global.XUID;
                     Result.UserID = ID;
                     return Result;
                 }
@@ -428,40 +382,12 @@ namespace Steam
 
         bool AcknowledgeInviteToClan(SteamID_t steamID, bool bAcceptOrDenyClanInvite)
         {
-            uint64_t GroupID{};
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID FROM Grouprequests WHERE ClientID = ? AND ProviderID = ?;"
-                       << steamID.UserID << Hash::WW32("Steam") >> GroupIDs;
-
-            for (const auto &Item : GroupIDs)
-            {
-                if (GroupID_t{ Item }.AdminID == Global.XUID.UserID)
-                {
-                    GroupID = Item;
-                    break;
-                }
-            }
-
-            // No applications for a group we are admin of.
-            if (GroupID == 0) return false;
-
-            const auto Request = JSON::Object_t({
-                { "isAccepted", bAcceptOrDenyClanInvite },
-                { "ProviderID", Hash::WW32("Steam") },
-                { "ClientID", steamID.UserID },
-                { "GroupID", GroupID },
-            });
-
-            Ayriarequest("Usergroups::Answerrequest", JSON::Object_t({}));
-            return true;
+            // Ayria does not do invites directly, the user requests to join.
+            return false;
         }
         bool AddFriend(SteamID_t steamIDFriend)
         {
-            const auto Request = JSON::Object_t({
-                { "TargetID", steamIDFriend.UserID },
-                { "isFriend", true}
-            });
-            Ayriarequest("Relationships::Update", Request);
+            AyriaDB::Relationships::Set::Friend(Global.XUID.UserID, steamIDFriend.UserID);
 
             const auto SRequest = new Callbacks::FriendAdded_t();
             SRequest->m_ulSteamID = steamIDFriend.FullID;
@@ -560,34 +486,13 @@ namespace Steam
         }
         bool InviteFriendToClan(SteamID_t steamIDfriend, SteamID_t steamIDclan)
         {
-            const auto Message = JSON::Object_t({
-                { "ClanID", steamIDclan.FullID },
-                { "Type", "Steam_Claninvite"s }
-            });
-
-            const auto Request = JSON::Object_t({
-                { "B64Message", Base64::Encode(JSON::Dump(Message)) },
-                { "ProviderID", Hash::WW32("Steam") },
-                { "TargetID", steamIDfriend.UserID }
-            });
-
-            Ayriarequest("Messaging::Sendtouser", Request);
-            return true;
+            // Ayria does not do invites directly, the user requests to join.
+            return false;
         }
         bool InviteUserToGame(SteamID_t steamIDFriend, const char *pchConnectString)
         {
-            const auto Message = JSON::Object_t({
-                { "Connectstring", std::string(pchConnectString) },
-                { "Type", "Steam_Gameinvite"s }
-            });
-            const auto Request = JSON::Object_t({
-                { "B64Message", Base64::Encode(JSON::Dump(Message)) },
-                { "ProviderID", Hash::WW32("Steam") },
-                { "TargetID", steamIDFriend.UserID }
-            });
-
-            Ayriarequest("Messaging::Sendtouser", Request);
-            return true;
+            // Ayria does not do invites directly, the user requests to join.
+            return false;
         }
         bool IsClanChatAdmin(SteamID_t groupID, SteamID_t userID)
         {
@@ -603,15 +508,12 @@ namespace Steam
         }
         bool IsUserInSource(SteamID_t steamIDUser, SteamID_t steamIDSource)
         {
-            std::vector<uint32_t> MemberIDs{};
-            Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                       << steamIDSource.FullID >> MemberIDs;
-
+            const auto MemberIDs = AyriaDB::Usergroups::Get::MemberIDs(steamIDSource.FullID);
             return MemberIDs.end() != std::find(MemberIDs.begin(), MemberIDs.end(), steamIDUser.UserID);
         }
         bool LeaveClanChatRoom(SteamID_t groupID)
         {
-            Ayriarequest("Usergroups::Leavegroup", JSON::Object_t({ {"GroupID", groupID.UserID} }));
+            Ayriarequest("Usergroups::Leavegroup", JSON::Object_t({ {"GroupID", groupID.FullID} }));
             return true;
         }
         bool OpenClanChatWindowInSteam(SteamID_t groupID)
@@ -625,17 +527,17 @@ namespace Steam
         }
         bool RemoveFriend(SteamID_t steamIDFriend)
         {
-            Ayriarequest("Relationships::Clear", JSON::Object_t({ { "TargetID", steamIDFriend.UserID } }));
+            AyriaDB::Relationships::Clear(Global.XUID.UserID, steamIDFriend.UserID);
             return true;
         }
         bool ReplyToFriendMessage(SteamID_t steamIDFriend, const char *pchMsgToSend)
         {
             const auto Request = JSON::Object_t({
                 { "B64Message", Base64::Encode(pchMsgToSend) },
-                { "ProviderID", Hash::WW32("Steam") },
+                { "Messagetype", Hash::WW32("Steamfriend") },
                 { "TargetID", steamIDFriend.UserID },
-                { "isPrivate", true },
-                { "Save", true }
+                { "Transient", false },
+                { "isPrivate", true }
             });
 
             Ayriarequest("Messaging::Sendtouser", Request);
@@ -649,9 +551,9 @@ namespace Steam
         {
             const auto Request = JSON::Object_t({
                 { "B64Message", Base64::Encode(cszMessage) },
-                { "ProviderID", Hash::WW32("Steam") },
+                { "Messagetype", Hash::WW32("Steamclan") },
                 { "GroupID", groupID.FullID },
-                { "Save", true }
+                { "Transient", false }
             });
 
             Ayriarequest("Messaging::Sendtogroup", Request);
@@ -659,15 +561,15 @@ namespace Steam
         }
         bool SendMsgToFriend1(SteamID_t steamIDFriend, EChatEntryType eFriendMsgType, const void *pvMsgBody, int cubMsgBody)
         {
-            if (eFriendMsgType != k_EChatEntryTypeChatMsg && eFriendMsgType == k_EChatEntryTypeEmote)
+            if (eFriendMsgType != k_EChatEntryTypeChatMsg && eFriendMsgType != k_EChatEntryTypeEmote)
                 return false;
 
             const auto Request = JSON::Object_t({
                 { "B64Message", Base64::Encode(std::string_view((const char *)pvMsgBody, cubMsgBody)) },
-                { "ProviderID", Hash::WW32("Steam") },
+                { "Messagetype", Hash::WW32("Steamfriend") },
                 { "TargetID", steamIDFriend.UserID },
-                { "isPrivate", true },
-                { "Save", true }
+                { "Transient", false },
+                { "isPrivate", true }
             });
 
             Ayriarequest("Messaging::Sendtouser", Request);
@@ -677,25 +579,34 @@ namespace Steam
         { return true; }
         bool SetRichPresence(const char *pchKey, const char *pchValue)
         {
-            Ayriarequest("Presence::Update", JSON::Object_t({ { std::string(pchKey), std::string(pchValue) } }));
+            AyriaDB::Userpresence::Set::Single(Global.XUID.UserID, pchKey, pchValue);
             return true;
         }
 
         const char *GetClanName(SteamID_t steamIDClan)
         {
-            static std::string Name{};
-            Database() << "SELECT Groupname FROM Usergroups WHERE GroupID = ?;" << steamIDClan.FullID >> Name;
+            const auto Groupinfo = AyriaDB::Usergroups::Get::Groupdata(steamIDClan.FullID);
+            const auto Object = JSON::Parse(Groupinfo);
+
+            static std::string Name;
+            Name = Object.value("Groupname", "UNKNOWN");
             return Name.c_str();
         }
         const char *GetClanTag(SteamID_t steamIDClan)
         {
-            return "";
+            const auto Groupinfo = AyriaDB::Usergroups::Get::Groupdata(steamIDClan.FullID);
+            const auto Object = JSON::Parse(Groupinfo);
+
+            static std::string Name;
+            Name = Object.value("Grouptag", "UNK");
+            return Name.c_str();
         }
         const char *GetFriendPersonaName(SteamID_t steamIDFriend)
         {
-            static std::string Name{};
-            Database() << "SELECT Username FROM Onlineclients WHERE ClientID = ? ORDER BY Authenticated DESC LIMIT 1;"
-                       << steamIDFriend.UserID >> Name;
+            auto Clientinfo = AyriaDB::Clientinfo::Get::byID(steamIDFriend.UserID);
+
+            static std::string Name;
+            Name = Clientinfo["Username"].get<std::string>();
             return Name.c_str();
         }
         const char *GetFriendPersonaNameHistory(SteamID_t steamIDFriend, int iPersonaName)
@@ -709,38 +620,44 @@ namespace Steam
         }
         const char *GetFriendRichPresence(SteamID_t steamIDFriend, const char *pchKey)
         {
-            static std::string Cache{};
-
-            Database() << "SELECT Value FROM Presence WHERE ClientID = ? AND Key = ?;"
-                       << steamIDFriend.UserID << std::string(pchKey) >> Cache;
-
-            return Cache.c_str();
+            static std::string Value;
+            Value = AyriaDB::Userpresence::Get::byKey(steamIDFriend.UserID, pchKey);
+            return Value.c_str();
         }
         const char *GetFriendRichPresenceKeyByIndex(SteamID_t steamIDFriend, int iKey)
         {
-            static std::string Cache{};
+            const auto Presence = AyriaDB::Userpresence::Get::All(steamIDFriend.UserID);
+            static std::string Result; Result.clear();
 
-            Database() << "SELECT Key FROM Presence WHERE ClientID = ? LIMIT 1 OFFSET ?;"
-                << steamIDFriend.UserID << iKey >> Cache;
-
-            return Cache.c_str();
-        }
-        const char *GetFriendsGroupName(FriendsGroupID_t friendsGroupID)
-        {
-            static std::string Name{};
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID from Usergroups;" >> GroupIDs;
-
-            for (const auto &ID : GroupIDs)
+            for (const auto &[Key, Value] : Presence)
             {
-                if (Grouptype_t{ GroupID_t{ ID }.Type }.isFriendgroup && GroupID_t{ ID }.RoomID == friendsGroupID)
+                if (iKey-- == 0)
                 {
-                    Database() << "SELECT Groupname FROM Usergroups WHERE GroupID = ?;" << ID >> Name;
-                    return Name.c_str();
+                    Result = Key;
+                    break;
                 }
             }
 
-            return "";
+            return Result.c_str();
+        }
+        const char *GetFriendsGroupName(FriendsGroupID_t friendsGroupID)
+        {
+            static std::string Name;
+            Grouptype_t Type{}; Type.isFriendgroup = true;
+            const auto Groups = AyriaDB::Usergroups::Get::byType(Type.Raw);
+
+            for (const auto &Item : Groups)
+            {
+                if (GroupID_t{ Item }.RoomID == friendsGroupID)
+                {
+                    const auto Groupinfo = AyriaDB::Usergroups::Get::Groupdata(Item);
+                    const auto Object = JSON::Parse(Groupinfo);
+                    Name = Object.value("Groupname", "UNKNOWN");
+                    break;
+                }
+            }
+
+            return Name.c_str();
         }
         const char *GetPersonaName()
         {
@@ -756,60 +673,55 @@ namespace Steam
         { return 0; }
         int GetChatMessage(SteamID_t steamIDFriend, int iChatID, void *pvData, int cubData, EChatEntryType *peFriendMsgType)
         {
-            std::string B64Message{};
-            uint32_t Timestamp{};
-
-            Database() << "SELECT (B64Message, Timestamp) FROM Messages WHERE SourceID = ? AND ProviderID = ? AND Transient = false LIMIT 1 OFFSET ?;"
-                       << steamIDFriend.UserID << Hash::WW32("Steam") << iChatID >> std::tie(B64Message, Timestamp);
+            uint32_t Messagetype; std::string B64Message;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT (Messagetype, B64Message) FROM Usermessages WHERE (SenderID = ? AND TargetID = ?) "
+                       "OR (SenderID = ? AND TargetID = ?) ORDER BY Timestamp ASC LIMIT 1 OFFSET ?;"
+                    << Global.XUID.UserID << steamIDFriend.UserID << steamIDFriend.UserID << Global.XUID.UserID << iChatID
+                    >> std::tie(Messagetype, B64Message);
+            }
+            catch (...) {}
 
             const auto Decoded = Base64::Decode(B64Message);
             int Min = std::min(cubData, int(Decoded.size()));
-
-            *peFriendMsgType = (uint32_t(time(NULL)) - Timestamp) > 30 ? k_EChatEntryTypeHistoricalChat : k_EChatEntryTypeChatMsg;
+            *peFriendMsgType = k_EChatEntryTypeChatMsg;
             std::memcpy(pvData, Decoded.data(), Min);
             return Min;
         }
         int GetClanChatMemberCount(SteamID_t groupID)
         {
-            std::vector<uint32_t> MemberIDs{};
-
-            Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                       << groupID.FullID >> MemberIDs;
-
-            return (int)MemberIDs.size();
+            const auto Members = AyriaDB::Usergroups::Get::MemberIDs(groupID.FullID);
+            return (int)Members.size();
         }
         int GetClanChatMessage(SteamID_t groupID, int iMessage, void *prgchText, int cchTextMax, EChatEntryType *peChatEntryType, SteamID_t *pSteamIDChatter)
         {
-            std::string B64Message{};
-            uint32_t Timestamp{};
-            uint32_t SourceID{};
+            uint32_t Messagetype{}; std::string B64Message{}; uint32_t Sender{};
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT (Messagetype, B64Message, SenderID) FROM Groupmessages WHERE GroupID = ? "
+                       "ORDER BY Timestamp ASC LIMIT 1 OFFSET ?;"
+                    << groupID.FullID << iMessage
+                    >> std::tie(Messagetype, B64Message, Sender);
+            }
+            catch (...) { return 0; }
 
-            Database() << "SELECT (B64Message, Timestamp, SourceID) FROM Messages WHERE GroupID = ? LIMIT 1 OFFSET ?;"
-                       << groupID.FullID << iMessage >> std::tie(B64Message, Timestamp, SourceID);
+            *pSteamIDChatter = Global.XUID;
+            pSteamIDChatter->UserID = Sender;
 
             const auto Decoded = Base64::Decode(B64Message);
             int Min = std::min(cchTextMax, int(Decoded.size()));
-
-            *pSteamIDChatter = Global.XUID;
-            pSteamIDChatter->UserID = SourceID;
-
-            *peChatEntryType = (uint32_t(time(NULL)) - Timestamp) > 30 ? k_EChatEntryTypeHistoricalChat : k_EChatEntryTypeChatMsg;
+            *peChatEntryType = k_EChatEntryTypeChatMsg;
             std::memcpy(prgchText, Decoded.data(), Min);
             return Min;
         }
         int GetClanCount()
         {
-            int Count = 0;
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID FROM Usergroups;" >> GroupIDs;
-
-            for (const auto &Item : GroupIDs)
-            {
-                if (Grouptype_t{ GroupID_t{ Item }.Type }.isClan)
-                    Count++;
-            }
-
-            return Count;
+            Grouptype_t Type{}; Type.isClan = true;
+            const auto Groups = AyriaDB::Usergroups::Get::byType(Type.Raw);
+            return (int)Groups.size();
         }
         int GetClanOfficerCount(SteamID_t steamIDClan)
         {
@@ -854,11 +766,8 @@ namespace Steam
         }
         int GetFriendRichPresenceKeyCount(SteamID_t steamIDFriend)
         {
-            int Count{};
-
-            Database() << "SELECT COUNT(*) FROM Presence WHERE ClientID = ?;" << steamIDFriend.UserID >> Count;
-
-            return Count;
+            const auto Presence = AyriaDB::Userpresence::Get::All(steamIDFriend.UserID);
+            return (int)Presence.size();
         }
         int GetFriendSteamLevel(SteamID_t steamIDFriend)
         {
@@ -866,22 +775,21 @@ namespace Steam
         }
         int GetFriendsGroupCount()
         {
-            return 0;
+            Grouptype_t Type{}; Type.isFriendgroup = true;
+            const auto Groups = AyriaDB::Usergroups::Get::byType(Type.Raw);
+            return (int)Groups.size();
         }
         int GetFriendsGroupMembersCount(FriendsGroupID_t friendsGroupID)
         {
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID FROM Usergroups;" >> GroupIDs;
+            Grouptype_t Type{}; Type.isFriendgroup = true;
+            const auto Groups = AyriaDB::Usergroups::Get::byType(Type.Raw);
 
-            for (const auto &ID : GroupIDs)
+            for (const auto &Item : Groups)
             {
-                if (Grouptype_t{ GroupID_t{ ID }.Type }.isFriendgroup && GroupID_t{ ID }.RoomID == friendsGroupID)
+                if (GroupID_t{ Item }.RoomID == friendsGroupID)
                 {
-                    std::vector<uint32_t> MemberIDs{};
-                    Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                               << ID >> MemberIDs;
-
-                    return int(MemberIDs.size());
+                    const auto Members = AyriaDB::Usergroups::Get::MemberIDs(Item);
+                    return (int)Members.size();
                 }
             }
 
@@ -906,17 +814,8 @@ namespace Steam
 
         uint32_t GetBlockedFriendCount()
         {
-            uint32_t Count{};
-
-            Database() << "SELECT Flags FROM Relationships WHERE SourceID = ?;"
-                       << Global.XUID.UserID
-                       >> [&](uint8_t Flags)
-                       {
-                           if (Relationflags_t{ Flags }.isBlocked)
-                               Count++;
-                       };
-
-            return Count;
+            const auto Blocked = AyriaDB::Relationships::Get::Blocked(Global.XUID.UserID);
+            return (uint32_t)Blocked.size();
         }
 
         void ActivateGameOverlay(const char *pchDialog)
@@ -943,30 +842,32 @@ namespace Steam
         {}
         void ClearChatHistory(SteamID_t steamIDFriend)
         {
-            Database() << "DELETE FROM Messages WJERE SourceID = ? AND ProviderID = ? AND Transient = false;"
-                       << steamIDFriend.UserID << Hash::WW32("Source");
+            try
+            {
+                AyriaDB::Query()
+                    << "DELETE FROM Usermessages WHERE (SenderID = ? AMD TargetID = ?) OR (SenderID = ? AMD TargetID = ?);"
+                    << Global.XUID.UserID << steamIDFriend.UserID << steamIDFriend.UserID << Global.XUID.UserID;
+            }
+            catch (...) {}
         }
         void ClearRichPresence()
         {
-            Database() << "DELETE FROM Presence WHERE ClientID = ?;" << Global.XUID.UserID;
+            AyriaDB::Userpresence::Clear(Global.XUID.UserID);
         }
         void GetFriendsGroupMembersList(FriendsGroupID_t friendsGroupID, SteamID_t *pOutSteamIDMembers, int nMembersCount)
         {
-            std::vector<uint64_t> GroupIDs{};
-            Database() << "SELECT GroupID FROM Usergroups;" >> GroupIDs;
+            Grouptype_t Type{}; Type.isFriendgroup = true;
+            const auto Groups = AyriaDB::Usergroups::Get::byType(Type.Raw);
 
-            for (const auto &ID : GroupIDs)
+            for (const auto &Item : Groups)
             {
-                if (Grouptype_t{ GroupID_t{ ID }.Type }.isFriendgroup && GroupID_t{ ID }.RoomID == friendsGroupID)
+                if (GroupID_t{ Item }.RoomID == friendsGroupID)
                 {
-                    std::vector<uint32_t> MemberIDs{};
-                    Database() << "SELECT Members FROM Usergroups WHERE GroupID = ?;"
-                               << ID >> MemberIDs;
-
-                    for (int i = 0; i < std::min(int(MemberIDs.size()), nMembersCount); ++i)
+                    const auto Members = AyriaDB::Usergroups::Get::MemberIDs(Item);
+                    for (int i = 0; i < std::min((int)Members.size(), nMembersCount); ++i)
                     {
                         pOutSteamIDMembers[i] = Global.XUID;
-                        pOutSteamIDMembers[i].UserID = MemberIDs[i];
+                        pOutSteamIDMembers[i].UserID = Members[i];
                     }
 
                     return;
@@ -1000,6 +901,11 @@ namespace Steam
         }
         void SetPersonaState(EPersonaState ePersonaState)
         {
+            JSON::Object_t Newstate;
+            Newstate["isAway"] = (ePersonaState == k_EPersonaStateBusy || ePersonaState == k_EPersonaStateAway || ePersonaState == k_EPersonaStateSnooze);
+            Newstate["isPrivate"] = (ePersonaState == k_EPersonaStateOffline || ePersonaState == k_EPersonaStateInvisible);
+
+            Ayriarequest("Clientinfo::setState", Newstate);
             Personastate = ePersonaState;
         }
         void SetPlayedWith(SteamID_t steamIDUserPlayedWith)
