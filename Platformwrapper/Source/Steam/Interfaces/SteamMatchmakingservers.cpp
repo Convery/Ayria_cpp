@@ -60,6 +60,7 @@ namespace Steam
 
     // SQL <-> Steam management.
     static Hashmap<uint32_t, gameserveritem_t, decltype(WW::Hash), decltype(WW::Equal)> Gameservers{};
+    static Hashmap<HServerListRequest, EMatchMakingType> Requests{};
     static void Pollservers()
     {
         static auto lLastupdate = GetTickCount();
@@ -132,8 +133,6 @@ namespace Steam
 
     struct SteamMatchmakingServers
     {
-        static Hashmap<HServerListRequest, EMatchMakingType> Requests;
-
         HServerListRequest RequestFavoritesServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
             pRequestServersResponse->RefreshComplete(0, eNoServersListedOnMasterServer);
