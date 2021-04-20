@@ -75,6 +75,9 @@ namespace Steam
     DWORD __stdcall InitializeIPC(void *);
     void Redirectmodulehandle();
 
+    // Unified creation and initialization for the SteamDB.
+    sqlite::database Database();
+
     // Asynchronous tasks.
     namespace Callbacks
     {

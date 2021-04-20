@@ -30,9 +30,9 @@ namespace Backend
     }
 
     // For debugging.
-    static void SQLErrorlog(void *, int error_code, const char *errstr)
+    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
     {
-        Debugprint(va("SQL error %i: %s", error_code, errstr));
+        Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
     }
 
     // Get the client-database.
@@ -43,14 +43,12 @@ namespace Backend
         {
             sqlite3 *Ptr{};
 
-            // Needs to be the first call to sqlite.
-            if constexpr (Build::isDebug) sqlite3_config(SQLITE_CONFIG_LOG, SQLErrorlog, nullptr);
-
             // :memory: should never fail unless the client has more serious problems.
             const auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
 
             // Intercept updates from plugins writing to the DB.
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.db");
             sqlite3_update_hook(Ptr, Updatehook, nullptr);
             sqlite3_extended_result_codes(Ptr, false);
 

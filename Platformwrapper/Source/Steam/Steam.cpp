@@ -19,6 +19,52 @@ namespace Steam
     extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
         uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion);
 
+    // Unified creation and initialization for the SteamDB.
+    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    {
+        Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
+    }
+    sqlite::database Database()
+    {
+        static std::shared_ptr<sqlite3> Database{};
+        if (!Database)
+        {
+            sqlite3 *Ptr{};
+
+            // :memory: should never fail unless the client has more serious problems.
+            const auto Result = sqlite3_open_v2("./Ayria/Steam.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.db");
+            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+
+            // Initialize the database with the interfaces tables.
+            {
+                // Needed for
+                sqlite::database(Database)
+                    << "CREATE TABLE IF NOT EXISTS DLCInfo ("
+                       "DLCID integer not null, "
+                       "AppID integer not null, "
+                       "Checkfile text, "
+                       "Name text, "
+                       "PRIMARY KEY (DLCID, AppID) );";
+
+                sqlite::database(Database)
+                    << "CREATE TABLE IF NOT EXISTS DLCData ("
+                       "AppID integer not null, "
+                       "Key text not null, "
+                       "Value text, "
+                       "PRIMARY KEY (AppID, Key) );";
+
+                sqlite::database(Database)
+                    << "CREATE TABLE IF NOT EXISTS Appinfo ("
+                       "AppID integer primary key unique not null, "
+                       "Languages text not null);";
+            }
+        }
+        return sqlite::database(Database);
+    }
+
     // Exported Steam interface.
     extern "C"
     {
