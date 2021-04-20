@@ -18,6 +18,7 @@ namespace Steam
         uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion);
     extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
         uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion);
+    extern bool isServeractive;
 
     // Unified creation and initialization for the SteamDB.
     static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
@@ -258,7 +259,7 @@ namespace Steam
         EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser() { Traceprint(); return { }; }
         EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
         EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
-        EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); }
+        EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); isServeractive = false; }
         EXPORT_ATTR void SteamGameServer_RunCallbacks() { Callbacks::Runcallbacks(); }
         EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Global.XUID.FullID; }
 

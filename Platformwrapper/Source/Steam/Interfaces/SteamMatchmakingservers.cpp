@@ -60,40 +60,36 @@ namespace Steam
 
     // SQL <-> Steam management.
     static Hashmap<uint32_t, gameserveritem_t, decltype(WW::Hash), decltype(WW::Equal)> Gameservers{};
-    static sqlite::database Database()
-    {
-        try
-        {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            return sqlite::database("./Ayria/Client.db", Config);
-        }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()));
-            return sqlite::database(":memory:");
-        }
-    }
     static void Pollservers()
     {
-        static auto Lastupdate = GetTickCount();
+        static auto lLastupdate = GetTickCount();
         const auto Currenttime = GetTickCount();
 
         // Only update once in a while.
-        if (Currenttime - Lastupdate < 5000) return;
+        if (Currenttime - lLastupdate < 5000) return;
+        lLastupdate = Currenttime;
 
-        Gameservers.clear();
-
-        Database() << "SELECT * FROM Matchmakingsessions WHERE ProviderID = ?;" << Hash::WW32("Steam")
-            >> [](uint32_t ProviderID, uint32_t HostID, uint32_t Lastupdate, const std::string &B64Gamedata, const std::string &Servername,
-                  uint32_t GameID, const std::string &Mapname, uint32_t IPv4, uint16_t Port)
+        // Get active servers.
+        const auto HostIDs = AyriaDB::Matchmakingsessions::Get::byGame(Global.ApplicationID);
+        for (const auto &ID : HostIDs)
         {
-            // If the server has timed out..
-            if (time(NULL) - Lastupdate > 30) [[unlikely]]
-                return;
+            auto Ayriaserver = AyriaDB::Matchmakingsessions::Get::byID(ID);
+            const uint32_t Hostaddress = Ayriaserver["Hostaddress"];
+            const uint32_t Lastupdate = Ayriaserver["Lastupdate"];
+            const std::string Gamedata = Ayriaserver["Gamedata"];
+            const uint16_t Hostport = Ayriaserver["Hostport"];
+            const uint32_t GameID = Ayriaserver["GameID"];
+            const uint32_t HostID = Ayriaserver["HostID"];
 
-            const auto Object = JSON::Parse(Base64::Decode(B64Gamedata));
+            // Outdated server..
+            if (time(NULL) - Lastupdate > 30) [[unlikely]]
+            {
+                Gameservers.erase(HostID);
+                continue;
+            }
+
             gameserveritem_t Server{};
+            const auto Object = JSON::Parse(Gamedata);
 
             Server.m_bPassword = Object.value<bool>("isPasswordprotected");
             Server.m_nMaxPlayers = Object.value<uint32_t>("Playermax");
@@ -107,7 +103,7 @@ namespace Steam
 
             Server.m_NetAdr.m_usConnectionPort = Object.value<uint16_t>("Gameport");
             Server.m_NetAdr.m_usQueryPort = Object.value<uint16_t>("Queryport");
-            Server.m_NetAdr.m_unIP = IPv4;
+            Server.m_NetAdr.m_unIP = Object.value<uint32_t>("Hostaddress");
 
             const auto Versionstring = Object.value<std::string>("Version");
             if (!Versionstring.empty())
@@ -125,13 +121,13 @@ namespace Steam
             Server.m_steamID.UserID = HostID;
 
             std::strncpy(Server.m_szGameDescription, Object.value<std::string>("Gamedescription").c_str(), sizeof(Server.m_szGameDescription));
+            std::strncpy(Server.m_szServerName, Object.value<std::string>("Servername").c_str(), sizeof(Server.m_szServerName));
             std::strncpy(Server.m_szGameTags, Object.value<std::string>("Gametags").c_str(), sizeof(Server.m_szGameTags));
             std::strncpy(Server.m_szGameDir, Object.value<std::string>("Gamedir").c_str(), sizeof(Server.m_szGameDir));
-            std::strncpy(Server.m_szServerName, Servername.c_str(), sizeof(Server.m_szServerName));
-            std::strncpy(Server.m_szMap, Mapname.c_str(), sizeof(Server.m_szMap));
+            std::strncpy(Server.m_szMap, Object.value<std::string>("Mapname").c_str(), sizeof(Server.m_szMap));
 
             Gameservers.emplace(HostID, Server);
-        };
+        }
     }
 
     struct SteamMatchmakingServers
@@ -229,27 +225,22 @@ namespace Steam
         }
         HServerQuery PlayerDetails(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPlayersResponse *pRequestServersResponse)
         {
-            std::string B64Gamedata;
-
-            Database() << "SELECT B64Gamedata FROM Matchmakingsessions WHERE ProviderID = ? AND IPv4 = ? AND Port = ?;"
-                << Hash::WW32("Steam") << unIP << usPort >> B64Gamedata;
-
-            // No such entry in the DB.
-            if (B64Gamedata.empty())
+            for (const auto &[ID, Server] : Gameservers)
             {
-                pRequestServersResponse->PlayersFailedToRespond();
-                return GetTickCount();
-            }
+                if (Server.m_NetAdr.m_unIP != unIP || Server.m_NetAdr.m_usQueryPort != usPort) continue;
 
-            const auto Object = JSON::Parse(Base64::Decode(B64Gamedata));
-            const auto Userdata = Object.value<JSON::Array_t>("Userdata");
+                const std::string Steamdata = AyriaDB::Matchmakingsessions::Get::byID(ID)["Gamedata"];
+                const JSON::Array_t Userdata = JSON::Parse(Steamdata).value("Userdata");
 
-            for (const auto &Item : Userdata)
-            {
-                const auto Username = Item.value<std::string>("Username");
-                const auto Userscore = Item.value<uint32_t>("Userscore");
+                for (const auto &Object : Userdata)
+                {
+                    const auto Username = Object.value<std::string>("Username");
+                    const auto Userscore = Object.value<uint32_t>("Userscore");
 
-                pRequestServersResponse->AddPlayerToList(Username.c_str(), Userscore, 60.0f);
+                    pRequestServersResponse->AddPlayerToList(Username.c_str(), Userscore, 60.0f);
+                }
+
+                break;
             }
 
             pRequestServersResponse->PlayersRefreshComplete();
@@ -257,24 +248,19 @@ namespace Steam
         }
         HServerQuery ServerRules(uint32_t unIP, uint16_t usPort, ISteamMatchmakingRulesResponse *pRequestServersResponse)
         {
-            std::string B64Gamedata;
-
-            Database() << "SELECT B64Gamedata FROM Matchmakingsessions WHERE ProviderID = ? AND IPv4 = ? AND Port = ?;"
-                       << Hash::WW32("Steam") << unIP << usPort >> B64Gamedata;
-
-            // No such entry in the DB.
-            if (B64Gamedata.empty())
+            for (const auto &[ID, Server] : Gameservers)
             {
-                pRequestServersResponse->RulesFailedToRespond();
-                return GetTickCount();
-            }
+                if (Server.m_NetAdr.m_unIP != unIP || Server.m_NetAdr.m_usQueryPort != usPort) continue;
 
-            const auto Object = JSON::Parse(Base64::Decode(B64Gamedata));
-            const auto Keyvalues = Object.value<JSON::Object_t>("Keyvalues");
+                const std::string Steamdata = AyriaDB::Matchmakingsessions::Get::byID(ID)["Gamedata"];
+                const JSON::Object_t Rules = JSON::Parse(Steamdata).value("Keyvalues");
 
-            for (const auto &[Key, Value] : Keyvalues)
-            {
-                pRequestServersResponse->RulesResponded(Key.c_str(), Value.get<std::string>().c_str());
+                for (const auto &[Key, Value] : Rules)
+                {
+                    pRequestServersResponse->RulesResponded(Key.c_str(), Value.get<std::string>().c_str());
+                }
+
+                break;
             }
 
             pRequestServersResponse->RulesRefreshComplete();

@@ -188,7 +188,7 @@ namespace Backend
         // Clients, optionally free-range and locally sourced.
         Database() << "CREATE TABLE IF NOT EXISTS Clientinfo ("
                       "ClientID integer primary key unique not null, "
-                      "Lastupdate integer not null, "
+                      "Lastupdate integer, "
                       "B64Authticket text, "
                       "B64Sharedkey text, "
                       "PublicIP integer, "
@@ -242,8 +242,8 @@ namespace Backend
         // Simply represents a collection of users, base for derived tables.
         Database() << "CREATE TABLE IF NOT EXISTS Usergroups ("
                       "GroupID integer primary key unique not null, "
-                      "Lastupdate integer not null, "
                       "GameID integer not null, "
+                      "Lastupdate integer, "
                       "MemberIDs blob, "
                       "Memberdata text, " // JSON data.
                       "Groupdata text )"; // JSON data.
@@ -276,9 +276,9 @@ namespace Backend
         Database() << "DROP TABLE IF EXISTS Matchmakingsessions;";
         Database() << "CREATE TABLE Matchmakingsessions ("
                       "HostID integer primary key unique not null, "
-                      "Lastupdate integer not null, "
                       "GameID integer not null, "
                       "Hostaddress integer, "
+                      "Lastupdate integer, "
                       "Hostport integer, "
                       "Gamedata text )"; // JSON data.
 

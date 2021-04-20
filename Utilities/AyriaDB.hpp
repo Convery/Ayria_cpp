@@ -310,7 +310,7 @@ namespace AyriaDB
                 try
                 {
                     Query() << "SELECT * FROM Usergroups WHERE GroupID = ?;" << GroupID
-                            >> [&](uint64_t, uint32_t Lastupdate, uint32_t GameID, std::vector<uint32_t> MemberIDs,
+                            >> [&](uint64_t, uint32_t GameID, uint32_t Lastupdate, std::vector<uint32_t> MemberIDs,
                                    std::string &&Memberdata, std::string &&Groupdata)
                             {
                                 Result = JSON::Object_t({
@@ -419,7 +419,58 @@ namespace AyriaDB
 
     namespace Matchmakingsessions
     {
+        namespace Get
+        {
+            inline std::unordered_set<uint32_t> byGame(uint32_t GameID)
+            {
+                std::unordered_set<uint32_t> Result{};
 
+                try
+                {
+                    Query()
+                        << "SELECT HostID FROM Matchmakingsessions WHERE GameID = ?;" << GameID
+                        >> [&](uint32_t HostID) { Result.insert(HostID); };
+                }
+                catch (...) {}
+
+                return Result;
+            }
+            inline JSON::Object_t byID(uint32_t HostID)
+            {
+                JSON::Object_t Result{};
+
+                try
+                {
+                    Query()
+                        << "SELECT * FROM Matchmakingsessions WHERE HostID = ?;" << HostID
+                        >> [&](uint32_t, uint32_t Lastupdate, uint32_t GameID, uint32_t Hostaddress, uint16_t Hostport, std::string &&Gamedata)
+                    {
+                        Result = JSON::Object_t({
+                            { "Gamedata", std::move(Gamedata) },
+                            { "Hostaddress", Hostaddress },
+                            { "Lastupdate", Lastupdate },
+                            { "Hostport", Hostport },
+                            { "HostID", HostID },
+                            { "GameID", GameID }
+                        });
+                    };
+                } catch (...) {}
+
+                return Result;
+            }
+        }
+
+        namespace Set
+        {
+            inline void Gamedata(uint32_t HostID, std::string &&Gamedata)
+            {
+                try
+                {
+                    Query() << "REPLACE INTO Matchmakingsessions (HostID, Gamedata) VALUES (?, ?);" << HostID << Gamedata;
+                }
+                catch (...) {}
+            }
+        }
     }
 
 }

@@ -46,72 +46,70 @@ namespace Steam
         std::unordered_map<std::string, std::string> Keyvalues;
         Hashmap<uint64_t, std::pair<std::string, uint32_t>> Userdata;
     };
-    Steamserver_t Localserver{};
-
-    static void Ayriaupdate()
+    static Steamserver_t Localserver{};
+    static std::string getGamedata()
     {
-        if (const auto Callback = Ayria.JSONRequest) [[likely]]
+        JSON::Array_t Userdata;
+        Userdata.reserve(Localserver.Userdata.size());
+        for (const auto &[UserID, Pair] : Localserver.Userdata)
         {
-            JSON::Array_t Userdata;
-            Userdata.reserve(Localserver.Userdata.size());
-            for (const auto &[UserID, Pair] : Localserver.Userdata)
-            {
-                const auto &[Username, Userscore] = Pair;
+            const auto &[Username, Userscore] = Pair;
 
-                Userdata.emplace_back(JSON::Object_t({
-                    { "Userscore", Userscore },
-                    { "Username", Username },
-                    { "UserID", UserID }
-                }));
-            }
-
-
-            const auto Steamgamedata = JSON::Object_t({
-                { "isDedicated", Localserver.isDedicated },
-                { "isSecure", Localserver.isSecure },
-                { "isPasswordprotected", Localserver.isPasswordprotected },
-                { "isLAN", Localserver.isLAN },
-
-                { "Spectatorport", Localserver.Spectatorport },
-                { "Gameport", Localserver.Gameport },
-                { "Authport", Localserver.Authport },
-                { "Queryport", Localserver.Queryport },
-
-                { "Playercount", Localserver.Playercount },
-                { "Playermax", Localserver.Playermax },
-                { "Botcount", Localserver.Botcount },
-                { "Spawncount", Localserver.Spawncount },
-                { "Serverflags", Localserver.Serverflags },
-
-                { "Gamedata", Localserver.Gamedata },
-                { "Gametags", Localserver.Gametags },
-                { "Gametype", Localserver.Gametype },
-                { "Gamedescription", Localserver.Gamedescription },
-                { "Gamedir", Localserver.Gamedir },
-
-                { "Spectatorname", Localserver.Spectatorname },
-                { "Moddir", Localserver.Moddir },
-                { "Region", Localserver.Region },
-                { "Product", Localserver.Product },
-                { "Version", Localserver.Version },
-
-                { "Keyvalues", Localserver.Keyvalues },
-                { "Userdata", Userdata }
-            });
-
-            const auto Request = JSON::Object_t({
-                { "ProviderID", Hash::WW32("Steam") },
-                { "Servername", Localserver.Servername },
-                { "Mapname", Localserver.Mapname },
-                { "GameID", Global.ApplicationID },
-                { "IPv4", Localserver.PublicIP.m_unIPv4 },
-                { "Port", Localserver.Gameport },
-                { "B64Gamedata", Base64::Encode(JSON::Dump(Steamgamedata)) }
-            });
-
-            Callback("Matchmaking::Update", JSON::Dump(Request).c_str());
+            Userdata.emplace_back(JSON::Object_t({
+                { "Userscore", Userscore },
+                { "Username", Username },
+                { "UserID", UserID }
+            }));
         }
+
+        const auto Steamgamedata = JSON::Object_t({
+            { "isPasswordprotected", Localserver.isPasswordprotected },
+            { "isDedicated", Localserver.isDedicated },
+            { "isSecure", Localserver.isSecure },
+            { "isLAN", Localserver.isLAN },
+
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Spectatorport", Localserver.Spectatorport },
+            { "Queryport", Localserver.Queryport },
+            { "Gameport", Localserver.Gameport },
+            { "Authport", Localserver.Authport },
+
+            { "Serverflags", Localserver.Serverflags },
+            { "Playercount", Localserver.Playercount },
+            { "Spawncount", Localserver.Spawncount },
+            { "Playermax", Localserver.Playermax },
+            { "Botcount", Localserver.Botcount },
+
+            { "Gamedescription", Localserver.Gamedescription },
+            { "Gamedata", Localserver.Gamedata },
+            { "Gametags", Localserver.Gametags },
+            { "Gametype", Localserver.Gametype },
+            { "Gamedir", Localserver.Gamedir },
+
+            { "Spectatorname", Localserver.Spectatorname },
+            { "Product", Localserver.Product },
+            { "Version", Localserver.Version },
+            { "Moddir", Localserver.Moddir },
+            { "Region", Localserver.Region },
+
+            { "Keyvalues", Localserver.Keyvalues },
+            { "Userdata", Userdata },
+
+            { "Servername", Localserver.Servername },
+            { "Mapname", Localserver.Mapname }
+        });
+
+        return JSON::Dump(Steamgamedata);
     }
+
+    bool isServeractive = false;
+    static bool Initializedcallback = false;
+    static void Serverupdate()
+    {
+        if (isServeractive)
+            AyriaDB::Matchmakingsessions::Set::Gamedata(Global.XUID.UserID, getGamedata());
+    }
+
     bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion)
     {
         Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
@@ -123,6 +121,22 @@ namespace Steam
         Localserver.Gameport = unGamePort;
         Localserver.Gamedir = pchGameDir;
         Localserver.Version = pchVersion;
+
+        const auto Request = JSON::Object_t({
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Hostport", Localserver.Gameport },
+            { "GameID", Global.ApplicationID },
+            { "Gamedata", getGamedata() }
+        });
+        Ayriarequest("Matchmakingsessions::Starthosting", Request);
+        isServeractive = true;
+
+        if (!Initializedcallback)
+        {
+            Initializedcallback = true;
+            Ayria.Createperiodictask(2000, Serverupdate);
+        }
+
         return true;
     }
     bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion)
@@ -134,6 +148,21 @@ namespace Steam
         Localserver.Authport = usSteamPort;
         Localserver.Gameport = unGamePort;
         Localserver.Version = pchVersion;
+
+        const auto Request = JSON::Object_t({
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Hostport", Localserver.Gameport },
+            { "GameID", Global.ApplicationID },
+            { "Gamedata", getGamedata() }
+            });
+        Ayriarequest("Matchmakingsessions::Starthosting", Request);
+        isServeractive = true;
+
+        if (!Initializedcallback)
+        {
+            Initializedcallback = true;
+            Ayria.Createperiodictask(2000, Serverupdate);
+        }
         return true;
     }
 
@@ -323,7 +352,7 @@ namespace Steam
         void EndAuthSession(SteamID_t steamID) {}
         void ForceHeartbeat() {}
         void GetGameplayStats() {}
-        void LogOff() {}
+        void LogOff() { isServeractive = false; }
         void LogOn0() {}
         void LogOn1(const char *pszAccountName, const char *pszPassword) {}
         void LogOn2(const char *pszToken) {}
@@ -407,7 +436,6 @@ namespace Steam
             SetSpectatorPort(unSpectatorPort);
         }
     };
-
 
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
