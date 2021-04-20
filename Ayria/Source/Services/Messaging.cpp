@@ -84,7 +84,7 @@ namespace Services::Messaging
         const auto Messagetype = Request.value<uint32_t>("Messagetype");
         auto B64Message = Request.value<std::string>("B64Message");
         const auto TargetID = Request.value<uint64_t>("TargetID");
-        const auto Transient = !Request.value<bool>("Transient");
+        const auto Transient = Request.value<bool>("Transient");
         const auto isPrivate = Request.value<bool>("isPrivate");
 
         // Add the message to the database so the plugins can access it.
