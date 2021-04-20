@@ -140,6 +140,15 @@ namespace Services::Clientinfo
         Backend::Network::Transmitmessage("Clientinfo::Terminate", {});
     }
 
+    // Modify the clients state.
+    static std::string __cdecl setClientstate(JSON::Value_t &&Request)
+    {
+        if (Request.contains("isPrivate")) Global.Stateflags.isPrivate = Request.value<bool>("isPrivate");
+        if (Request.contains("isIngame")) Global.Stateflags.isIngame = Request.value<bool>("isIngame");
+        if (Request.contains("isAway")) Global.Stateflags.isAway = Request.value<bool>("isAway");
+        return "{}";
+    }
+
     // Check for new states once in a while.
     static void Updatestate()
     {
@@ -178,6 +187,9 @@ namespace Services::Clientinfo
         // Register the callback for client-requests.
         Backend::Network::Registerhandler("Clientinfo::Terminate", Terminationhandler);
         Backend::Network::Registerhandler("Clientinfo::Discovery", Discoveryhandler);
+
+        // Register the JSON endpoints.
+        Backend::API::addEndpoint("Clientinfo::setState", setClientstate);
 
         // Notify other clients once in a while.
         Backend::Enqueuetask(5000, Updatestate);

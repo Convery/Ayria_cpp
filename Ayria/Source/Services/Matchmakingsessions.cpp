@@ -114,6 +114,9 @@ namespace Services::Matchmakingsessions
             Localsession.Port = Hostport;
             Localsession.Active = true;
 
+            // Incase some other service wants to know.
+            Global.Stateflags.isHosting = true;
+
             // Add the entry so that the plugins can query for it.
             try
             {
@@ -130,6 +133,9 @@ namespace Services::Matchmakingsessions
         {
             Localsession.Active = false;
             Backend::Network::Transmitmessage("Matchmaking::Terminate", {});
+
+            // Incase some other service wants to know.
+            Global.Stateflags.isHosting = false;
 
             try { Backend::Database() << "DELETE FROM Matchmakingsessions WHERE HostID = ?;" << Global.ClientID; }
             catch (...) {}
