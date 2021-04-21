@@ -209,6 +209,7 @@ namespace Backend
                       "Leaderboardname text not null, "
                       "isDecending bool not null, "
                       "GameID integer not null, "
+                      "isFloat bool not null, "
                       "PRIMARY KEY (LeaderboardID, GameID) )";
 
         // Stats-entry, optionally validated by some authority.
@@ -217,8 +218,9 @@ namespace Backend
                       "Timestamp integer not null, "
                       "ClientID integer not null, "
                       "GameID integer not null, "
-                      "Score integer not null, "
-                      "isValid bool not null"
+                      "iScore integer, "
+                      "fScore real, "
+                      "isValid bool, "
                       "PRIMARY KEY (LeaderboardID, GameID, ClientID) )";
 
         // Transient messages are cleared on restart.

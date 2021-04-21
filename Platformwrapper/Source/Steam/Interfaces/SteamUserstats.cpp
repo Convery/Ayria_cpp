@@ -21,76 +21,6 @@ namespace Steam
     };
     static Hashmap<uint64_t, std::vector<Entry_t>> Downloadedentries;
 
-    static bool Initialized = false;
-    static sqlite::database Database()
-    {
-        try
-        {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            auto DB = sqlite::database("./Ayria/Steam.db", Config);
-
-            if (!Initialized)
-            {
-                DB << "CREATE TABLE IF NOT EXISTS Achievement ("
-                      "API_Name text not null, "
-                      "AppID integer not null, "
-                      "Maxprogress integer, "
-                      "Name text not null, "
-                      "Description text, "
-                      "Icon text, "
-                      "PRIMARY_KEY(API_Name, AppID) );";
-
-                DB << "CREATE TABLE IF NOT EXISTS Achievementprogress ("
-                      "ClientID integer not null, "
-                      "Currentprogress integer, "
-                      "AppID integer not null, "
-                      "Name text not null, "
-                      "Unlocktime integer, "
-                      "PRIMARY KEY (Name, ClientID, AppID) );";
-
-                DB << "CREATE TABLE IF NOT EXISTS Groupachievement ("
-                      "AppID integer not null, "
-                      "Name text not null, "
-                      "Unlocktime integer, "
-                      "PRIMARY_KEY (AppID, Name) );";
-
-                DB << "CREATE TABLE IF NOT EXISTS Userstat ("
-                      "ClientID integer not null, "
-                      "AppID integer not null, "
-                      "Statname text not null, "
-                      "Stattype integer, "
-                      "Value, "
-                      "PRIMARY KEY (ClientID, AppID, Statname) );";
-
-                DB << "CREATE TABLE IF NOT EXISTS Globalstats ("
-                      "Statname text primary key unique not null, "
-                      "Stattype integer, "
-                      "Value );";
-
-                DB << "CREATE TABLE IF NOT EXISTS Leaderboards ("
-                      "LeaderboardID integer not null, "
-                      "ClientID integer not null, "
-                      "AppID integer not null, "
-                      "Leaderboardname text, "
-                      "Displaytype integer, "
-                      "Sortmethod integer, "
-                      "Score integer, "
-                      "Details blob, "
-                      "PRIMARY KEY (LeaderboardID, ClientID, AppID) );";
-
-                Initialized = true;
-            }
-
-            return DB;
-        }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()));
-            return sqlite::database(":memory:");
-        }
-    }
-
     struct SteamUserstats
     {
         enum ELeaderboardUploadScoreMethod : uint32_t
@@ -135,30 +65,35 @@ namespace Steam
 
         ELeaderboardDisplayType GetLeaderboardDisplayType(SteamLeaderboard_t hSteamLeaderboard)
         {
-            uint32_t Displaytype{};
-
-            Database() << "SELECT Displaytype FROM Leaderboards WHERE LeaderboardID = ? AND AppID = ? LIMIT 1;"
-                       << hSteamLeaderboard << Global.ApplicationID >> Displaytype;
-
-            return ELeaderboardDisplayType{ Displaytype };
+            return k_ELeaderboardDisplayTypeNumeric;
         }
         ELeaderboardSortMethod GetLeaderboardSortMethod(SteamLeaderboard_t hSteamLeaderboard)
         {
-            uint32_t Sortmethod{};
+            bool isDecending{};
 
-            Database() << "SELECT Sortmethod FROM Leaderboards WHERE LeaderboardID = ? AND AppID = ? LIMIT 1;"
-                       << hSteamLeaderboard << Global.ApplicationID >> Sortmethod;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isDecending FROM Leaderboard WHERE (LeaderboardID = ? AND GameID = ?);"
+                    << hSteamLeaderboard << Global.ApplicationID >> isDecending;
+            } catch (...) {}
 
-            return ELeaderboardSortMethod{ Sortmethod };
+            if (isDecending) return k_ELeaderboardSortMethodDescending;
+            else return k_ELeaderboardSortMethodAscending;
         }
         ESteamUserStatType GetStatType(GameID_t nGameID, const char *pchName)
         {
-            uint32_t Stattype{};
+            bool isFloat{};
 
-            Database() << "SELECT Stattype FROM Userstat WHERE AppID = ? AND Statname = ? LIMIT 1;"
-                       << nGameID.AppID << std::string(pchName) >> Stattype;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isFloat FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?);"
+                    << pchName << nGameID.AppID >> isFloat;
+            } catch (...) {}
 
-            return ESteamUserStatType{ Stattype };
+            if (isFloat) return k_ESteamUserStatTypeFLOAT;
+            else return k_ESteamUserStatTypeINT;
         }
 
         SteamAPICall_t AttachLeaderboardUGC(SteamLeaderboard_t hSteamLeaderboard, UGCHandle_t hUGC);
@@ -219,24 +154,30 @@ namespace Steam
         }
         SteamAPICall_t UploadLeaderboardScore1(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardUploadScoreMethod eLeaderboardUploadScoreMethod, int32_t nScore, const int32_t *pScoreDetails, int cScoreDetailsCount)
         {
-            bool Changed{};
-            std::vector<int32_t> Details;
-            Details.reserve(cScoreDetailsCount);
-            for (int i = 0; i < cScoreDetailsCount; ++i)
-                Details.emplace_back(pScoreDetails[i]);
+            bool Changed{ true };
 
             if (eLeaderboardUploadScoreMethod == k_ELeaderboardUploadScoreMethodKeepBest)
             {
                 int32_t Currentscore{};
-                Database() << "SELECT Score FROM Leaderboards WHERE LeaderboardID = ? AND ClientID = ? AND AppID = ? LIMIT 1;"
-                           << hSteamLeaderboard << Global.XUID.UserID << Global.ApplicationID >> Currentscore;
+                try
+                {
+                    AyriaDB::Query()
+                        << "SELECT Score FROM Leaderboardentry WHERE (LeaderboardID = ? AND ClientID = ? AND GameID = ?) LIMIT 1;"
+                        << hSteamLeaderboard << Global.XUID.UserID << Global.ApplicationID >> Currentscore;
+                }
+                catch (...) {}
 
                 Changed = nScore > Currentscore;
                 nScore = std::max(Currentscore, nScore);
             }
 
-            Database() << "REPLACE (LeaderboardID, ClientID, AppID, Score, Details) INTO Leaderboards VALUES (?,?,?,?,?);"
-                       << hSteamLeaderboard << Global.XUID.UserID << Global.ApplicationID << nScore << Details;
+            try
+            {
+                AyriaDB::Query()
+                    << "REPLACE INTO Leaderboardentry (LeaderboardID, Timestamp, ClientID, GameID, iScore) VALUES (?,?,?,?,?);"
+                    << hSteamLeaderboard << time(NULL) << Global.XUID.UserID << Global.ApplicationID << nScore;
+            }
+            catch (...) {}
 
             auto Result = new Callbacks::LeaderboardScoreUploaded_t();
             Result->m_hSteamLeaderboard = hSteamLeaderboard;
@@ -257,8 +198,13 @@ namespace Steam
 
         bool ClearAchievement0(GameID_t nGameID, const char *pchName)
         {
-            Database() << "REPLACE (Currentprogress, Unlocktime) INTO Achievementprogress VALUES(0, 0) WHERE AppID = ? AND API_Name = ? AND ClientID = ?;"
-                       << nGameID.AppID << Global.XUID.UserID << std::string(pchName);
+            try
+            {
+                Database()
+                    << "REPLACE INTO Achievementprogress (Currentprogress, Unlocktime) VALUES (0, 0) WHERE (AppID = ? AND API_Name = ? AND ClientID = ?);"
+                    << nGameID.AppID<< std::string(pchName) << Global.XUID.UserID;
+
+            } catch (...) {}
 
             return true;
         }
@@ -268,16 +214,19 @@ namespace Steam
         }
         bool ClearGroupAchievement(GameID_t nGameID, const char *pchName)
         {
-            Database() << "REPLACE (Unlocktime) INTO Groupachievement VALUES(0) WHERE AppID = ? AND API_Name = ?;"
-                       << nGameID.AppID << std::string(pchName);
-            return true;
+            return ClearAchievement0(nGameID, pchName);
         }
         bool GetAchievement0(GameID_t nGameID, const char *pchName, bool *pbAchieved)
         {
             uint32_t Unlocktime{};
 
-            Database() << "SELECT Unlocktime FROM Achievementprogress WHERE AppID = ? AND ClientID = ? AND API_Name = ?;"
-                       << nGameID.AppID << Global.XUID.UserID << std::string(pchName) >> Unlocktime;
+            try
+            {
+                Database()
+                    << "SELECT Unlocktime FROM Achievementprogress WHERE AppID = ? AND ClientID = ? AND API_Name = ?;"
+                    << nGameID.AppID << Global.XUID.UserID << std::string(pchName) >> Unlocktime;
+            }
+            catch (...) {}
 
             *pbAchieved = !!Unlocktime;
             return true;
@@ -290,11 +239,17 @@ namespace Steam
         {
             uint32_t Currentprogress{}, Maxprogress{};
 
-            Database() << "SELECT Currentprogress FROM Achievementprogress WHERE AppID = ? AND ClientID = ? AND API_Name = ?;"
-                       << Global.ApplicationID << Global.XUID.UserID << std::string(pchName) >> Currentprogress;
+            try
+            {
+                Database()
+                    << "SELECT Maxprogress FROM Achievement WHERE (AppID = ? AND API_Name = ?);"
+                    << Global.ApplicationID << std::string(pchName) >> Maxprogress;
 
-            Database() << "SELECT Maxprogress FROM Achievement WHERE AppID = ? AND API_Name = ?;"
-                       << Global.ApplicationID << std::string(pchName) >> Maxprogress;
+                Database()
+                    << "SELECT Currentprogress FROM Achievementprogress WHERE (AppID = ? AND ClientID = ? AND API_Name = ?);"
+                    << Global.ApplicationID << Global.XUID.UserID << std::string(pchName) >> Currentprogress;
+            }
+            catch (...) {}
 
             *pflPercent = float(Currentprogress) / float(Maxprogress) * 100;
             return true;
@@ -307,8 +262,13 @@ namespace Steam
         {
             uint32_t Maxprogress{};
 
-            Database() << "SELECT Maxprogress FROM Achievement WHERE AppID = ? AND API_Name = ?;"
-                       << Global.ApplicationID << std::string(pchName) >> Maxprogress;
+            try
+            {
+                Database()
+                    << "SELECT Maxprogress FROM Achievement WHERE AppID = ? AND API_Name = ?;"
+                    << Global.ApplicationID << std::string(pchName) >> Maxprogress;
+            }
+            catch (...) {}
 
             *pfMinProgress = 0;
             *pfMaxProgress = Maxprogress;
@@ -319,8 +279,13 @@ namespace Steam
         {
             uint32_t Maxprogress{};
 
-            Database() << "SELECT Maxprogress FROM Achievement WHERE AppID = ? AND API_Name = ?;"
-                << Global.ApplicationID << std::string(pchName) >> Maxprogress;
+            try
+            {
+                Database()
+                    << "SELECT Maxprogress FROM Achievement WHERE AppID = ? AND API_Name = ?;"
+                    << Global.ApplicationID << std::string(pchName) >> Maxprogress;
+            }
+            catch (...) {}
 
             *pnMinProgress = 0;
             *pnMaxProgress = Maxprogress;
@@ -345,27 +310,75 @@ namespace Steam
         }
         bool GetGlobalStatFLOAT(const char *pchStatName, double *pData)
         {
-            bool hasResult{};
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
 
-            Database() << "SELECT Value FROM Globalstats WHERE Statname = ? LIMIT 1;" << std::string(pchStatName)
-                       >> [&](double Value)
-                       {
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = 0) LIMIT 1;"
+                    << std::string(pchStatName)
+                    >> std::tie(LeaderboardID, isDecending);
+
+                if (isDecending)
+                {
+                    AyriaDB::Query()
+                        << "SELECT fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore DESC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](double Value)
+                        {
                             *pData = Value;
                             hasResult = true;
-                       };
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ASC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](double Value)
+                        {
+                            *pData = Value;
+                            hasResult = true;
+                        };
+                }
+            }  catch (...) {}
 
             return hasResult;
         }
         bool GetGlobalStatINT(const char *pchStatName, int64_t *pData)
         {
-            bool hasResult{};
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
 
-            Database() << "SELECT Value FROM Globalstats WHERE Statname = ? LIMIT 1;" << std::string(pchStatName)
-                       >> [&](int64_t Value)
-                       {
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = 0) LIMIT 1;"
+                    << std::string(pchStatName)
+                    >> std::tie(LeaderboardID, isDecending);
+
+                if (isDecending)
+                {
+                    AyriaDB::Query()
+                        << "SELECT iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore DESC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](int64_t Value)
+                        {
                             *pData = Value;
                             hasResult = true;
-                       };
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ASC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](int64_t Value)
+                        {
+                            *pData = Value;
+                            hasResult = true;
+                        };
+                }
+            }  catch (...) {}
 
             return hasResult;
         }
@@ -373,37 +386,88 @@ namespace Steam
         {
             uint32_t Unlocktime{};
 
-            Database() << "SELECT Unlocktime FROM Groupachievement WHERE AppID = ? AND API_Name = ?;"
-                       << nGameID.AppID << std::string(pchName) >> Unlocktime;
+            try
+            {
+                Database()
+                    << "SELECT Unlocktime FROM Achievementprogress WHERE (AppID = ? AND Name = ? AND ClientID = ?);"
+                    << nGameID.AppID << std::string(pchName) << Global.XUID.UserID >> Unlocktime;
+            }
+            catch (...) {}
 
             *pbAchieved = !!Unlocktime;
             return true;
         }
         bool GetStatFLOAT0(GameID_t nGameID, const char *pchName, float *pData)
         {
-            bool hasResult{};
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
 
-            Database() << "SELECT Value FROM Userstat WHERE Statname = ? AND ClientID = ? AND AppID = ? LIMIT 1;"
-                       << std::string(pchName) << Global.XUID.UserID << nGameID.AppID
-                       >> [&](float Value)
-                       {
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << nGameID.FullID
+                    >> std::tie(LeaderboardID, isDecending);
+
+                if (isDecending)
+                {
+                    AyriaDB::Query()
+                        << "SELECT fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore DESC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](double Value)
+                        {
                             *pData = Value;
                             hasResult = true;
-                       };
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ASC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](double Value)
+                        {
+                            *pData = Value;
+                            hasResult = true;
+                        };
+                }
+            }  catch (...) {}
 
             return hasResult;
         }
         bool GetStatINT0(GameID_t nGameID, const char *pchName, int32_t *pData)
         {
-            bool hasResult{};
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
 
-            Database() << "SELECT Value FROM Userstat WHERE Statname = ? AND ClientID = ? AND AppID = ? LIMIT 1;"
-                       << std::string(pchName) << Global.XUID.UserID << nGameID.AppID
-                       >> [&](int32_t Value)
-                       {
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << nGameID.FullID
+                    >> std::tie(LeaderboardID, isDecending);
+
+                if (isDecending)
+                {
+                    AyriaDB::Query()
+                        << "SELECT iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore DESC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](int64_t Value)
+                        {
                             *pData = Value;
                             hasResult = true;
-                       };
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ASC LIMIT 1;"
+                        << LeaderboardID
+                        >> [&](int64_t Value)
+                        {
+                            *pData = Value;
+                            hasResult = true;
+                        };
+                }
+            }  catch (...) {}
 
             return hasResult;
         }
@@ -423,17 +487,64 @@ namespace Steam
         {
             uint32_t Unlocktime{};
 
-            Database() << "SELECT Unlocktime FROM Achievementprogress WHERE AppID = ? AND ClientID = ? AND API_Name = ?;"
-                       << Global.ApplicationID << steamIDUser.UserID << std::string(pchName) >> Unlocktime;
+            try
+            {
+                Database()
+                    << "SELECT Unlocktime FROM Achievementprogress WHERE (ClientID = ? AND Name = ?);"
+                    << steamIDUser.UserID << std::string(pchName) >> Unlocktime;
+            }
+            catch (...) {}
 
             *punUnlockTime = Unlocktime;
             *pbAchieved = !!Unlocktime;
             return true;
         }
         bool GetUserStatFLOAT(SteamID_t steamIDUser, const char *pchName, float *pData)
-        { return false; }
+        {
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << Global.ApplicationID
+                    >> std::tie(LeaderboardID, isDecending);
+
+                AyriaDB::Query()
+                    << "SELECT fScore FROM Leaderboardentry WHERE (LeaderboardID = ? AND ClientID = ?) LIMIT 1;"
+                    << LeaderboardID << Global.XUID.UserID
+                    >> [&](double Value)
+                    {
+                        *pData = Value;
+                        hasResult = true;
+                    };
+            }  catch (...) {}
+
+            return hasResult;
+        }
         bool GetUserStatINT(SteamID_t steamIDUser, const char *pchName, int32_t *pData)
-        { return false; }
+        {
+            bool hasResult{}, isDecending{}; uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID, isDecending FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << Global.ApplicationID
+                    >> std::tie(LeaderboardID, isDecending);
+
+                AyriaDB::Query()
+                    << "SELECT iScore FROM Leaderboardentry WHERE (LeaderboardID = ? AND ClientID = ?) LIMIT 1;"
+                    << LeaderboardID << Global.XUID.UserID
+                    >> [&](int64_t Value)
+                    {
+                        *pData = Value;
+                        hasResult = true;
+                    };
+            }  catch (...) {}
+
+            return hasResult;
+        }
         bool GetUserStatsData(void *pvData, uint32_t cubData, uint32_t *pcubWritten)
         {
             // Deprecated.
@@ -457,14 +568,20 @@ namespace Steam
         { return true; }
         bool ResetAllStats(bool bAchievementsToo)
         {
-            Database() << "DELETE FROM Userstat WHERE AppID = ? AND ClientID = ?;"
-                       << Global.ApplicationID << Global.XUID.UserID;
-
-            if (bAchievementsToo)
+            try
             {
-                Database() << "DELETE FROM Achievementprogress WHERE AppID = ? AND ClientID = ?;"
-                           << Global.ApplicationID << Global.XUID.UserID;
+                AyriaDB::Query()
+                    << "DELETE FROM Leaderboardentry WHERE (GameID = ? AND ClientID = ?);"
+                    << Global.ApplicationID << Global.XUID.UserID;
+
+                if (bAchievementsToo)
+                {
+                    Database()
+                        << "REPLACE INTO Achievementprogress (Currentprogress, Unlocktime) VALUES (0, 0) WHERE (AppID = ? AND ClientID = ?);"
+                        << Global.ApplicationID << Global.XUID.UserID;
+                }
             }
+            catch (...) {}
 
             return true;
         }
@@ -474,8 +591,13 @@ namespace Steam
             float Min{}, Max{};
             GetAchievementProgressLimitsFLOAT(pchName, &Min, &Max);
 
-            Database() << "REPLACE (AppID, ClientID, Currentprogress, Name, Unlocktime) INTO Achievementprogress VALUES (?,?,?,?,?);"
-                       << nGameID.AppID << Global.XUID.UserID << Max << std::string(pchName) << uint32_t(time(NULL));
+            try
+            {
+                Database()
+                    << "REPLACE INTO Achievementprogress (AppID, ClientID, Currentprogress, Name, Unlocktime) VALUES (?,?,?,?,?);"
+                    << nGameID.AppID << Global.XUID.UserID << Max << std::string(pchName) << uint32_t(time(NULL));
+            }
+            catch (...) {}
 
             return true;
         }
@@ -485,20 +607,44 @@ namespace Steam
         }
         bool SetGroupAchievement(GameID_t nGameID, const char *pchName)
         {
-            Database() << "REPLACE (Unlocktime) INTO Groupachievement VALUES(?) WHERE AppID = ? AND API_Name = ?;"
-                       << uint32_t(time(NULL)) << nGameID.AppID << std::string(pchName);
-            return true;
+            return SetAchievement0(nGameID, pchName);
         }
         bool SetStatFLOAT0(GameID_t nGameID, const char *pchName, float fData)
         {
-            Database() << "REPLACE (ClientID, AppID, Statname, Stattype, Value) INTO Userstat VALUES (?,?,?,?,?);"
-                       << Global.XUID.UserID << nGameID.AppID << std::string(pchName) << uint32_t(k_ESteamUserStatTypeFLOAT) << fData;
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << nGameID.FullID
+                    >> LeaderboardID;
+
+                AyriaDB::Query()
+                    << "REPLACE INTO Leaderboardentry (LeaderboardID, Timestamp, ClientID, GameID, fScore) VALUES (?, ?, ?, ?, ?);"
+                    << LeaderboardID << time(NULL) << Global.XUID.UserID << nGameID.FullID << fData;
+            }
+            catch (...) {}
+
             return true;
         }
         bool SetStatINT0(GameID_t nGameID, const char *pchName, int32_t nData)
         {
-           Database() << "REPLACE (ClientID, AppID, Statname, Stattype, Value) INTO Userstat VALUES (?,?,?,?,?);"
-                       << Global.XUID.UserID << nGameID.AppID << std::string(pchName) << uint32_t(k_ESteamUserStatTypeINT) << nData;
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboard WHERE (Leaderboardname = ? AND GameID = ?) LIMIT 1;"
+                    << std::string(pchName) << nGameID.FullID
+                    >> LeaderboardID;
+
+                AyriaDB::Query()
+                    << "REPLACE INTO Leaderboardentry (LeaderboardID, Timestamp, ClientID, GameID, iScore) VALUES (?, ?, ?, ?, ?);"
+                    << LeaderboardID << time(NULL) << Global.XUID.UserID << nGameID.FullID << nData;
+            }
+            catch (...) {}
+
             return true;
         }
         bool SetStatFLOAT1(const char *pchName, float fData)
@@ -532,19 +678,29 @@ namespace Steam
         {
             static std::string Result{};
 
-            if (Hash::WW32(pchKey) == Hash::WW32("name"))
+            try
             {
-                Database() << "SELECT Name FROM Achievement WHERE AppID = ? AND API_Name = ?;"
-                           << nGameID.AppID << std::string(pchName) >> Result;
-                return Result.c_str();
-            }
+                if (Hash::WW32(pchKey) == Hash::WW32("name"))
+                {
+                    Database()
+                        << "SELECT Name FROM Achievement WHERE AppID = ? AND API_Name = ?;"
+                        << nGameID.AppID << std::string(pchName)
+                        >> Result;
 
-            if (Hash::WW32(pchKey) == Hash::WW32("desc"))
-            {
-                Database() << "SELECT Description FROM Achievement WHERE AppID = ? AND API_Name = ?;"
-                           << nGameID.AppID << std::string(pchName) >> Result;
-                return Result.c_str();
+                    return Result.c_str();
+                }
+
+                if (Hash::WW32(pchKey) == Hash::WW32("desc"))
+                {
+                    Database()
+                        << "SELECT Description FROM Achievement WHERE AppID = ? AND API_Name = ?;"
+                        << nGameID.AppID << std::string(pchName)
+                        >> Result;
+
+                    return Result.c_str();
+                }
             }
+            catch (...) {}
 
             // If all else, the 'hidden' attribute.
             return "1";
@@ -557,8 +713,13 @@ namespace Steam
         {
             static std::string Result{};
 
-            Database() << "SELECT Name FROM Achievement WHERE AppID = ? LIMIT 1 OFFSET ?;"
-                       << nGameID.AppID << iAchievement >> Result;
+            try
+            {
+                Database()
+                    << "SELECT Name FROM Achievement WHERE AppID = ? LIMIT 1 OFFSET ?;"
+                    << nGameID.AppID << iAchievement >> Result;
+            }
+            catch (...) {}
 
             return Result.c_str();
         }
@@ -568,28 +729,38 @@ namespace Steam
         }
         const char *GetGroupAchievementName(GameID_t nGameID, uint32_t iAchievement)
         {
-            static std::string Name{};
-
-            Database() << "SELECT Name FROM Groupachievement WHERE AppID = ? LIMIT 1 OFFSET ?;"
-                       << nGameID.AppID << iAchievement >> Name;
-
-            return Name.c_str();
+            return GetAchievementName0(nGameID, iAchievement);
         }
         const char *GetLeaderboardName(SteamLeaderboard_t hSteamLeaderboard)
         {
             static std::string Result{};
 
-            Database() << "SELECT Leaderboardname FROM Leaderboards WHERE AppID = ? AND LeaderboardID = ? LIMIT 1;"
-                       << Global.ApplicationID << hSteamLeaderboard;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT Leaderboardname FROM Leaderboards WHERE (GameID = ? AND LeaderboardID = ?);"
+                    << Global.ApplicationID << hSteamLeaderboard >> Result;
+            }
+            catch (...) {}
 
             return Result.c_str();
         }
         const char *GetStatName(GameID_t nGameID, uint32_t iStat)
         {
             static std::string Result{};
+            uint64_t LeaderboardID{};
 
-            Database() << "SELECT Statname FROM Userstat WHERE AppID = ? LIMIT 1 OFFSET ?;"
-                       << nGameID.AppID << iStat >> Result;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboardentry WHERE (GameID = ? AND ClientID = ?) LIMIT 1 OFFSET ?;"
+                    << nGameID.FullID << Global.XUID.UserID << iStat >> LeaderboardID;
+
+                AyriaDB::Query()
+                    << "SELECT Leaderboardname FROM Leaderboards WHERE (GameID = ? AND LeaderboardID = ?);"
+                    << Global.ApplicationID << LeaderboardID >> Result;
+            }
+            catch (...) {}
 
             return Result.c_str();
         }
@@ -603,8 +774,13 @@ namespace Steam
         {
             int Count{};
 
-            Database() << "SELECT COUNT(*) FROM Leaderboards WHERE AppID = ? AND LeaderboardID = ?;"
-                       << Global.ApplicationID << hSteamLeaderboard >> Count;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT COUNT(*) FROM Leaderboardentry WHERE GameID = ? AND LeaderboardID = ?;"
+                    << Global.ApplicationID << hSteamLeaderboard >> Count;
+            }
+            catch (...) {}
 
             return Count;
         }
@@ -630,26 +806,31 @@ namespace Steam
         {
             uint32_t Count{};
 
-            Database() << "SELECT COUNT(*) FROM Achievement WHERE AppID = ?;"
-                       << nGameID.AppID >> Count;
+            try
+            {
+                Database()
+                    << "SELECT COUNT(*) FROM Achievement WHERE AppID = ?;"
+                    << nGameID.AppID >> Count;
+            }
+            catch (...) {}
 
             return Count;
         }
         uint32_t GetNumGroupAchievements(GameID_t nGameID)
         {
-            uint32_t Count{};
-
-            Database() << "SELECT COUNT(*) FROM Groupachievement WHERE AppID = ?;"
-                       << nGameID.AppID >> Count;
-
-            return Count;
+            return GetNumAchievements0(nGameID);
         }
         uint32_t GetNumStats(GameID_t nGameID)
         {
             uint32_t Count{};
 
-            Database() << "SELECT COUNT(*) FROM Userstat WHERE AppID = ? AND ClientID = ?;"
-                       << nGameID.AppID << Global.XUID.UserID >> Count;
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT COUNT(*) FROM Leaderboardentry WHERE (GameID = ? AND ClientID = ?);"
+                    << nGameID.FullID << Global.XUID.UserID >> Count;
+            }
+            catch (...) {}
 
             return Count;
         }

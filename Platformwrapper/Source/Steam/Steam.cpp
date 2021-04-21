@@ -79,6 +79,28 @@ namespace Steam
                            "Tags text, "
                            "PRIMARY KEY (AppID, FileID) );";
                 }
+
+                // Steam achievements and stats.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Achievement ("
+                           "API_Name text not null, "
+                           "AppID integer not null, "
+                           "Maxprogress integer, "
+                           "Name text not null, "
+                           "Description text, "
+                           "Icon text, "
+                           "PRIMARY_KEY(API_Name, AppID) );";
+
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Achievementprogress ("
+                           "ClientID integer not null, "
+                           "Currentprogress integer, "
+                           "AppID integer not null, "
+                           "Name text not null, "
+                           "Unlocktime integer, "
+                           "PRIMARY KEY (Name, ClientID, AppID) );";
+                }
             }
         }
         return sqlite::database(Database);
