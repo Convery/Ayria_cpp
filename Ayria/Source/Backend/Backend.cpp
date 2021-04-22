@@ -30,7 +30,7 @@ namespace Backend
     }
 
     // For debugging.
-    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    static void SQLErrorlog([[maybe_unused]] void *DBName, [[maybe_unused]] int Errorcode, [[maybe_unused]] const char *Errorstring)
     {
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
     }

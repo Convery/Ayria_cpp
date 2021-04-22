@@ -362,7 +362,7 @@ namespace JSON
                 if (Item.is_object())
                 {
                     Object_t Object; Object.reserve(Item.size());
-                    for (const auto Items = Item.items(); const auto &[Key, Value] : Items)
+                    for (auto Items = Item.items(); const auto &[Key, Value] : Items)
                     {
                         Object.emplace(Key, Parse(Value));
                     }
