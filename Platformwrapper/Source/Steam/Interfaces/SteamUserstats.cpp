@@ -948,7 +948,28 @@ namespace Steam
             return Result.c_str();
         }
 
-        int GetAchievementIcon0(GameID_t nGameID, const char *pchName);
+        int GetAchievementIcon0(GameID_t nGameID, const char *pchName)
+        {
+            try
+            {
+                std::string Icon;
+                Database()
+                    << "SELECT Icon FROM Achievementprogress WHERE (AppID = ? AND Name = ?);"
+                    << nGameID.AppID << std::string(pchName)
+                    >> Icon;
+
+                auto Request = new UserAchievementIconFetched_t();
+                std::strncpy(Request->m_rgchAchievementName, pchName, 128);
+                Request->m_nIconHandle = Hash::WW32(Icon);
+                Request->m_nGameID = nGameID;
+
+                Callbacks::Completerequest(Createrequest(), Types::UserAchievementIconFetched_t, Request);
+                return Hash::WW32(Icon);
+            }
+            catch (...) {}
+
+            return 0;
+        }
         int GetAchievementIcon1(const char *pchName)
         {
             return GetAchievementIcon0(GameID_t{ .AppID = Global.ApplicationID }, pchName);
@@ -967,8 +988,16 @@ namespace Steam
 
             return Count;
         }
-        int GetMostAchievedAchievementInfo(char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved);
-        int GetNextMostAchievedAchievementInfo(int iIteratorPrevious, char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved);
+        int GetMostAchievedAchievementInfo(char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved)
+        {
+            // TODO(tcn): SELECT FROM Achievmentprogress WHERE AppID = ? ORDER BY COUNT (Name) LIMIT 1;
+            return -1;
+        }
+        int GetNextMostAchievedAchievementInfo(int iIteratorPrevious, char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved)
+        {
+            // TODO(tcn): SELECT FROM Achievmentprogress WHERE AppID = ? ORDER BY COUNT (Name) LIMIT 1 OFFSET iIterator; return Iterator++;
+            return -1;
+        }
 
         int32_t GetGlobalStatHistoryFLOAT(const char *pchStatName, double *pData, uint32_t cubData)
         {
