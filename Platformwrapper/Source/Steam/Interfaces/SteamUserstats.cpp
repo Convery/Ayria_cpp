@@ -96,21 +96,73 @@ namespace Steam
             else return k_ESteamUserStatTypeINT;
         }
 
-        SteamAPICall_t AttachLeaderboardUGC(SteamLeaderboard_t hSteamLeaderboard, UGCHandle_t hUGC);
+        SteamAPICall_t AttachLeaderboardUGC(SteamLeaderboard_t hSteamLeaderboard, UGCHandle_t hUGC)
+        {
+            return {};
+        }
         SteamAPICall_t DownloadLeaderboardEntries(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardDataRequest eLeaderboardDataRequest, int nRangeStart, int nRangeEnd);
         SteamAPICall_t DownloadLeaderboardEntriesForUsers(SteamLeaderboard_t hSteamLeaderboard, SteamID_t *prgUsers, int cUsers);
-        SteamAPICall_t FindLeaderboard(const char *pchLeaderboardName);
-        SteamAPICall_t FindOrCreateLeaderboard(const char *pchLeaderboardName, ELeaderboardSortMethod eLeaderboardSortMethod, ELeaderboardDisplayType eLeaderboardDisplayType);
+        SteamAPICall_t FindLeaderboard(const char *pchLeaderboardName)
+        {
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboards WHERE Leaderboardname = ? LIMIT 1;"
+                    << std::string(pchLeaderboardName)
+                    >> LeaderboardID;
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardFindResult_t();
+            Request->m_hSteamLeaderboard = LeaderboardID;
+            Request->m_bLeaderboardFound = !!LeaderboardID;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardFindResult_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t FindOrCreateLeaderboard(const char *pchLeaderboardName, ELeaderboardSortMethod eLeaderboardSortMethod, ELeaderboardDisplayType eLeaderboardDisplayType)
+        {
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboards WHERE Leaderboardname = ? LIMIT 1;"
+                    << std::string(pchLeaderboardName)
+                    >> LeaderboardID;
+            }
+            catch (...) {}
+
+            try
+            {
+                if (!LeaderboardID)
+                {
+                    LeaderboardID = GetTickCount();
+
+                    AyriaDB::Query()
+                        << "INSERT INTO Leaderboards (LeaderboardID, Leaderboardname, isDecending, GameID, isFloat) VALUES (?, ?, ?, ?, ?);"
+                        << LeaderboardID << std::string(pchLeaderboardName) << bool(eLeaderboardSortMethod != k_ELeaderboardSortMethodAscending)
+                        << Global.ApplicationID << bool(eLeaderboardDisplayType != k_ELeaderboardDisplayTypeNumeric);
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardFindResult_t();
+            Request->m_hSteamLeaderboard = LeaderboardID;
+            Request->m_bLeaderboardFound = !!LeaderboardID;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardFindResult_t, Request);
+            return RequestID;
+        }
         SteamAPICall_t GetNumberOfCurrentPlayers()
         {
             uint32_t Count{};
 
-            try
-            {
-                sqlite::sqlite_config Config{};
-                Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-                sqlite::database("./Ayria/Client.db", Config) << "SELECT COUNT(*) FROM Onlineclients;" >> Count;
-            }
+            try { AyriaDB::Query() << "SELECT COUNT(*) FROM Clientinfo;" >> Count; }
             catch (...) {}
 
             auto Result = new Callbacks::NumberOfCurrentPlayers_t();
