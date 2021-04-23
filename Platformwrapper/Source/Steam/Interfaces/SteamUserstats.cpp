@@ -9,7 +9,7 @@
 
 namespace Steam
 {
-    struct Entry_t : LeaderboardEntry_t
+    struct Entry_t : public LeaderboardEntry_t
     {
         std::vector<int32_t> Details;
 
@@ -100,8 +100,139 @@ namespace Steam
         {
             return {};
         }
-        SteamAPICall_t DownloadLeaderboardEntries(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardDataRequest eLeaderboardDataRequest, int nRangeStart, int nRangeEnd);
-        SteamAPICall_t DownloadLeaderboardEntriesForUsers(SteamLeaderboard_t hSteamLeaderboard, SteamID_t *prgUsers, int cUsers);
+        SteamAPICall_t DownloadLeaderboardEntries(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardDataRequest eLeaderboardDataRequest, int nRangeStart, int nRangeEnd)
+        {
+            const uint64_t Handle = GetTickCount();
+            bool isDecending{}; bool isFloat{};
+            int Count = 1;
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isDecending, isFloat FROM Leaderboards WHERE LeaderboardID = ?;"
+                    << (uint64_t)hSteamLeaderboard
+                    >> std::tie(isDecending, isFloat);
+            }
+            catch (...) {}
+
+            try
+            {
+                if (isFloat)
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ? LIMIT ? OFFSET ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s) << (nRangeEnd - nRangeStart) << nRangeStart
+                        >> [&](uint32_t UserID, double Score)
+                        {
+                            LeaderboardEntry_t Stats{};
+                            Stats.m_nScore = int(Score);
+                            Stats.m_steamIDUser = Global.XUID;
+                            Stats.m_steamIDUser.UserID = UserID;
+                            Stats.m_nGlobalRank = nRangeStart + Count++;
+                            Downloadedentries[Handle].emplace_back(Stats);
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ? LIMIT ? OFFSET ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s) << (nRangeEnd - nRangeStart) << nRangeStart
+                        >> [&](uint32_t UserID, int64_t Score)
+                        {
+                            LeaderboardEntry_t Stats{};
+                            Stats.m_nScore = int(Score);
+                            Stats.m_steamIDUser = Global.XUID;
+                            Stats.m_steamIDUser.UserID = UserID;
+                            Stats.m_nGlobalRank = nRangeStart + Count++;
+                            Downloadedentries[Handle].emplace_back(Stats);
+                        };
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardScoresDownloaded_t();
+            Request->m_cEntryCount = (int)Downloadedentries[Handle].size();
+            Request->m_hSteamLeaderboard = hSteamLeaderboard;
+            Request->m_hSteamLeaderboardEntries = Handle;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardScoresDownloaded_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t DownloadLeaderboardEntriesForUsers(SteamLeaderboard_t hSteamLeaderboard, SteamID_t *prgUsers, int cUsers)
+        {
+            const uint64_t Handle = GetTickCount();
+            bool isDecending{}; bool isFloat{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isDecending, isFloat FROM Leaderboards WHERE LeaderboardID = ?;"
+                    << (uint64_t)hSteamLeaderboard
+                    >> std::tie(isDecending, isFloat);
+            }
+            catch (...) {}
+
+            try
+            {
+                if (isFloat)
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s)
+                        >> [&](uint32_t UserID, double Score)
+                        {
+                            for (int i = 0; i < cUsers; ++i)
+                            {
+                                if (prgUsers[i].UserID == UserID)
+                                {
+                                    LeaderboardEntry_t Stats{};
+                                    Stats.m_steamIDUser = Global.XUID;
+                                    Stats.m_steamIDUser.UserID = UserID;
+                                    Stats.m_nGlobalRank = i + 1;
+                                    Stats.m_nScore = int(Score);
+
+                                    Downloadedentries[Handle].emplace_back(Stats);
+                                    break;
+                                }
+                            }
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s)
+                        >> [&](uint32_t UserID, int64_t Score)
+                        {
+                            for (int i = 0; i < cUsers; ++i)
+                            {
+                                if (prgUsers[i].UserID == UserID)
+                                {
+                                    LeaderboardEntry_t Stats{};
+                                    Stats.m_steamIDUser = Global.XUID;
+                                    Stats.m_steamIDUser.UserID = UserID;
+                                    Stats.m_nGlobalRank = i + 1;
+                                    Stats.m_nScore = int(Score);
+
+                                    Downloadedentries[Handle].emplace_back(Stats);
+                                    break;
+                                }
+                            }
+                        };
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardScoresDownloaded_t();
+            Request->m_cEntryCount = (int)Downloadedentries[Handle].size();
+            Request->m_hSteamLeaderboard = hSteamLeaderboard;
+            Request->m_hSteamLeaderboardEntries = Handle;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardScoresDownloaded_t, Request);
+            return RequestID;
+        }
         SteamAPICall_t FindLeaderboard(const char *pchLeaderboardName)
         {
             uint64_t LeaderboardID{};
