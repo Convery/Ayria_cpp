@@ -54,8 +54,9 @@ namespace Steam
     Interface_t<> **Fetchinterface(std::string_view Name)
     {
         // See if we got a Steam name.
-        if (Scanstrings.contains(Name))
-            Name = Scanstrings.at(Name).c_str();
+        const auto Temp = std::string(Name.data(), Name.size());
+        if (Scanstrings.contains(Temp))
+            Name = Scanstrings.at(Temp).c_str();
 
         // See if we even have the interface implemented.
         const auto Result = Interfacenames->find(Name);

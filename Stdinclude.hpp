@@ -40,6 +40,7 @@
 #include <tuple>
 #include <span>
 #include <any>
+#include <set>
 
 // Platform-specific libraries.
 #if defined(_WIN32)

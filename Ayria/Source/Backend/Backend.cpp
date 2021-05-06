@@ -32,6 +32,7 @@ namespace Backend
     // For debugging.
     static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
     {
+        (void)DBName; (void)Errorcode; (void)Errorstring;
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
     }
 

@@ -9,7 +9,7 @@
 
 namespace Steam
 {
-    struct Entry_t : LeaderboardEntry_t
+    struct Entry_t : public LeaderboardEntry_t
     {
         std::vector<int32_t> Details;
 
@@ -96,21 +96,204 @@ namespace Steam
             else return k_ESteamUserStatTypeINT;
         }
 
-        SteamAPICall_t AttachLeaderboardUGC(SteamLeaderboard_t hSteamLeaderboard, UGCHandle_t hUGC);
-        SteamAPICall_t DownloadLeaderboardEntries(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardDataRequest eLeaderboardDataRequest, int nRangeStart, int nRangeEnd);
-        SteamAPICall_t DownloadLeaderboardEntriesForUsers(SteamLeaderboard_t hSteamLeaderboard, SteamID_t *prgUsers, int cUsers);
-        SteamAPICall_t FindLeaderboard(const char *pchLeaderboardName);
-        SteamAPICall_t FindOrCreateLeaderboard(const char *pchLeaderboardName, ELeaderboardSortMethod eLeaderboardSortMethod, ELeaderboardDisplayType eLeaderboardDisplayType);
+        SteamAPICall_t AttachLeaderboardUGC(SteamLeaderboard_t hSteamLeaderboard, UGCHandle_t hUGC)
+        {
+            return {};
+        }
+        SteamAPICall_t DownloadLeaderboardEntries(SteamLeaderboard_t hSteamLeaderboard, ELeaderboardDataRequest eLeaderboardDataRequest, int nRangeStart, int nRangeEnd)
+        {
+            const uint64_t Handle = GetTickCount();
+            bool isDecending{}; bool isFloat{};
+            int Count = 1;
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isDecending, isFloat FROM Leaderboards WHERE LeaderboardID = ?;"
+                    << (uint64_t)hSteamLeaderboard
+                    >> std::tie(isDecending, isFloat);
+            }
+            catch (...) {}
+
+            try
+            {
+                if (isFloat)
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ? LIMIT ? OFFSET ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s) << (nRangeEnd - nRangeStart) << nRangeStart
+                        >> [&](uint32_t UserID, double Score)
+                        {
+                            LeaderboardEntry_t Stats{};
+                            Stats.m_nScore = int(Score);
+                            Stats.m_steamIDUser = Global.XUID;
+                            Stats.m_steamIDUser.UserID = UserID;
+                            Stats.m_nGlobalRank = nRangeStart + Count++;
+                            Downloadedentries[Handle].emplace_back(Stats);
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ? LIMIT ? OFFSET ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s) << (nRangeEnd - nRangeStart) << nRangeStart
+                        >> [&](uint32_t UserID, int64_t Score)
+                        {
+                            LeaderboardEntry_t Stats{};
+                            Stats.m_nScore = int(Score);
+                            Stats.m_steamIDUser = Global.XUID;
+                            Stats.m_steamIDUser.UserID = UserID;
+                            Stats.m_nGlobalRank = nRangeStart + Count++;
+                            Downloadedentries[Handle].emplace_back(Stats);
+                        };
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardScoresDownloaded_t();
+            Request->m_cEntryCount = (int)Downloadedentries[Handle].size();
+            Request->m_hSteamLeaderboard = hSteamLeaderboard;
+            Request->m_hSteamLeaderboardEntries = Handle;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardScoresDownloaded_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t DownloadLeaderboardEntriesForUsers(SteamLeaderboard_t hSteamLeaderboard, SteamID_t *prgUsers, int cUsers)
+        {
+            const uint64_t Handle = GetTickCount();
+            bool isDecending{}; bool isFloat{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT isDecending, isFloat FROM Leaderboards WHERE LeaderboardID = ?;"
+                    << (uint64_t)hSteamLeaderboard
+                    >> std::tie(isDecending, isFloat);
+            }
+            catch (...) {}
+
+            try
+            {
+                if (isFloat)
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, fScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY fScore ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s)
+                        >> [&](uint32_t UserID, double Score)
+                        {
+                            for (int i = 0; i < cUsers; ++i)
+                            {
+                                if (prgUsers[i].UserID == UserID)
+                                {
+                                    LeaderboardEntry_t Stats{};
+                                    Stats.m_steamIDUser = Global.XUID;
+                                    Stats.m_steamIDUser.UserID = UserID;
+                                    Stats.m_nGlobalRank = i + 1;
+                                    Stats.m_nScore = int(Score);
+
+                                    Downloadedentries[Handle].emplace_back(Stats);
+                                    break;
+                                }
+                            }
+                        };
+                }
+                else
+                {
+                    AyriaDB::Query()
+                        << "SELECT ClientID, iScore FROM Leaderboardentry WHERE LeaderboardID = ? ORDER BY iScore ?;"
+                        << hSteamLeaderboard << (isDecending ? "DESC"s : "ASC"s)
+                        >> [&](uint32_t UserID, int64_t Score)
+                        {
+                            for (int i = 0; i < cUsers; ++i)
+                            {
+                                if (prgUsers[i].UserID == UserID)
+                                {
+                                    LeaderboardEntry_t Stats{};
+                                    Stats.m_steamIDUser = Global.XUID;
+                                    Stats.m_steamIDUser.UserID = UserID;
+                                    Stats.m_nGlobalRank = i + 1;
+                                    Stats.m_nScore = int(Score);
+
+                                    Downloadedentries[Handle].emplace_back(Stats);
+                                    break;
+                                }
+                            }
+                        };
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardScoresDownloaded_t();
+            Request->m_cEntryCount = (int)Downloadedentries[Handle].size();
+            Request->m_hSteamLeaderboard = hSteamLeaderboard;
+            Request->m_hSteamLeaderboardEntries = Handle;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardScoresDownloaded_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t FindLeaderboard(const char *pchLeaderboardName)
+        {
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboards WHERE Leaderboardname = ? LIMIT 1;"
+                    << std::string(pchLeaderboardName)
+                    >> LeaderboardID;
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardFindResult_t();
+            Request->m_hSteamLeaderboard = LeaderboardID;
+            Request->m_bLeaderboardFound = !!LeaderboardID;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardFindResult_t, Request);
+            return RequestID;
+        }
+        SteamAPICall_t FindOrCreateLeaderboard(const char *pchLeaderboardName, ELeaderboardSortMethod eLeaderboardSortMethod, ELeaderboardDisplayType eLeaderboardDisplayType)
+        {
+            uint64_t LeaderboardID{};
+
+            try
+            {
+                AyriaDB::Query()
+                    << "SELECT LeaderboardID FROM Leaderboards WHERE Leaderboardname = ? LIMIT 1;"
+                    << std::string(pchLeaderboardName)
+                    >> LeaderboardID;
+            }
+            catch (...) {}
+
+            try
+            {
+                if (!LeaderboardID)
+                {
+                    LeaderboardID = GetTickCount();
+
+                    AyriaDB::Query()
+                        << "INSERT INTO Leaderboards (LeaderboardID, Leaderboardname, isDecending, GameID, isFloat) VALUES (?, ?, ?, ?, ?);"
+                        << LeaderboardID << std::string(pchLeaderboardName) << bool(eLeaderboardSortMethod != k_ELeaderboardSortMethodAscending)
+                        << Global.ApplicationID << bool(eLeaderboardDisplayType != k_ELeaderboardDisplayTypeNumeric);
+                }
+            }
+            catch (...) {}
+
+            const auto RequestID = Callbacks::Createrequest();
+            auto Request = new LeaderboardFindResult_t();
+            Request->m_hSteamLeaderboard = LeaderboardID;
+            Request->m_bLeaderboardFound = !!LeaderboardID;
+
+            Callbacks::Completerequest(RequestID, Types::LeaderboardFindResult_t, Request);
+            return RequestID;
+        }
         SteamAPICall_t GetNumberOfCurrentPlayers()
         {
             uint32_t Count{};
 
-            try
-            {
-                sqlite::sqlite_config Config{};
-                Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-                sqlite::database("./Ayria/Client.db", Config) << "SELECT COUNT(*) FROM Onlineclients;" >> Count;
-            }
+            try { AyriaDB::Query() << "SELECT COUNT(*) FROM Clientinfo;" >> Count; }
             catch (...) {}
 
             auto Result = new Callbacks::NumberOfCurrentPlayers_t();
@@ -765,7 +948,28 @@ namespace Steam
             return Result.c_str();
         }
 
-        int GetAchievementIcon0(GameID_t nGameID, const char *pchName);
+        int GetAchievementIcon0(GameID_t nGameID, const char *pchName)
+        {
+            try
+            {
+                std::string Icon;
+                Database()
+                    << "SELECT Icon FROM Achievementprogress WHERE (AppID = ? AND Name = ?);"
+                    << nGameID.AppID << std::string(pchName)
+                    >> Icon;
+
+                auto Request = new UserAchievementIconFetched_t();
+                std::strncpy(Request->m_rgchAchievementName, pchName, 128);
+                Request->m_nIconHandle = Hash::WW32(Icon);
+                Request->m_nGameID = nGameID;
+
+                Callbacks::Completerequest(Createrequest(), Types::UserAchievementIconFetched_t, Request);
+                return Hash::WW32(Icon);
+            }
+            catch (...) {}
+
+            return 0;
+        }
         int GetAchievementIcon1(const char *pchName)
         {
             return GetAchievementIcon0(GameID_t{ .AppID = Global.ApplicationID }, pchName);
@@ -784,8 +988,16 @@ namespace Steam
 
             return Count;
         }
-        int GetMostAchievedAchievementInfo(char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved);
-        int GetNextMostAchievedAchievementInfo(int iIteratorPrevious, char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved);
+        int GetMostAchievedAchievementInfo(char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved)
+        {
+            // TODO(tcn): SELECT FROM Achievmentprogress WHERE AppID = ? ORDER BY COUNT (Name) LIMIT 1;
+            return -1;
+        }
+        int GetNextMostAchievedAchievementInfo(int iIteratorPrevious, char *pchName, uint32_t unNameBufLen, float *pflPercent, bool *pbAchieved)
+        {
+            // TODO(tcn): SELECT FROM Achievmentprogress WHERE AppID = ? ORDER BY COUNT (Name) LIMIT 1 OFFSET iIterator; return Iterator++;
+            return -1;
+        }
 
         int32_t GetGlobalStatHistoryFLOAT(const char *pchStatName, double *pData, uint32_t cubData)
         {
