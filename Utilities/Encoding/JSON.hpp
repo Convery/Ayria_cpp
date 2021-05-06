@@ -154,8 +154,20 @@ namespace JSON
             if (Type == Type_t::Array) return asPtr(Array_t)->empty();
             return true;
         }
+        [[nodiscard]] bool isNull() const
+        {
+            return Type == Type_t::Null;
+        }
 
         //
+        template<typename T, size_t N> auto value(std::string_view Key, const std::array<T, N> &Defaultvalue)
+        {
+            return value(Key, std::basic_string<std::remove_const_t<T>>(Defaultvalue, N));
+        }
+        template<typename T, size_t N> auto value(std::string_view Key, T(&Defaultvalue)[N])
+        {
+            return value(Key, std::basic_string<std::remove_const_t<T>>(Defaultvalue, N));
+        }
         template<typename T> T value(std::string_view Key, T Defaultvalue) const
         {
             if constexpr (!std::is_convertible_v<Value_t, T>) return Defaultvalue;
@@ -247,14 +259,20 @@ namespace JSON
         }
 
         //
+        template<typename T, size_t N> Value_t(const std::array<T, N> &Input)
+        {
+            *this = std::basic_string<std::remove_const_t<T>>(Input.data(), N);
+            return;
+        }
+        template<typename T, size_t N> [[nodiscard]] Value_t(T(&Input)[N])
+        {
+            *this = std::basic_string<std::remove_const_t<T>>(Input, N);
+            return;
+        }
         template<typename T> Value_t(const T &Input)
         {
-            // Need to decay any pointers.
-            if constexpr (std::is_pointer_v<T>)
-            {
-                *this = Value_t(*Input);
-                return;
-            }
+            // Let's not bother with pointers.
+            static_assert(!std::is_pointer_v<T>);
 
             // Safety-check, we do not convert arrays to strings.
             static_assert(toType<T>() != Type_t::Null);
