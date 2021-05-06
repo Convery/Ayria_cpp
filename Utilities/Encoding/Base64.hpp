@@ -41,7 +41,7 @@ namespace Base64
     template<size_t N, B64Internal::Bytealigned_t T>
     [[nodiscard]] constexpr std::array<char, ((N + 2) / 3 * 4)> Encode(const T (&Input)[N])
     {
-        std::array<char, ((N + 2) / 3 * 4)> Result;
+        std::array<char, ((N + 2) / 3 * 4)> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint32_t Bits{};

@@ -142,11 +142,11 @@ struct IHTTPServer : IStreamserver
     std::string StreamOUT{};
 
     // Callbacks on data, returns the response.
-    std::string(__cdecl *onGET)(HTTPRequest_t &) {};
-    std::string(__cdecl *onPUT)(HTTPRequest_t &) {};
-    std::string(__cdecl *onPOST)(HTTPRequest_t &) {};
-    std::string(__cdecl *onCOPY)(HTTPRequest_t &) {};
-    std::string(__cdecl *onDELETE)(HTTPRequest_t &) {};
+    std::string(__cdecl *onGET)(const HTTPRequest_t &) {};
+    std::string(__cdecl *onPUT)(const HTTPRequest_t &) {};
+    std::string(__cdecl *onPOST)(const HTTPRequest_t &) {};
+    std::string(__cdecl *onCOPY)(const HTTPRequest_t &) {};
+    std::string(__cdecl *onDELETE)(const HTTPRequest_t &) {};
 
     // On incoming data from Localnet.
     bool onStreamwrite(const void *Databuffer, const uint32_t Datasize) override
