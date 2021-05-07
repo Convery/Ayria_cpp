@@ -226,7 +226,7 @@ struct IHTTPSServer : IHTTPServer
         }
 
         // Work in smaller batches.
-        uint8_t Buffer[2048]; int Readcount;
+        uint8_t Buffer[2048]; int Readcount{};
         do
         {
             Readcount = SSL_read(State, Buffer, 2048);

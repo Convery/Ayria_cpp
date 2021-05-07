@@ -26,12 +26,12 @@ namespace FS
     class MMappedfile_t
     {
         // Internal.
-        void *Nativehandle;
-        int NativeFD;
+        void *Nativehandle{};
+        int NativeFD{};
 
         public:
-        size_t Size;
-        void *Data;
+        size_t Size{};
+        void *Data{};
 
         explicit MMappedfile_t(const std::string &Path)
         {

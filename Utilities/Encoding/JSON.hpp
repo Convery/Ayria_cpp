@@ -70,7 +70,7 @@ namespace JSON
                 case Type_t::Object:
                 {
                     std::string Result{ "{" };
-                    for (const auto &[lKey, lValue] : *asPtr(Object_t))
+                    for (const auto Ptr = asPtr(Object_t); const auto &[lKey, lValue] : *Ptr)
                     {
                         Result.append(va("\"%*s\":", lKey.size(), lKey.data()));
                         Result.append(lValue.dump());
@@ -83,7 +83,7 @@ namespace JSON
                 case Type_t::Array:
                 {
                     std::string Result{ "[" };
-                    for (const auto &lValue : *asPtr(Array_t))
+                    for (const auto Ptr = asPtr(Array_t); const auto &lValue : *Ptr)
                     {
                         Result.append(lValue.dump());
                         Result.append(",");
@@ -190,11 +190,11 @@ namespace JSON
         {
             switch (Type)
             {
-                case Type_t::Object: if constexpr (std::is_same_v<T, Object_t>) return *asPtr(Object_t);
-                case Type_t::Unsignedint: if constexpr (std::is_integral_v<T>) return *asPtr(uint64_t);
-                case Type_t::Float: if constexpr (std::is_floating_point_v<T>) return *asPtr(double);
-                case Type_t::Signedint: if constexpr (std::is_integral_v<T>) return *asPtr(int64_t);
-                case Type_t::Bool: if constexpr (std::is_same_v<T, bool>) return *asPtr(bool);
+                case Type_t::Object: if constexpr (std::is_same_v<T, Object_t>) return *asPtr(Object_t); break;
+                case Type_t::Unsignedint: if constexpr (std::is_integral_v<T>) return *asPtr(uint64_t); break;
+                case Type_t::Float: if constexpr (std::is_floating_point_v<T>) return *asPtr(double); break;
+                case Type_t::Signedint: if constexpr (std::is_integral_v<T>) return *asPtr(int64_t); break;
+                case Type_t::Bool: if constexpr (std::is_same_v<T, bool>) return *asPtr(bool); break;
                 case Type_t::Null: break;
 
                 case Type_t::String:
@@ -380,7 +380,7 @@ namespace JSON
                 if (Item.is_object())
                 {
                     Object_t Object; Object.reserve(Item.size());
-                    for (auto Items = Item.items(); const auto &[Key, Value] : Items)
+                    for (const auto Items = Item.items(); const auto &[Key, Value] : Items)
                     {
                         Object.emplace(Key, Parse(Value));
                     }

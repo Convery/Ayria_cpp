@@ -36,6 +36,7 @@ struct Debugmutex
     }
     void unlock()
     {
+        (void)Internal.try_lock();
         Internal.unlock();
         Currentowner = {};
     }

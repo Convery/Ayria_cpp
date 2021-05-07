@@ -157,7 +157,7 @@ namespace AyriaDB
 
         namespace Set
         {
-            inline void Single(uint32_t ClientID, const std::string &Key, const std::string Value)
+            inline void Single(uint32_t ClientID, const std::string &Key, const std::string &Value)
             {
                 try
                 {
@@ -444,16 +444,16 @@ namespace AyriaDB
                     Query()
                         << "SELECT * FROM Matchmakingsessions WHERE HostID = ?;" << HostID
                         >> [&](uint32_t, uint32_t Lastupdate, uint32_t GameID, uint32_t Hostaddress, uint16_t Hostport, std::string &&Gamedata)
-                    {
-                        Result = JSON::Object_t({
-                            { "Gamedata", std::move(Gamedata) },
-                            { "Hostaddress", Hostaddress },
-                            { "Lastupdate", Lastupdate },
-                            { "Hostport", Hostport },
-                            { "HostID", HostID },
-                            { "GameID", GameID }
-                        });
-                    };
+                        {
+                            Result = JSON::Object_t({
+                                { "Gamedata", std::move(Gamedata) },
+                                { "Hostaddress", Hostaddress },
+                                { "Lastupdate", Lastupdate },
+                                { "Hostport", Hostport },
+                                { "HostID", HostID },
+                                { "GameID", GameID }
+                            });
+                        };
                 } catch (...) {}
 
                 return Result;

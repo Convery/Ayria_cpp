@@ -36,7 +36,7 @@ class Ringbuffer_t
                 while (!empty())
                 {
                     erase(Tail);
-                    Tail = ++Tail % N;
+                    Tail = (Tail + 1) % N;
                     --Size;
                 }
                 throw;
@@ -64,7 +64,7 @@ class Ringbuffer_t
             while (!empty())
             {
                 erase(Tail);
-                Tail = ++Tail % N;
+                Tail = (Tail + 1) % N;
                 --Size;
             }
         }
@@ -80,7 +80,7 @@ class Ringbuffer_t
         if (empty()) return;
         erase(Tail);
 
-        Tail = ++Tail % N;
+        Tail = (Tail + 1) % N;
         --Size;
     }
     const T *push_back(T &&Value) noexcept
@@ -89,9 +89,9 @@ class Ringbuffer_t
         Storage[Head] = std::move(Value);
         const auto Result = &Storage[Head];
 
-        if (full()) Tail = ++Tail % N;
+        if (full()) Tail = (Tail + 1) % N;
         if (!full()) ++Size;
-        Head = ++Head % N;
+        Head = (Head + 1) % N;
 
         return Result;
     }
@@ -101,9 +101,9 @@ class Ringbuffer_t
         Storage[Head] = Value;
         const auto Result = &Storage[Head];
 
-        if (full()) Tail = ++Tail % N;
+        if (full()) Tail = (Tail + 1) % N;
         if (!full()) ++Size;
-        Head = ++Head % N;
+        Head = (Head + 1) % N;
 
         return Result;
     }
@@ -115,9 +115,9 @@ class Ringbuffer_t
         Storage[Head] = { args };
         auto Result = &Storage[Head];
 
-        if (full()) Tail = ++Tail % N;
+        if (full()) Tail = (Tail + 1) % N;
         if (!full()) ++Size;
-        Head = ++Head % N;
+        Head = (Head + 1) % N;
 
         return Result;
     }
@@ -161,7 +161,7 @@ class Ringbuffer_t
         bool operator!=(const Iterator &Right) const { return Index != Right.Index; }
         Iterator<T, N, C> &operator++() noexcept
         {
-            Index = ++Index % N;
+            Index = (Index + 1) % N;
             ++Count;
             return *this;
         }
