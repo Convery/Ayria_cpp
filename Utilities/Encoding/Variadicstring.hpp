@@ -9,16 +9,16 @@
 #include <string_view>
 
 #if defined(HAS_ABSEIL)
-template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, const Args& ...args)
 {
     return absl::StrFormat(Format, args ...);
 }
-template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(const char *Format, const Args& ...args)
 {
     return absl::StrFormat(Format, args ...);
 }
 #else
-template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, const Args& ...args)
 {
     const auto Size = 1 + std::snprintf(nullptr, 0, Format.data(), args ...);
     auto Buffer = std::make_unique<char[]>(Size);
@@ -26,7 +26,7 @@ template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format
     std::snprintf(Buffer.get(), Size, Format.data(), args ...);
     return Buffer.get();
 }
-template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::string va(const char *Format, const Args& ...args)
 {
     const auto Size = 1 + std::snprintf(nullptr, 0, Format, args ...);
     auto Buffer = std::make_unique<char[]>(Size);
@@ -37,7 +37,7 @@ template<typename ... Args> [[nodiscard]] std::string va(const char *Format, Arg
 #endif
 
 #if defined (_WIN32)
-template<typename ... Args> [[nodiscard]] std::wstring va(std::wstring_view Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::wstring va(std::wstring_view Format, const Args& ...args)
 {
     const auto Size = 1 + _snwprintf(nullptr, 0, Format.data(), args ...);
     auto Buffer = std::make_unique<wchar_t[]>(Size);
@@ -45,7 +45,7 @@ template<typename ... Args> [[nodiscard]] std::wstring va(std::wstring_view Form
     _snwprintf(Buffer.get(), Size, Format.data(), args ...);
     return Buffer.get();
 }
-template<typename ... Args> [[nodiscard]] std::wstring va(const wchar_t *Format, Args ...args)
+template<typename ... Args> [[nodiscard]] std::wstring va(const wchar_t *Format, const Args& ...args)
 {
     const auto Size = 1 + _snwprintf(nullptr, 0, Format, args ...);
     auto Buffer = std::make_unique<wchar_t[]>(Size);
