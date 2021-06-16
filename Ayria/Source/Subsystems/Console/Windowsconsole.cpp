@@ -24,9 +24,9 @@ namespace Console::Windows
         if (Message == WM_CHAR && wParam == VK_RETURN)
         {
             wchar_t Input[1024]{};
-            GetWindowTextW(Inputhandle, Input, 1024);
+            const size_t Len = GetWindowTextW(Inputhandle, Input, 1024);
+            Console::execCommand(std::wstring_view{ Input, Len });
             SetWindowTextW(Inputhandle, L"");
-            Console::execCommandline(Encoding::toNarrow(Input));
             return 0;
         }
         if (Message == WM_CHAR)
@@ -85,14 +85,14 @@ namespace Console::Windows
         Bufferhandle = CreateWindowExW(NULL, L"edit", NULL, Bufferstyle, 6, 5, 806, 410, Consolehandle, (HMENU)BufferID, hInstance, NULL);
         Inputhandle = CreateWindowExW(NULL, L"edit", NULL, Linestyle, 6, 420, 808, 20, Consolehandle, (HMENU)InputID, hInstance, NULL);
 
-        SendMessageW(Bufferhandle, WM_SETFONT, (WPARAM)getDefaultfont(), NULL);
-        SendMessageW(Inputhandle, WM_SETFONT, (WPARAM)getDefaultfont(), NULL);
+        SendMessageW(Bufferhandle, WM_SETFONT, (WPARAM)Graphics::getDefaultfont(14), NULL);
+        SendMessageW(Inputhandle, WM_SETFONT, (WPARAM)Graphics::getDefaultfont(14), NULL);
 
         oldLine = (WNDPROC)SetWindowLongPtrW(Inputhandle, GWLP_WNDPROC, (LONG_PTR)Inputproc);
         SetFocus(Inputhandle);
 
         // Add common commands.
-        Initializebackend();
+        Initialize();
     }
     void Showconsole(bool Hide)
     {
@@ -118,7 +118,7 @@ namespace Console::Windows
         const auto Currenttime = GetTickCount();
         if (Currenttime > (Lastupdate + 100))
         {
-            const auto Hash = Hash::WW32(Console::getLoglines(1, L"")[0].first);
+            const auto Hash = Hash::WW32(Console::getMessages(1, L"")[0].first);
 
             if (Lastmessage != Hash) [[unlikely]]
             {
@@ -129,7 +129,7 @@ namespace Console::Windows
                     std::wstring Concatenated;
                     Lastmessage = Hash;
 
-                    for (const auto Items = Console::getLoglines(999, Console::getFilter()); const auto &[String, Colour] : Items)
+                    for (const auto Items = Console::getMessages(999, L""); const auto & [String, Colour] : Items)
                     {
                         if (String.empty()) continue;
                         Concatenated += String;
@@ -142,5 +142,4 @@ namespace Console::Windows
             }
         }
     }
-
 }

@@ -19,8 +19,8 @@ struct Color_t : rgb_t
     constexpr Color_t() : rgb_t() { a = 0xFF; }
     constexpr Color_t(rgb_t RGB) : rgb_t(RGB) { a = 0xFF; };
     constexpr Color_t(uint8_t R, uint8_t G, uint8_t B, uint8_t A = 0xFF) : rgb_t{ R, G, B }, a(A) {}
-    constexpr Color_t(COLORREF RGBA) { r = RGBA & 0xFF; g = (RGBA >> 8) & 0xFF;  b = (RGBA >> 16) & 0xFF; a = (RGBA >> 24) & 0xFF; }
-    constexpr Color_t(uint32_t RGBA) { b = RGBA & 0xFF; g = (RGBA >> 8) & 0xFF;  r = (RGBA >> 16) & 0xFF; a = (RGBA >> 24) & 0xFF; }
+    constexpr Color_t(COLORREF RGBA) { r = RGBA & 0xFF; g = (RGBA >> 8) & 0xFF;  b = (RGBA >> 16) & 0xFF; a = (RGBA >> 24) & 0xFF; if (a == 0) a = 0xFF; }
+    constexpr Color_t(uint32_t RGBA) { b = RGBA & 0xFF; g = (RGBA >> 8) & 0xFF;  r = (RGBA >> 16) & 0xFF; a = (RGBA >> 24) & 0xFF; if (a == 0) a = 0xFF; }
 
     static constexpr rgb_t Blend(rgb_t Source, rgb_t Overlay, uint8_t Opacity)
     {
@@ -55,55 +55,11 @@ struct Color_t : rgb_t
     constexpr operator COLORREF() const { return r | (g << 8U) | (b << 16U); }
 };
 
-// NOTE(tcn): Windows gets confused if Alpha != NULL.
-constexpr COLORREF Clearcolor{ 0x00FFFFFF };
-
-using Eventflags_t = union
-{
-    union
-    {
-        uint32_t Raw;
-        uint32_t Any;
-        struct
-        {
-            uint32_t
-                onWindowchange : 1,
-                onCharinput : 1,
-
-                doBackspace : 1,
-                doDelete : 1,
-                doCancel : 1,
-                doPaste : 1,
-                doEnter : 1,
-                doUndo : 1,
-                doRedo : 1,
-                doCopy : 1,
-                doTab : 1,
-                doCut : 1,
-
-                Mousemove : 1,
-                Mousedown : 1,
-                Mouseup : 1,
-                Keydown : 1,
-                Keyup : 1,
-
-                Mousemiddle : 1,
-                Mouseright : 1,
-                Mouseleft : 1,
-
-                modShift : 1,
-                modCtrl : 1,
-
-                FLAG_MAX : 1;
-        };
-    };
-};
-
 #pragma pack(pop)
 #pragma endregion
 
 // Subsystems that depend on the datatypes.
 #include "Pluginloader/Pluginloader.hpp"
-#include "Overlay/Rendering.hpp"
+#include "Overlay/Graphics.hpp"
 #include "Overlay/Overlay.hpp"
 #include "Console/Console.hpp"

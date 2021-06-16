@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2020-09-18
+    Started: 2021-06-06
     License: MIT
 */
 
@@ -10,26 +10,22 @@
 
 namespace Console
 {
-    // UTF8 escaped ASCII strings.
-    using Callback_t = void(__cdecl *)(int Argc, const char **Argv);
-    using Logline_t = std::pair<std::wstring, COLORREF>;
+    // UTF8 escaped ACII strings are passed to Argv for compatibility.
+    using Functioncallback_t = void(__cdecl *)(int Argc, const char **Argv);
+    using Logline_t = std::pair<std::wstring, Color_t>;
 
-    // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::string &Message, Color_t Colour);
+    // Threadsafe injection into and fetching from the global log.
+    template <typename T> void addMessage(const std::basic_string<T> &Message, Color_t Color);
+    template <typename T> void addMessage(std::basic_string_view<T> Message, Color_t Color);
+    std::vector<Logline_t> getMessages(size_t Maxcount, std::wstring_view Filter);
 
-    // Fetch a copy of the internal strings.
-    std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter);
+    // Manage and execute the commandline, with optional logging.
+    template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback);
+    template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback);
+    template <typename T> void execCommand(const std::basic_string<T> &Commandline, bool Log = true);
+    template <typename T> void execCommand(std::basic_string_view<T> Commandline, bool Log = true);
 
-    // Track the current filter.
-    std::wstring_view getFilter();
-
-    // Add a new command to the internal list.
-    void addConsolecommand(std::string_view Name, Callback_t Callback);
-
-    // Evaluate the string, optionally add to the history.
-    void execCommandline(const std::string &Commandline, bool logCommand = true);
-
-    // Quake-style console.
+    // Quake-style console for Windows.
     namespace Windows
     {
         // Show auto-creates a console if needed.
@@ -38,13 +34,7 @@ namespace Console
         void doFrame();
     }
 
-    // Ingame console.
-    namespace Overlay
-    {
-        void Createconsole(Overlay_t<false> *Parent);
-    }
-
-    // Add common commands.
-    void Initializebackend();
+    // Add common commands to the backend.
+    void Initialize();
 }
 

@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2020-09-18
+    Started: 2021-06-06
     License: MIT
 */
 
@@ -9,153 +9,199 @@
 
 namespace Console
 {
-    // Console output.
-    #pragma region Consoleoutput
-    static Spinlock Writelock;
-    constexpr size_t Logsize = 256;
-    static std::wstring Currentfilter{};
-    static Ringbuffer_t<Logline_t, Logsize> Consolelog{};
+    // UTF8 escaped ACII strings are passed to Argv for compatibility.
+    // using Functioncallback_t = void(__cdecl *)(int Argc, const char *Argv);
+    // using Logline_t = std::pair<std::wstring, Color_t>;
 
-    // Threadsafe injection of strings into the global log.
-    void addConsolemessage(const std::string &Message, Color_t Colour)
+    static Spinlock Writelock{};
+    constexpr size_t Loglimit = 256;
+    static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
+    static Hashmap<std::wstring, Functioncallback_t> Commands{};
+
+    // Threadsafe injection into and fetching from the global log.
+    template <typename T> void addMessage(const std::basic_string<T> &Message, Color_t Color)
     {
-        // Scan for keywords to detect a colour if not specified.
-        if (Colour == 0)
-        {
-            Colour = [&]() -> uint32_t
-            {
-                // Common keywords.
-                if (std::strstr(Message.c_str(), "[E]") || std::strstr(Message.c_str(), "rror")) return 0xBE282A;
-                if (std::strstr(Message.c_str(), "[W]") || std::strstr(Message.c_str(), "arning")) return 0x2AC0BE;
-
-                // Ayria default.
-                if (std::strstr(Message.c_str(), "[I]")) return 0xBD8F21;
-                if (std::strstr(Message.c_str(), "[D]")) return 0x3E967F;
-                if (std::strstr(Message.c_str(), "[>]")) return 0x7F963E;
-
-                // Default.
-                return 0x315571;
-            }();
-        }
-
-        // Safety per parse, rather than per line.
-        const std::scoped_lock _(Writelock);
-
-        // Split by newline.
-        for (const auto Results = Tokenizestring(Message, "\r\n"); const auto &String : Results)
-            if (!String.empty())
-                Consolelog.push_back(Logline_t{ Encoding::toWide(String), Colour });
+        return addMessage(std::basic_string_view<T> {Message}, Color);
     }
+    template <typename T> void addMessage(std::basic_string_view<T> Message, Color_t Color)
+    {
+        std::scoped_lock Threadguard(Writelock);
+        const auto Compat = Encoding::toNarrow(Message);
 
-    // Fetch a copy of the internal strings.
-    std::vector<Logline_t> getLoglines(size_t Count, std::wstring_view Filter)
+        for (const auto &String : lz::split(Compat, '\n'))
+        {
+            // Ensure that we have some color.
+            if (Color == 0)
+            {
+                const auto Newcolor = [&]() -> uint32_t
+                {
+                    // Ayria common prefixes.
+                    if (String.find("[E]") != String.npos) return 0xBE282A;
+                    if (String.find("[W]") != String.npos) return 0x2AC0BE;
+                    if (String.find("[I]") != String.npos) return 0xBD8F21;
+                    if (String.find("[D]") != String.npos) return 0x3E967F;
+                    if (String.find("[>]") != String.npos) return 0x7F963E;
+
+                    // Just a guess..
+                    if (String.find("rror") !=  String.npos) return 0xBE282A;
+                    if (String.find("arning") !=  String.npos) return 0x2AC0BE;
+
+                    // Default.
+                    return 0x315571;
+                }();
+
+                Consolelog.emplace_back(Encoding::toWide(String), Newcolor);
+            }
+            else
+            {
+                Consolelog.emplace_back(Encoding::toWide(String), Color);
+            }
+        }
+    }
+    std::vector<Logline_t> getMessages(size_t Maxcount, std::wstring_view Filter)
     {
         std::vector<Logline_t> Result;
-        Result.reserve(std::clamp(Count, size_t(1), Logsize));
+        Result.reserve(std::clamp(Maxcount, size_t(1), Loglimit));
 
-        // Safety per fetch, rather than per line.
-        const std::scoped_lock _(Writelock);
-
-        std::for_each(Consolelog.rbegin(), Consolelog.rend(), [&](const auto &Item)
+        std::scoped_lock Threadguard(Writelock);
+        std::copy_if(Consolelog.rbegin(), Consolelog.rend(), std::back_inserter(Result),
+        [&](const auto &Tuple)
         {
-            if (Count)
+            if (0 == Maxcount) return false;
+
+            const auto &[String, Colot] = Tuple;
+            if (String.find(Filter) != String.npos)
             {
-                if (std::wcsstr(Item.first.c_str(), Filter.data()))
-                {
-                    Result.push_back(Item);
-                    Count--;
-                }
+                Maxcount--;
+                return true;
             }
+
+            return false;
         });
 
-        std::reverse(Result.begin(), Result.end());
+        // Reverse the vector to simplify other code.
+        std::ranges::reverse(Result);
         return Result;
     }
 
-    // Track the current filter.
-    std::wstring_view getFilter()
+    // Helper to manage the commands.
+    Functioncallback_t Findcommand(std::wstring_view Functionname)
     {
-        return Currentfilter;
+        for (const auto &[Name, Callback] : Commands)
+        {
+            if (Name.size() != Functionname.size()) continue;
+
+            const auto Range = lz::zip(Name, Functionname);
+            if (std::any_of(Range.begin(), Range.end(), [](const auto &Tuple) -> bool
+            {
+                const auto &[Char1, Char2] = Tuple;
+                return std::toupper(Char1) != std::toupper(Char2);
+            })) continue;
+
+            return Callback;
+        }
+
+        return nullptr;
     }
-    #pragma endregion
 
-    // Console input.
-    #pragma region Consoleinput
-    static std::vector<std::pair<std::string, Callback_t>> Functions;
-
-    // Evaluate the string, optionally add to the history.
-    void execCommandline(const std::string &Commandline, bool logCommand)
+    // Manage and execute the commandline, with optional logging.
+    template <typename T> void execCommand(std::basic_string_view<T> Commandline, bool Log)
     {
-        static const std::regex rxCommands("(\"[^\"]+\"|[^\\s\"]+)", std::regex_constants::optimize);
-        auto It = std::sregex_iterator(Commandline.cbegin(), Commandline.cend(), rxCommands);
+        const auto Compat = Encoding::toNarrow(Commandline);
+
+        static const std::regex Regex("(\"[^\"]+\"|[^\\s\"]+)", std::regex_constants::optimize);
+        auto It = std::sregex_iterator(Compat.cbegin(), Compat.cend(), Regex);
         const auto Size = std::distance(It, std::sregex_iterator());
 
-        // Why would you do this?
+        // Why would you do this to me? =(
         if (Size == 0) return;
 
         // Format as a C-array with the last pointer being null.
-        std::vector<std::string> Heapstorage; Heapstorage.reserve(Size);
-        const auto Arguments = (const char **)alloca((Size + 1) * sizeof(char *));
+        const char **Arguments = new const char *[Size + 1]();
+        std::vector<std::string> Heapstorage;
+        Heapstorage.reserve(Size);
+
         for (ptrdiff_t i = 0; i < Size; ++i)
         {
-            // Hackery because STL regex doesn't support lookahead/behind.
-            std::string Temp((It++)->str());
-            if (Temp.back() == '\"') Temp.pop_back();
-            if (Temp.front() == '\"') Temp.erase(0, 1);
+            auto Temp = (*It++).str();
+            if (Temp.back() == '\"' && Temp.front() == '\"')
+                Temp = Temp.substr(1, Temp.size() - 2);
             Arguments[i] = Heapstorage.emplace_back(std::move(Temp)).c_str();
         }
-        Arguments[Size] = NULL;
 
-        // Find the function we are interested in.
-        const auto Callback = std::find_if(std::execution::par_unseq, Functions.begin(), Functions.end(),
-                              [&](const auto &Pair) { return 0 == _strnicmp(Pair.first.c_str(), Arguments[0], Pair.first.size()); });
-
-        // Print the command to the console and evaluate.
-        if (logCommand)
+        // Find the command by name (first argument).
+        const auto Callback = Findcommand(Encoding::toWide(Heapstorage.front()));
+        if (!Callback)
         {
-            addConsolemessage("> "s + Commandline.data(), Color_t(0xD6, 0xB7, 0x49));
-        }
-        if (Callback != Functions.end())
-        {
-            Callback->second(Size - 1, Arguments + 1);
-        }
-    }
-
-    // Add a new command to the internal list.
-    void addConsolecommand(std::string_view Name, Callback_t Callback)
-    {
-        // Check if we already have this command.
-        if (std::any_of(std::execution::par_unseq, Functions.begin(), Functions.end(),
-                        [&](const auto &Pair) { return 0 == _strnicmp(Pair.first.c_str(), Name.data(), Pair.first.size()); }))
+            Errorprint(va("No command named: %s", Heapstorage.front().c_str()));
+            delete[] Arguments;
             return;
+        }
 
-        Functions.emplace_back(Name, Callback);
+        // Notify the user about what was executed.
+        if (Log)
+        {
+            addMessage("> "s + Compat, Color_t(0xD6, 0xB7, 0x49));
+        }
+
+        // And finally evaluate.
+        Callback(Size - 1, &Arguments[1]);
+        delete[] Arguments;
     }
-    #pragma endregion
-
-    // API exports.
-    extern "C"  EXPORT_ATTR void __cdecl addConsolecommand(const char *Command, const void *Callback)
+    template <typename T> void execCommand(const std::basic_string<T> &Commandline, bool Log)
     {
-        if (!Command || !Callback) return;
-        addConsolecommand(std::string_view(Command), Callback_t(Callback));
+        return execCommand(std::basic_string_view<T>{Commandline}, Log);
     }
-    static std::string __cdecl execCommand(JSON::Value_t &&Request)
+    template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback)
     {
-        const auto Commandline = Request.value<std::string>("Commandline");
-        execCommandline(Commandline, false);
-        return "{}";
-    }
-    static std::string __cdecl printLine(JSON::Value_t &&Request)
-    {
-        const auto Color = std::max(Request.value<uint32_t>("Color"), Request.value<uint32_t>("Colour"));
-        const auto Message = Request.value<std::string>("Message");
+        assert(Callback); assert(!Name.empty());
 
-        addConsolemessage(Message, Color);
-        return "{}";
+        if (!Findcommand(Encoding::toWide(Name)))
+        {
+            Commands.emplace(Encoding::toWide(Name), Callback);
+        }
+    }
+    template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback)
+    {
+        return addCommand(std::basic_string_view<T>{Name}, Callback);
     }
 
-    // Add common commands.
-    void Initializebackend()
+    // Interactions with other plugins.
+    namespace API
+    {
+        // UTF8 escaped ASCII strings.
+        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Length, unsigned int Colour)
+        {
+            assert(String);
+            addMessage(std::string_view{ String, Length }, uint32_t(Colour));
+        }
+        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *String, unsigned int Length, const void *Callback)
+        {
+            assert(String); assert(Callback);
+            addCommand(std::string_view{ String, Length }, Functioncallback_t(Callback));
+        }
+
+        // JSON endpoints.
+        static std::string __cdecl printLine(JSON::Value_t &&Request)
+        {
+            const auto Color = std::max(Request.value<uint32_t>("Color"), Request.value<uint32_t>("Colour"));
+            const auto Message = Request.value<std::string>("Message");
+
+            addMessage(Message, Color);
+            return "{}";
+        }
+        static std::string __cdecl execCommand(JSON::Value_t &&Request)
+        {
+            const auto Commandline = Request.value<std::string>("Commandline");
+            const auto Shouldlog = Request.value<bool>("Log");
+
+            Console::execCommand(Commandline, Shouldlog);
+            return "{}";
+        }
+    }
+
+    // Add common commands to the backend.
+    void Initialize()
     {
         static bool Initialized{};
         if (Initialized) return;
@@ -165,45 +211,49 @@ namespace Console
         {
             std::exit(0);
         };
-        addConsolecommand("Quit", Quit);
-        addConsolecommand("Exit", Quit);
+        addCommand("Quit"sv, Quit);
+        addCommand("Exit"sv, Quit);
 
         static const auto List = [](int, const char **)
         {
-            std::string Commands; Commands.reserve(16 * Functions.size());
-            for (auto Items = Enumerate(Functions, 1); const auto &[Index, Pair] : Items)
+            std::wstring Output; Output.reserve(16 * Commands.size());
+            for (const auto &[Index, Tuple] : lz::enumerate(Commands, 1))
             {
-                Commands += "    ";
-                Commands += Pair.first;
-                if (Index % 4 == 0) Commands += "\n";
+                Output += L"    ";
+                Output += Tuple.first;
+                if (Index % 4 == 0) Output += L'\n';
             }
 
-            addConsolemessage("Available commands:", 0xBD8F21U);
-            addConsolemessage(Commands, 0x715531U);
-        };
-        addConsolecommand("List", List);
-        addConsolecommand("Help", List);
+            addMessage("Available commands:"sv , 0xBD8F21U);
+            addMessage(Output, 0x715531U);
 
-        static const auto Changefilter = [](int ArgC, const char **ArgV)
-        {
-            if (ArgC == 1) Currentfilter = L"";
-            else Currentfilter = Encoding::toWide(ArgV[1]);
+            // Totally not a hack to make the last line unique.
+            static bool Ticktock{}; Ticktock ^= true;
+            if (Ticktock) addMessage("--------------------------------"sv, 0xBD8F21U);
+            else addMessage("================================"sv, 0xBD8F21U);
         };
-        addConsolecommand("setFilter", Changefilter);
-        addConsolecommand("Filter", Changefilter);
+        addCommand("List"sv, List);
+        addCommand("Help"sv, List);
 
-        Backend::API::addEndpoint("Console::Exec", execCommand);
-        Backend::API::addEndpoint("Console::Print", printLine);
+        Backend::API::addEndpoint("Console::Exec", API::execCommand);
+        Backend::API::addEndpoint("Console::Print", API::printLine);
     }
 
-    // Provide a C-API for external code.
-    namespace API
+    // Instantiate the templates to make MSVC happy.
+    void Totally_real_func()
     {
-        // UTF8 escaped ASCII strings.
-        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Length, unsigned int Colour)
-        {
-            assert(String);
-            Console::addConsolemessage({String, Length }, uint32_t(Colour));
-        }
+        addMessage(std::wstring(), {});
+        addCommand(std::wstring(), {});
+        execCommand(std::wstring(), {});
+        addMessage(std::wstring_view(), {});
+        addCommand(std::wstring_view(), {});
+        execCommand(std::wstring_view(), {});
+
+        addMessage(std::string(), {});
+        addCommand(std::string(), {});
+        execCommand(std::string(), {});
+        addMessage(std::string_view(), {});
+        addCommand(std::string_view(), {});
+        execCommand(std::string_view(), {});
     }
 }

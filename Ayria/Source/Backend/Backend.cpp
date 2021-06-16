@@ -107,8 +107,7 @@ namespace Backend
 
         // Initialize the subsystems.
         // TODO(tcn): Initialize pluginmenu, move the overlay storage somewhere.
-        Overlay_t<false> Ingameconsole({}, {});
-        Console::Overlay::Createconsole(&Ingameconsole);
+        const auto Consoleoverlay = Createconsoleoverlay();
 
         // Optional console for developers.
         if (Global.Applicationsettings.enableExternalconsole) Console::Windows::Createconsole(GetModuleHandleW(NULL));
@@ -123,7 +122,7 @@ namespace Backend
             Lastframe = Thisframe;
 
             // Notify all elements about the frame.
-            Ingameconsole.doFrame(std::chrono::duration<float>(Deltatime).count());
+            Consoleoverlay->onFrame(std::chrono::duration<float>(Deltatime).count());
             Console::Windows::doFrame();
 
             // Log frame-average every 5 seconds.
