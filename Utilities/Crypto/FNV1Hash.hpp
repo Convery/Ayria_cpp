@@ -117,11 +117,11 @@ namespace Hash
         }
         template <bool TypeA, Iteratable_t T> [[nodiscard]] constexpr uint32_t FNV1_32_t(const T &Vector)
         {
-            return FNV1_32_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
+            return FNV1_32_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T::value_type) * Vector.size());
         }
         template <bool TypeA, Iteratable_t T> [[nodiscard]] constexpr uint64_t FNV1_64_t(const T &Vector)
         {
-            return FNV1_64_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
+            return FNV1_64_t<TypeA, uint8_t>((const uint8_t *)Vector.data(), sizeof(T::value_type) * Vector.size());
         }
 
         // Wrappers for random types, constexpr depending on compiler.

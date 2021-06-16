@@ -62,9 +62,10 @@ struct vec2_t
     T x{}, y{};
 
     constexpr vec2_t() = default;
-    constexpr vec2_t(T X, T Y) : x(X), y(Y) {}
     constexpr operator bool() const { return !!(x + y); }
+    constexpr vec2_t(const vec2_t &Other) { x = Other.x; y = Other.y; }
     template<typename U> constexpr operator U() const { return { x, y }; }
+    template<typename A, typename B> constexpr vec2_t(A X, B Y) : x(X), y(Y) {}
 
     constexpr bool operator!=(const vec2_t &Right) const { return !operator==(Right); }
     constexpr bool operator==(const vec2_t &Right) const { return x == Right.x && y == Right.y; }
@@ -90,9 +91,10 @@ struct vec3_t
     T x{}, y{}, z{};
 
     constexpr vec3_t() = default;
-    constexpr vec3_t(T X, T Y, T Z) : x(X), y(Y), z(Z) {}
     constexpr operator bool() const { return !!(x + y + z); }
     template<typename U> constexpr operator U() const { return { x, y, z }; }
+    constexpr vec3_t(const vec3_t &Other) { x = Other.x; y = Other.y; z = Other.z; }
+    template<typename A, typename B, typename C> constexpr vec3_t(A X, B Y, C Z) : x(X), y(Y), z(Z) {}
 
     constexpr bool operator!=(const vec3_t &Right) const { return !operator==(Right); }
     constexpr bool operator==(const vec3_t &Right) const { return x == Right.x && y == Right.y && z == Right.z; }
@@ -123,8 +125,9 @@ struct vec4_t
 
     constexpr vec4_t() { x = y = z = w = 0; }
     constexpr vec4_t(vec2_t<T> X, vec2_t<T> Y) : ab(X), cd(Y) {}
-    constexpr vec4_t(T X, T Y, T Z, T W) : x(X), y(Y), z(Z), w(W) {}
     template<typename U> constexpr operator U() const { return { x, y, z, w }; }
+    constexpr vec4_t(const vec4_t &Other) { x = Other.x; y = Other.y; z = Other.z; w = Other.w; }
+    template<typename A, typename B, typename C, typename D> constexpr vec4_t(A X, B Y, C Z, D W) : x(X), y(Y), z(Z), w(W) {}
 
     constexpr operator bool() const { return !!(x + y + z + w); }
     constexpr bool operator!=(const vec4_t &Right) const { return !operator==(Right); }

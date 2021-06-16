@@ -155,11 +155,11 @@ namespace Hash
         }
         template <Iteratable_t T> [[nodiscard]] constexpr uint32_t WW32(const T &Vector)
         {
-            return Waterhash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
+            return Waterhash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T::value_type) * Vector.size());
         }
         template <Iteratable_t T> [[nodiscard]] constexpr uint64_t WW64(const T &Vector)
         {
-            return Wheathash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T) * Vector.size());
+            return Wheathash<uint8_t>((const uint8_t *)Vector.data(), sizeof(T::value_type) * Vector.size());
         }
 
         // Wrappers for random types, constexpr depending on compiler.

@@ -112,14 +112,14 @@ class Ringbuffer_t
     T &emplace_back(Args&&... args) noexcept
     {
         if (full()) erase(Head);
-        Storage[Head] = { args };
+        Storage[Head] = { std::forward<Args>(args)... };
         auto Result = &Storage[Head];
 
         if (full()) Tail = (Tail + 1) % N;
         if (!full()) ++Size;
         Head = (Head + 1) % N;
 
-        return Result;
+        return *Result;
     }
 
     [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }

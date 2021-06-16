@@ -339,6 +339,10 @@ namespace Encoding
     {
         return toNarrow(toUTF8(Input));
     }
+
+    // Complements for for easier template coding.
+    [[nodiscard]] inline std::wstring toWide(std::wstring_view Input) { return { Input.data(), Input.size() }; }
+    [[nodiscard]] inline std::string toNarrow(std::string_view Input) { return { Input.data(), Input.size() }; }
 }
 
 #if defined (HAS_ABSEIL)
@@ -350,7 +354,6 @@ namespace Encoding
 {
     return absl::StrSplit(String, absl::ByChar(Needle), absl::SkipEmpty());
 }
-
 #else
 [[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
 {
@@ -383,3 +386,19 @@ namespace Encoding
     return Results;
 }
 #endif
+[[nodiscard]] inline std::vector<std::wstring> Tokenizestring(const std::wstring &String, std::wstring_view Needle)
+{
+    const auto Tokens = Tokenizestring(Encoding::toNarrow(String), Encoding::toNarrow(Needle));
+    std::vector<std::wstring> Result; Result.reserve(Tokens.size());
+
+    for (const auto &Token : Tokens) Result.emplace_back(Encoding::toWide(Token));
+    return Result;
+}
+[[nodiscard]] inline std::vector<std::wstring> Tokenizestring(std::wstring_view String, wchar_t Needle)
+{
+    const auto Tokens = Tokenizestring(Encoding::toNarrow(String), Encoding::toNarrow(std::wstring(1, Needle)));
+    std::vector<std::wstring> Result; Result.reserve(Tokens.size());
+
+    for (const auto &Token : Tokens) Result.emplace_back(Encoding::toWide(Token));
+    return Result;
+}
