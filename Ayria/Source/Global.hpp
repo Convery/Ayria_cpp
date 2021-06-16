@@ -6,6 +6,7 @@
 
 #pragma once
 #include "Services.hpp"
+#include "Assets/Assets.hpp"
 #include "Backend/Backend.hpp"
 #include "Subsystems/Subsystems.hpp"
 
