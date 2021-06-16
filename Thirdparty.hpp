@@ -10,6 +10,13 @@
 #pragma once
 #pragma warning(push, 0)
 
+// Lazy iterators, required.
+#include <Lz/Lz.hpp>
+
+// C++ wrapper around Sqlite3, required.
+#pragma comment(lib, "sqlite3.lib")
+#include <sqlite_modern_cpp.h>
+
 // NLhohmann modern JSON parsing library.
 #if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
@@ -32,6 +39,13 @@
 #pragma comment(lib, "libcrypto.lib")
 #pragma comment(lib, "libssl.lib")
 #define HAS_OPENSSL
+#endif
+
+// STB image decompression for assets.
+#if __has_include(<stb_image.h>)
+#define HAS_STB_IMAGE
+#include <stb.h>
+#include <stb_image.h>
 #endif
 
 // Generic hooking library.
@@ -62,13 +76,6 @@
 #if __has_include(<polyhook2/IHook.hpp>)
 #pragma comment(lib, "PolyHook_2.lib")
 #define HAS_POLYHOOK
-#endif
-
-// C++ wrapper around Sqlite3.
-#if __has_include(<sqlite_modern_cpp.h>)
-#pragma comment(lib, "sqlite3.lib")
-#include <sqlite_modern_cpp.h>
-#define HAS_SQLITE
 #endif
 
 // Agner Fogs SIMD library.
@@ -174,6 +181,7 @@
 #pragma comment(lib, "absl_throw_delegate.lib")
 #pragma comment(lib, "absl_time.lib")
 #pragma comment(lib, "absl_time_zone.lib")
+#pragma comment(lib, "absl_wyhash.lib")
 
 template <class K, class V,
           class Hash = absl::container_internal::hash_default_hash<K>,

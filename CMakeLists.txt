@@ -1,5 +1,5 @@
 # Convery (tcn@ayria.se)
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.14)
 project(AYRIA)
 
 # Use the latest standard at this time.
@@ -63,7 +63,18 @@ get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
 include_directories(${STD_INC})
 link_directories(${STD_LIB})
 
+# Extra packages.
+include(FetchContent)
+FetchContent_Declare(
+    cpp-lazy
+    GIT_REPOSITORY https://github.com/MarcDirven/cpp-lazy
+    GIT_TAG "3.0.0"
+    UPDATE_DISCONNECTED YES)
+add_definitions(-DLZ_STANDALONE)
+FetchContent_MakeAvailable(cpp-lazy)
+
 # Global utilities.
+include_directories("${cpp-lazy_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}")
 set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 add_subdirectory(Utilities)
@@ -72,7 +83,7 @@ add_subdirectory(Utilities)
 add_subdirectory(Ayria)
 add_subdirectory(Injector)
 add_subdirectory(Localnetworking)
-add_subdirectory(Platformwrapper)
+#add_subdirectory(Platformwrapper)
 
 ## Examples.
 #add_subdirectory(Plugintemplate)

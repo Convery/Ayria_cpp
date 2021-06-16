@@ -20,6 +20,7 @@
 #include <functional>
 #include <algorithm>
 #include <execution>
+#include <optional>
 #include <cassert>
 #include <cstdint>
 #include <numbers>
