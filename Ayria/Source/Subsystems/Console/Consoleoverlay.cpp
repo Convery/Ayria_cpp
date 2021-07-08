@@ -20,7 +20,7 @@ namespace Outputarea
         Renderer.Rectangle({}, Elementinfo.Size)->Render({}, Color_t(39, 38, 35));
         Renderer.Line({}, vec2i{ Elementinfo.Size.x, 0 })->Render(Color_t(0xBE, 0x90, 00), {});
 
-        vec2i Position = { 10, 4 };
+        vec2u Position = { 10, 4 };
         for (const auto &[String, Color] : Lines)
         {
             if (String.empty()) continue;
@@ -50,9 +50,8 @@ namespace Outputarea
 // Gather input from the user.
 namespace Inputarea
 {
+    static Ringbuffer_t<std::wstring, 5> Commandhistory{};
     static Elementinfo_t Elementinfo{};
-    static std::wstring Lastcommand{};
-    static std::wstring Inputline{};
     static bfloat16_t Elapsed{};
     static size_t Cursorpos{};
     static bool Caretstate{};
@@ -62,6 +61,9 @@ namespace Inputarea
         Renderer.Rectangle({ Elementinfo.Position.x - 2, Elementinfo.Position.y },
                            { Elementinfo.Size.x + 4, Elementinfo.Size.y }
                           )->Render(Color_t(0xBE, 0x90, 00), Color_t(39, 38, 35));
+
+        // The last element should always be our input.
+        const auto Inputline = Commandhistory.back();
 
         // Split the string so that we can insert a caret.
         const std::wstring Output = Inputline.substr(0, Cursorpos) + (Caretstate ? L'|' : L' ') + Inputline.substr(Cursorpos);
@@ -95,7 +97,7 @@ namespace Inputarea
             if (Letter == 0xA7 || Letter == 0xBD || Letter == L'~')
                 return;
 
-            Inputline.insert(Cursorpos, 1, Letter);
+            Commandhistory.back().insert(Cursorpos, 1, Letter);
             Cursorpos++;
 
             Parent->Invalidatescreen(Elementinfo.Position, Elementinfo.Size);
@@ -111,31 +113,32 @@ namespace Inputarea
             {
                 if (Scancode == VK_BACK && Cursorpos)
                 {
-                    Inputline.erase(Cursorpos - 1, 1);
+                    Commandhistory.back().erase(Cursorpos - 1, 1);
                     Cursorpos--;
                     break;
                 }
 
-                if (Scancode == VK_DELETE && Cursorpos < Inputline.size())
+                if (Scancode == VK_DELETE && Cursorpos < Commandhistory.back().size())
                 {
-                    Inputline.erase(Cursorpos, 1);
+                    Commandhistory.back().erase(Cursorpos, 1);
                     break;
                 }
 
                 if (Scancode == VK_ESCAPE)
                 {
-                    Inputline.clear();
+                    Commandhistory.back().clear();
                     Cursorpos = 0;
                     break;
                 }
 
                 if (Scancode == VK_RETURN)
                 {
-                    if (Inputline.back() == '\n') Inputline.pop_back();
-                    if (Inputline.back() == '\r') Inputline.pop_back();
-                    Console::execCommand(Inputline, true);
-                    Lastcommand = Inputline;
-                    Inputline.clear();
+                    if (Commandhistory.back().back() == '\n') Commandhistory.back().pop_back();
+                    if (Commandhistory.back().back() == '\r') Commandhistory.back().pop_back();
+                    Console::execCommand(Commandhistory.back(), true);
+
+                    std::rotate(Commandhistory.rbegin(), ++(Commandhistory.rbegin()), Commandhistory.rend());
+                    Commandhistory.back().clear();
                     Cursorpos = 0;
                     break;
                 }
@@ -150,8 +153,8 @@ namespace Inputarea
                             {
                                 if (const auto String = (LPCWSTR)GlobalLock(Memory))
                                 {
-                                    Inputline.insert(Cursorpos, String);
-                                    Cursorpos = Inputline.size();
+                                    Commandhistory.back().insert(Cursorpos, String);
+                                    Cursorpos = Commandhistory.back().size();
                                 }
                             }
 
@@ -164,10 +167,16 @@ namespace Inputarea
                 }
 
                 // History management.
-                if (Scancode == VK_UP || Scancode == VK_DOWN)
+                if (Scancode == VK_UP)
                 {
-                    std::swap(Lastcommand, Inputline);
-                    Cursorpos = Inputline.size();
+                    std::rotate(Commandhistory.begin(), ++(Commandhistory.begin()), Commandhistory.end());
+                    Cursorpos = Commandhistory.back().size();
+                    break;
+                }
+                if (Scancode == VK_DOWN && !Commandhistory.back().empty())
+                {
+                    std::rotate(Commandhistory.rbegin(), ++(Commandhistory.rbegin()), Commandhistory.rend());
+                    Cursorpos = Commandhistory.back().size();
                     break;
                 }
 
@@ -175,7 +184,7 @@ namespace Inputarea
                 if (Scancode == VK_LEFT || Scancode == VK_RIGHT)
                 {
                     const auto Offset = Scancode == VK_LEFT ? -1 : 1;
-                    Cursorpos = std::clamp(int32_t(Cursorpos + Offset), int32_t(), int32_t(Inputline.size()));
+                    Cursorpos = std::clamp(int32_t(Cursorpos + Offset), int32_t(), int32_t(Commandhistory.back().size()));
                     break;
                 }
 
@@ -202,11 +211,11 @@ namespace Inputarea
 class Consoleoverlay_t : public Overlay_t
 {
     HWND Lastfocus{};
+    bool isExtended{};
     uint32_t Previousmove{};
     uint32_t Previousclick{};
     uint32_t Lastcaretblink{};
     uint32_t Lastmessagehash{};
-    bool isVisible{}, isExtended{};
 
     protected:
     virtual void onTick(uint32_t DeltatimeMS)
@@ -273,9 +282,8 @@ class Consoleoverlay_t : public Overlay_t
             RECT Windowarea{};
             GetWindowRect(Lastfocus, &Windowarea);
 
-            vec2i Wantedsize{ Windowarea.right - Windowarea.left - 40, Windowarea.bottom - Windowarea.top - 45 };
+            const vec2u Wantedsize{ Windowarea.right - Windowarea.left - 40, (Windowarea.bottom - Windowarea.top - 45) * (isExtended ? 0.6f : 0.3f) };
             const vec2i Wantedposition{ Windowarea.left + 20, Windowarea.top + 45 };
-            Wantedsize.y *= isExtended ? 0.6f : 0.3f;
 
             // Unlikely to be needed, but let's check.
             if (Windowposition != Wantedposition || Windowsize != Wantedsize) [[unlikely]]

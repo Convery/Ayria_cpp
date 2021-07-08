@@ -11,6 +11,7 @@
 #pragma warning(push, 0)
 
 // Lazy iterators, required.
+#define LZ_STANDALONE
 #include <Lz/Lz.hpp>
 
 // C++ wrapper around Sqlite3, required.

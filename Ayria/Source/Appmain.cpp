@@ -107,9 +107,9 @@ int main(int, char **)
 
     // Create a simple window.
     const auto Windowhandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"HOST", NULL, swidth / 4, sheight / 4,
-        swidth / 2, sheight / 2, NULL, NULL, Windowclass.hInstance, NULL);
+                                              swidth / 2, sheight / 2, NULL, NULL, Windowclass.hInstance, NULL);
     if (!Windowhandle) return 1;
-    ShowWindow(Windowhandle, SW_SHOW);
+    //ShowWindow(Windowhandle, SW_SHOW);
 
     // Initialize the backend to test features.
     Backend::Initialize();

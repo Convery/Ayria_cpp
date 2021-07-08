@@ -258,7 +258,7 @@ namespace Localnetworking
         // Proxy Winsocks exports with our own information.
         const auto Hook = [&](const char *Name, void *Target)
         {
-            auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name);
+            const auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name);
             auto Address2 = GetProcAddress(LoadLibraryA("ws2_32.dll"), Name);
             if (Address1 == Address2) Address2 = 0;
 

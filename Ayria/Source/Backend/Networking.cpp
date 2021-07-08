@@ -1,52 +1,92 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2020-10-02
+    Started: 2021-06-23
     License: MIT
 */
 
 #include <Stdinclude.hpp>
 #include <Global.hpp>
 
-namespace Backend::Network
-{
-    // Totally randomly selected constants..
-    constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
-    constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
+// Totally randomly selected constants here..
+constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
+constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
 
+#pragma pack(push, 1)
+struct LANpacket_t { uint32_t SessionID; uint32_t Identifier; uint16_t Payloadlength; char Payload[1]; };
+#pragma pack(pop)
+
+namespace Network::LAN
+{
     static sockaddr_in Multicast{ AF_INET, htons(Syncport), {{.S_addr = htonl(Syncaddress)}} };
     static Hashmap<uint32_t, Hashset<Callback_t>> Messagehandlers{};
+    static std::unordered_map<uint32_t, IN_ADDR> Peerlist{};
+    static size_t Sendersocket{}, Receiversocket{};
     static Hashset<uint32_t> Blacklistedclients{};
-    static size_t Sendersocket, Receiversocket;
-    static Hashmap<uint32_t, IN_ADDR> Nodes{};
-    static uint32_t RandomID{};
+    static uint32_t SessionID{};
 
-    // static void __cdecl Callback(unsigned int NodeID, const char *Message, unsigned int Length);
-    // using Callback_t = void(__cdecl *)(unsigned int NodeID, const char *Message, unsigned int Length);
-    void Registerhandler(std::string_view Identifier, Callback_t Handler)
+    // Handlers for the different packets.
+    void Register(std::string_view Identifier, Callback_t Handler)
     {
-        const auto ID = Hash::WW32(Identifier);
-        Messagehandlers[ID].insert(Handler);
+        return Register(Hash::WW32(Identifier), Handler);
+    }
+    void Register(uint32_t Identifier, Callback_t Handler)
+    {
+        Messagehandlers[Identifier].insert(Handler);
     }
 
-    // Formats and LZ compresses the message.
-    void Transmitmessage(std::string_view Identifier, JSON::Value_t &&Message)
+    // Broadcast a message to the LAN clients.
+    void Publish(std::string_view Identifier, std::string_view Payload)
     {
-        const auto Messagetype = Hash::WW32(Identifier);
-        const auto Encoded = Base64::Encode(JSON::Dump(Message));
-        const int Headersize = sizeof(Messagetype) + sizeof(RandomID);
-        const auto Messagesize = LZ4_compressBound(int(Encoded.size()));
-        auto Packet = std::make_unique<char[]>(Messagesize + Headersize);
+        return Publish(Hash::WW32(Identifier), Payload);
+    }
+    void Publish(uint32_t Identifier, std::string_view Payload)
+    {
+        // Developers should know better than to send 4KB as a single packet.
+        const auto Totalsize = static_cast<int>(10 + Payload.size());
+        assert(Totalsize < Buffersize);
 
-        std::memcpy(Packet.get() + 0, &RandomID, sizeof(RandomID));
-        std::memcpy(Packet.get() + sizeof(RandomID), &Messagetype, sizeof(Messagetype));
-        LZ4_compress_default(Encoded.data(), Packet.get() + Headersize, (int)Encoded.size(), Messagesize + Headersize);
+        // If the client wants to remain private, don't post anything.
+        if (Global.Settings.noNetworking) [[unlikely]] return;
+        if (Global.Settings.isPrivate) [[unlikely]] return;
 
-        sendto(Sendersocket, Packet.get(), int(Messagesize + Headersize), 0, (sockaddr *)&Multicast, sizeof(Multicast));
+        auto Packet = (LANpacket_t *)alloca(Totalsize);
+        Packet->SessionID = SessionID;
+        Packet->Identifier = Identifier;
+        Packet->Payloadlength = Payload.size();
+        std::memcpy(Packet->Payload, Payload.data(), Payload.size());
+
+        // We are in non-blocking mode, so may need a retry or two.
+        while (true)
+        {
+            const auto Sent = sendto(Sendersocket, (char *)Packet, Totalsize, 0, (sockaddr *)&Multicast, sizeof(Multicast));
+            if (Sent == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) continue;
+
+            assert(Sent == Totalsize);
+            break;
+        }
     }
 
-    // Decodes and calls the handler for a packet.
-    static void Pollnetwork()
+    // List or block LAN clients by their SessionID.
+    const std::unordered_map<uint32_t, IN_ADDR> &getPeers()
     {
+        return Peerlist;
+    }
+    IN_ADDR getPeer(uint32_t SessionID)
+    {
+        if (!Peerlist.contains(SessionID)) [[unlikely]] return {};
+        return Peerlist[SessionID];
+    }
+    void Blockpeer(uint32_t SessionID)
+    {
+        Blacklistedclients.insert(SessionID);
+    }
+
+    // Fetch as many messages as possible from the network.
+    static void __cdecl Pollnetwork()
+    {
+        // There is no network available at this time.
+        if (Global.Settings.noNetworking) [[unlikely]] return;
+
         constexpr timeval Defaulttimeout{ NULL, 1 };
         constexpr auto Buffersizelimit = 4096;
         auto Timeout{ Defaulttimeout };
@@ -64,110 +104,97 @@ namespace Backend::Network
         {
             sockaddr_in Clientaddress; int Addresslen = sizeof(Clientaddress);
             const auto Packetlength = recvfrom(Receiversocket, (char *)Buffer, Buffersizelimit, NULL, (sockaddr *)&Clientaddress, &Addresslen);
-            if (Packetlength < 8) break;
+            if (Packetlength < 10) break;   // Also covers any errors.
 
-            // For slightly cleaner code, should be optimized out.
-            using Message_t = struct { uint32_t RandomID, Messagetype; char Payload[1]; };
-            const auto Packet = (Message_t *)Buffer;
+            // Sanity-checking..
+            const auto Packet = (LANpacket_t *)Buffer;
+            if (Packet->SessionID == 0) [[unlikely]] continue;                          // Borked client.
+            if (Packet->SessionID == SessionID) [[likely]] continue;                    // Our own packet.
+            if (!Messagehandlers.contains(Packet->Identifier)) [[unlikely]] continue;   // Not a packet we can handle.
+            if (Blacklistedclients.contains(Packet->SessionID)) [[unlikely]] continue;  // Our client does not like them.
+            if (Packet->Payloadlength > (Buffersizelimit - 10)) [[unlikely]] continue;  // Packet is larger than our buffer.
 
-            // To ensure that we don't process our own packets.
-            if (Packet->RandomID == RandomID) [[likely]] continue;
+            // Save the peers address incase someone needs it.
+            Peerlist[Packet->SessionID] = Clientaddress.sin_addr;
 
-            // Blocked / invalid clients shouldn't be processed.
-            if (!Packet->RandomID || Blacklistedclients.contains(Packet->RandomID)) [[unlikely]] continue;
-
-            // Save the address in-case some service needs it.
-            Nodes[Packet->RandomID] = Clientaddress.sin_addr;
-
-            // Do we even care for this message?
-            if (const auto Result = Messagehandlers.find(Packet->Messagetype); Result != Messagehandlers.end()) [[likely]]
+            // Special case: Clientinfo needs to use the SessionID.
+            if (Packet->Identifier == Hash::WW32("AYRIA::Clienthello"))
             {
-                // All messages should be LZ4 compressed.
-                const auto Decodebuffer = std::make_unique<char[]>(Packetlength * 3);
-                const auto Decodesize = LZ4_decompress_safe(Packet->Payload, Decodebuffer.get(),
-                                                            static_cast<int>(Packetlength - 8), Packetlength * 3);
+                // Let the compiler decide how to vectorize this..
+                std::ranges::for_each(Messagehandlers[Packet->Identifier],
+                    [&](const Callback_t &CB) { if (CB) [[likely]] CB(Packet->SessionID, Packet->Payload, Packet->Payloadlength); });
+            }
+            else
+            {
+                // Get the associated account ID.
+                const auto AccountID = Services::Clientinfo::getAccountID(Packet->SessionID);
 
-                // Possibly corrupted packet.
-                if (Decodesize <= 0) [[unlikely]]
-                {
-                    Debugprint(va("Packet from ID %08X failed to decode.", Packet->RandomID));
-                    continue;
-                }
-
-                    // All messages should be base64, in-place decode zero-terminates.
-                    const auto Decoded = Base64::Decode_inplace(Decodebuffer.get(), Decodesize);
-
-                    // May have multiple listeners for the same messageID.
-                    for (const auto Results = Result->second; const auto Callback : Results)
-                    {
-                        Callback(Packet->RandomID, Decoded.data(), (unsigned int)Decoded.size());
-                    }
+                // Let the compiler decide how to vectorize this..
+                std::ranges::for_each(Messagehandlers[Packet->Identifier],
+                    [&](const Callback_t &CB) { if (CB) [[likely]] CB(AccountID, Packet->Payload, Packet->Payloadlength); });
             }
         }
     }
 
-    // Resolve a LAN nodes address.
-    IN_ADDR Nodeaddress(uint32_t NodeID)
-    {
-        if (!Nodes.contains(NodeID)) return {};
-        else return Nodes[NodeID];
-    }
-
-    // Prevent packets from being processed.
-    void Blockclient(uint32_t NodeID)
-    {
-        Blacklistedclients.insert(NodeID);
-    }
-
-    // Exported functionallity.
-    namespace API
-    {
-        extern "C" EXPORT_ATTR void __cdecl addHandler(const char *Messagetype,
-                               void(__cdecl *Callback)(unsigned int NodeID, const char *Message, unsigned int Length))
-        {
-            Registerhandler(Messagetype, Callback);
-        }
-        static std::string __cdecl Sendmessage(JSON::Value_t &&Request)
-        {
-            const auto Messagetype = Request.value<std::string>("Messagetype");
-            const auto Message = Request.value<std::string>("Message");
-            Transmitmessage(Messagetype, Message);
-
-            return "{}";
-        }
-    }
-
-    // Initialize the system.
+    // Set up the network.
     void Initialize()
     {
-        WSADATA WSAData;
+        WSADATA Unused;
         unsigned long Error{ 0 };
         unsigned long Argument{ 1 };
-        sockaddr_in Localhost{ AF_INET, htons(Syncport), {{.S_addr = htonl(INADDR_ANY)}} };
+        const ip_mreq Request{ {{.S_addr = htonl(Syncaddress)}} };
+        const sockaddr_in Localhost{ AF_INET, htons(Syncport), {{.S_addr = htonl(INADDR_ANY)}} };
 
-        // We only need WS 1.1, no need for more.
-        Error |= WSAStartup(MAKEWORD(1, 1), &WSAData);
+        // We only need WS 1.1, no need to load more modules.
+        WSAStartup(MAKEWORD(1, 1), &Unused);
         Sendersocket = socket(AF_INET, SOCK_DGRAM, 0);
         Receiversocket = socket(AF_INET, SOCK_DGRAM, 0);
         Error |= ioctlsocket(Sendersocket, FIONBIO, &Argument);
         Error |= ioctlsocket(Receiversocket, FIONBIO, &Argument);
 
         // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for devs).
-        const auto Request = ip_mreq{ {{.S_addr = htonl(Syncaddress)}}, {{.S_addr = htonl(INADDR_ANY)}} };
-        Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&Request, sizeof(Request));
+        // TODO(tcn): Investigate if WS2's IP_ADD_MEMBERSHIP (12) gets mapped to the WS1's original (5) internally.
+        Error |= setsockopt(Receiversocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&Request, sizeof(Request));
         Error |= setsockopt(Receiversocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
         Error |= bind(Receiversocket, (sockaddr *)&Localhost, sizeof(Localhost));
 
-        // Make a unique identifier for later.
-        RandomID = Hash::WW32(GetTickCount64() ^ Sendersocket);
+        // TODO(tcn): Proper error handling.
+        if (Error) [[unlikely]]
+        {
+            Global.Settings.noNetworking = true;
+            closesocket(Receiversocket);
+            closesocket(Sendersocket);
+            assert(false);
+            return;
+        }
 
-        // TODO(tcn): Error checking.
-        if (Error) [[unlikely]] { assert(false); }
+        // Make a unique identifier for later.
+        SessionID = Hash::WW32(GetTickCount64() ^ Sendersocket);
 
         // Should only need to check for packets 10 times a second.
-        Enqueuetask(100, Pollnetwork);
-
-        // JSON API.
-        Backend::API::addEndpoint("Network::Sendmessage", API::Sendmessage, R"({ "Messagetype" : "Func", "Message" : "String" })");
+        Backend::Enqueuetask(100, Pollnetwork);
+        Global.Settings.noNetworking = false;
     }
+
+    // Helper for the plugins to send and recive.
+    namespace API
+    {
+        extern "C" EXPORT_ATTR void __cdecl registerLANCallback(const char *Messageidentifier, void(__cdecl *Callback)(unsigned int AccountID, const char *Message, unsigned int Length))
+        {
+            assert(Messageidentifier);
+            Register(std::string_view(Messageidentifier), Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl publishLANPacket(const char *Messageidentifier, const char *JSONPayload)
+        {
+            assert(Messageidentifier);
+            const std::string_view Payload = JSONPayload ? JSONPayload : std::string_view();
+            Publish(std::string_view(Messageidentifier), Payload);
+        }
+    }
+}
+
+namespace Network::WAN
+{
+    // Set up the network.
+    void Initialize() {}
 }

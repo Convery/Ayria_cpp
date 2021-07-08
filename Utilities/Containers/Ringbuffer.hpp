@@ -83,7 +83,7 @@ class Ringbuffer_t
         Tail = (Tail + 1) % N;
         --Size;
     }
-    const T *push_back(T &&Value) noexcept
+    const T &push_back(T &&Value) noexcept
     {
         if (full()) erase(Head);
         Storage[Head] = std::move(Value);
@@ -95,7 +95,7 @@ class Ringbuffer_t
 
         return Result;
     }
-    const T *push_back(const T &Value) noexcept
+    const T &push_back(const T &Value) noexcept
     {
         if (full()) erase(Head);
         Storage[Head] = Value;
@@ -123,8 +123,8 @@ class Ringbuffer_t
     }
 
     [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }
-    [[nodiscard]] const T &front() const noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->front(); }
-    [[nodiscard]] const T &back() const noexcept { return const_cast<Ringbuffer_t<T, N> *>(back)->back(); }
+    [[nodiscard]] const T &front() noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->front(); }
+    [[nodiscard]] const T &back() noexcept { return const_cast<Ringbuffer_t<T, N> *>(back)->back(); }
     [[nodiscard]] T &front() noexcept { return reinterpret_cast<T &>(Storage[Tail]); }
 
     [[nodiscard]] T &operator[](size_t Index) noexcept { return reinterpret_cast<T &>(Storage[Index]); }

@@ -45,7 +45,7 @@ namespace Steam
     static Hashmap<uint64_t, Blob> Asyncreads;
 
     // Per-user storage directory.
-    static std::string Storagepath(std::string_view Path)
+    static std::string Storagepath(std::string_view Input)
     {
         static std::string Basepath{ []()
         {
@@ -55,12 +55,12 @@ namespace Steam
         }() };
 
         // We only care about the filename.
-        Path = Path.substr(0, Path.find_last_of('/'));
-        Path = Path.substr(0, Path.find_last_of('\\'));
-        while (!Path.empty() && (Path.front() == '.' || Path.front() == '/' || Path.front() == '\\'))
-            Path.remove_prefix(1);
+        if (Input.find_last_of('/') != Input.npos) Input.remove_prefix(Input.find_last_of('/') + 1);
+        if (Input.find_last_of('\\') != Input.npos) Input.remove_prefix(Input.find_last_of('\\') + 1);
+        while (!Input.empty() && (Input.front() == '.' || Input.front() == '/' || Input.front() == '\\'))
+            Input.remove_prefix(1);
 
-        return Basepath + std::string(Path);
+        return Basepath + std::string(Input);
     }
 
     struct SteamRemotestorage

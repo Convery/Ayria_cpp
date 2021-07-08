@@ -9,10 +9,6 @@
 
 namespace Console
 {
-    // UTF8 escaped ACII strings are passed to Argv for compatibility.
-    // using Functioncallback_t = void(__cdecl *)(int Argc, const char *Argv);
-    // using Logline_t = std::pair<std::wstring, Color_t>;
-
     static Spinlock Writelock{};
     constexpr size_t Loglimit = 256;
     static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
@@ -85,7 +81,7 @@ namespace Console
     }
 
     // Helper to manage the commands.
-    Functioncallback_t Findcommand(std::wstring_view Functionname)
+    static Functioncallback_t Findcommand(std::wstring_view Functionname)
     {
         for (const auto &[Name, Callback] : Commands)
         {
@@ -170,15 +166,15 @@ namespace Console
     namespace API
     {
         // UTF8 escaped ASCII strings.
-        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Length, unsigned int Colour)
+        extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int Colour)
         {
             assert(String);
-            addMessage(std::string_view{ String, Length }, uint32_t(Colour));
+            addMessage(std::string_view{ String }, uint32_t(Colour));
         }
-        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *String, unsigned int Length, const void *Callback)
+        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, void(__cdecl *Callback)(int Argc, const char **Argv))
         {
-            assert(String); assert(Callback);
-            addCommand(std::string_view{ String, Length }, Functioncallback_t(Callback));
+            assert(Name); assert(Callback);
+            addCommand(std::string_view{ Name }, Callback);
         }
 
         // JSON endpoints.

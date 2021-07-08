@@ -8,26 +8,50 @@
     NOTE(tcn): Using IDs other than those provided by Ayria is generally a no-op.
 */
 
+#if defined (__cplusplus)
 #pragma once
 #include <Stdinclude.hpp>
+#include "Ayriamodule.h"
 
-#if defined (__cplusplus)
-namespace AyriaDB
+namespace AyriaAPI
 {
     // For unfiltered access to the DB, use with care.
     inline sqlite::database Query()
     {
-        try
+        static std::shared_ptr<sqlite3> Database{};
+        if (!Database) [[unlikely]]
         {
-            sqlite::sqlite_config Config{};
-            Config.flags = sqlite::OpenFlags::CREATE | sqlite::OpenFlags::READWRITE | sqlite::OpenFlags::FULLMUTEX;
-            return sqlite::database("./Ayria/Client.db", Config);
+            sqlite3 *Ptr{};
+
+            // :memory: should never fail unless the client has more serious problems..
+            const auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
         }
-        catch (std::exception &e)
-        {
-            Errorprint(va("Could not connect to the database: %s", e.what()).c_str());
-            return sqlite::database(":memory:");
-        }
+
+        return sqlite::database(Database);
+    }
+
+    // Get the primary key for a client.
+    inline uint32_t getKeyhash(uint32_t AccountID)
+    {
+        uint32_t Keyhash = 0;
+
+        try { Query() << "SELECT Sharedkeyhash FROM Knownclients WHERE AccountID = ? LIMIT 1;"
+                      << AccountID >> Keyhash;
+        } catch (...) {}
+
+        return Keyhash;
+    }
+    inline uint32_t getAccountID(uint32_t Keyhash)
+    {
+        uint32_t AccountID = 0;
+
+        try { Query() << "SELECT AccountID FROM Knownclients WHERE Sharedkeyhash = ? LIMIT 1;"
+                      << Keyhash >> AccountID;
+        } catch (...) {}
+
+        return AccountID;
     }
 
     // Information about the active clients on the network.
@@ -35,70 +59,180 @@ namespace AyriaDB
     {
         namespace Get
         {
-            inline JSON::Object_t byID(uint32_t ClientID)
+            inline JSON::Value_t Basicinfo(uint32_t AccountID)
             {
                 JSON::Object_t Result{};
-
                 try
                 {
-                    Query() << "SELECT * FROM Clientinfo WHERE ClientID = ?;" << ClientID
-                        >> [&](uint32_t, uint32_t Lastupdate, std::string &&B64Authticket,
-                            std::string &&B64Sharedkey, uint32_t PublicIP, uint32_t GameID,
-                            std::string &&Username, bool isLocal)
-                        {
-                            Result = JSON::Object_t({
-                                { "B64Authticket", B64Authticket },
-                                { "B64Sharedkey", B64Sharedkey },
-                                { "Lastupdate", Lastupdate },
-                                { "ClientID", ClientID },
-                                { "Username", Username },
-                                { "PublicIP", PublicIP },
-                                { "isLocal", isLocal },
-                                { "GameID", GameID }
-                            });
-                        };
-                }
-                catch (...) {}
-
-                return Result;
-            }
-            inline JSON::Object_t byName(const std::string &Name)
-            {
-                JSON::Object_t Result{};
-
-                try
-                {
-                    Query()
-                        << "SELECT * FROM Clientinfo WHERE Username = ? LIMIT 1;" << Name
-                        >> [&](uint32_t ClientID, uint32_t Lastupdate, std::string &&B64Authticket,
-                            std::string &&B64Sharedkey, uint32_t PublicIP, uint32_t GameID,
-                            std::string &&Username, bool isLocal)
-                        {
-                            Result = JSON::Object_t({
-                                { "B64Authticket", B64Authticket },
-                                { "B64Sharedkey", B64Sharedkey },
-                                { "Lastupdate", Lastupdate },
-                                { "ClientID", ClientID },
-                                { "Username", Username },
-                                { "PublicIP", PublicIP },
-                                { "isLocal", isLocal },
-                                { "GameID", GameID }
+                    Query() << "SELECT * FROM Knownclients WHERE Sharedkeyhash = ?;" << getKeyhash(AccountID)
+                            >> [&](uint32_t Sharedkeyhash, uint32_t AccountID, const std::string &Username, bool Validated, uint32_t Timestamp)
+                            {
+                                Result = JSON::Object_t({
+                                    { "Sharedkeyhash", Sharedkeyhash },
+                                    { "AccountID", AccountID },
+                                    { "Username", Username },
+                                    { "Validated", Validated },
+                                    { "Timestamp", Timestamp }
                                 });
-                        };
+                            };
                 } catch (...) {}
 
                 return Result;
             }
-            inline std::unordered_set<uint32_t> byGame(uint32_t GameID)
+            inline JSON::Value_t Extendedinfo(uint32_t AccountID)
             {
-                std::unordered_set<uint32_t> Result{};
+                JSON::Object_t Result{};
+                try
+                {
+                    Query() << "SELECT * FROM Clientinfo WHERE AyriaID = ?;" << getKeyhash(AccountID)
+                            >> [&](uint32_t AyriaID, const std::string &Sharedkey, uint32_t InternalIP, uint32_t ExternalIP, uint32_t GameID, uint32_t ModID)
+                            {
+                                Result = JSON::Object_t({
+                                    { "AyriaID", AyriaID},
+                                    { "Sharedkey", Sharedkey},
+                                    { "InternalIP", InternalIP},
+                                    { "ExternalIP", ExternalIP},
+                                    { "GameID", GameID},
+                                    { "ModID", ModID}
+                                });
+                            };
+                } catch (...) {}
+
+                return Result;
+            }
+
+            inline uint32_t Lastmessage(uint32_t AccountID)
+            {
+                uint32_t Timestamp{};
+
+                try { Query() << "SELECT Timestamp FROM Knownclients WHERE AccountID = ? LIMIT 1;"
+                              << AccountID >> Timestamp;
+                } catch (...) {}
+
+                return uint32_t(time(NULL)) - Timestamp;
+            }
+            inline uint32_t AccountID(const std::string &Username)
+            {
+                size_t AccountID{};
 
                 try
                 {
-                    Query() << "SELECT ClientID FROM Clientinfo WHERE GameID = ?;" << GameID
-                            >> [&](uint32_t ClientID) { Result.insert(ClientID); };
-                }
-                catch (...) {}
+                    Query() << "SELECT AccountID FROM Knownclients WHERE Username = ? LIMIT 1;"
+                            << Username >> AccountID;
+                } catch (...) {}
+
+                return AccountID;
+            }
+
+            inline std::unordered_set<uint32_t> byGame(std::optional<uint32_t> GameID, std::optional<uint32_t> ModID)
+            {
+                std::unordered_set<uint32_t> AccountIDs{}, AyriaIDs{};
+
+                try
+                {
+                    // Both by game and mod.
+                    if (GameID && ModID)
+                    {
+                        Query() << "SELECT AyriaID FROM Clientinfo WHERE (GameID = ? AND ModID = ?);"
+                                << GameID.value() << ModID.value()
+                                >> [&](uint32_t AyriaID) { AyriaIDs.insert(AyriaID); };
+                    }
+
+                    // Only by game.
+                    else if (GameID)
+                    {
+                        Query() << "SELECT AyriaID FROM Clientinfo WHERE GameID = ?;"
+                                << GameID.value()
+                                >> [&](uint32_t AyriaID) { AyriaIDs.insert(AyriaID); };
+                    }
+
+                    // Only by mod.
+                    else if (ModID)
+                    {
+                        Query() << "SELECT AyriaID FROM Clientinfo WHERE ModID = ?;"
+                                << ModID.value()
+                                >> [&](uint32_t AyriaID) { AyriaIDs.insert(AyriaID); };
+                    }
+
+                    // Any and all.
+                    else
+                    {
+                        Query() << "SELECT AccountID FROM Knownclients;"
+                                >> [&](uint32_t AccountID) { AccountIDs.insert(AccountID); };
+                    }
+
+                } catch (...) {}
+
+
+                for (const auto &ID : AyriaIDs) AccountIDs.insert(getAccountID(ID));
+
+                return AccountIDs;
+            }
+        }
+
+        namespace Set
+        {
+            inline void Socialstate(std::optional<bool> isPrivate, std::optional<bool> isAway)
+            {
+                JSON::Object_t Request{};
+                if (isPrivate) Request["isPrivate"] = isPrivate.value();
+                if (isAway) Request["isAway"] = isAway.value();
+
+                Ayria.doRequest("setSocialstate", Request);
+            }
+            inline void Gamestate(std::optional<bool> isHosting, std::optional<bool> isIngame, std::optional<uint32_t> GameID, std::optional<uint32_t> ModID)
+            {
+                JSON::Object_t Request{};
+                if (isHosting) Request["isHosting"] = isHosting.value();
+                if (isIngame) Request["isIngame"] = isIngame.value();
+                if (GameID) Request["GameID"] = GameID.value();
+                if (ModID) Request["ModID"] = ModID.value();
+
+                Ayria.doRequest("setGamestate", Request);
+            }
+        }
+    }
+
+    // Key-value storage of what the user is doing.
+    namespace Clientpresence
+    {
+        namespace Get
+        {
+            inline std::string byKey(const std::string &Key, uint32_t AccountID)
+            {
+                std::string Value{};
+
+                try
+                {
+                    Query() << "SELECT Value FROM Clientpresence WHERE (AyriaID = ? AND Key = ?) LIMIT 1;"
+                            << getKeyhash(AccountID) << Key >> Value;
+                } catch (...) {}
+
+                return Value;
+            }
+            inline std::vector<std::pair<uint32_t, std::string>> byKey(const std::string &Key)
+            {
+                std::vector<std::pair<uint32_t, std::string>> Result{};
+
+                try
+                {
+                    Query() << "SELECT AccountID, Value FROM Clientpresence WHERE Key = ?;"
+                            << Key >> [&](uint32_t AccountID, const std::string &Value)
+                                      { Result.emplace_back(AccountID, Value); };
+                } catch (...) {}
+
+                return Result;
+            }
+            inline std::vector<std::pair<std::string, std::string>> byAccountID(uint32_t AccountID)
+            {
+                std::vector<std::pair<std::string, std::string>> Result{};
+
+                try
+                {
+                    Query() << "SELECT Key, Value FROM Clientpresence WHERE AyriaID = ?;"
+                            << getKeyhash(AccountID) >> [&](const std::string &Key, const std::string &Value)
+                                                        { Result.emplace_back(Key, Value); };
+                } catch (...) {}
 
                 return Result;
             }
@@ -106,19 +240,60 @@ namespace AyriaDB
 
         namespace Set
         {
-            inline void GameID(uint32_t ClientID, uint32_t GameID)
+            inline void Single(const std::string &Key, const std::string &Value)
             {
-                try
+                Ayria.doRequest("setClientpresence", JSON::Object_t({
+                    { "Value", Value },
+                    { "Key", Key }
+                }));
+            }
+            inline void Multiple(const std::vector<std::pair<std::string, std::string>> &Keyvalues)
+            {
+                JSON::Array_t Array{}; Array.reserve(Keyvalues.size());
+
+                for (const auto &[Key, Value] : Keyvalues)
                 {
-                    Query() << "REPLACE INTO Clientinfo (ClientID, GameID) VALUES (?, ?);"
-                            << ClientID << GameID;
+                    Array.emplace_back(JSON::Object_t({
+                        { "Value", Value },
+                        { "Key", Key }
+                    }));
                 }
-                catch (...) {}
+
+                Ayria.doRequest("setClientpresence", Array);
             }
         }
     }
 
-    // Key-value storage of what the user is doing.
+    // Chat messages between clients.
+    namespace Messaging
+    {
+        inline bool sendClientmessage(uint32_t toAccountID, const std::string &Message, bool Encrypt = false)
+        {
+            const auto Response = Ayria.doRequest("Sendmessage", JSON::Object_t({
+                { "toAccountID", toAccountID },
+                { "Message", Message },
+                { "Encrypt", Encrypt }
+            }));
+
+            return !Response.contains("Error");
+        }
+        inline bool sendGroupmessage(uint32_t toGroupID, const std::string &Message)
+        {
+            const auto Response = Ayria.doRequest("Sendmessage", JSON::Object_t({
+                { "toGroupID", toGroupID },
+                { "Message", Message }
+            }));
+
+            return !Response.contains("Error");
+        }
+    }
+
+
+
+
+
+
+
     namespace Userpresence
     {
         inline void Clear(uint32_t ClientID)

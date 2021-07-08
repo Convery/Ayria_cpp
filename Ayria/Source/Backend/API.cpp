@@ -10,7 +10,7 @@
 // JSON Interface.
 namespace Backend::API
 {
-    using Handler_t = struct { LZString_t Name; Callback_t Handler; LZString_t Usage; };
+    using Handler_t = struct { LZString_t Name; Callback_t Handler; };
     static Hashmap<uint32_t, Handler_t> Requesthandlers{};
     static Ringbuffer_t<std::string, 8> Results{};
     static std::string Failurestring{};
@@ -20,15 +20,14 @@ namespace Backend::API
     static const char *Genericresult = "{}";
 
     // static std::string __cdecl Callback(JSON::Value_t &&Request);
-    // using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
-    void addEndpoint(std::string_view Functionname, Callback_t Callback, std::string_view Usagestring)
+    void addEndpoint(std::string_view Functionname, Callback_t Callback)
     {
         const auto ID = Hash::WW32(Functionname);
-        Requesthandlers[ID] = { Functionname, Callback, Usagestring };
+        Requesthandlers[ID] = { Functionname, Callback };
     }
 
     // For internal use.
-    std::vector<JSON::Value_t> listEndpoints()
+    static std::vector<JSON::Value_t> listEndpoints()
     {
         std::vector<JSON::Value_t> Result;
         Result.reserve(Requesthandlers.size());
@@ -37,14 +36,13 @@ namespace Backend::API
         {
             Result.emplace_back(JSON::Object_t({
                 { "Endpointname", (std::u8string)Handler.Name },
-                { "Usage", (std::u8string)Handler.Usage },
                 { "EndpointID", ID}
             }));
         }
 
         return Result;
     }
-    const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
+    static const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
     {
         static Debugmutex Threadsafe{};
         std::scoped_lock Lock(Threadsafe);
@@ -62,35 +60,26 @@ namespace Backend::API
         }
 
         // Call the handler with the object.
-        auto Handlerinfo = &Requesthandlers[ID];
-        const auto Result = Handlerinfo->Handler(std::move(Request));
+        const auto Handlerinfo = &Requesthandlers[ID];
+        auto Result = Handlerinfo->Handler(std::move(Request));
 
         // Functions that return no data use a simple "{}".
-        if (Result.empty())
-        {
-            const auto Failure = JSON::Object_t({
-                { "Error", "The function returned an error, verify your input."s },
-                { "Usage", (std::u8string)Handlerinfo->Usage }
-            });
-
-            Failurestring = JSON::Dump(Failure);
-            return Failurestring.c_str();
-        }
+        if (Result.empty()) Result = "{}";
 
         // Is it a generic result?
         if (Hash::WW32(Result) == Generichash)
             return Genericresult;
 
         // Save the result on the heap for 8 calls.
-        return Results.push_back(Result)->c_str();
+        return Results.push_back(std::move(Result)).c_str();
     }
 
     // Export the JSON interface to the plugins.
     namespace API
     {
-        extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
+        extern "C" EXPORT_ATTR const char *__cdecl doJSONRequest(const char *Endpointname, const char *JSONString)
         {
-            std::string_view Functionname = Function ? Function : "";
+            const std::string_view Functionname = Endpointname ? Endpointname : "";
             return callEndpoint(Functionname, JSON::Parse(JSONString));
         }
     }

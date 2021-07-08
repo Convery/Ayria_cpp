@@ -39,8 +39,7 @@ enum Bytebuffertype : uint8_t
     BB_MAX
 };
 
-// Don't reuse this.
-namespace Internal
+namespace BBInternal
 {
     // Helpers for type deduction.
     template <class T, template <class...> class Template>
@@ -162,7 +161,7 @@ struct Bytebuffer
     // Typed IO.
     template <typename Type> void Write(const Type Value, bool Typechecked = true)
     {
-        constexpr auto TypeID = Internal::toID<Type>();
+        constexpr auto TypeID = BBInternal::toID<Type>();
 
         // Special case of using a bytebuffer as blob.
         if constexpr (std::is_same<Type, Bytebuffer>::value)
@@ -176,7 +175,7 @@ struct Bytebuffer
             Rawwrite(sizeof(TypeID), &TypeID);
 
         // Serialize an array of values.
-        if constexpr (Internal::isDerived<Type, std::vector>::value)
+        if constexpr (BBInternal::isDerived<Type, std::vector>::value)
         {
             Write(uint32_t(sizeof(typename Type::value_type) * Value.size()));
             Write(uint32_t(Value.size()), false);
@@ -186,7 +185,7 @@ struct Bytebuffer
         }
 
         // Serialize as a blob of data.
-        if constexpr (Internal::isDerived<Type, std::basic_string>::value)
+        if constexpr (BBInternal::isDerived<Type, std::basic_string>::value)
         {
             if constexpr (std::is_same<Type, Blob>::value)
             {
@@ -206,7 +205,7 @@ struct Bytebuffer
     }
     template <typename Type> bool Read(Type &Buffer, bool Typechecked = true)
     {
-        constexpr auto TypeID = Internal::toID<Type>();
+        constexpr auto TypeID = BBInternal::toID<Type>();
         uint8_t Storedtype;
 
         // Verify the datatype.
@@ -223,7 +222,7 @@ struct Bytebuffer
         }
 
         // Deserialize as an array.
-        if constexpr (Internal::isDerived<Type, std::vector>::value)
+        if constexpr (BBInternal::isDerived<Type, std::vector>::value)
         {
             // Total data-size.
             Buffer.reserve(Read<uint32_t>(true));
@@ -247,7 +246,7 @@ struct Bytebuffer
     }
     template <> bool Read(std::wstring &Buffer, bool Typechecked)
     {
-        constexpr auto TypeID = Internal::toID<std::wstring>();
+        constexpr auto TypeID = BBInternal::toID<std::wstring>();
         uint8_t Storedtype;
 
         // Verify the datatype.
@@ -269,7 +268,7 @@ struct Bytebuffer
     }
     template <> bool Read(std::string &Buffer, bool Typechecked)
     {
-        constexpr auto TypeID = Internal::toID<std::string>();
+        constexpr auto TypeID = BBInternal::toID<std::string>();
         uint8_t Storedtype;
 
         // Verify the datatype.

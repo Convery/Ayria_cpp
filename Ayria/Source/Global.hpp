@@ -5,46 +5,50 @@
 */
 
 #pragma once
-#include "Services.hpp"
 #include "Assets/Assets.hpp"
 #include "Backend/Backend.hpp"
+#include "Services/AAServices.hpp"
 #include "Subsystems/Subsystems.hpp"
 
-// Global system information, 56 bytes on x64.
+// Global system information, should be <= 64 bytes on x64.
 struct Globalstate_t
 {
-    uint32_t GameID;
-    uint32_t ClientID;
-    uint32_t Publicaddress;
-    char8_t Username[22];
+    uint32_t InternalIP{}, ExternalIP{};
+    uint32_t AccountID{ 0xDEADC0DE };
+    uint32_t GameID{}, ModID{};
+    uint32_t Sharedkeyhash{};
+    // 24 bytes.
 
+    char8_t Username[22]{ u8"Unknown" };
     union
     {
-        uint8_t Full;
+        uint16_t Raw;
         struct
         {
-            uint8_t
-                isAway : 1,
-                isOnline : 1,
-                isIngame : 1,
-                isPrivate : 1,
-                isHosting : 1;
-        };
-    } Stateflags;
-    union
-    {
-        uint8_t Full;
-        struct
-        {
-            uint8_t
-                modifiedConfig : 1,
+            uint16_t
+                // Application.
+                enableExternalconsole : 1,
                 enableIATHooking : 1,
-                enableExternalconsole : 1;
-        };
-    } Applicationsettings;
+                enableFileshare : 1,
+                modifiedConfig : 1,
+                noNetworking : 1,
 
-    RSA *Cryptokeys;
-    std::string *B64Authticket;
+                // Social state.
+                isPrivate : 1,
+                isAway : 1,
+
+                // Matchmaking state.
+                isHosting : 1,
+                isIngame : 1,
+
+                END : 1;
+        };
+    } Settings;
+    // 48 bytes.
+
+    std::array<uint8_t, 32> *Publickey{};
+    std::array<uint8_t, 32> *Privatekey{};
+    // 56 / 64 bytes.
 };
 
 // Let's not cross a cache-line.

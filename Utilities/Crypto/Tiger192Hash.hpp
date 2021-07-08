@@ -765,5 +765,9 @@ namespace Hash
         Resultstring.append((const char *)Resultbuffer, 24);
         return Resultstring;
     }
+    inline std::string Tiger192(std::string_view Input)
+    {
+        return Tiger192(Input.data(), Input.size());
+    }
 }
 #pragma warning(pop)

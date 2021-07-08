@@ -122,22 +122,22 @@ namespace Graphics
         explicit Renderer_t(HDC Context, vec4f Boundingbox) : Devicecontext(Context)
         {
             // GDI's clipping is a little odd..
-            Clipping = CreateRectRgn(Boundingbox.x, Boundingbox.y, Boundingbox.z, 1 + (int)Boundingbox.w);
+            Clipping = CreateRectRgn(Boundingbox.x, Boundingbox.y, Boundingbox.z, 2 + (int)Boundingbox.w);
             SelectClipRgn(Devicecontext, Clipping);
         }
         ~Renderer_t();
 
         // Create renderobjects based on the users needs, only valid until the next call.
-        Renderobject_t *Line(vec2f Start, vec2f Stop, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Ellipse(vec2f Position, vec2f Size, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Path(const std::vector<vec2f> &Points, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Gradientrect(vec2f Position, vec2f Size, bool Vertical = false) const noexcept;
-        Renderobject_t *Polygon(const std::vector<vec2f> &Points, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Arc(vec2f Position, vec2f Angles, uint8_t Rounding, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Rectangle(vec2f Position, vec2f Size, uint8_t Rounding = 0, uint8_t Linewidth = 1) const noexcept;
-        Renderobject_t *Mesh(const std::vector<vec2f> &Points, const std::vector<Color_t> &Colors, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Line(vec2i Start, vec2i Stop, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Ellipse(vec2i Position, vec2i Size, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Path(const std::vector<vec2i> &Points, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Gradientrect(vec2i Position, vec2i Size, bool Vertical = false) const noexcept;
+        Renderobject_t *Polygon(const std::vector<vec2i> &Points, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Arc(vec2i Position, vec2i Angles, uint8_t Rounding, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Rectangle(vec2i Position, vec2i Size, uint8_t Rounding = 0, uint8_t Linewidth = 1) const noexcept;
+        Renderobject_t *Mesh(const std::vector<vec2i> &Points, const std::vector<Color_t> &Colors, uint8_t Linewidth = 1) const noexcept;
 
-        Renderobject_t *Text(vec2f Position, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
+        Renderobject_t *Text(vec2i Position, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
         Renderobject_t *Textcentered(vec4f Boundingbox, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
     };
 }

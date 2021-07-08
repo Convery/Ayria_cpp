@@ -62,10 +62,10 @@ namespace Backend
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
     {
         std::scoped_lock _(Threadsafe);
-        Backgroundtasks.push_back({ 0, PeriodMS, Callback });
+        Backgroundtasks.emplace_back(0, PeriodMS, Callback);
     }
 
-    // TODO(tcn): Investigate if we can merge these threads.
+    // NOTE(tcn): We need to keep the graphics realtime so it gets its own thread.
     [[noreturn]] static DWORD __stdcall Backgroundthread(void *)
     {
         // Name this thread for easier debugging.
@@ -90,11 +90,14 @@ namespace Backend
             }
 
             // Most tasks run with periods in seconds.
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
     [[noreturn]] static DWORD __stdcall Graphicsthread(void *)
     {
+        // Hackery to measure time to the first frame.
+        uint64_t Lastframe{ GetTickCount64() };
+
         // UI-thread, boost our priority.
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
@@ -108,35 +111,38 @@ namespace Backend
         // Initialize the subsystems.
         // TODO(tcn): Initialize pluginmenu, move the overlay storage somewhere.
         const auto Consoleoverlay = Createconsoleoverlay();
+        const auto Loginmenu = Createloginmenu();
+        Loginmenu->setVisibility(true);
 
         // Optional console for developers.
-        if (Global.Applicationsettings.enableExternalconsole) Console::Windows::Createconsole(GetModuleHandleW(NULL));
+        if (Global.Settings.enableExternalconsole)
+            Console::Windows::Createconsole(GetModuleHandleW(NULL));
 
         // Main loop, runs until the application terminates or DLL unloads.
-        std::chrono::high_resolution_clock::time_point Lastframe{};
         while (true)
         {
-            // Track the frame-time, should be less than 33ms at worst.
-            const auto Thisframe{ std::chrono::high_resolution_clock::now() };
-            const auto Deltatime = Thisframe - Lastframe;
+            // Track the frame-time.
+            const auto Thisframe = GetTickCount64();
+            const int32_t DeltatimeMS = Thisframe - Lastframe;
             Lastframe = Thisframe;
 
             // Notify all elements about the frame.
-            Consoleoverlay->onFrame(std::chrono::duration<float>(Deltatime).count());
+            Consoleoverlay->onFrame(DeltatimeMS);
+            Loginmenu->onFrame(DeltatimeMS);
             Console::Windows::doFrame();
 
             // Log frame-average every 5 seconds.
             if constexpr (Build::isDebug)
             {
-                static std::array<uint64_t, 256> Timings{};
-                static float Elapsedtime{};
+                static std::array<uint32_t, 256> Timings{};
+                static uint32_t Elapsedtime{};
                 static size_t Index{};
 
-                Timings[Index % 256] = std::chrono::duration_cast<std::chrono::nanoseconds>(Deltatime).count();
-                Elapsedtime += std::chrono::duration<float>(Deltatime).count();
+                Timings[Index % 256] = DeltatimeMS;
+                Elapsedtime += DeltatimeMS;
                 Index++;
 
-                if (Elapsedtime >= 5.0f)
+                if (Elapsedtime >= 5000)
                 {
                     const auto Sum = std::reduce(std::execution::par_unseq, Timings.begin(), Timings.end());
                     constexpr auto NPS = 1000000000.0;
@@ -148,7 +154,7 @@ namespace Backend
             }
 
             // Cap the FPS to ~60, as we only render if dirty we can get thousands of FPS.
-            std::this_thread::sleep_until(Thisframe + std::chrono::milliseconds(1000 / 60));
+            std::this_thread::sleep_for(std::chrono::milliseconds((1000 / 60) - DeltatimeMS));
         }
     }
 
@@ -156,10 +162,10 @@ namespace Backend
     static void Saveconfig()
     {
         JSON::Object_t Config{};
-        Config["enableExternalconsole"] = Global.Applicationsettings.enableExternalconsole;
-        Config["enableIATHooking"] = Global.Applicationsettings.enableIATHooking;
+        Config["enableExternalconsole"] = Global.Settings.enableExternalConsole;
+        Config["enableIATHooking"] = Global.Settings.enableIATHooking;
         Config["Username"] = std::u8string(Global.Username);
-        Config["UserID"] = Global.ClientID;
+        Config["AccountID"] = Global.AccountID;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Config));
     }
@@ -168,18 +174,18 @@ namespace Backend
     static void Initializeglobals()
     {
         const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
-        Global.Applicationsettings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
-        Global.Applicationsettings.enableIATHooking = Config.value<bool>("enableIATHooking");
-        Global.ClientID = Config.value("UserID", 0xDEADC0DE);
+        Global.Settings.enableExternalConsole = Config.value<bool>("enableExternalconsole");
+        Global.Settings.enableIATHooking = Config.value<bool>("enableIATHooking");
+        Global.AccountID = Config.value("AccountID", 0xDEADC0DE);
 
-        const auto Username = Config.value("Username", u8"AYRIA"s);;
-        std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
+        const auto Username = Config.value("Username", u8"AYRIA"s);
+        if (!Username.empty()) std::memcpy(Global.Username, Username.data(), std::min(Username.size(), sizeof(Global.Username) - 1));
 
         // Sanity checking, force save if nothing was parsed.
         if (!FS::Fileexists(L"./Ayria/Settings.json")) Saveconfig();
 
         // Save the configuration on exit.
-        std::atexit([]() { if (Global.Applicationsettings.modifiedConfig) Saveconfig(); });
+        std::atexit([]() { if (Global.Settings.modifiedConfig) Saveconfig(); });
     }
 
     // Ensure that all tables for the database is available.
@@ -306,18 +312,12 @@ namespace Backend
         // Initialize the global state from disk settings.
         Initializeglobals();
 
-        // Create / clear the database if needed.
-        Initializedatabase();
-
         // Initialize subsystems that plugins may need.
         Services::Initialize();
 
         /*
             TODO(tcn):
-            If the user has authenticated in the past, get 'Authhash' from the config.
-            Saved as Base64::Encode(AES::Encrypt(bcrypt/argon2(Password), Clientinfo::getHWID()));
-
-            Then authenticate in the background.
+            If the user has authenticated in the past, re-auth.
         */
 
         // Workers.
@@ -326,7 +326,7 @@ namespace Backend
     }
 
     // Export functionality to the plugins.
-    extern "C" EXPORT_ATTR void __cdecl Createperiodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
+    extern "C" EXPORT_ATTR void __cdecl createPeriodictask(unsigned int PeriodMS, void(__cdecl *Callback)())
     {
         if (PeriodMS && Callback) Enqueuetask(PeriodMS, Callback);
     }

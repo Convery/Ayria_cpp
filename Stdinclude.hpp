@@ -89,8 +89,10 @@ using namespace std::literals;
 #include <Utilities/Hacking/Patternscan.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
-#include <Utilities/AyriaDB.hpp>
-#include <Utilities/Localnetservers.hpp>
+
+#include <Utilities/Ayria/Ayriamodule.h>
+#include <Utilities/Ayria/AyriaAPI.hpp>
+#include <Utilities/Ayria/Localnetservers.hpp>
 
 // Temporary includes.
 #include <Utilities/Internal/Misc.hpp>
@@ -99,51 +101,3 @@ using namespace std::literals;
 #include <Utilities/Internal/Asynctaskqueue.hpp>
 #include <Utilities/Internal/Compressedstring.hpp>
 
-// Ayria module used throughout the projects.
-// Exports as struct for easier plugin initialization.
-struct Ayriamodule_t
-{
-    // Call the exported JSON functions, pass NULL as function to list all. Result-string freed after 6 calls.
-    const char *(__cdecl *JSONRequest)(const char *Function, const char *JSONString);
-
-    // Callback on LAN messages.
-    void (__cdecl *addMessagehandler)(const char *Messagetype,
-        void(__cdecl *Callback)(unsigned int NodeID, const char *Message, unsigned int Length));
-
-    // UTF8 escaped ASCII strings.
-    void (__cdecl *addConsolemessage)(const char *String, unsigned int Length, unsigned int Colour);
-    void (__cdecl *addConsolecommand)(const char *Command, void(__cdecl *Callback)(int Argc, const char **Argv));
-
-    // Run a periodic task on the systems background thread.
-    void(__cdecl *Createperiodictask)(unsigned int PeriodMS, void(__cdecl *Callback)(void));
-
-    // Internal, notify other plugins we are initialized.
-    void(__cdecl *onInitialized)(bool);
-
-    // Helpers for C++, C users have to do their own initialization.
-    #if defined(__cplusplus)
-    #define Ayriarequest(x, y) [&]() { if (const auto Callback = Ayria.JSONRequest) return Callback(x, JSON::Value_t(y).dump().c_str()); return ""; }()
-
-    Ayriamodule_t()
-    {
-        #if defined(NDEBUG)
-        const auto Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64.dll" : "./Ayria/Ayria32.dll");
-        #else
-        const auto Modulehandle = LoadLibraryA(Build::is64bit ? "./Ayria/Ayria64d.dll" : "./Ayria/Ayria32d.dll");
-        #endif
-
-        if (Modulehandle)
-        {
-            #define Import(x) x = (decltype(x))GetProcAddress(Modulehandle, #x)
-            Import(Createperiodictask);
-            Import(addConsolemessage);
-            Import(addConsolecommand);
-            Import(addMessagehandler);
-            Import(onInitialized);
-            Import(JSONRequest);
-            #undef Import
-        }
-    }
-    #endif
-};
-extern Ayriamodule_t Ayria;

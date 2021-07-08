@@ -56,7 +56,6 @@ else()
 endif()
 
 # Try to add the lib directories based on a required package.
-find_package(OpenSSL REQUIRED)
 find_path(STD_INC openssl/aes.h)
 find_library(STD_LIB_RAW libssl.lib)
 get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
@@ -72,9 +71,9 @@ FetchContent_Declare(
     UPDATE_DISCONNECTED YES)
 add_definitions(-DLZ_STANDALONE)
 FetchContent_MakeAvailable(cpp-lazy)
+include_directories("${cpp-lazy_SOURCE_DIR}/include")
 
 # Global utilities.
-include_directories("${cpp-lazy_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}")
 set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 add_subdirectory(Utilities)

@@ -74,15 +74,16 @@ struct vec2_t
     constexpr bool operator<=(const vec2_t &Right) const { return (x <= Right.x) || (y <= Right.y); }
     constexpr bool operator>=(const vec2_t &Right) const { return (x >= Right.x) || (y >= Right.y); }
 
-    vec2_t &operator*=(const T &Right) { x *= Right; y *= Right; return *this; }
-    vec2_t &operator+=(const vec2_t &Right) { x += Right.x; y += Right.y; return *this; }
-    vec2_t &operator-=(const vec2_t &Right) { x -= Right.x; y -= Right.y; return *this; }
+    constexpr vec2_t &operator*=(const T &Right) { x *= Right; y *= Right; return *this; }
+    constexpr vec2_t &operator+=(const vec2_t &Right) { x += Right.x; y += Right.y; return *this; }
+    constexpr vec2_t &operator-=(const vec2_t &Right) { x -= Right.x; y -= Right.y; return *this; }
 
-    friend vec2_t operator*(vec2_t Left, const T &Right) { Left *= Right; return Left; }
-    friend vec2_t operator+(vec2_t Left, const vec2_t &Right) { Left += Right; return Left; }
-    friend vec2_t operator-(vec2_t Left, const vec2_t &Right) { Left -= Right; return Left; }
+    constexpr friend vec2_t operator*(vec2_t Left, const T &Right) { Left *= Right; return Left; }
+    constexpr friend vec2_t operator+(vec2_t Left, const vec2_t &Right) { Left += Right; return Left; }
+    constexpr friend vec2_t operator-(vec2_t Left, const vec2_t &Right) { Left -= Right; return Left; }
 };
 using vec2f = vec2_t<bfloat16_t>;
+using vec2u = vec2_t<uint16_t>;
 using vec2i = vec2_t<int16_t>;
 
 template <typename T>
@@ -103,15 +104,16 @@ struct vec3_t
     constexpr bool operator<=(const vec3_t &Right) const { return (x <= Right.x) || (y <= Right.y) || (z <= Right.z); }
     constexpr bool operator>=(const vec3_t &Right) const { return (x >= Right.x) || (y >= Right.y) || (z >= Right.z); }
 
-    vec3_t &operator*=(const T &Right) { x *= Right; y *= Right; z *= Right; return *this; }
-    vec3_t &operator+=(const vec3_t &Right) { x += Right.x; y += Right.y; z += Right.z; return *this; }
-    vec3_t &operator-=(const vec3_t &Right) { x -= Right.x; y -= Right.y; z -= Right.z; return *this; }
+    constexpr vec3_t &operator*=(const T &Right) { x *= Right; y *= Right; z *= Right; return *this; }
+    constexpr vec3_t &operator+=(const vec3_t &Right) { x += Right.x; y += Right.y; z += Right.z; return *this; }
+    constexpr vec3_t &operator-=(const vec3_t &Right) { x -= Right.x; y -= Right.y; z -= Right.z; return *this; }
 
-    friend vec3_t operator*(vec3_t Left, const T &Right) { Left *= Right; return Left; }
-    friend vec3_t operator+(vec3_t Left, const vec3_t &Right) { Left += Right; return Left; }
-    friend vec3_t operator-(vec3_t Left, const vec3_t &Right) { Left -= Right; return Left; }
+    constexpr friend vec3_t operator*(vec3_t Left, const T &Right) { Left *= Right; return Left; }
+    constexpr friend vec3_t operator+(vec3_t Left, const vec3_t &Right) { Left += Right; return Left; }
+    constexpr friend vec3_t operator-(vec3_t Left, const vec3_t &Right) { Left -= Right; return Left; }
 };
 using vec3f = vec3_t<bfloat16_t>;
+using vec3u = vec3_t<uint16_t>;
 using vec3i = vec3_t<int16_t>;
 
 template <typename T>
@@ -137,15 +139,16 @@ struct vec4_t
     constexpr bool operator<=(const vec4_t &Right) const { return (ab <= Right.ab) || (cd <= Right.cd); }
     constexpr bool operator>=(const vec4_t &Right) const { return (ab >= Right.ab) || (cd >= Right.cd); }
 
-    vec4_t &operator*=(const T &Right) { ab *= Right; cd *= Right; return *this; }
-    vec4_t &operator+=(const vec4_t &Right) { ab += Right.ab; cd += Right.cd; return *this; }
-    vec4_t &operator-=(const vec4_t &Right) { ab -= Right.ab; cd -= Right.cd; return *this; }
+    constexpr vec4_t &operator*=(const T &Right) { ab *= Right; cd *= Right; return *this; }
+    constexpr vec4_t &operator+=(const vec4_t &Right) { ab += Right.ab; cd += Right.cd; return *this; }
+    constexpr vec4_t &operator-=(const vec4_t &Right) { ab -= Right.ab; cd -= Right.cd; return *this; }
 
-    friend vec4_t operator*(vec4_t Left, const T &Right) { Left *= Right; return Left; }
-    friend vec4_t operator+(vec4_t Left, const vec4_t &Right) { Left += Right; return Left; }
-    friend vec4_t operator-(vec4_t Left, const vec4_t &Right) { Left -= Right; return Left; }
+    constexpr friend vec4_t operator*(vec4_t Left, const T &Right) { Left *= Right; return Left; }
+    constexpr friend vec4_t operator+(vec4_t Left, const vec4_t &Right) { Left += Right; return Left; }
+    constexpr friend vec4_t operator-(vec4_t Left, const vec4_t &Right) { Left -= Right; return Left; }
 };
 using vec4f = vec4_t<bfloat16_t>;
+using vec4u = vec4_t<uint16_t>;
 using vec4i = vec4_t<int16_t>;
 
 #pragma pack(pop)

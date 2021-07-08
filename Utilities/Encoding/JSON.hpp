@@ -244,19 +244,20 @@ namespace JSON
         {
             if (Type == Type_t::Null) *this = Value_t(T());
             return *asPtr(T);
-        };
+        }
 
         //
-        Value_t operator[](std::string_view Key) const
+        template<size_t N> Value_t &operator[](const char(&Key)[N])
         {
-            return value(Key, Value_t());
-        }
-        Value_t &operator[](std::string_view Key)
-        {
-            if (Type == Type_t::Null) *this = Object_t();
             if (Type != Type_t::Object) return *this;
-            return asPtr(Object_t)->at(Key.data());
+            return asPtr(Object_t)->at({ Key, N });
         }
+        const Value_t &operator[](std::string_view Key) const
+        {
+            if (Type != Type_t::Object) return *this;
+            return asPtr(Object_t)->at({ Key.data(), Key.size() });
+        }
+
 
         //
         template<typename T, size_t N> Value_t(const std::array<T, N> &Input)

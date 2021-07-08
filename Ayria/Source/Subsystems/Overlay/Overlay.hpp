@@ -43,6 +43,7 @@ using Eventcallback = void(__cdecl *)(class Overlay_t *Parent, Eventflags_t Even
 
 // Forward declaration for the overlays.
 class Overlay_t *Createconsoleoverlay();
+class Overlay_t *Createloginmenu();
 
 // Core building block of the graphics.
 struct Elementinfo_t
@@ -63,11 +64,12 @@ constexpr size_t Defaultcount = 4;
 class Overlay_t
 {
     protected:
+    bool isVisible{};
     HWND Windowhandle{};
     Spinlock Threadlock{};
     std::atomic_flag dirtyCache{};
     std::atomic_flag dirtyBuffer{};
-    std::atomic<RECT> dirtyScreen{ { 9999, 9999, 0, 0 } };
+    std::atomic<RECT> dirtyScreen{ { INT16_MAX, INT16_MAX, 0, 0 } };
 
     // Cache of the elements properties by Z.
     Inlinedvector<int8, Defaultcount> ZIndex{};
@@ -82,11 +84,11 @@ class Overlay_t
     virtual void onPaint()
     {
         const RECT Rect = dirtyScreen.load();
-        dirtyScreen.store({});
+        dirtyScreen.store({ INT16_MAX, INT16_MAX, 0, 0 });
         dirtyBuffer.clear();
 
         const vec4i Paintrect(Rect.left, Rect.top, Rect.right, Rect.bottom);
-        const vec2i Size(Paintrect.z - Paintrect.x, Paintrect.w - Paintrect.y);
+        const vec2u Size(Paintrect.z - Paintrect.x, Paintrect.w - Paintrect.y);
 
         const auto Windowcontext = GetDC(Windowhandle);
         const auto Devicecontext = CreateCompatibleDC(Windowcontext);
@@ -101,9 +103,9 @@ class Overlay_t
         const auto Range = lz::zip(Paintcallbacks, Hitbox);
         for (const auto &[Callback, Box] : Range)
         {
+            if (!Callback) [[unlikely]] continue;
             if (Box.x > Paintrect.z || Box.z < Paintrect.x) [[unlikely]] continue;
             if (Box.y > Paintrect.w || Box.w < Paintrect.y) [[unlikely]] continue;
-            if (!Callback) [[unlikely]] continue;
             Callback(this, Renderer);
         }
 
@@ -158,13 +160,23 @@ class Overlay_t
     }
 
     public:
-    vec2i Windowsize{};
+    vec2u Windowsize{};
     vec2i Windowposition{};
 
     // Access from the elements.
+    void Togglevisibility()
+    {
+        isVisible ^= true;
+        ShowWindowAsync(Windowhandle, isVisible ? SW_SHOW : SW_HIDE);
+    }
     void Invalidateelements()
     {
         dirtyCache.test_and_set();
+    }
+    void setVisibility(bool Visible)
+    {
+        isVisible = Visible;
+        ShowWindowAsync(Windowhandle, isVisible ? SW_SHOW : SW_HIDE);
     }
     void Insertelement(Elementinfo_t *Element)
     {
@@ -206,16 +218,16 @@ class Overlay_t
 
         dirtyBuffer.test_and_set();
     }
-    void Invalidatescreen(vec2i Dirtypos, vec2i Dirtysize)
+    void Invalidatescreen(vec2i Dirtypos, vec2u Dirtysize)
     {
         return Invalidatescreen(vec4i{ Dirtypos.x, Dirtypos.y, Dirtypos.x + Dirtysize.x, Dirtypos.y + Dirtysize.y });
     }
 
-    // Called each frame, dispatches to derived classes.
-    void onFrame(float Deltatime)
-    {
-        const uint32_t DeltatimeMS = Deltatime * 1000.0f;
+    // Show the window as needed.
 
+    // Called each frame, dispatches to derived classes.
+    void onFrame(uint32_t DeltatimeMS)
+    {
         // If the cache is dirty, we need to sort it again.
         if (dirtyCache.test()) [[unlikely]]
         {
@@ -363,7 +375,7 @@ class Overlay_t
             case WM_MOUSELEAVE:
             {
                 Eventflags_t Flags{}; Flags.onMousemove = true;
-                This->onEvent(Flags, vec2i{ -99999, -99999 }); // Probably outside of the positioning.
+                This->onEvent(Flags, vec2i{ INT16_MIN, INT16_MIN });
                 Mousecaptureowner = {};
                 return NULL;
             }
@@ -498,7 +510,7 @@ class Overlay_t
     }
 
     // Create a new window for our overlay.
-    Overlay_t(vec2i Position, vec2i Size) : Windowposition(Position), Windowsize(Size)
+    Overlay_t(vec2i Position, vec2u Size) : Windowposition(Position), Windowsize(Size)
     {
         // Register the overlay class.
         WNDCLASSEXW Windowclass{};
@@ -507,7 +519,7 @@ class Overlay_t
         Windowclass.lpfnWndProc = Overlaywndproc;
         Windowclass.lpszClassName = L"Ayria_overlay";
         Windowclass.cbWndExtra = sizeof(Overlay_t *);
-        if (NULL == RegisterClassExW(&Windowclass)) assert(false);
+        RegisterClassExW(&Windowclass);
 
         // Generic overlay style.
         const DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
@@ -518,7 +530,7 @@ class Overlay_t
         assert(Windowhandle);
 
         // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
-        SetLayeredWindowAttributes(Windowhandle, 0x00FFFFFF, 0, LWA_COLORKEY);
+        SetLayeredWindowAttributes(Windowhandle, 0x0000FFFF, 0, LWA_COLORKEY);
 
         // Resize to show the window.
         if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);

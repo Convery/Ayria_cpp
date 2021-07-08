@@ -23,7 +23,7 @@ namespace Graphics
         vec4f Dimensions{};
         bool Horizontal{};
 
-        Gradient_t(HDC Context, vec2f Position, vec2f Size, bool Vertical) : Renderobject_t(Context)
+        Gradient_t(HDC Context, vec2i Position, vec2i Size, bool Vertical) : Renderobject_t(Context)
         {
             Dimensions = { Position.x, Position.y, Position.x + Size.x, Position.y + Size.y };
             Currentobject = GRADIENT;
@@ -43,7 +43,7 @@ namespace Graphics
         vec4f Dimensions;
         uint8_t Width;
 
-        Ellipse_t(HDC Context, uint8_t Linewidth, vec2f Position, vec2f Size) : Renderobject_t(Context)
+        Ellipse_t(HDC Context, uint8_t Linewidth, vec2i Position, vec2i Size) : Renderobject_t(Context)
         {
             Dimensions = { Position.x, Position.y, Position.x + Size.x, Position.y + Size.y };
             Currentobject = ELLIPSE;
@@ -61,7 +61,7 @@ namespace Graphics
         std::vector<POINT> GDIPoints;
         uint8_t Width;
 
-        Polygon_t(HDC Context, uint8_t Linewidth, const std::vector<vec2f> &Points) : Renderobject_t(Context)
+        Polygon_t(HDC Context, uint8_t Linewidth, const std::vector<vec2i> &Points) : Renderobject_t(Context)
         {
             Width = Linewidth;
             Currentobject = POLYGON;
@@ -72,8 +72,8 @@ namespace Graphics
         }
         virtual void Render(std::optional<Color_t> Outline, std::optional<Color_t> Background)
         {
+            const Pen_t FG(Devicecontext, Width, Outline.value_or(Background.value_or(Color_t(uint32_t(OPAQUE)))));
             const Brush_t BG(Devicecontext, Background.value_or(Color_t(uint32_t(OPAQUE))));
-            const Pen_t FG(Devicecontext, Width, Outline.value_or(Color_t(uint32_t(OPAQUE))));
             Polygon(Devicecontext, GDIPoints.data(), (int)GDIPoints.size());
         }
     };
@@ -82,7 +82,7 @@ namespace Graphics
         std::vector<POINT> GDIPoints;
         uint8_t Width;
 
-        Path_t(HDC Context, uint8_t Linewidth, const std::vector<vec2f> &Points) : Renderobject_t(Context)
+        Path_t(HDC Context, uint8_t Linewidth, const std::vector<vec2i> &Points) : Renderobject_t(Context)
         {
             Width = Linewidth;
             Currentobject = PATH;
@@ -104,7 +104,7 @@ namespace Graphics
         std::vector<TRIVERTEX> Vertices;
         uint8_t Width;
 
-        Mesh_t(HDC Context, uint8_t Linewidth, const std::vector<vec2f> &Points, const std::vector<Color_t> &Colors) : Renderobject_t(Context)
+        Mesh_t(HDC Context, uint8_t Linewidth, const std::vector<vec2i> &Points, const std::vector<Color_t> &Colors) : Renderobject_t(Context)
         {
             assert(Points.size() == Colors.size()); assert(Points.size() % 3 == 0);
 
@@ -172,7 +172,7 @@ namespace Graphics
         uint8_t Radius;
         uint8_t Width;
 
-        Quad_t(HDC Context, vec2f Position, vec2f Size, uint8_t Rounding, uint8_t Linewidth) : Renderobject_t(Context)
+        Quad_t(HDC Context, vec2i Position, vec2i Size, uint8_t Rounding, uint8_t Linewidth) : Renderobject_t(Context)
         {
             Dimensions = { Position.x, Position.y, Position.x + Size.x, Position.y + Size.y };
             Currentobject = QUAD;
@@ -205,7 +205,7 @@ namespace Graphics
         vec4f Dimensions{};
         std::wstring Text{};
 
-        Text_t(HDC Context, vec2f Position, const std::wstring &String, HFONT Font) : Renderobject_t(Context)
+        Text_t(HDC Context, vec2i Position, const std::wstring &String, HFONT Font) : Renderobject_t(Context)
         {
             Currentobject = TEXT;
 
@@ -256,11 +256,11 @@ namespace Graphics
     };
     struct Arc_t : Renderobject_t
     {
-        vec2f Focalpoint0, Focalpoint1;
+        vec2i Focalpoint0, Focalpoint1;
         vec4f Boundingbox;
         uint8_t Width;
 
-         Arc_t(HDC Context, uint8_t Linewidth, vec2f Position, vec2f Angles, uint8_t Rounding) : Renderobject_t(Context)
+         Arc_t(HDC Context, uint8_t Linewidth, vec2i Position, vec2i Angles, uint8_t Rounding) : Renderobject_t(Context)
         {
             Width = Linewidth;
             Currentobject = ARC;
@@ -318,41 +318,41 @@ namespace Graphics
     }
 
     // Create renderobjects based on the users needs, only valid until the next call.
-    Renderobject_t *Renderer_t::Line(vec2f Start, vec2f Stop, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Line(vec2i Start, vec2i Stop, uint8_t Linewidth) const noexcept
     {
-        std::vector<vec2f> TMP{ Start, Stop };
+        std::vector<vec2i> TMP{ Start, Stop };
         return Internalalloc<Path_t>(Devicecontext, Linewidth, TMP);
     }
-    Renderobject_t *Renderer_t::Ellipse(vec2f Position, vec2f Size, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Ellipse(vec2i Position, vec2i Size, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Ellipse_t>(Devicecontext, Linewidth, Position, Size);
     }
-    Renderobject_t *Renderer_t::Gradientrect(vec2f Position, vec2f Size, bool Vertical) const noexcept
+    Renderobject_t *Renderer_t::Gradientrect(vec2i Position, vec2i Size, bool Vertical) const noexcept
     {
         return Internalalloc<Gradient_t>(Devicecontext, Position, Size, Vertical);
     }
-    Renderobject_t *Renderer_t::Path(const std::vector<vec2f> &Points, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Path(const std::vector<vec2i> &Points, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Path_t>(Devicecontext, Linewidth, Points);
     }
-    Renderobject_t *Renderer_t::Polygon(const std::vector<vec2f> &Points, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Polygon(const std::vector<vec2i> &Points, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Polygon_t>(Devicecontext, Linewidth, Points);
     }
-    Renderobject_t *Renderer_t::Arc(vec2f Position, vec2f Angles, uint8_t Rounding, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Arc(vec2i Position, vec2i Angles, uint8_t Rounding, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Arc_t>(Devicecontext, Linewidth, Position, Angles, Rounding);
     }
-    Renderobject_t *Renderer_t::Rectangle(vec2f Position, vec2f Size, uint8_t Rounding, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Rectangle(vec2i Position, vec2i Size, uint8_t Rounding, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Quad_t>(Devicecontext, Position, Size, Rounding, Linewidth);
     }
-    Renderobject_t *Renderer_t::Mesh(const std::vector<vec2f> &Points, const std::vector<Color_t> &Colors, uint8_t Linewidth) const noexcept
+    Renderobject_t *Renderer_t::Mesh(const std::vector<vec2i> &Points, const std::vector<Color_t> &Colors, uint8_t Linewidth) const noexcept
     {
         return Internalalloc<Mesh_t>(Devicecontext, Linewidth, Points, Colors);
     }
 
-    Renderobject_t *Renderer_t::Text(vec2f Position, const std::wstring &String, HFONT Font) const noexcept
+    Renderobject_t *Renderer_t::Text(vec2i Position, const std::wstring &String, HFONT Font) const noexcept
     {
         return Internalalloc<Text_t>(Devicecontext, Position, String, Font);
     }

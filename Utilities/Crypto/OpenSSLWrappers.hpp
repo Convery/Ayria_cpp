@@ -558,9 +558,9 @@ namespace PK_RSA
     {
         std::string Result; Result.resize(Finallength);
 
-        if (1 != RSA_padding_add_PKCS1_OAEP((uint8_t *)Result.data(), (int)Finallength,
-                                            (const uint8_t *)Input.data(), (int)Input.size(),
-                                            (const uint8_t *)Padding.data(), (int)Padding.size()))
+        if (1 != RSA_padding_add_PKCS1_OAEP_mgf1((uint8_t *)Result.data(), (int)Finallength,
+                                                 (const uint8_t *)Input.data(), (int)Input.size(),
+                                                 (const uint8_t *)Padding.data(), (int)Padding.size(), NULL, NULL))
             return "";
 
         return Result;

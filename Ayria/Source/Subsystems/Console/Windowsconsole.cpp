@@ -13,9 +13,9 @@ namespace Console::Windows
 {
     // Each window needs a unique ID, because reasons.
     constexpr size_t InputID = 1, BufferID = 2;
-    static HWND Consolehandle, Inputhandle, Bufferhandle;
-    static vec2f Windowsize;
-    static WNDPROC oldLine;
+    static HWND Consolehandle{}, Inputhandle{}, Bufferhandle{};
+    static vec2u Windowsize{};
+    static WNDPROC oldLine{};
     static bool isVisible{};
 
     LRESULT __stdcall Inputproc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
@@ -31,7 +31,7 @@ namespace Console::Windows
         }
         if (Message == WM_CHAR)
         {
-            if (wParam == L'§' || wParam == L'½' || wParam == L'~' || wParam == VK_OEM_5)
+            if (wParam == 0xA7 || wParam == 0xBD || wParam == L'~' || wParam == VK_OEM_5)
                 return 0;
         }
 
@@ -63,7 +63,7 @@ namespace Console::Windows
         Windowclass.lpszClassName = L"Windows_console";
         Windowclass.hbrBackground = (HBRUSH)COLOR_WINDOW;
         Windowclass.hIcon = LoadIconW(hInstance, (LPCWSTR)1);
-        if (!RegisterClassW(&Windowclass)) assert(false); // WTF?
+        RegisterClassW(&Windowclass);
 
         const auto Device = GetDC(GetDesktopWindow());
         auto Height = GetDeviceCaps(Device, VERTRES);
@@ -73,7 +73,7 @@ namespace Console::Windows
         RECT Windowrect{ 0, 0, 820, 450 };
         AdjustWindowRect(&Windowrect, Style, FALSE);
 
-        const vec2f Position{ (Width - 150) / 2, (Height - 450) / 2 };
+        const vec2u Position{ (Width - 150) / 2, (Height - 450) / 2 };
         Windowsize = { Windowrect.right - Windowrect.left + 1,  Windowrect.bottom - Windowrect.top + 1 };
 
         Consolehandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"Console", Style,
@@ -119,7 +119,6 @@ namespace Console::Windows
         if (Currenttime > (Lastupdate + 100))
         {
             const auto Hash = Hash::WW32(Console::getMessages(1, L"")[0].first);
-
             if (Lastmessage != Hash) [[unlikely]]
             {
                 // If the user have selected text, skip.
@@ -129,7 +128,7 @@ namespace Console::Windows
                     std::wstring Concatenated;
                     Lastmessage = Hash;
 
-                    for (const auto Items = Console::getMessages(999, L""); const auto & [String, Colour] : Items)
+                    for (const auto Items = Console::getMessages(999, L""); const auto &[String, Colour] : Items)
                     {
                         if (String.empty()) continue;
                         Concatenated += String;
@@ -139,6 +138,8 @@ namespace Console::Windows
                     SetWindowTextW(Bufferhandle, Concatenated.c_str());
                     SendMessageW(Bufferhandle, WM_VSCROLL, SB_BOTTOM, 0);
                 }
+
+                Lastupdate = Currenttime;
             }
         }
     }
