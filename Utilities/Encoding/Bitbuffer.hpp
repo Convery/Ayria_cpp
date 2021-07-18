@@ -119,7 +119,7 @@ struct Bitbuffer
     // Typed IO.
     template <typename Type> void Write(const Type Value, bool Typechecked = true)
     {
-        constexpr auto TypeID = Internal::toID<Type>();
+        constexpr auto TypeID = BBInternal::toID<Type>();
 
         // A byte prefix for the type.
         if (Typechecked)
@@ -133,7 +133,7 @@ struct Bitbuffer
         }
 
         // Serialize as a blob of data.
-        if constexpr (Internal::isDerived<Type, std::basic_string>::value)
+        if constexpr (BBInternal::isDerived<Type, std::basic_string>::value)
         {
             if constexpr (std::is_same<Type, Blob>::value)
             {
@@ -156,7 +156,7 @@ struct Bitbuffer
     }
     template <typename Type> bool Read(Type &Buffer, bool Typechecked = true)
     {
-        constexpr auto TypeID = Internal::toID<Type>();
+        constexpr auto TypeID = BBInternal::toID<Type>();
         uint8_t Storedtype;
 
         // Verify the data-type.
@@ -192,7 +192,7 @@ struct Bitbuffer
     }
     template <> bool Read(std::wstring &Buffer, bool Typechecked)
     {
-        constexpr auto TypeID = Internal::toID<std::wstring>();
+        constexpr auto TypeID = BBInternal::toID<std::wstring>();
         uint8_t Storedtype;
 
         // Verify the datatype.
@@ -214,7 +214,7 @@ struct Bitbuffer
     }
     template <> bool Read(std::string &Buffer, bool Typechecked)
     {
-        constexpr auto TypeID = Internal::toID<std::string>();
+        constexpr auto TypeID = BBInternal::toID<std::string>();
         uint8_t Storedtype;
 
         // Verify the datatype.

@@ -162,7 +162,7 @@ namespace Backend
     static void Saveconfig()
     {
         JSON::Object_t Config{};
-        Config["enableExternalconsole"] = Global.Settings.enableExternalConsole;
+        Config["enableExternalconsole"] = Global.Settings.enableExternalconsole;
         Config["enableIATHooking"] = Global.Settings.enableIATHooking;
         Config["Username"] = std::u8string(Global.Username);
         Config["AccountID"] = Global.AccountID;
@@ -174,7 +174,7 @@ namespace Backend
     static void Initializeglobals()
     {
         const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
-        Global.Settings.enableExternalConsole = Config.value<bool>("enableExternalconsole");
+        Global.Settings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
         Global.Settings.enableIATHooking = Config.value<bool>("enableIATHooking");
         Global.AccountID = Config.value("AccountID", 0xDEADC0DE);
 

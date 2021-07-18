@@ -123,8 +123,6 @@ class Ringbuffer_t
     }
 
     [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }
-    [[nodiscard]] const T &front() noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->front(); }
-    [[nodiscard]] const T &back() noexcept { return const_cast<Ringbuffer_t<T, N> *>(back)->back(); }
     [[nodiscard]] T &front() noexcept { return reinterpret_cast<T &>(Storage[Tail]); }
 
     [[nodiscard]] T &operator[](size_t Index) noexcept { return reinterpret_cast<T &>(Storage[Index]); }

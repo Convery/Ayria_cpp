@@ -10,6 +10,7 @@
 // Totally randomly selected constants here..
 constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
 constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
+constexpr auto Buffersizelimit = 4096;
 
 #pragma pack(push, 1)
 struct LANpacket_t { uint32_t SessionID; uint32_t Identifier; uint16_t Payloadlength; char Payload[1]; };
@@ -43,7 +44,7 @@ namespace Network::LAN
     {
         // Developers should know better than to send 4KB as a single packet.
         const auto Totalsize = static_cast<int>(10 + Payload.size());
-        assert(Totalsize < Buffersize);
+        assert(Totalsize < Buffersizelimit);
 
         // If the client wants to remain private, don't post anything.
         if (Global.Settings.noNetworking) [[unlikely]] return;
@@ -52,7 +53,7 @@ namespace Network::LAN
         auto Packet = (LANpacket_t *)alloca(Totalsize);
         Packet->SessionID = SessionID;
         Packet->Identifier = Identifier;
-        Packet->Payloadlength = Payload.size();
+        Packet->Payloadlength = (uint16_t)Payload.size();
         std::memcpy(Packet->Payload, Payload.data(), Payload.size());
 
         // We are in non-blocking mode, so may need a retry or two.
@@ -88,7 +89,6 @@ namespace Network::LAN
         if (Global.Settings.noNetworking) [[unlikely]] return;
 
         constexpr timeval Defaulttimeout{ NULL, 1 };
-        constexpr auto Buffersizelimit = 4096;
         auto Timeout{ Defaulttimeout };
         auto Count{ 1 };
 
