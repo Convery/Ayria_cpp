@@ -113,7 +113,7 @@ namespace AyriaAPI
             }
             inline uint32_t AccountID(const std::string &Username)
             {
-                size_t AccountID{};
+                uint32_t AccountID{};
 
                 try
                 {

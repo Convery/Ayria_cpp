@@ -27,7 +27,7 @@ namespace Backend::API
     }
 
     // For internal use.
-    static std::vector<JSON::Value_t> listEndpoints()
+    std::vector<JSON::Value_t> listEndpoints()
     {
         std::vector<JSON::Value_t> Result;
         Result.reserve(Requesthandlers.size());
@@ -42,7 +42,7 @@ namespace Backend::API
 
         return Result;
     }
-    static const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
+    const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
     {
         static Debugmutex Threadsafe{};
         std::scoped_lock Lock(Threadsafe);

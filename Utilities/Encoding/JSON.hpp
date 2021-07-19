@@ -11,7 +11,6 @@
 #pragma once
 #include <memory>
 #include <Stdinclude.hpp>
-#include "Bytebuffer.hpp"
 #include "Stringconv.hpp"
 #include "Utilities/Internal/Misc.hpp"
 
@@ -19,6 +18,15 @@
 #pragma warning(disable: 4702)
 namespace JSON
 {
+    namespace Internal
+    {
+        // Helpers for type deduction.
+        template <class T, template <class...> class Template>
+        struct isDerived : std::false_type {};
+        template <template <class...> class Template, class... Args>
+        struct isDerived<Template<Args...>, Template> : std::true_type {};
+    }
+
     enum class Type_t { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
     using Object_t = std::unordered_map<std::string, struct Value_t>;
     using Array_t = std::vector<struct Value_t>;
