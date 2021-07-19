@@ -28,6 +28,7 @@
 #include <bitset>
 #include <chrono>
 #include <cstdio>
+#include <format>
 #include <future>
 #include <memory>
 #include <ranges>

@@ -32,8 +32,6 @@
 #define NOMINMAX
 #endif
 
-// Where to keep the log.
-#define LOGPATH "./Ayria/Logs"
 
 // Produce a smaller build by not including third-party detours.
 // #define NO_HOOKLIB
@@ -64,7 +62,7 @@ namespace Build
 }
 
 // Information logging.
-namespace Logging { extern void Print(const char Prefix, const char *Message); }
+namespace Logging { template <typename T> extern void Print(char Prefix, T Message); }
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)
@@ -74,6 +72,11 @@ namespace Logging { extern void Print(const char Prefix, const char *Message); }
 #else
 #define Debugprint(string) ((void)0)
 #define Traceprint() ((void)0)
+#endif
+
+// Where to keep the log.
+#if !defined(LOG_PATH)
+#define LOG_PATH "./Ayria/Logs"
 #endif
 
 // Helper to switch between debug and release mutex's.

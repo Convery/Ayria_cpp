@@ -1,5 +1,5 @@
 # Convery (tcn@ayria.se)
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.11)
 project(AYRIA)
 
 # Use the latest standard at this time.
@@ -79,9 +79,9 @@ set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 add_subdirectory(Utilities)
 
 # Add the sub-projects.
-add_subdirectory(Ayria)
-add_subdirectory(Injector)
-add_subdirectory(Localnetworking)
+#add_subdirectory(Ayria)
+#add_subdirectory(Injector)
+#add_subdirectory(Localnetworking)
 #add_subdirectory(Platformwrapper)
 
 ## Examples.
