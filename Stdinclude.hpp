@@ -13,6 +13,7 @@
 #pragma warning(push, 0)
 
 // Standard-library includes for all projects in this repository.
+#include <memory_resource>
 #include <unordered_map>
 #include <unordered_set>
 #include <string_view>
@@ -101,4 +102,3 @@ using namespace std::literals;
 #include <Utilities/Internal/Debugmutex.hpp>
 #include <Utilities/Internal/Asynctaskqueue.hpp>
 #include <Utilities/Internal/Compressedstring.hpp>
-
