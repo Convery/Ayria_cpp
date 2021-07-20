@@ -8,7 +8,6 @@
 #include <Stdinclude.hpp>
 #include "../Datatypes.hpp"
 #include "Renderer.hpp"
-#include "Overlay.hpp"
 
 // Windows only module.
 static_assert(Build::isWindows, "Renderer is only available on Windows for now.");
@@ -247,11 +246,11 @@ namespace Graphics
             if (Background)
             {
                 const Backgroundcolor_t RTTI3(Devicecontext, Background.value_or(Color_t()));
-                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN | ETO_OPAQUE, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN | ETO_OPAQUE, pArea, Text.c_str(), Text.size(), NULL);
             }
             else
             {
-                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN, pArea, Text.c_str(), Text.size(), NULL);
             }
 
             if (isCentered)

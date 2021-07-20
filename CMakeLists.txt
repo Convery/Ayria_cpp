@@ -57,7 +57,7 @@ endif()
 
 # Try to add the lib directories based on a required package.
 find_path(STD_INC openssl/aes.h)
-find_library(STD_LIB_RAW libssl.lib)
+find_library(STD_LIB_RAW sqlite3.lib)
 get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
 include_directories(${STD_INC})
 link_directories(${STD_LIB})
@@ -79,7 +79,7 @@ set(MODULE_LIBS ${MODULE_LIBS} Utilities)
 add_subdirectory(Utilities)
 
 # Add the sub-projects.
-#add_subdirectory(Ayria)
+add_subdirectory(Ayria)
 #add_subdirectory(Injector)
 #add_subdirectory(Localnetworking)
 #add_subdirectory(Platformwrapper)

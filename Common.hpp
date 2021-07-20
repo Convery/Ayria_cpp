@@ -8,7 +8,7 @@
 
 // Fixup some Visual Studio builds not defining this.
 #if !defined(_DEBUG) && !defined(NDEBUG)
-#define NDEBUG
+    #define NDEBUG
 #endif
 
 // Platform identification.
@@ -31,7 +31,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #endif
-
 
 // Produce a smaller build by not including third-party detours.
 // #define NO_HOOKLIB
@@ -67,23 +66,23 @@ namespace Logging { template <typename T> extern void Print(char Prefix, T Messa
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)
 #if !defined(NDEBUG)
-#define Debugprint(string) Logging::Print('D', string)
-#define Traceprint() Logging::Print('>', __FUNCTION__)
+    #define Debugprint(string) Logging::Print('D', string)
+    #define Traceprint() Logging::Print('>', __FUNCTION__)
 #else
-#define Debugprint(string) ((void)0)
-#define Traceprint() ((void)0)
+    #define Debugprint(string) ((void)0)
+    #define Traceprint() ((void)0)
 #endif
 
 // Where to keep the log.
 #if !defined(LOG_PATH)
-#define LOG_PATH "./Ayria/Logs"
+    #define LOG_PATH "./Ayria/Logs"
 #endif
 
 // Helper to switch between debug and release mutex's.
 #if defined(NDEBUG)
-#define Defaultmutex Spinlock
+    #define Defaultmutex Spinlock
 #else
-#define Defaultmutex Debugmutex
+    #define Defaultmutex Debugmutex
 #endif
 
 // Ignore ANSI compatibility for structs.

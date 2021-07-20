@@ -37,9 +37,16 @@
 
 // OpenSSL - Encryption library.
 #if __has_include(<openssl/ssl.h>)
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "libssl.lib")
 #define HAS_OPENSSL
+
+// BoringSSL version.
+#if __has_include(<openssl/curve25519.h>)
+    #pragma comment(lib, "crypto.lib")
+    #pragma comment(lib, "ssl.lib")
+#else
+    #pragma comment(lib, "libcrypto.lib")
+    #pragma comment(lib, "libssl.lib")
+#endif
 #endif
 
 // STB image decompression for assets.

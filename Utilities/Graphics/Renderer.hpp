@@ -196,4 +196,3 @@ namespace Graphics
         std::shared_ptr<Renderobject_t> Textcentered(vec4f Boundingbox, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
     };
 }
-
