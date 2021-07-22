@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 
 # Get the modulename from the directory.
 get_filename_component(Directory ${CMAKE_CURRENT_LIST_DIR} NAME)

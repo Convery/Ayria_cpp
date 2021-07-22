@@ -13,8 +13,8 @@ using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base64
 {
-    template <typename T> constexpr auto Encodesize(T N) { return ((N + 2) / 3 * 4); }
-    template <typename T> constexpr auto Decodesize(T N) { return (N * 3 / 4) - 1; }
+    constexpr size_t Encodesize(size_t N) { return ((N + 2) / 3 * 4); }
+    constexpr size_t Decodesize(size_t N) { return (N * 3 / 4) - 1; }
     template <typename T> concept Byte_t = sizeof(T) == 1;
 
     namespace B64Internal

@@ -7,7 +7,7 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-struct Address_t { unsigned int IPv4; unsigned short Port; };
+typedef struct { unsigned int IPv4; unsigned short Port; } Address_t;
 
 // Server interfaces for localnetworking-plugins.
 // Callbacks return false on error or if there's no data.
@@ -41,100 +41,177 @@ struct IDatagramserver : IServer
     bool onStreamwrite(const void *, unsigned int) override { return false; }
 };
 
-// The HTTP server just decodes the data and pass it to a callback.
-struct HTTPRequest_t
+// C developers need to make their own version.
+#if defined(__cplusplus)
+
+// Helpers for parsing HTTP stuff.
+struct HTTPResponse_t
 {
-    std::string URL{};
+    bool hasStatuscode{}, hasHeader{}, isChunked{}, isBad{}, hasChunks{};
+    Hashmap<std::string, std::string> Headers{};
+    uint32_t Statuscode{}, Expectedlength{};
     std::string Body{};
-    std::string Method{};
-    Hashmap<std::string, std::string> Fields{};
 
-    size_t Expectedlength{};
-    bool isChunked{};
-    bool hasHeader{};
-    bool hasBody{};
-    bool isBad{};
-
-    void Clear()
-    {
-        *this = {};
-    }
+    // Lazy clear.
+    void Clear() { *this = {}; }
     void Parse(std::string_view Input)
     {
-        // Parse the header.
+        // The status code should be the first line.
+        if (!hasStatuscode)
+        {
+            // Regex requires the copy until P0506 is accepted.
+            const auto Substring = Input.substr(0, Input.find_first_of("\r\n") + 2);
+            const auto Buffer = std::string(Substring.data(), Substring.size());
+            Input.remove_prefix(Substring.size());
+
+            std::smatch Match{};
+            static const std::regex RX(" (\\d+) ", std::regex_constants::optimize);
+            if (!std::regex_match(Buffer, Match, RX) || Match.size() != 2) { isBad = true; return; }
+
+            Statuscode = std::strtoul(Match[1].str().c_str(), {}, 10);
+            hasStatuscode = true;
+        }
+
+        // Followed by optional header fields.
         if (!hasHeader)
         {
-            static const std::regex rxHeader("^(\\w+) *(.*) +(.*)$", std::regex_constants::optimize);
-            static const std::regex rxFields("^(.+): *(.+)$", std::regex_constants::optimize);
-            const auto End = std::sregex_iterator();
-
             // Regex requires the copy until P0506 is accepted.
             const auto Substring = Input.substr(0, Input.find_first_of("\r\n\r\n") + 4);
             const auto Buffer = std::string(Substring.data(), Substring.size());
             Input.remove_prefix(Substring.size());
 
-            // Incase more than one line in the header matches.
-            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), rxHeader); It != End; ++It)
+            // Zero or more matches.
+            const auto End = std::sregex_iterator();
+            static const std::regex RX("^(.*?): *(.*)$", std::regex_constants::optimize);
+            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), RX); It != End; ++It)
             {
-                const auto &Match = *It;
-                if (Match.size() >= 2)
+                if (const auto &Match = *It; Match.size() == 3)
                 {
-                    Method = Match[1].str();
-                    URL = Match[2].str();
-                    break;
+                    Headers[Match[1].str()] = Match[2].str();
                 }
             }
 
-            // All fields up to \n\n
-            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), rxFields); It != End; ++It)
-            {
-                const auto &Match = *It;
-                if (Match.size() == 3)
-                {
-                    Fields[Match[1].str()] = Match[2].str();
-                }
-            }
-
-            // Extract data from the fields if available.
-            isChunked = Fields.contains("Transfer-Encoding") && Hash::WW32(Fields["Transfer-Encoding"]) == Hash::WW32("chunked");
-            Expectedlength = Fields.contains("Content-Length") ? std::strtoul(Fields["Content-Length"].c_str(), {}, 10) : 0;
+            // Check if chunked or if we know the body length.
+            isChunked = Headers.contains("Transfer-Encoding") && Hash::WW32(Headers["Transfer-Encoding"]) == Hash::WW32("chunked");
+            Expectedlength = Headers.contains("Content-Length") ? std::strtoul(Headers["Content-Length"].c_str(), {}, 10) : 0;
             hasHeader = true;
         }
 
-        // Parse the data.
+        // Parse any remaining data into the buffer.
         while (!Input.empty())
         {
-            // Simple case.
-            if (!isChunked) [[likely]]
-            {
-                Body.append(Input);
-                break;
-            }
+            // Common case.
+            if (!isChunked) { Body += Input; return; }
 
             // Lovely chunked encoding.
-            const auto Size = std::strtoul(Input.data(), {}, 10);
-            Input.remove_prefix(Input.find_first_of("\n") + 1);
+            const auto Size = std::strtoul(Input.data(), {}, 16);
+            Input.remove_prefix(Input.find_first_of("\r\n") + 2);
 
-            if (Size >= Input.size())
-            {
-                isBad = true;
-                break;
-            }
-            if (Size == 0)
-            {
-                Expectedlength = Body.size();
-                break;
-            }
+            // Should never happen..
+            if (Size >= Input.size()) [[unlikely]] { isBad = true; break; }
 
+            // End of stream.
+            if (Size == 0) { hasChunks = true; break; }
+
+            // Simply append.
             Body.append(Input.data(), Size);
             Input.remove_prefix(Size);
-            Input.remove_prefix(Input.find_first_of("\n") + 1);
+            Input.remove_prefix(Input.find_first_of("\r\n") + 2);
         }
-
-        // Are we done here?
-        hasBody = (Body.size() >= Expectedlength) && hasHeader;
+    }
+    [[nodiscard]] bool isParsed() const
+    {
+        if (isBad) [[unlikely]] return false;
+        if (isChunked && hasChunks) [[unlikely]] return true;
+        if (Expectedlength && Expectedlength == Body.size()) return true;
+        return false;
     }
 };
+struct HTTPRequest_t
+{
+    bool hasURI{}, hasHeader{}, isChunked{}, isBad{}, hasChunks{};
+    Hashmap<std::string, std::string> Headers{};
+    std::string Method{}, URI{}, Body{};
+    uint32_t Expectedlength{};
+
+    // Lazy clear.
+    void Clear() { *this = {}; }
+    void Parse(std::string_view Input)
+    {
+        // The method and URI should be the first line.
+        if (!hasURI)
+        {
+            // Regex requires the copy until P0506 is accepted.
+            const auto Substring = Input.substr(0, Input.find_first_of("\r\n") + 2);
+            const auto Buffer = std::string(Substring.data(), Substring.size());
+            Input.remove_prefix(Substring.size());
+
+            std::smatch Match{};
+            static const std::regex RX("^(\\w+)\\s+(.+?)\\s+", std::regex_constants::optimize);
+            if (!std::regex_match(Buffer, Match, RX) || Match.size() != 3) { isBad = true; return; }
+
+            Method = Match[1].str();
+            URI = Match[2].str();
+            hasURI = true;
+        }
+
+        // Followed by optional header fields.
+        if (!hasHeader)
+        {
+            // Regex requires the copy until P0506 is accepted.
+            const auto Substring = Input.substr(0, Input.find_first_of("\r\n\r\n") + 4);
+            const auto Buffer = std::string(Substring.data(), Substring.size());
+            Input.remove_prefix(Substring.size());
+
+            // Zero or more matches.
+            const auto End = std::sregex_iterator();
+            static const std::regex RX("^(.*?): *(.*)$", std::regex_constants::optimize);
+            for (auto It = std::sregex_iterator(Buffer.cbegin(), Buffer.cend(), RX); It != End; ++It)
+            {
+                if (const auto &Match = *It; Match.size() == 3)
+                {
+                    Headers[Match[1].str()] = Match[2].str();
+                }
+            }
+
+            // Check if chunked or if we know the body length.
+            isChunked = Headers.contains("Transfer-Encoding") && Hash::WW32(Headers["Transfer-Encoding"]) == Hash::WW32("chunked");
+            Expectedlength = Headers.contains("Content-Length") ? std::strtoul(Headers["Content-Length"].c_str(), {}, 10) : 0;
+            hasHeader = true;
+        }
+
+        // Parse any remaining data into the buffer.
+        while (!Input.empty())
+        {
+            // Common case.
+            if (!isChunked) { Body += Input; return; }
+
+            // Lovely chunked encoding.
+            const auto Size = std::strtoul(Input.data(), {}, 16);
+            Input.remove_prefix(Input.find_first_of("\r\n") + 2);
+
+            // Should never happen..
+            if (Size >= Input.size()) [[unlikely]] { isBad = true; break; }
+
+                // End of stream.
+            if (Size == 0) { hasChunks = true; break; }
+
+            // Simply append.
+            Body.append(Input.data(), Size);
+            Input.remove_prefix(Size);
+            Input.remove_prefix(Input.find_first_of("\r\n") + 2);
+        }
+    }
+    [[nodiscard]] bool isParsed() const
+    {
+        if (isBad) [[unlikely]] return false;
+        if (isChunked && hasChunks) [[unlikely]] return true;
+        if (Expectedlength && Expectedlength == Body.size()) return true;
+        return false;
+    }
+};
+
+// The HTTP server just decodes the data and pass it to a callback.
 struct IHTTPServer : IStreamserver
 {
     // HTTP parser information.
@@ -157,27 +234,23 @@ struct IHTTPServer : IStreamserver
         Parsedrequest.Parse(std::string_view((char *)Databuffer, Datasize));
 
         // Forward to the callbacks if parsed.
-        if (Parsedrequest.hasBody)
+        if (Parsedrequest.isParsed())
         {
-            // Naturally we wont continue if the data is bad.
-            if (!Parsedrequest.isBad)
+            std::string Result{};
+            switch (Hash::WW32(Parsedrequest.Method))
             {
-                std::string Result{};
-                switch (Hash::WW32(Parsedrequest.Method.c_str()))
-                {
-                    case Hash::WW32("GET"): if (onGET) Result = onGET(Parsedrequest); break;
-                    case Hash::WW32("PUT"): if (onPUT) Result = onPUT(Parsedrequest); break;
-                    case Hash::WW32("POST"): if (onPOST) Result = onPOST(Parsedrequest); break;
-                    case Hash::WW32("COPY"): if (onCOPY) Result = onCOPY(Parsedrequest); break;
-                    case Hash::WW32("DELETE"): if (onDELETE) Result = onDELETE(Parsedrequest); break;
-                    default:
-                        Errorprint(va("HTTP server got a request for %s, but there's no handler for the type.", Parsedrequest.URL.c_str()).c_str());
-                        return true;
-                }
-                StreamOUT.append(Result);
+                case Hash::WW32("GET"): if (onGET) Result = onGET(Parsedrequest); break;
+                case Hash::WW32("PUT"): if (onPUT) Result = onPUT(Parsedrequest); break;
+                case Hash::WW32("POST"): if (onPOST) Result = onPOST(Parsedrequest); break;
+                case Hash::WW32("COPY"): if (onCOPY) Result = onCOPY(Parsedrequest); break;
+                case Hash::WW32("DELETE"): if (onDELETE) Result = onDELETE(Parsedrequest); break;
+                default:
+                    Errorprint(va("HTTP server got a request for %s, but there's no handler for the type.", Parsedrequest.URI.c_str()));
+                    return true;
             }
 
             // Clear the state for the next request.
+            StreamOUT.append(Result);
             Parsedrequest.Clear();
         }
 
@@ -389,4 +462,5 @@ struct IHTTPSServer : IHTTPServer
         }
     }
 };
+#endif
 #endif

@@ -92,9 +92,9 @@ using namespace std::literals;
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
 
-#include <Utilities/Ayria/Ayriamodule.h>
 #include <Utilities/Ayria/AyriaAPI.hpp>
-#include <Utilities/Ayria/Localnetservers.hpp>
+#include <Utilities/Ayria/Ayriamodule.h>
+#include <Utilities/Ayria/Localnetservers.h>
 
 // Temporary includes.
 #include <Utilities/Internal/Misc.hpp>
