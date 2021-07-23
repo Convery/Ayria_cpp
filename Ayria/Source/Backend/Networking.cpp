@@ -58,7 +58,7 @@ namespace Networking
 
         const auto isB64 = Base64::isValid(Payload);
         const auto Buffersize = sizeof(Packet_t) + (isB64 ? Payload.size() : Base64::Encodesize(Payload.size()));
-        auto Buffer = alloca(Buffersize);
+        const auto Buffer = alloca(Buffersize);
 
         // Basic header.
         static_cast<Packet_t *>(Buffer)->TransactionID = isTransient ? 0 : ++MessageID;
@@ -112,7 +112,7 @@ namespace Networking
             FD_SET ReadFD{}; FD_SET(Receiversocket, &ReadFD);
             constexpr timeval Defaulttimeout{ NULL, 1 };
             auto Timeout{ Defaulttimeout };
-            auto Count{ 1 };
+            const auto Count{ 1 };
 
             if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]] return;
         }
@@ -193,23 +193,19 @@ namespace Networking
         //Global.Settings.noNetworking = false;
     }
 
-    #include <openssl/bio.h>
     // Send a request and return the async response.
     static Response_t doRequest(std::string &&URL, std::string &&Data)
     {
         std::string Host{}, URI{}, Port{};
-        Response_t Result{ 500 };
         std::smatch Match{};
 
         // Ensure proper formatting.
         if (!URL.starts_with("http")) URL.insert(0, "http://");
 
         // Extract the important parts from the URL.
-        static const std::regex RX("\\/\\/([^\\/:\\s]+):?(\\d+)?(.*)", std::regex_constants::optimize);
-        if (!std::regex_match(URL, Match, RX) || Match.size() < 3) return Result;
-        Host = Match[1].str();
-        Port = Match[2].str();
-        URI = Match[3].str();
+        const std::regex RX(R"(\/\/([^\/:\s]+):?(\d+)?(.*))", std::regex_constants::optimize);
+        if (!std::regex_match(URL, Match, RX) || Match.size() != 4) return { 500 };
+        Host = Match[1].str(); Port = Match[2].str(); URI = Match[3].str();
 
         // Fallback if it's not available in the URL.
         const bool isHTTPS = URL.starts_with("https");
@@ -218,122 +214,95 @@ namespace Networking
 
         // Totally legit HTTP..
         const auto Request = va("%s %s HTTP1.1\r\nContent-length: %zu\r\n\r\n%s",
-                                Data.empty() ? "GET" : "POST", URI.c_str(),
-                                Data.size(), Data.empty() ? "" : Data.c_str());
+            Data.empty() ? "GET" : "POST", URI.c_str(),
+            Data.size(), Data.empty() ? "" : Data.c_str());
 
         // Common networking.
         addrinfo *Resolved{};
         HTTPResponse_t Parser{};
-        auto Buffer = alloca(4096);
-
-        addrinfo Hint{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM };
-        if (0 != getaddrinfo(Host.c_str(), Port.c_str(), &Hint, &Resolved)) return Result;
-
-        const auto Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol);
-        if (0 != connect(Socket, Resolved->ai_addr, Resolved->ai_addrlen))
+        const auto Buffer = alloca(4096);
+        const addrinfo Hint{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM };
+        auto Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol);
+        const auto Cleanup = [&]()
         {
-            freeaddrinfo(Resolved);
-            closesocket(Socket);
-            return Result;
-        }
+            if (Socket != INVALID_SOCKET) closesocket(Socket); Socket = INVALID_SOCKET;
+            if (Resolved) freeaddrinfo(Resolved); Resolved = nullptr;
+        };
+
+        if (INVALID_SOCKET == Socket) return { 500 };
+        if (0 != getaddrinfo(Host.c_str(), Port.c_str(), &Hint, &Resolved)) { Cleanup(); return { 500 }; }
+        if (0 != connect(Socket, Resolved->ai_addr, Resolved->ai_addrlen)) { Cleanup(); return { 500 }; }
 
         // SSL context needed.
-        if (isHTTPS)
+        const auto doHTTPS = [&]() -> Response_t
         {
-            auto Context = SSL_CTX_new(TLS_method());
-            SSL_CTX_set_max_proto_version(Context, TLS1_3_VERSION);
+            const std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> Context(SSL_CTX_new(TLS_method()), SSL_CTX_free);
+            SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION);
 
-            auto BIO = BIO_new_socket(Socket, BIO_CLOSE);
-            auto State = SSL_new(Context);
-            SSL_set_bio(State, BIO, BIO);
+            const std::unique_ptr<BIO> Bio(BIO_new_socket(Socket, BIO_CLOSE));
+            const auto State = SSL_new(Context.get());
+            SSL_set_bio(State, Bio.get(), Bio.get());
             SSL_connect(State);
 
-            RETRY_HANDSHAKE: auto Return = SSL_read(State, Buffer, 4096);
-            if (Return <= 0)
-            {
-                if (SSL_ERROR_WANT_READ != SSL_get_error(State, Return))
-                {
-                    freeaddrinfo(Resolved);
-                    closesocket(Socket);
-                    return Result;
-                }
-
-                goto RETRY_HANDSHAKE;
-            }
-
-            RETRY_SEND: Return = SSL_write(State, Request.data(), Request.size());
-            if (Return <= 0)
-            {
-                if (SSL_ERROR_WANT_WRITE != SSL_get_error(State, Return))
-                {
-                    freeaddrinfo(Resolved);
-                    closesocket(Socket);
-                    return Result;
-                }
-
-                goto RETRY_SEND;
-            }
-
+            // Because tools get upset about goto..
             while (true)
             {
-                Return = SSL_read(State, Buffer, 4096);
+                if (const auto Return = SSL_read(State, Buffer, 4096); Return <= 0)
+                {
+                    if (SSL_ERROR_WANT_READ == SSL_get_error(State, Return)) continue;
+                    else { Cleanup(); return { 500 }; }
+                }
+                break;
+            }
+            while (true)
+            {
+                if (const auto Return = SSL_write(State, Request.data(), Request.size()); Return <= 0)
+                {
+                    if (SSL_ERROR_WANT_WRITE == SSL_get_error(State, Return)) continue;
+                    else { Cleanup(); return { 500 }; }
+                }
+                break;
+            }
+            while (true)
+            {
+                const auto Return = SSL_read(State, Buffer, 4096);
+                if (0 == Return) { Cleanup(); return { Parser.Statuscode,  Parser.Body }; }
+
                 if (Return < 0)
                 {
-                    if (SSL_ERROR_WANT_READ != SSL_get_error(State, Return))
-                    {
-                        freeaddrinfo(Resolved);
-                        closesocket(Socket);
-                        return Result;
-                    }
-
-                    continue;
+                    if (SSL_ERROR_WANT_READ == SSL_get_error(State, Return)) continue;
+                    else break;
                 }
 
-                if (0 == Return)
-                {
-                    Result.Statuscode = Parser.Statuscode;
-                    Result.Body = Parser.Body;
-                    freeaddrinfo(Resolved);
-                    closesocket(Socket);
-                    return Result;
-                }
-
-                Parser.Parse(std::string_view((char *)Buffer, Return));
+                Parser.Parse(std::string_view(static_cast<char *>(Buffer), Return));
                 if (Parser.isBad) break;
             }
-        }
-        else
+
+            Cleanup();
+            return { 500 };
+        };
+        const auto doHTTP = [&]() -> Response_t
         {
-            auto Return = send(Socket, Request.data(), Request.size(), NULL);
-            if (Return <= 0)
+            if (const auto Return = send(Socket, Request.data(), Request.size(), NULL); Return <= 0)
             {
-                freeaddrinfo(Resolved);
-                closesocket(Socket);
-                return Result;
+                Cleanup(); return { 500 };
             }
 
             while (true)
             {
-                Return = recv(Socket, (char *)Buffer, 4096, NULL);
+                const auto Return = recv(Socket, static_cast<char *>(Buffer), 4096, NULL);
+                if (0 == Return) { Cleanup();  return { Parser.Statuscode,  Parser.Body }; }
                 if (Return < 0) break;
 
-                if (0 == Return)
-                {
-                    Result.Statuscode = Parser.Statuscode;
-                    Result.Body = Parser.Body;
-                    freeaddrinfo(Resolved);
-                    closesocket(Socket);
-                    return Result;
-                }
-
-                Parser.Parse(std::string_view((char *)Buffer, Return));
+                Parser.Parse(std::string_view(static_cast<char *>(Buffer), Return));
                 if (Parser.isBad) break;
             }
-        }
 
-        freeaddrinfo(Resolved);
-        closesocket(Socket);
-        return Result;
+            Cleanup();
+            return { 500 };
+        };
+
+        return isHTTPS ? doHTTPS() : doHTTP();
     }
     std::future<Response_t> GET(std::string URL)
     {

@@ -147,7 +147,7 @@ struct HTTPRequest_t
             Input.remove_prefix(Substring.size());
 
             std::smatch Match{};
-            static const std::regex RX("^(\\w+)\\s+(.+?)\\s+", std::regex_constants::optimize);
+            static const std::regex RX(R"(^(\w+)\s+(.+?)\s+)", std::regex_constants::optimize);
             if (!std::regex_match(Buffer, Match, RX) || Match.size() != 3) { isBad = true; return; }
 
             Method = Match[1].str();
