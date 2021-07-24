@@ -7,6 +7,29 @@
 #pragma once
 #include <Stdinclude.hpp>
 
+namespace Backend
+{
+    // Add a recurring task to the worker thread.
+    void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)());
+
+    // Interface with the client database, remember try-catch.
+    sqlite::database Database();
+
+    // Initialize the system.
+    void Initialize();
+}
+
+namespace API
+{
+    // static std::string __cdecl Callback(JSON::Value_t &&Request);
+    using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
+    void addEndpoint(std::string_view Functionname, Callback_t Callback);
+
+    // For internal use.
+    const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request);
+    std::vector<JSON::Value_t> listEndpoints();
+}
+
 namespace Networking
 {
     typedef union { uint64_t Raw; struct { uint32_t SessionID, AccountID; }; } Nodeinfo_t;
