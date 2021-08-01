@@ -535,7 +535,7 @@ namespace PK_RSA
 
         const auto Length = BIO_pending(Bio);
         std::string Result; Result.resize(Length);
-        BIO_read(Bio, Result.data(), Length);
+        BIO_read(Bio, Result.data(), (int)Length);
 
         BIO_free_all(Bio);
         return Result;
@@ -547,7 +547,7 @@ namespace PK_RSA
 
         const auto Length = BIO_pending(Bio);
         std::string Result; Result.resize(Length);
-        BIO_read(Bio, Result.data(), Length);
+        BIO_read(Bio, Result.data(), (int)Length);
 
         BIO_free_all(Bio);
         return Result;
@@ -636,7 +636,7 @@ namespace PK_ECC
 
         const auto Length = BIO_pending(Bio);
         std::string Result; Result.resize(Length);
-        BIO_read(Bio, Result.data(), Length);
+        BIO_read(Bio, Result.data(), (int)Length);
 
         BIO_free_all(Bio);
         return Result;

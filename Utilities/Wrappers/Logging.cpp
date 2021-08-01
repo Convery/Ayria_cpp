@@ -34,7 +34,7 @@ namespace Logging
 
         if (Console) [[likely]]
         {
-            reinterpret_cast<void(__cdecl *)(const char *, unsigned int, unsigned int)>(Console)(Message.data(), Message.size(), 0);
+            reinterpret_cast<void(__cdecl *)(const char *, unsigned int, unsigned int)>(Console)(Message.data(), (uint32_t)Message.size(), 0);
         }
     }
     void toLogfile(const std::string &Message)

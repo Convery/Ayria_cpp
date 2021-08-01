@@ -37,18 +37,18 @@ namespace Networking
         // Common networking.
         addrinfo *Resolved{};
         HTTPResponse_t Parser{};
+        size_t Socket = INVALID_SOCKET;
         const auto Buffer = alloca(4096);
         const addrinfo Hint{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM };
-        auto Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol);
         const auto Cleanup = [&]()
         {
             if (Socket != INVALID_SOCKET) closesocket(Socket); Socket = INVALID_SOCKET;
             if (Resolved) freeaddrinfo(Resolved); Resolved = nullptr;
         };
 
-        if (INVALID_SOCKET == Socket) return { 500 };
         if (0 != getaddrinfo(Host.c_str(), Port.c_str(), &Hint, &Resolved)) { Cleanup(); return { 500 }; }
-        if (0 != connect(Socket, Resolved->ai_addr, Resolved->ai_addrlen)) { Cleanup(); return { 500 }; }
+        Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol);
+        if (0 != connect(Socket, Resolved->ai_addr, (int)Resolved->ai_addrlen)) { Cleanup(); return { 500 }; }
 
         // SSL context needed.
         const auto doHTTPS = [&]() -> Response_t
@@ -56,38 +56,38 @@ namespace Networking
             const std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> Context(SSL_CTX_new(TLS_method()), SSL_CTX_free);
             SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION);
 
-            const std::unique_ptr<BIO> Bio(BIO_new_socket(Socket, BIO_CLOSE));
-            const auto State = SSL_new(Context.get());
-            SSL_set_bio(State, Bio.get(), Bio.get());
-            SSL_connect(State);
+            const std::unique_ptr<SSL, decltype(&SSL_free)> State(SSL_new(Context.get()), SSL_free);
+            const auto Bio = BIO_new_socket(Socket, BIO_CLOSE);
+            SSL_set_bio(State.get(), Bio, Bio);
+            SSL_connect(State.get());
 
             // Because tools get upset about goto..
             while (true)
             {
-                if (const auto Return = SSL_read(State, Buffer, 4096); Return <= 0)
+                if (const auto Return = SSL_read(State.get(), Buffer, 4096); Return <= 0)
                 {
-                    if (SSL_ERROR_WANT_READ == SSL_get_error(State, Return)) continue;
+                    if (SSL_ERROR_WANT_READ == SSL_get_error(State.get(), Return)) continue;
                     else { Cleanup(); return { 500 }; }
                 }
                 break;
             }
             while (true)
             {
-                if (const auto Return = SSL_write(State, Request.data(), Request.size()); Return <= 0)
+                if (const auto Return = SSL_write(State.get(), Request.data(), Request.size()); Return <= 0)
                 {
-                    if (SSL_ERROR_WANT_WRITE == SSL_get_error(State, Return)) continue;
+                    if (SSL_ERROR_WANT_WRITE == SSL_get_error(State.get(), Return)) continue;
                     else { Cleanup(); return { 500 }; }
                 }
                 break;
             }
             while (true)
             {
-                const auto Return = SSL_read(State, Buffer, 4096);
+                const auto Return = SSL_read(State.get(), Buffer, 4096);
                 if (0 == Return) { Cleanup(); return { Parser.Statuscode,  Parser.Body }; }
 
                 if (Return < 0)
                 {
-                    if (SSL_ERROR_WANT_READ == SSL_get_error(State, Return)) continue;
+                    if (SSL_ERROR_WANT_READ == SSL_get_error(State.get(), Return)) continue;
                     else break;
                 }
 
