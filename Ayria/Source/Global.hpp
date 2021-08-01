@@ -12,17 +12,17 @@
 struct AccountID_t
 {
     uint32_t AyriaID{}; // Official ID for identification.
-    uint32_t UserID{};  // WW32 hash of the public signing key.
+    uint32_t KeyID{};   // WW32 hash of the public signing key.
 
     AccountID_t() = default;
     AccountID_t(uint64_t Raw)
     {
         AyriaID = (Raw >> 32) & 0xFFFFFFFF;
-        UserID = Raw & 0xFFFFFFFF;
+        KeyID = Raw & 0xFFFFFFFF;
     }
     operator uint64_t () const
     {
-        return { uint64_t(AyriaID) << 32 | UserID };
+        return { uint64_t(AyriaID) << 32 | KeyID };
     }
 };
 struct Globalstate_t
@@ -33,13 +33,13 @@ struct Globalstate_t
     // 24 bytes.
 
     // Rarely used, but good to have.
-    std::unique_ptr<std::u8string> Username{};
+    std::unique_ptr<std::u8string> Username{ new std::u8string() };
     // 28 / 32 bytes.
 
     // 25519-curve cryptography.
-    std::unique_ptr<std::array<uint8_t, 32>> SigningkeyPublic{};    // Shared static key.
-    std::unique_ptr<std::array<uint8_t, 64>> SigningkeyPrivate{};   // Derived from authentication.
-    std::unique_ptr<std::array<uint8_t, 32>> EncryptionkeyPrivate{};// Transient session-key.
+    std::unique_ptr<std::array<uint8_t, 32>> SigningkeyPublic{ new std::array<uint8_t, 32>() };     // Shared static key.
+    std::unique_ptr<std::array<uint8_t, 64>> SigningkeyPrivate{ new std::array<uint8_t, 64>() };    // Derived from authentication.
+    std::unique_ptr<std::array<uint8_t, 32>> EncryptionkeyPrivate{ new std::array<uint8_t, 32>() }; // Transient session-key.
     // 40 / 56 bytes.
 
     // Internal settings, need packing or we'll get 6 bytes of padding.

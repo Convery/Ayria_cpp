@@ -17,6 +17,7 @@ namespace Networking
     static const sockaddr_in Multicast{ AF_INET, htons(Syncport), {{.S_addr = htonl(Syncaddress)}} };
     static Hashmap<uint32_t /* SessionID */, Client_t> LANClients{};
     static size_t Sendersocket{}, Receiversocket{};
+    static Hashset<uint32_t> Verifiedclients{};
     static uint32_t LocalsessionID{};
 
     // 9 byte shared header.
@@ -119,16 +120,16 @@ namespace Networking
     {
         const Client_t *byAccount(AccountID_t AccountID)
         {
-            const uint8_t Wantedcount = !!AccountID.AyriaID + !!AccountID.UserID;
+            const uint8_t Wantedcount = !!AccountID.AyriaID + !!AccountID.KeyID;
             if (!Wantedcount) return nullptr;
 
             for (const auto &[Session, Client] : LANClients)
             {
                 if (Wantedcount == 1 && AccountID.AyriaID && AccountID.AyriaID == Client.AccountID.AyriaID)
                     return &Client;
-                else if (Wantedcount == 1 && AccountID.UserID && AccountID.UserID == Client.AccountID.UserID)
+                else if (Wantedcount == 1 && AccountID.KeyID && AccountID.KeyID == Client.AccountID.KeyID)
                     return &Client;
-                else if (AccountID.UserID == Client.AccountID.UserID && AccountID.AyriaID == Client.AccountID.AyriaID)
+                else if (AccountID.KeyID == Client.AccountID.KeyID && AccountID.AyriaID == Client.AccountID.AyriaID)
                     return &Client;
             }
 
@@ -179,6 +180,11 @@ namespace Networking
                 continue;
             }
 
+            // Sanity checking for the header.
+            if (Header.SessionID == 0) [[unlikely]] continue;                           // Borked client.
+            if (isBlocked(Header.SessionID)) [[likely]] continue;                       // Ignored session, likely our own.
+            if (Header.Packetflags.Encrypted && !Header.Packetflags.Targeted) continue; // We have no idea how to decrypt this.
+
             // Client heartbeat, save their information.
             if (Header.Messagetype == Hash::WW32("Clienthello"))
             {
@@ -187,8 +193,12 @@ namespace Networking
                 Client.InternalIP = Clientaddress.sin_addr.S_un.S_addr;
 
                 // Sanity check.
-                if (Client.AccountID.UserID != Hash::WW64(Client.SigningkeyPublic)) [[unlikely]]
-                    continue;
+                if (Client.AccountID.KeyID != Hash::WW32(Client.SigningkeyPublic)) [[unlikely]] continue;
+                if (!Verifiedclients.contains(Client.AccountID.AyriaID))
+                {
+                    // TODO(tcn): Validate authentication.
+                    Client.AccountID.AyriaID = 0;
+                }
 
                 // TODO(tcn): Check emplace result and notify callbacks.
                 LANClients.emplace(Header.SessionID, std::move(Client));
@@ -204,12 +214,9 @@ namespace Networking
                 continue;
             }
 
-            // Sanity checking for the header.
-            if (Header.SessionID == 0) [[unlikely]] continue;                           // Borked client.
-            if (isBlocked(Header.SessionID)) [[likely]] continue;                       // Ignored session, likely our own.
+            // More checking for odd packets.
             if (!LANClients.contains(Header.SessionID)) [[unlikely]] continue;          // Unknown client, needs a hello first.
             if (!Messagehandlers.contains(Header.Messagetype)) [[unlikely]] continue;   // Not a packet we know how to handle.
-            if (Header.Packetflags.Encrypted && !Header.Packetflags.Targeted) continue; // We have no idea how to decrypt this.
 
             // Update the timestamp for the client, even if the payload is corrupted.
             LANClients.at(Header.SessionID).Lastmessage = (uint32_t)time(NULL);
