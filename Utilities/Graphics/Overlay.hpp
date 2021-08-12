@@ -9,7 +9,7 @@
 
 #include "Renderer.hpp"
 #include "../Datatypes.hpp"
-#include "Utilities/Internal/Spinlock.hpp"
+#include "Utilities/Threads/Spinlock.hpp"
 
 // Windows only module.
 static_assert(Build::isWindows, "Overlay is only available on Windows for now.");

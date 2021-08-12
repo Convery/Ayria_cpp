@@ -90,6 +90,8 @@ using namespace std::literals;
 #include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>
+#include <Utilities/Threads/Spinlock.hpp>
+#include <Utilities/Threads/Debugmutex.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
 
@@ -99,7 +101,5 @@ using namespace std::literals;
 
 // Temporary includes.
 #include <Utilities/Internal/Misc.hpp>
-#include <Utilities/Internal/Spinlock.hpp>
-#include <Utilities/Internal/Debugmutex.hpp>
 #include <Utilities/Internal/Asynctaskqueue.hpp>
 #include <Utilities/Internal/Compressedstring.hpp>

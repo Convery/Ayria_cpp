@@ -62,19 +62,20 @@ namespace Console
     }
     std::vector<Logline_t> getMessages(size_t Maxcount, std::wstring_view Filter)
     {
+        auto Clamped = std::min(Maxcount, Loglimit);
         std::vector<Logline_t> Result;
-        Result.reserve(std::clamp(Maxcount, size_t(1), Loglimit));
+        Result.reserve(Clamped);
 
         std::scoped_lock Threadguard(Writelock);
         std::copy_if(Consolelog.rbegin(), Consolelog.rend(), std::back_inserter(Result),
                      [&](const auto &Tuple)
                      {
-                         if (0 == Maxcount) return false;
+                         if (0 == Clamped) return false;
 
                          const auto &[String, Colot] = Tuple;
                          if (String.find(Filter) != String.npos)
                          {
-                             Maxcount--;
+                             Clamped--;
                              return true;
                          }
 
