@@ -86,6 +86,7 @@ using namespace std::literals;
 #include <Utilities/Encoding/JSON.hpp>
 #include <Utilities/Encoding/Stringconv.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
+#include <Utilities/Graphics/Overlay.hpp>
 #include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
 #include <Utilities/Hacking/Patternscan.hpp>

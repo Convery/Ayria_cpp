@@ -4,8 +4,7 @@
     License: MIT
 */
 
-#include <Stdinclude.hpp>
-#include "Global.hpp"
+#include <Global.hpp>
 
 // Some applications do not handle exceptions well.
 static LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Context)
@@ -55,8 +54,9 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
 
-        // Initialize the backend; in-case plugins need access.
+        // Initialize the backend and console; in-case plugins need access.
         Backend::Initialize();
+        Console::Initialize();
 
         // If injected, we can't hook. So just load all plugins directly.
         if (lpvReserved == NULL) Plugins::Initialize();

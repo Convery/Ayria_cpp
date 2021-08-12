@@ -6,7 +6,10 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+
+#include "Renderer.hpp"
 #include "../Datatypes.hpp"
+#include "Utilities/Internal/Spinlock.hpp"
 
 // Windows only module.
 static_assert(Build::isWindows, "Overlay is only available on Windows for now.");
