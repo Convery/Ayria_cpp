@@ -43,9 +43,9 @@ namespace Plugins
             }
 
             // Call the first real callback if we had one.
-            Callbacks = (size_t *)Directory->AddressOfCallBacks;
-            if (*Callbacks && GetModuleHandleExA(6, (LPCSTR)*Callbacks, &Valid))
-                ((decltype(TLSCallback) *)*Callbacks)(a, b, c);
+            Callbacks = reinterpret_cast<size_t *>(Directory->AddressOfCallBacks);
+            if (*Callbacks && GetModuleHandleExA(6, LPCSTR(*Callbacks), &Valid))
+                reinterpret_cast<decltype(TLSCallback) *>(*Callbacks)(a, b, c);
         }
     }
     void EPCallback()
@@ -70,11 +70,11 @@ namespace Plugins
     // Different types of hooking.
     bool InstallTLSHook()
     {
-        if (const auto Directory = (PIMAGE_TLS_DIRECTORY)getTLSEntry())
+        if (const auto Directory = reinterpret_cast<PIMAGE_TLS_DIRECTORY>(getTLSEntry()))
         {
             // Save any and all existing callbacks.
             auto Callbacks = (uintptr_t *)Directory->AddressOfCallBacks;
-            while (*Callbacks) OriginalTLS.push_back(*(Callbacks++));
+            while (*Callbacks) OriginalTLS.push_back(*Callbacks++);
 
             // Replace with ours.
             Callbacks = (uintptr_t *)Directory->AddressOfCallBacks;
@@ -91,7 +91,7 @@ namespace Plugins
         if (const auto EP = getEntrypoint())
         {
             // Save the code in-case the app does integrity checking.
-            std::memcpy(EPCode, (void *)EP, 14);
+            std::memcpy(EPCode, reinterpret_cast<void *>(EP), 14);
 
             // Jump to our function when EP is called.
             EPTrampoline = Hooking::Stomphook(EP, EPCallback);
@@ -112,9 +112,9 @@ namespace Plugins
         if (!Modulehandle) return NULL;
 
         // Traverse the PE header.
-        const auto *DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
-        const auto *NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
-        return (DWORD_PTR)Modulehandle + NTHeader->OptionalHeader.AddressOfEntryPoint;
+        const auto *DOSHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Modulehandle);
+        const auto *NTHeader = PIMAGE_NT_HEADERS(DWORD_PTR(Modulehandle) + DOSHeader->e_lfanew);
+        return reinterpret_cast<DWORD_PTR>(Modulehandle) + NTHeader->OptionalHeader.AddressOfEntryPoint;
     }
     uintptr_t getTLSEntry()
     {
@@ -123,12 +123,12 @@ namespace Plugins
         if (!Modulehandle) return NULL;
 
         // Traverse the PE header.
-        const auto *DOSHeader = (PIMAGE_DOS_HEADER)Modulehandle;
-        const auto *NTHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)Modulehandle + DOSHeader->e_lfanew);
+        const auto *DOSHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Modulehandle);
+        const auto *NTHeader = PIMAGE_NT_HEADERS(DWORD_PTR(Modulehandle) + DOSHeader->e_lfanew);
         const auto Directory = NTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
 
         if (Directory.Size == 0) return NULL;
-        return (DWORD_PTR)Modulehandle + Directory.VirtualAddress;
+        return DWORD_PTR(Modulehandle) + Directory.VirtualAddress;
     }
 
     // Track the plugins for the "initialized" signal.
@@ -154,7 +154,7 @@ namespace Plugins
     }
 
     #if !defined(NDEBUG)
-    // Primarilly used for hotreloading.
+    // Primarilly used for hot-reloading.
     extern "C" EXPORT_ATTR void __cdecl unloadPlugin(const char *Pluginname)
     {
         if (!Pluginname) [[unlikely]] return;
