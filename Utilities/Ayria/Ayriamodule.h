@@ -31,6 +31,10 @@ struct Ayriamodule_t
     // Run a periodic task on the systems background thread.
     void(__cdecl *createPeriodictask)(unsigned int PeriodMS, void(__cdecl *Callback)(void));
 
+    // Listen and publish notifications to other plugins, e.g. new chat-message.
+    void(__cdecl *addNotificationlistener)(const char *Identifier, void(__cdecl *Callback)(const char *JSONString));
+    void(__cdecl *publishNotification)(const char *Identifier, const char *JSONString);
+
     // Internal, notify other plugins the application is fully initialized.
     void(__cdecl *onInitialized)(bool);
 
@@ -70,6 +74,9 @@ struct Ayriamodule_t
             Import(createPeriodictask);
             Import(onInitialized);
 
+            Import(addNotificationlistener);
+            Import(publishNotification);
+
             #if !defined(NDEBUG)
             Import(unloadPlugin);
             Import(loadPlugins);
@@ -85,6 +92,9 @@ struct Ayriamodule_t
             registerLANCallback = (decltype(registerLANCallback))Nullsub2;
             createPeriodictask = (decltype(createPeriodictask))Nullsub2;
             onInitialized = (decltype(onInitialized))Nullsub2;
+
+            addNotificationlistener = (decltype(addNotificationlistener))Nullsub2;
+            publishNotification = (decltype(publishNotification))Nullsub2;
 
             #if !defined(NDEBUG)
             unloadPlugin = (decltype(unloadPlugin))Nullsub2;

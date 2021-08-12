@@ -10,7 +10,7 @@
 // Totally randomly selected constants here..
 constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
 constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
-constexpr auto Buffersizelimit = 4096;                          // A single virtual page.
+constexpr auto Buffersizelimit = 4096;                          // A single virtual page (if the compiler is smart enough).
 
 namespace Networking
 {
@@ -141,6 +141,23 @@ namespace Networking
                 return &LANClients.at(SessionID);
             return nullptr;
         }
+        std::string toJSON(const Client_t *Client)
+        {
+            if (!Client) [[unlikely]] return "{}";
+
+            const auto Object = JSON::Object_t({
+                { "Encryptionkey", Base64::Encode(Client->EncryptionkeyPublic) },
+                { "Signingkey", Base64::Encode(Client->SigningkeyPublic) },
+                { "Username", std::u8string(Client->Username.data()) },
+                { "AyriaID", Client->AccountID.AyriaID },
+                { "Lastmessage", Client->Lastmessage },
+                { "KeyID", Client->AccountID.KeyID },
+                { "InternalIP", Client->InternalIP },
+                { "GameID", Client->GameID },
+                { "ModID", Client->ModID }
+            });
+            return JSON::Dump(Object);
+        }
     }
 
     // Fetch as many messages as possible from the network.
@@ -191,6 +208,7 @@ namespace Networking
                 if (Stream.size() < sizeof(Client_t)) [[unlikely]] continue;
                 auto Client = Consumestream(Client_t);
                 Client.InternalIP = Clientaddress.sin_addr.S_un.S_addr;
+                Client.Username.back() = 0;
 
                 // Sanity check.
                 if (Client.AccountID.KeyID != Hash::WW32(Client.SigningkeyPublic)) [[unlikely]] continue;
@@ -200,16 +218,18 @@ namespace Networking
                     Client.AccountID.AyriaID = 0;
                 }
 
-                // TODO(tcn): Check emplace result and notify callbacks.
-                LANClients.emplace(Header.SessionID, std::move(Client));
+                // Notify any listeners about this client joining.
+                const auto &[Ptr, New] = LANClients.emplace(Header.SessionID, Client);
+                if (New) Notifications::Publish("Clientjoin", Clientinfo::toJSON(&Client).c_str());
                 continue;
             }
 
             // Client terminated, remove them.
             if (Header.Messagetype == Hash::WW32("Clientgoodbye")) [[unlikely]]
             {
-                // TODO(tcn): Notify callbacks.
                 if (Header.SessionID == 0) [[unlikely]] continue;
+
+                Notifications::Publish("Clientleave", Clientinfo::toJSON(Clientinfo::bySession(Header.SessionID)).c_str());
                 LANClients.erase(Header.SessionID);
                 continue;
             }
@@ -219,7 +239,7 @@ namespace Networking
             if (!Messagehandlers.contains(Header.Messagetype)) [[unlikely]] continue;   // Not a packet we know how to handle.
 
             // Update the timestamp for the client, even if the payload is corrupted.
-            LANClients.at(Header.SessionID).Lastmessage = (uint32_t)time(NULL);
+            LANClients.at(Header.SessionID).Lastmessage = static_cast<uint32_t>(time(NULL));
             const auto Client = &LANClients.at(Header.SessionID);
 
             // If this is a targeted message, check that it's for us.
@@ -261,13 +281,14 @@ namespace Networking
             // Decode the incoming message and forward it to the handler(s).
             const auto Decoded = Base64::Decode_inplace((char *)Stream.data(), Stream.size());
             std::ranges::for_each(Messagehandlers[Header.Messagetype],
-                                  [&](const auto &CB) { if (CB) [[likely]] CB(Client, Decoded.data(), (uint32_t)Decoded.size()); });
+                                  [&](const auto &CB) { if (CB) [[likely]] CB(Client, Decoded.data(), uint32_t(Decoded.size())); });
         }
     }
 
     // Share our info once in a while.
     static void __cdecl Announceclient()
     {
+        // The encryption-key is static, so no need to derive it everytime.
         static Client_t Self = []()
         {
             Client_t Tmp{};
@@ -295,7 +316,7 @@ namespace Networking
         const sockaddr_in Localhost{ AF_INET, htons(Syncport), {{.S_addr = htonl(INADDR_ANY)}} };
 
         // We only need WS 1.1, no need to load more modules.
-        WSAStartup(MAKEWORD(1, 1), &Unused);
+        (void)WSAStartup(MAKEWORD(1, 1), &Unused);
         Sendersocket = socket(AF_INET, SOCK_DGRAM, 0);
         Receiversocket = socket(AF_INET, SOCK_DGRAM, 0);
         Error |= ioctlsocket(Receiversocket, FIONBIO, &Argument);
@@ -309,7 +330,7 @@ namespace Networking
         // TODO(tcn): Proper error handling.
         if (Error) [[unlikely]]
         {
-            //Global.Settings.noNetworking = true;
+            Global.Settings.noNetworking = true;
             closesocket(Receiversocket);
             closesocket(Sendersocket);
             assert(false);

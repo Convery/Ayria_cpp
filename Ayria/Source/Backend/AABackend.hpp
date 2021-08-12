@@ -32,6 +32,8 @@ namespace API
 
 namespace Networking
 {
+    // Incase the struct is extended in the future.
+    #pragma pack(push, 1)
     struct Client_t
     {
         AccountID_t AccountID;
@@ -45,6 +47,7 @@ namespace Networking
         uint32_t Lastmessage;
     };
     typedef void (__cdecl *Callback_t)(Client_t *Clientinfo, const char *Message, unsigned int Length);
+    #pragma pack(pop)
 
     // Register handlers for the different packets.
     void Register(std::string_view Identifier, Callback_t Handler);
@@ -62,6 +65,7 @@ namespace Networking
     {
         const Client_t *byAccount(AccountID_t AccountID);
         const Client_t *bySession(uint32_t SessionID);
+        std::string toJSON(const Client_t *Client);
     }
 
     // Initialize the system.
@@ -105,4 +109,11 @@ namespace Console
 
     // Add common commands to the backend.
     void Initialize();
+}
+
+namespace Notifications
+{
+    using Callback_t = void(__cdecl *)(const char *JSONString);
+    void Register(std::string_view Identifier, Callback_t Handler);
+    void Publish(std::string_view Identifier, const char *JSONString);
 }

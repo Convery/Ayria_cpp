@@ -50,8 +50,39 @@ namespace Backend
         }
     }
 
+    // For debugging.
+    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    {
+        (void)DBName; (void)Errorcode; (void)Errorstring;
+        Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
+    }
+
     // Interface with the client database, remember try-catch.
-    sqlite::database Database();
+    sqlite::database Database()
+    {
+        static std::shared_ptr<sqlite3> Database{};
+        if (!Database)
+        {
+            sqlite3 *Ptr{};
+
+            // :memory: should never fail unless the client has more serious problems.
+            auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
+            if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
+            assert(Result == SQLITE_OK);
+
+            // Intercept updates from plugins writing to the DB.
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.db");
+            sqlite3_extended_result_codes(Ptr, false);
+
+            // Close the DB at exit to ensure everything's flushed.
+            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+
+            /*
+                INIT CLIENT DB?
+            */
+        }
+        return sqlite::database(Database);
+    }
 
     // Save the configuration to disk.
     static void Saveconfig()

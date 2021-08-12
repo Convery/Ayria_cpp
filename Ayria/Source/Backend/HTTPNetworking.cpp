@@ -34,21 +34,23 @@ namespace Networking
             Data.empty() ? "GET" : "POST", URI.c_str(),
             Data.size(), Data.empty() ? "" : Data.c_str());
 
+        // Should already have been called, but just to make sure.
+        WSADATA Unused; (void)WSAStartup(MAKEWORD(1, 1), &Unused);
+
         // Common networking.
         addrinfo *Resolved{};
         HTTPResponse_t Parser{};
-        size_t Socket = INVALID_SOCKET;
+        auto Socket = INVALID_SOCKET;
         const auto Buffer = alloca(4096);
-        const addrinfo Hint{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM };
-        const auto Cleanup = [&]()
-        {
-            if (Socket != INVALID_SOCKET) closesocket(Socket); Socket = INVALID_SOCKET;
-            if (Resolved) freeaddrinfo(Resolved); Resolved = nullptr;
+        constexpr addrinfo Hint{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM };
+        const auto Cleanup = [&]() {
+            if (Socket != INVALID_SOCKET) { closesocket(Socket); Socket = INVALID_SOCKET; }
+            if (Resolved) { freeaddrinfo(Resolved); Resolved = nullptr; }
         };
 
         if (0 != getaddrinfo(Host.c_str(), Port.c_str(), &Hint, &Resolved)) { Cleanup(); return { 500 }; }
-        Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol);
-        if (0 != connect(Socket, Resolved->ai_addr, (int)Resolved->ai_addrlen)) { Cleanup(); return { 500 }; }
+        if (Socket = socket(Resolved->ai_family, Resolved->ai_socktype, Resolved->ai_protocol); Socket == INVALID_SOCKET) { Cleanup(); return { 500 }; }
+        if (0 != connect(Socket, Resolved->ai_addr, int(Resolved->ai_addrlen))) { Cleanup(); return { 500 }; }
 
         // SSL context needed.
         const auto doHTTPS = [&]() -> Response_t
