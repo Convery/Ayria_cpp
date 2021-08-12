@@ -72,3 +72,13 @@ namespace Networking
     std::future<Response_t> POST(std::string URL, std::string Data);
     std::future<Response_t> GET(std::string URL);
 }
+
+namespace Plugins
+{
+    // Different types of hooking.
+    bool InstallTLSHook();
+    bool InstallEPHook();
+
+    // Simply load all plugins from disk.
+    void Initialize();
+}

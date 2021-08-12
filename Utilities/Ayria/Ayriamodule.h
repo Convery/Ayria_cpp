@@ -34,6 +34,12 @@ struct Ayriamodule_t
     // Internal, notify other plugins the application is fully initialized.
     void(__cdecl *onInitialized)(bool);
 
+    #if !defined(NDEBUG)
+    // Hot-reloading for plugin developers in debug-mode.
+    void(__cdecl *unloadPlugin)(const char *Pluginname);
+    void(__cdecl *loadPlugins)();
+    #endif
+
     // Helpers for C++, C users will have to create their own methods.
     #if defined(__cplusplus)
     JSON::Value_t doRequest(const std::string &Endpoint, const JSON::Value_t &Payload)
@@ -63,6 +69,11 @@ struct Ayriamodule_t
             Import(registerLANCallback);
             Import(createPeriodictask);
             Import(onInitialized);
+
+            #if !defined(NDEBUG)
+            Import(unloadPlugin);
+            Import(loadPlugins);
+            #endif
             #undef Import
         }
         else
@@ -74,6 +85,11 @@ struct Ayriamodule_t
             registerLANCallback = (decltype(registerLANCallback))Nullsub2;
             createPeriodictask = (decltype(createPeriodictask))Nullsub2;
             onInitialized = (decltype(onInitialized))Nullsub2;
+
+            #if !defined(NDEBUG)
+            unloadPlugin = (decltype(unloadPlugin))Nullsub2;
+            loadPlugins = (decltype(loadPlugins))Nullsub2;
+            #endif
         }
     }
     #endif
