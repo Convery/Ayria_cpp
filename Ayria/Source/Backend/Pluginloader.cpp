@@ -9,9 +9,9 @@
 namespace Plugins
 {
     // Helper to write a pointer.
-    #define Writeptr(where, what) { \
-    const auto Lock = Memprotect::Makewriteable(where, sizeof(uintptr_t)); \
-    *(uintptr_t *)where = (uintptr_t)what; }
+    #define Writeptr(where, what) {                                         \
+    const auto Lock = Memprotect::Makewriteable((where), sizeof(uintptr_t));\
+    *(uintptr_t *)(where) = (uintptr_t)(what); }
 
     // If TLS is not properly supported, fallback to simple hooks.
     static Inlinedvector<uintptr_t, 4> OriginalTLS;
