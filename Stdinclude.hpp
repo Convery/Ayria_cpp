@@ -75,11 +75,9 @@ using namespace std::literals;
 // Global utilities.
 #include <Utilities/Datatypes.hpp>
 #include <Utilities/Containers/Ringbuffer.hpp>
-#include <Utilities/Crypto/FNV1Hash.hpp>
-#include <Utilities/Crypto/CRC32Hash.hpp>
+#include <Utilities/Crypto/Hashes.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
-#include <Utilities/Crypto/WWHash.hpp>
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
