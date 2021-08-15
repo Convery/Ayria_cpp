@@ -129,7 +129,7 @@ namespace Backend
         ED25519_keypair_from_seed(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data(), Seed);
 
         // Update the ID for the new keys.
-        Global.AccountID.KeyID = Hash::WW32(Global.SigningkeyPublic.get());
+        Global.AccountID.KeyID = Hash::WW32(*Global.SigningkeyPublic);
 
         // TODO(tcn): Perform HTTPS auth to get the AyriaID.
     }
@@ -145,7 +145,7 @@ namespace Backend
         (*Global.EncryptionkeyPrivate)[31] |= ~127;
 
         // Try to authenticate and get proper IDs.
-        Global.AccountID.KeyID = Hash::WW32(Global.SigningkeyPublic.get());
+        Global.AccountID.KeyID = Hash::WW32(*Global.SigningkeyPublic);
         Initialauth();
 
         // Load the last configuration from disk.

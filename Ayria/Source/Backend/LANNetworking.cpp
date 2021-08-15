@@ -7,7 +7,7 @@
 #include <Global.hpp>
 #include <openssl/curve25519.h>
 
-// Totally randomly selected constants here..
+// NOTE(tcn): While Hyrum's law is generally not respected, port should be updated for breaking changes.
 constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
 constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
 constexpr auto Buffersizelimit = 4096;                          // A single virtual page (if the compiler is smart enough).

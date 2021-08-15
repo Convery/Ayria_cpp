@@ -141,15 +141,18 @@ namespace Plugins
         // If the plugin has a callback..
         for (const auto &Item : Pluginhandles)
         {
-            // Already initialized.
-            if (Initializedplugins.contains(Item)) [[unlikely]]
-                continue;
-
-            if (const auto Callback = GetProcAddress(Item, "onInitialized"))
+            const auto Lambda = [&](const auto Handle)
             {
-                (reinterpret_cast<void(__cdecl *)(bool)>(Callback))(Reserved);
-                Initializedplugins.insert(Item);
-            }
+                // Already initialized.
+                if (Initializedplugins.contains(Handle)) [[unlikely]] return;
+
+                if (const auto Callback = GetProcAddress(Handle, "onInitialized"))
+                {
+                    (reinterpret_cast<void(__cdecl *)(bool)>(Callback))(Reserved);
+                    Initializedplugins.insert(Handle);
+                }
+            };
+            std::thread(Lambda, Item).detach();
         }
     }
 
@@ -192,12 +195,16 @@ namespace Plugins
         }
 
         // Notify the plugins about startup.
-        for (const auto &Item : Additions)
+        for (auto &Item : Additions)
         {
-            if (const auto Callback = GetProcAddress(Item, "onStartup"))
+            const auto Lambda = [](const auto Handle)
             {
-                (reinterpret_cast<void(__cdecl *)(bool)>(Callback))(false);
-            }
+                if (const auto Callback = GetProcAddress(Handle, "onStartup"))
+                {
+                    (reinterpret_cast<void(__cdecl *)(bool)>(Callback))(false);
+                }
+            };
+            std::thread(Lambda, Item).detach();
         }
 
         // Ensure that a "onInitialized" is sent 'soon'.
