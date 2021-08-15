@@ -19,10 +19,10 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
     if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
-        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /W4 /Oiytyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except-")
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /W4 /Oiysyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except- /Zc:externConstexpr")
         set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
-        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /Gy /utf-8 /fp:except-") # /d2cgsummary
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /Gy /utf-8 /fp:except- /Zc:externConstexpr") # /d2TPReport
         set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /debug:full /cgthreads:8")
     endif()
 
