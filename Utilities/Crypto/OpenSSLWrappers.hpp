@@ -227,62 +227,6 @@ namespace DES3
     }
 }
 
-namespace Hash
-{
-    inline std::string SHA1(const void *Input, const size_t Size)
-    {
-        const auto Buffer = std::make_unique<uint8_t[]>(20);
-        const auto Context = EVP_MD_CTX_create();
-
-        EVP_DigestInit_ex(Context, EVP_sha1(), nullptr);
-        EVP_DigestUpdate(Context, Input, Size);
-        EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
-        EVP_MD_CTX_destroy(Context);
-
-        return std::string((char *)Buffer.get(), 20);
-    }
-    inline std::string SHA256(const void *Input, const size_t Size)
-    {
-        const auto Buffer = std::make_unique<uint8_t[]>(32);
-        const auto Context = EVP_MD_CTX_create();
-
-        EVP_DigestInit_ex(Context, EVP_sha256(), nullptr);
-        EVP_DigestUpdate(Context, Input, Size);
-        EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
-        EVP_MD_CTX_destroy(Context);
-
-        return std::string((char *)Buffer.get(), 32);
-    }
-    inline std::string HMACSHA1(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
-    {
-        unsigned char Buffer[256]{};
-        unsigned int Buffersize = 256;
-
-        HMAC(EVP_sha1(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
-        return std::string((char *)Buffer, Buffersize);
-    }
-    inline std::string HMACSHA256(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
-    {
-        unsigned char Buffer[256]{};
-        unsigned int Buffersize = 256;
-
-        HMAC(EVP_sha256(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
-        return std::string((char *)Buffer, Buffersize);
-    }
-    inline std::string MD5(const void *Input, const size_t Size)
-    {
-        const auto Buffer = std::make_unique<uint8_t[]>(16);
-        const auto Context = EVP_MD_CTX_create();
-
-        EVP_DigestInit_ex(Context, EVP_md5(), nullptr);
-        EVP_DigestUpdate(Context, Input, Size);
-        EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
-        EVP_MD_CTX_destroy(Context);
-
-        return std::string((char *)Buffer.get(), 16);
-    }
-}
-
 namespace PK_RSA
 {
     // Helper to manage signatures.

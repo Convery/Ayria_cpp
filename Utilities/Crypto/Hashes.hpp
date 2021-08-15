@@ -7,6 +7,11 @@
 #pragma once
 #include <Stdinclude.hpp>
 
+#if defined (HAS_OPENSSL)
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+#endif
+
 namespace Hash
 {
     namespace Internal
@@ -189,6 +194,45 @@ namespace Hash
             return CRC32<T, 0xEDB88320, true>(Input, Length, ~uint32_t(Length));
         }
 
+        #if defined (HAS_OPENSSL)
+        template <Bytealigned_t T> [[nodiscard]] inline std::string MD5(const T *Input, const size_t Size)
+        {
+            const auto Buffer = std::make_unique<uint8_t[]>(16);
+            const auto Context = EVP_MD_CTX_create();
+
+            EVP_DigestInit_ex(Context, EVP_md5(), nullptr);
+            EVP_DigestUpdate(Context, Input, Size);
+            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
+            EVP_MD_CTX_destroy(Context);
+
+            return std::string((char *)Buffer.get(), 16);
+        }
+        template <Bytealigned_t T> [[nodiscard]] inline std::string SHA1(const T *Input, const size_t Size)
+        {
+            const auto Buffer = std::make_unique<uint8_t[]>(20);
+            const auto Context = EVP_MD_CTX_create();
+
+            EVP_DigestInit_ex(Context, EVP_sha1(), nullptr);
+            EVP_DigestUpdate(Context, Input, Size);
+            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
+            EVP_MD_CTX_destroy(Context);
+
+            return std::string((char *)Buffer.get(), 20);
+        }
+        template <Bytealigned_t T> [[nodiscard]] inline std::string SHA256(const T *Input, const size_t Size)
+        {
+            const auto Buffer = std::make_unique<uint8_t[]>(32);
+            const auto Context = EVP_MD_CTX_create();
+
+            EVP_DigestInit_ex(Context, EVP_sha256(), nullptr);
+            EVP_DigestUpdate(Context, Input, Size);
+            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
+            EVP_MD_CTX_destroy(Context);
+
+            return std::string((char *)Buffer.get(), 32);
+        }
+        #endif
+
         // Compile-time hashing for simple fixed-length datablocks.
         template <typename F, Bytealigned_t T, size_t N> [[nodiscard]] constexpr decltype(auto) doHash(F &&Func, const std::array<T, N> &Input)
         {
@@ -242,6 +286,26 @@ namespace Hash
     Impl(FNV1a_32); Impl(FNV1a_64);
     Impl(WW32); Impl(WW64);
     Impl(CRC32A); Impl(CRC32B); Impl(CRC32T);
+
+    #if defined (HAS_OPENSSL)
+    Impl(MD5); Impl(SHA1); Impl(SHA256);
+    inline std::string HMACSHA1(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
+    {
+        unsigned char Buffer[256]{};
+        unsigned int Buffersize = 256;
+
+        HMAC(EVP_sha1(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        return std::string((char *)Buffer, Buffersize);
+    }
+    inline std::string HMACSHA256(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
+    {
+        unsigned char Buffer[256]{};
+        unsigned int Buffersize = 256;
+
+        HMAC(EVP_sha256(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        return std::string((char *)Buffer, Buffersize);
+    }
+    #endif
     #undef Impl
 
     // Sanity checking.
@@ -251,9 +315,9 @@ namespace Hash
     static_assert(CRC32B("12345") == 0xCBF53A1C, "Someone fucked with CRC32-B.");
     static_assert(CRC32T("12345") == 0x0315B56C, "Someone fucked with CRC32-T.");
     static_assert(FNV1a_32("12345") == 0x43C2C0D8, "Someone fucked with FNV32a.");
-    static_assert(WW64("12345") == 0x3C570C468027DB01, "Someone fucked with WW64.");
-    static_assert(FNV1_64("12345") == 0xA92F4455DA95A77A, "Someone fucked with FNV64.");
-    static_assert(FNV1a_64("12345") == 0xE575E8883C0F89F8, "Someone fucked with FNV64a.");
+    static_assert(WW64("12345") == 0x3C570C468027DB01ULL, "Someone fucked with WW64.");
+    static_assert(FNV1_64("12345") == 0xA92F4455DA95A77AULL, "Someone fucked with FNV64.");
+    static_assert(FNV1a_64("12345") == 0xE575E8883C0F89F8ULL, "Someone fucked with FNV64a.");
 }
 
 // Drop-in generic functions for std:: algorithms, containers, and such.
