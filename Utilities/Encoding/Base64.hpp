@@ -108,7 +108,7 @@ namespace Base64
             const auto Item = Input[i];
             if (Item == '=') [[unlikely]] continue;
 
-            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
             Bits += 6;
 
             if (Bits >= 8)
@@ -163,7 +163,7 @@ namespace Base64
             const auto Item = Input[i];
             if (Item == '=') [[unlikely]] continue;
 
-            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
             Bits += 6;
 
             if (Bits >= 8)
@@ -230,7 +230,7 @@ namespace Base64
             const auto Item = Input[i];
             if (Item == '=') [[unlikely]] continue;
 
-            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
             Bits += 6;
 
             if (Bits >= 8)
