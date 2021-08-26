@@ -75,7 +75,7 @@ namespace Networking
             }
             while (true)
             {
-                if (const auto Return = SSL_write(State.get(), Request.data(), Request.size()); Return <= 0)
+                if (const auto Return = SSL_write(State.get(), Request.data(), (int)Request.size()); Return <= 0)
                 {
                     if (SSL_ERROR_WANT_WRITE == SSL_get_error(State.get(), Return)) continue;
                     else { Cleanup(); return { 500 }; }
@@ -102,7 +102,7 @@ namespace Networking
         };
         const auto doHTTP = [&]() -> Response_t
         {
-            if (const auto Return = send(Socket, Request.data(), Request.size(), NULL); Return <= 0)
+            if (const auto Return = send(Socket, Request.data(), (int)Request.size(), NULL); Return <= 0)
             {
                 Cleanup(); return { 500 };
             }

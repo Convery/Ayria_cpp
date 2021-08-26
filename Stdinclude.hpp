@@ -78,7 +78,9 @@ using namespace std::literals;
 #include <Utilities/Crypto/Hashes.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
+#include <Utilities/Encoding/Base58.hpp>
 #include <Utilities/Encoding/Base64.hpp>
+#include <Utilities/Encoding/Base85.hpp>
 #include <Utilities/Encoding/Bitbuffer.hpp>
 #include <Utilities/Encoding/Bytebuffer.hpp>
 #include <Utilities/Encoding/JSON.hpp>

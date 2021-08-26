@@ -7,19 +7,22 @@ License: MIT
 #pragma once
 #include <array>
 #include <cstdint>
+#include <concepts>
 #include <string_view>
 using Blob = std::basic_string<uint8_t>;
 using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base64
 {
-    constexpr size_t Encodesize(size_t N) { return ((N + 2) / 3 * 4); }
-    constexpr size_t Decodesize(size_t N) { return (N * 3 / 4) - 1; }
     template <typename T> concept Byte_t = sizeof(T) == 1;
+    constexpr size_t Decodesize(size_t N)  { return (N * 3 / 4) - 1; }
+    constexpr size_t Encodesize(size_t N)  { return ((N + 2) / 3 * 4); }
+    template <size_t N> constexpr size_t Decodesize()  { return (N * 3 / 4) - 1; }
+    template <size_t N> constexpr size_t Encodesize()  { return ((N + 2) / 3 * 4); }
 
     namespace B64Internal
     {
-        constexpr char Table[64] =
+        constexpr uint8_t Table[64] =
         {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
             'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
@@ -28,7 +31,7 @@ namespace Base64
             's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
             '3', '4', '5', '6', '7', '8', '9', '+', '/'
         };
-        constexpr char Reversetable[128] =
+        constexpr uint8_t Reversetable[128] =
         {
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
@@ -65,9 +68,9 @@ namespace Base64
         }
     }
 
-    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize(N)> Encode(const std::array<T, N> &Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize<N>()> Encode(const std::array<T, N> &Input)
     {
-        std::array<char, Encodesize(N)> Result{};
+        std::array<char, Encodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint8_t Bits{};
@@ -91,14 +94,14 @@ namespace Base64
             Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
         }
 
-        while (Outputposition < Encodesize(N))
+        while (Outputposition < Encodesize<N>())
             Result[Outputposition++] = '=';
 
         return Result;
     }
-    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize(N)> Decode(const std::array<T, N> &Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize<N>()> Decode(const std::array<T, N> &Input)
     {
-        std::array<T, Decodesize(N)> Result{};
+        std::array<T, Decodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint8_t Bits{};
@@ -120,9 +123,9 @@ namespace Base64
 
         return Result;
     }
-    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize(N)> Encode(const T (&Input)[N])
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize<N>()> Encode(const T (&Input)[N])
     {
-        std::array<char, Encodesize(N)> Result{};
+        std::array<char, Encodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint8_t Bits{};
@@ -146,14 +149,14 @@ namespace Base64
             Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
         }
 
-        while (Outputposition < Encodesize(N))
+        while (Outputposition < Encodesize<N>())
             Result[Outputposition++] = '=';
 
         return Result;
     }
-    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize(N)> Decode(const T(&Input)[N])
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize<N>()> Decode(const T(&Input)[N])
     {
-        std::array<T, Decodesize(N)> Result{};
+        std::array<T, Decodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
         uint8_t Bits{};
@@ -269,7 +272,7 @@ namespace Base64
     }
 
     // Verify that the string is valid.
-    [[nodiscard]] inline bool isValid(std::string_view Input)
+    [[nodiscard]] constexpr bool isValid(std::string_view Input)
     {
         if ((Input.size() & 3) != 0) return false;
 
