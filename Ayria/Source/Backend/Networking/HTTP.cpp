@@ -6,8 +6,11 @@
 
 #include <Global.hpp>
 
-namespace Networking
+namespace Networking::HTTP
 {
+    #if defined(HAS_ZMQ)
+    #else
+
     static Response_t doRequest(std::string &&URL, std::string &&Data)
     {
         // No network available.
@@ -133,4 +136,5 @@ namespace Networking
     {
         return std::async(std::launch::async, doRequest, std::move(URL), std::string());
     }
+    #endif
 }

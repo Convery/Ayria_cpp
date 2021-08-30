@@ -30,52 +30,62 @@ namespace API
     std::vector<std::string> listEndpoints();
 }
 
-namespace Networking
+namespace Communication
 {
-    // Incase the struct is extended in the future.
     #pragma pack(push, 1)
-    struct Client_t
-    {
-        AccountID_t AccountID;
-        uint32_t GameID, ModID;
-        std::array<char8_t, 20> Username;
-        std::array<uint8_t, 32> SigningkeyPublic;
-        std::array<uint8_t, 32> EncryptionkeyPublic;
-
-        // Internal properties.
-        uint32_t InternalIP;
-        uint32_t Lastmessage;
-    };
-    typedef void (__cdecl *Callback_t)(Client_t *Clientinfo, const char *Message, unsigned int Length);
+    enum class Source_t : uint8_t  { LAN, ZMQ_CLIENT, ZMQ_SERVER };
+    struct Payload_t { std::array<uint8_t, 32> toPublic; uint32_t Type; /* B85 Data here */ };
+    struct Packet_t { std::array<uint8_t, 32> fromPublic; std::array<uint8_t, 64> Signature;  Payload_t Payload; };
+    typedef void (__cdecl *Callback_t)(uint32_t AccountID /* WW32(Pubkey) */, const char *Message, unsigned int Length);
     #pragma pack(pop)
 
-    // Register handlers for the different packets.
-    void Register(std::string_view Identifier, Callback_t Handler);
-    void Register(uint32_t Identifier, Callback_t Handler);
+    // Register handlers for the different packets message WW32(ID).
+    void registerHandler(std::string_view Identifier, Callback_t Handler, bool General);
+    void registerHandler(uint32_t Identifier, Callback_t Handler, bool General);
 
-    // Broadcast a message to the LAN clients.
-    void Publish(std::string_view Identifier, std::string_view Payload, uint64_t TargetID = 0, bool Encrypt = false, bool Sign = false);
-    void Publish(uint32_t Identifier, std::string_view Payload, uint64_t TargetID = 0, bool Encrypt = false, bool Sign = false);
+    // Save a packet for later processing or forward to the handlers, internal.
+    void forwardPacket(uint32_t Identifier, uint32_t AccountID, std::string_view Payload, bool General);
+    void savePacket(const Packet_t *Header, std::string_view Payload, Source_t Source);
 
-    // Drop packets from bad clients on the floor.
-    void Blockclient(uint32_t SessionID);
+    // Access for services to list clients by source, internal.
+    std::unordered_set<uint32_t> enumerateSource(Source_t Source);
 
-    // Service access to the LAN clients.
-    namespace Clientinfo
-    {
-        const Client_t *byAccount(AccountID_t AccountID);
-        const Client_t *bySession(uint32_t SessionID);
-        std::string toJSON(const Client_t *Client);
-    }
+    // Publish a message to a client, or broadcast if ID == 0.
+    bool Publish(std::string_view Identifier, std::string_view Payload, uint32_t TargetID = 0);
+    bool Publish(uint32_t Identifier, std::string_view Payload, uint32_t TargetID = 0);
 
     // Initialize the system.
     void Initialize();
-
-    // Send a request and return the async response.
-    using Response_t = struct { uint32_t Statuscode; std::string Body; };
-    std::future<Response_t> POST(std::string URL, std::string Data);
-    std::future<Response_t> GET(std::string URL);
 }
+
+namespace Networking
+{
+    // Source_t == LAN
+    namespace LAN
+    {
+        // Publish a message to the local multicast group.
+        bool Publish(std::unique_ptr<char []> &&Buffer, size_t Buffersize, size_t Overhead);
+
+        // Initialize the system.
+        void Initialize();
+    }
+
+    // Helper for HTTP(s) requests.
+    namespace HTTP
+    {
+        // Send a request and return the async response.
+        using Response_t = struct { uint32_t Statuscode; std::string Body; };
+        std::future<Response_t> POST(std::string URL, std::string Data);
+        std::future<Response_t> GET(std::string URL);
+    }
+
+    // Initialize the system.
+    inline void Initialize()
+    {
+        LAN::Initialize();
+    }
+}
+
 
 namespace Plugins
 {
