@@ -6,9 +6,13 @@
 
 #include "AABackend.hpp"
 #include <openssl/curve25519.h>
+#include <winioctl.h>
 
 // 512-bit aligned storage.
 Globalstate_t Global{};
+
+// Generate an identifier for the current hardware.
+inline std::pair<std::string, std::string> GenerateHWID();
 
 namespace Backend
 {
@@ -66,8 +70,8 @@ namespace Backend
             sqlite3 *Ptr{};
 
             // :memory: should never fail unless the client has more serious problems.
-            auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
-            if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
+            auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             assert(Result == SQLITE_OK);
 
             // Intercept updates from plugins writing to the DB.
@@ -76,10 +80,6 @@ namespace Backend
 
             // Close the DB at exit to ensure everything's flushed.
             Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
-
-            /*
-                INIT CLIENT DB?
-            */
         }
         return sqlite::database(Database);
     }
@@ -97,56 +97,47 @@ namespace Backend
     }
 
     // Perform startup authentication if credentials have been provided.
-    static void Initialauth()
+    static bool Initialauth()
     {
-        const auto Commandline = std::string(GetCommandLineA());
-        static const std::regex rxCommands(R"(("[^"]+"|[^\s"]+))", std::regex_constants::optimize);
-        const auto Start = std::sregex_iterator(Commandline.cbegin(), Commandline.cend(), rxCommands);
-        const auto End = std::sregex_iterator();
+        const auto Commandline = std::wstring(GetCommandLineW());
+        if (Commandline.find(L"--Auth") == std::wstring::npos) return false;
 
-        // Extract the credentials.
-        bool hasE{}, hasP{}; std::string Email{}, Password{};
-        for (auto It = Start; It != End; ++It)
-        {
-            // Hackery because STL regex doesn't support lookahead/behind.
-            std::string Temp((It++)->str());
-            if (Temp.back() == '\"') Temp.pop_back();
-            if (Temp.front() == '\"') Temp.erase(0, 1);
+        const auto &[MOBO, UUID] = GenerateHWID();
+        const auto Hash1 = Hash::SHA256(MOBO);
+        const auto Hash2 = Hash::SHA256(UUID);
 
-            if (hasE) { Email = Temp; hasE = false; continue; }
-            if (hasP) { Password = Temp; hasP = false; continue; }
-            if (Temp.starts_with("--E")) { hasE = true; continue; }
-            if (Temp.starts_with("--P")) { hasP = true; continue; }
-        }
-
-        // If nothing is provided, we can't do much.
-        if (Email.empty() || Password.empty()) return;
-
-        // Derive keys from the credentials.
         uint8_t Seed[32]{};
-        if (NULL == PKCS5_PBKDF2_HMAC(Password.c_str(), Password.size(), (uint8_t *)Email.c_str(), Email.size(), 123456, EVP_sha512(), 32, Seed))
-            [[unlikely]] return;
+        if (NULL == PKCS5_PBKDF2_HMAC(Hash1.data(), Hash1.size(), (uint8_t *)Hash2.data(),
+                                      Hash2.size(), 123456, EVP_sha512(), 32, Seed)) [[unlikely]] return false;
+
         ED25519_keypair_from_seed(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data(), Seed);
+        const auto Hash = Hash::SHA256(*Global.SigningkeyPrivate);
 
-        // Update the ID for the new keys.
-        Global.AccountID.KeyID = Hash::WW32(*Global.SigningkeyPublic);
+        // The encryption-key is RFC 7748 compliant.
+        std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
+        (*Global.EncryptionkeyPrivate)[0] |= ~248;
+        (*Global.EncryptionkeyPrivate)[31] &= ~64;
+        (*Global.EncryptionkeyPrivate)[31] |= ~127;
 
-        // TODO(tcn): Perform HTTPS auth to get the AyriaID.
+        // TODO(tcn): Notify Ayria server.
+        return true;
     }
 
     // Initialize the system.
     void Initialize()
     {
-        // Initialize the cryptographic-keys with random data, RFC 7748 compliant.
+        // Initialize the signing key-pair with random data.
         ED25519_keypair(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data());
-        RAND_bytes(Global.EncryptionkeyPrivate->data(), 32);
+        const auto Hash = Hash::SHA256(*Global.SigningkeyPrivate);
+
+        // The encryption-key is RFC 7748 compliant.
+        std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
         (*Global.EncryptionkeyPrivate)[0] |= ~248;
         (*Global.EncryptionkeyPrivate)[31] &= ~64;
         (*Global.EncryptionkeyPrivate)[31] |= ~127;
 
-        // Try to authenticate and get proper IDs.
-        Global.AccountID.KeyID = Hash::WW32(*Global.SigningkeyPublic);
-        Initialauth();
+        // Try to authenticate and get proper keys.
+        Global.Settings.isAuthenticated = Initialauth();
 
         // Load the last configuration from disk.
         const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
@@ -154,6 +145,12 @@ namespace Backend
         Global.Settings.enableIATHooking = Config.value<bool>("enableIATHooking");
         Global.Settings.enableFileshare = Config.value<bool>("enableFileshare");
         *Global.Username = Config.value("Username", u8"AYRIA"s);
+
+        // Notify the user about the current settings.
+        Infoprint("Loaded settings:");
+        Infoprint(va("Username: %*s", Global.Username->size(), Global.Username->data()));
+        Infoprint(va("LongID: %s", Global.getLongID().c_str()));
+        Infoprint(va("ShortID: 0x08X", Global.getShortID()));
 
         // If there was no config, force-save one for the user instantly.
         std::atexit([]() { if (Global.Settings.modifiedConfig) Saveconfig(); });
@@ -178,4 +175,68 @@ namespace Backend
     {
         if (PeriodMS && Callback) [[likely]] Enqueuetask(PeriodMS, Callback);
     }
+}
+
+// Generate an identifier for the current hardware.
+inline std::pair<std::string, std::string> GenerateHWID()
+{
+    #if defined (_WIN32)
+    std::string MOBOSerial{};
+    std::string SystemUUID{};
+
+    const auto Size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
+    const auto Buffer = std::make_unique<char8_t[]>(Size);
+    GetSystemFirmwareTable('RSMB', 0, Buffer.get(), Size);
+
+    const auto Tablelength = *(DWORD *)(Buffer.get() + 4);
+    const auto Version_major = *(uint8_t *)(Buffer.get() + 1);
+    auto Table = std::u8string_view(Buffer.get() + 8, Tablelength);
+
+    #define Consume(x) *(x *)Table.data(); Table.remove_prefix(sizeof(x));
+    if (Version_major == 0 || Version_major >= 2)
+    {
+        while (!Table.empty())
+        {
+            const auto Type = Consume(uint8_t);
+            const auto Length = Consume(uint8_t);
+            const auto Handle = Consume(uint16_t);
+
+            if (Type == 1)
+            {
+                SystemUUID.reserve(16);
+                for (size_t i = 0; i < 16; ++i)
+                    SystemUUID.append(std::format("{:02X}", (uint8_t)Table[4 + i]));
+
+                Table.remove_prefix(Length);
+            }
+            else if (Type == 2)
+            {
+                const auto Index = *(const uint8_t *)(Table.data() + 3);
+                Table.remove_prefix(Length);
+
+                for (uint8_t i = 1; i < Index; ++i)
+                    Table.remove_prefix(std::strlen((char *)Table.data()) + 1);
+
+                MOBOSerial = std::string((char *)Table.data());
+            }
+            else Table.remove_prefix(Length);
+
+            // Have all the information we want?
+            if (!MOBOSerial.empty() && !SystemUUID.empty()) break;
+
+            // Skip to next entry.
+            while (!Table.empty())
+            {
+                const auto Value = Consume(uint16_t);
+                if (Value == 0) break;
+            }
+        }
+    }
+    #undef Consume
+
+    return { MOBOSerial, SystemUUID };
+    #else
+    static_assert(false, "NIX function is not yet implemented.");
+    return {};
+    #endif
 }

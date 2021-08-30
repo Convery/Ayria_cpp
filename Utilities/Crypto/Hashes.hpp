@@ -5,7 +5,9 @@
 */
 
 #pragma once
-#include <Stdinclude.hpp>
+#include <string>
+#include <cstdint>
+#include <concepts>
 
 #if defined (HAS_OPENSSL)
 #include <openssl/hmac.h>
