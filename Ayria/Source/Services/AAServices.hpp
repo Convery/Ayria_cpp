@@ -25,6 +25,9 @@ namespace Services
             std::u8string Username;
             std::array<uint8_t, 32> Signingkey;
             std::array<uint8_t, 32> Encryptionkey;
+
+            // Internal.
+            uint64_t Timestamp;
         };
 
         // Format as JSON so that other tools can read it.

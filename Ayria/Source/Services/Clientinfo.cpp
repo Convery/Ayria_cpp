@@ -31,6 +31,9 @@ namespace Services::Clientinfo
     // Let the local network know about us.
     static void __cdecl Clienthello()
     {
+        // Should we even announce our presence?
+        if (Global.Settings.isPrivate || Global.Settings.isAway) [[unlikely]] return;
+
         Localclient.ModID = Global.ModID;
         Localclient.GameID = Global.GameID;
         Localclient.Username = Global.Username->c_str();
@@ -47,25 +50,43 @@ namespace Services::Clientinfo
     }
     static void __cdecl Clientgoodbye()
     {
+        // Should we even announce our presence?
+        if (Global.Settings.isPrivate) [[unlikely]] return;
+
         // Post to the local network.
         Communication::Publish("Clientinfo::Goodbye", "Sign me");
     }
 
     // Handle incoming messages.
-    static void __cdecl Handlegoodbye(uint32_t AccountID, const char *, unsigned int)
+    static void __cdecl Handlegoodbye(uint64_t, uint32_t AccountID, const char *, unsigned int)
     {
         Activeclients.erase(AccountID);
     }
-    static void __cdecl Handlehello(uint32_t AccountID, const char *Message, unsigned int Length)
+    static void __cdecl Handlehello(uint64_t Timestamp, uint32_t AccountID, const char *Message, unsigned int Length)
     {
-        const auto [Client, Valid] = fromJSON(std::string_view(Message, Length));
+        auto [Client, Valid] = fromJSON(std::string_view(Message, Length));
+        Client.Timestamp = Timestamp;
 
         // Sanity-checking.
         if (!Valid) [[unlikely]] return;
         if (AccountID != Hash::WW32(Client.Signingkey)) [[unlikely]] return;
+        if (Activeclients.contains(AccountID) && Activeclients[AccountID]->Timestamp > Timestamp) [[unlikely]] return;
 
-        // Save for later.
-        Activeclients[AccountID] = std::make_shared<Client_t>(Client);
+        // Save for later lookups if the client is indeed active (i.e. we are not just processing the backlog).
+        if (Timestamp > uint64_t((std::chrono::utc_clock::now() - std::chrono::minutes(5)).time_since_epoch().count()))
+        {
+            Activeclients[AccountID] = std::make_shared<Client_t>(Client);
+        }
+
+        // Save the client to the database for the future.
+        try
+        {
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Clients (AccountID, Timestamp, GameID, ModID, Encryptionkey, Username) VALUES (?,?,?,?,?,?);"
+                << AccountID << Timestamp << Client.GameID << Client.ModID
+                << Base85::Encode<char>(Client.Encryptionkey)
+                << Encoding::toNarrow(Client.Username);
+        } catch (...) {}
     }
 
     // JSON API for accessing the client state and updating settings.
@@ -102,6 +123,19 @@ namespace Services::Clientinfo
     // Add the handlers and tasks.
     void Initialize()
     {
+        // Create a persistent table to hold all clients we've seen over sessions.
+        try
+        {
+            Backend::Database() <<
+                "CREATE TABLE IF NOT EXISTS Clients ("
+                "AccountID INTEGER PRIMARY KEY, "
+                "Timestamp INTEGER NOT NULL, "
+                "GameID INTEGER NOT NULL, "
+                "ModID INTEGER NOT NULL, "
+                "Username TEXT NOT NULL, "
+                "Encryptionkey TEXT NOT NULL );";
+        } catch (...) {}
+
         // Add generalized handlers for the communication systems (currently LAN only).
         Communication::registerHandler("Clientinfo::Goodbye", Handlegoodbye, true);
         Communication::registerHandler("Clientinfo::Hello", Handlehello, true);

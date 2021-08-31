@@ -14,8 +14,8 @@ namespace Communication
     static Hashmap<Source_t, std::unordered_set<uint32_t>> Clientsources{};
 
     // Register handlers for the different packets message WW32(ID).
-    static Hashmap<uint32_t /* Messagetype */, Hashset<Callback_t>> Generalhandlers{};
     static Hashmap<uint32_t /* Messagetype */, Hashset<Callback_t>> Targetedhandlers{};
+    static Hashmap<uint32_t /* Messagetype */, Hashset<Callback_t>> Generalhandlers{};
     void registerHandler(std::string_view Identifier, Callback_t Handler, bool General)
     {
         return registerHandler(Hash::WW32(Identifier), Handler, General);
@@ -28,19 +28,6 @@ namespace Communication
     }
 
     // Save a packet for later processing or forward to the handlers, internal.
-    void forwardPacket(uint32_t Identifier, uint32_t AccountID, std::string_view Payload, bool General)
-    {
-        if (General)
-        {
-            std::ranges::for_each(Generalhandlers[Identifier], [&](const auto &CB)
-            { CB(AccountID, Payload.data(), static_cast<uint32_t>(Payload.size())); });
-        }
-        else
-        {
-            std::ranges::for_each(Targetedhandlers[Identifier], [&](const auto &CB)
-            { CB(AccountID, Payload.data(), static_cast<uint32_t>(Payload.size())); });
-        }
-    }
     void savePacket(const Packet_t *Header, std::string_view Payload, Source_t Source)
     {
         const auto Timestamp = std::chrono::utc_clock::now().time_since_epoch().count();
@@ -65,16 +52,29 @@ namespace Communication
             if (Base85::isValid(Payload)) [[likely]]
             {
                 Backend::Database()
-                    << "INSERT INTO Messagelog (Timestamp, Type, From, To, Message) VALUES (?,?,?,?,?);"
+                    << "INSERT OR REPLACE INTO Messagelog (Timestamp, Type, From, To, Message) VALUES (?,?,?,?,?);"
                     << Timestamp << Type << From << To << std::string(Payload);
             }
             else
             {
                 Backend::Database()
-                    << "INSERT INTO Messagelog (Timestamp, Type, From, To, Message) VALUES (?,?,?,?,?);"
+                    << "INSERT OR REPLACE INTO Messagelog (Timestamp, Type, From, To, Message) VALUES (?,?,?,?,?);"
                     << Timestamp << Type << From << To << Base85::Encode(Payload);
             }
         } catch (...) {}
+    }
+    void forwardPacket(uint64_t Timestamp, uint32_t Identifier, uint32_t AccountID, std::string_view Payload, bool General)
+    {
+        if (General)
+        {
+            std::ranges::for_each(Generalhandlers[Identifier], [&](const auto &CB)
+            { CB(Timestamp, AccountID, Payload.data(), static_cast<uint32_t>(Payload.size())); });
+        }
+        else
+        {
+            std::ranges::for_each(Targetedhandlers[Identifier], [&](const auto &CB)
+            { CB(Timestamp, AccountID, Payload.data(), static_cast<uint32_t>(Payload.size())); });
+        }
     }
 
     // Associate clients with a source for future lookups.
@@ -123,28 +123,35 @@ namespace Communication
     }
 
     // Process all new messages twice a second.
-    void __cdecl doProcess()
+    static std::chrono::utc_clock::duration Lasttick = { std::chrono::utc_clock::now().time_since_epoch() };
+    static void __cdecl doProcess()
     {
-        static std::chrono::utc_clock::duration Lasttick = { std::chrono::utc_clock::now().time_since_epoch() };
         const auto Timenow = std::chrono::utc_clock::now().time_since_epoch();
         const auto LongID = Global.getLongID();
 
         try
         {
             Backend::Database()
-            << "SELECT (Type, From, To, Message) FROM Messagelog WHERE (Timestamp >= ? AND Timestamp < ?);"
+            << "SELECT (Timestamp, Type, From, To, Message) FROM Messagelog WHERE (Timestamp >= ? AND Timestamp < ?);"
             << Lasttick.count() << Timenow.count()
-            >> [&](uint32_t Type, const std::string &From, const std::string &To, const std::string Message)
+            >> [&](uint64_t Timestamp, uint32_t Type, const std::string &From, const std::string &To, const std::string Message)
             {
                 const auto Publickey = Base58::Decode(From);
                 const auto AccountID = Hash::WW32(Publickey);
                 const auto Decoded = Base85::Decode(Message);
                 const auto General = To.empty() || To != LongID;
-                forwardPacket(Type, AccountID, Decoded, General);
+                forwardPacket(Timestamp, Type, AccountID, Decoded, General);
             };
 
             Lasttick = Timenow;
         } catch (...) {}
+    }
+
+    // Clean up the DB on exit.
+    static void Cleanup()
+    {
+        const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::hours(4)).time_since_epoch();
+        try { Backend::Database() << "DELETE FROM Messagelog WHERE Timestamp < ?;" << Timestamp.count(); } catch (...) {}
     }
 
     // Initialize the system.
@@ -158,10 +165,16 @@ namespace Communication
                 "Type INTEGER NOT NULL, "
                 "From TEXT NOT NULL, "
                 "To TEXT NOT NULL, "
-                "Message TEXT NOT NULL );";
+                "Message TEXT NOT NULL, "
+                "UNIQUE (Type, From, To, Message) );"; // Reduce duplicates (e.g. Clienthello).
+
+            // If we already have a database, set the last tick to the last write - 10 seconds (to cover last second writes).
+            uint64_t LastwriteNS{}; Backend::Database() << "SELECT MAX(Timestamp) FROM Messagelog;" >> LastwriteNS;
+            if (LastwriteNS) Lasttick = std::chrono::utc_clock::duration(LastwriteNS) - std::chrono::seconds(10);
         } catch (...) {}
 
         // Should be often enough.
         Backend::Enqueuetask(500, doProcess);
+        std::atexit(Cleanup);
     }
 }

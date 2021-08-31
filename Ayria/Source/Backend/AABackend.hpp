@@ -36,8 +36,8 @@ namespace Communication
     enum class Source_t : uint8_t  { LAN, ZMQ_CLIENT, ZMQ_SERVER };
     struct Payload_t { std::array<uint8_t, 32> toPublic; uint32_t Type; /* B85 Data here */ };
     struct Packet_t { std::array<uint8_t, 32> fromPublic; std::array<uint8_t, 64> Signature;  Payload_t Payload; };
-    typedef void (__cdecl *Callback_t)(uint32_t AccountID /* WW32(Pubkey) */, const char *Message, unsigned int Length);
-    // static void __cdecl Handler(uint32_t AccountID, const char *Message, unsigned int Length);
+    typedef void (__cdecl *Callback_t)(uint64_t Timestamp, uint32_t AccountID /* WW32(Pubkey) */, const char *Message, unsigned int Length);
+    // static void __cdecl Handler(uint64_t Timestamp, uint32_t AccountID, const char *Message, unsigned int Length);
     #pragma pack(pop)
 
     // Register handlers for the different packets message WW32(ID).
@@ -45,8 +45,8 @@ namespace Communication
     void registerHandler(uint32_t Identifier, Callback_t Handler, bool General);
 
     // Save a packet for later processing or forward to the handlers, internal.
-    void forwardPacket(uint32_t Identifier, uint32_t AccountID, std::string_view Payload, bool General);
     void savePacket(const Packet_t *Header, std::string_view Payload, Source_t Source);
+    void forwardPacket(uint64_t Timestamp, uint32_t Identifier, uint32_t AccountID, std::string_view Payload, bool General);
 
     // Access for services to list clients by source, internal.
     std::unordered_set<uint32_t> enumerateSource(Source_t Source);
