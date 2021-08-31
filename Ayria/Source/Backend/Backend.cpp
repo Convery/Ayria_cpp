@@ -102,16 +102,11 @@ namespace Backend
         const auto Commandline = std::wstring(GetCommandLineW());
         if (Commandline.find(L"--Auth") == std::wstring::npos) return false;
 
-        const auto &[MOBO, UUID] = GenerateHWID();
-        const auto Hash1 = Hash::SHA256(MOBO);
-        const auto Hash2 = Hash::SHA256(UUID);
+        const auto [MOBO, UUID] = GenerateHWID();
+        const auto Seed = Hash::SHA256(Hash::SHA256(MOBO) + Hash::SHA256(UUID));
 
-        uint8_t Seed[32]{};
-        if (NULL == PKCS5_PBKDF2_HMAC(Hash1.data(), Hash1.size(), (uint8_t *)Hash2.data(),
-                                      Hash2.size(), 123456, EVP_sha512(), 32, Seed)) [[unlikely]] return false;
-
-        ED25519_keypair_from_seed(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data(), Seed);
-        const auto Hash = Hash::SHA256(*Global.SigningkeyPrivate);
+        ED25519_keypair_from_seed(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data(), (uint8_t *)Seed.data());
+        const auto Hash = Hash::SHA256(Hash::SHA256(*Global.SigningkeyPrivate) + "Authed");
 
         // The encryption-key is RFC 7748 compliant.
         std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
@@ -128,7 +123,7 @@ namespace Backend
     {
         // Initialize the signing key-pair with random data.
         ED25519_keypair(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data());
-        const auto Hash = Hash::SHA256(*Global.SigningkeyPrivate);
+        const auto Hash = Hash::SHA256(Hash::SHA256(*Global.SigningkeyPrivate) + "Noauth");
 
         // The encryption-key is RFC 7748 compliant.
         std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
