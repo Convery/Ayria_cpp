@@ -37,6 +37,7 @@ namespace Communication
     struct Payload_t { std::array<uint8_t, 32> toPublic; uint32_t Type; /* B85 Data here */ };
     struct Packet_t { std::array<uint8_t, 32> fromPublic; std::array<uint8_t, 64> Signature;  Payload_t Payload; };
     typedef void (__cdecl *Callback_t)(uint32_t AccountID /* WW32(Pubkey) */, const char *Message, unsigned int Length);
+    // static void __cdecl Handler(uint32_t AccountID, const char *Message, unsigned int Length);
     #pragma pack(pop)
 
     // Register handlers for the different packets message WW32(ID).
@@ -124,6 +125,6 @@ namespace Console
 namespace Notifications
 {
     using Callback_t = void(__cdecl *)(const char *JSONString);
-    void Register(std::string_view Identifier, Callback_t Handler);
+    void Subscribe(std::string_view Identifier, Callback_t Handler);
     void Publish(std::string_view Identifier, const char *JSONString);
 }

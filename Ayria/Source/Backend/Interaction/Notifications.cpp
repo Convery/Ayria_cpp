@@ -10,7 +10,7 @@ namespace Notifications
 {
     static Hashmap<uint32_t, Hashset<Callback_t>> Notificationcallbacks{};
 
-    void Register(std::string_view Identifier, Callback_t Handler)
+    void Subscribe(std::string_view Identifier, Callback_t Handler)
     {
         const auto Hash = Hash::WW32(Identifier);
         Notificationcallbacks[Hash].insert(Handler);
@@ -30,7 +30,7 @@ namespace Notifications
     extern "C" EXPORT_ATTR void addNotificationlistener(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
     {
         if (!Identifier || !Callback) [[unlikely]] return;
-        Register(Identifier, Callback);
+        Subscribe(Identifier, Callback);
     }
     extern "C" EXPORT_ATTR void publishNotification(const char *Identifier, const char *JSONString)
     {
