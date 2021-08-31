@@ -30,7 +30,7 @@ namespace API
             static std::string Failurestring = va(R"({ "Error" : "No endpoint with name %*s available.", \n"Endpoints" : [\n)",
                                                   Functionname.size(), Functionname.data());
 
-            for (const auto &[Name, _] : Requesthandlers)
+            for (const auto &Name : Requesthandlers | std::views::keys)
             {
                 Failurestring.append(Name);
                 Failurestring.append(",");
@@ -42,7 +42,7 @@ namespace API
         }
 
         const auto Result = Requesthandlers[std::string(Functionname)](std::move(Request));
-        if (Hash::WW32(Result) == Generichash) [[likely]] return Genericresult;
+        if (Result.empty() || Hash::WW32(Result) == Generichash) [[likely]] return Genericresult;
 
         // Save the result on the heap for 8 calls.
         return Results.emplace_back(Result).c_str();
@@ -52,7 +52,7 @@ namespace API
         std::vector<std::string> Result;
         Result.reserve(Requesthandlers.size());
 
-        for (const auto &[Name, _] : Requesthandlers)
+        for (const auto &Name : Requesthandlers | std::views::keys)
             Result.emplace_back(Name);
 
         return Result;
