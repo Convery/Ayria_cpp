@@ -193,7 +193,7 @@ namespace JSON
             return asPtr(Object_t)->at(Key.data());
         }
 
-        //
+        // NOTE(tcn): std::basic_string variants can't deduce T, use value().
         template<typename T> operator T() const
         {
             switch (Type)
@@ -207,7 +207,7 @@ namespace JSON
 
                 case Type_t::String:
                 {
-                    if constexpr (Internal::isDerived<T, std::basic_string>{} || Internal::isDerived<T, std::basic_string_view>{})
+                    if constexpr (Internal::isDerived<T, std::basic_string>{})
                     {
                         if constexpr (std::is_same_v<typename T::value_type, wchar_t>)
                             return Encoding::toWide(*asPtr(std::u8string));
@@ -260,10 +260,10 @@ namespace JSON
             if (Type != Type_t::Object) return *this;
             return asPtr(Object_t)->at({ Key, N });
         }
-        const Value_t &operator[](std::string_view Key) const
+        template<size_t N> Value_t operator[](const char(&Key)[N]) const
         {
             if (Type != Type_t::Object) return *this;
-            return asPtr(Object_t)->at({ Key.data(), Key.size() });
+            return *asPtr(Object_t)->at({ Key, N });
         }
 
 
