@@ -159,7 +159,7 @@ namespace Backend
 
         // Initialize subsystems that plugins may need.
         Networking::Initialize();
-        //Services::Initialize();
+        Services::Initialize();
 
         // Create a worker-thread in the background.
         CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);

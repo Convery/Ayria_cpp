@@ -71,5 +71,6 @@ namespace Services
     inline void Initialize()
     {
         Clientinfo::Initialize();
+        Clientrelations::Initialize();
     }
 }

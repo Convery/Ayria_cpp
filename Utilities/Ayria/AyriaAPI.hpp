@@ -100,12 +100,8 @@ namespace AyriaAPI
             }
             else
             {
-                Query()
-                    << "SELECT AccountID FROM Clients;"
-                    >> [&](uint32_t AccountID)
-                    {
-                        AccountIDs.insert(AccountID);
-                    };
+                Query() << "SELECT AccountID FROM Clients;"
+                        >> [&](uint32_t AccountID) { AccountIDs.insert(AccountID); };
             }
         } catch (...) {}
 
@@ -114,6 +110,33 @@ namespace AyriaAPI
             Result.emplace_back(getClientinfo(ID));
 
         return Result;
+    }
+
+    // Client relationships.
+    using isFriend = bool; using isBlocked = bool; using Relation = std::pair<isFriend, isBlocked>;
+    inline std::pair<Relation, Relation> getRelation(uint32_t AccountA, uint32_t AccountB)
+    {
+        Relation A{}, B{};
+
+        try
+        {
+            Query() << "SELECT isFriend, isBlocked FROM Relations WHERE (Source = ? AND Target = ?);"
+                    << AccountA << AccountB >> std::tie(A.first, A.second);
+            Query() << "SELECT isFriend, isBlocked FROM Relations WHERE (Source = ? AND Target = ?);"
+                    << AccountB << AccountA >> std::tie(B.first, B.second);
+        } catch (...) {}
+
+        return { A, B };
+    }
+    inline bool areFriends(uint32_t AccountA, uint32_t AccountB)
+    {
+        const auto [A, B] = getRelation(AccountA, AccountB);
+        return A.first && B.first;
+    }
+    inline bool areBlocked(uint32_t AccountA, uint32_t AccountB)
+    {
+        const auto [A, B] = getRelation(AccountA, AccountB);
+        return A.second || B.second;
     }
 
 
