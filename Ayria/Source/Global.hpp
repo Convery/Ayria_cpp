@@ -20,10 +20,10 @@ struct alignas(64) Globalstate_t
     uint32_t GameID{}, ModID{};             // Set through Platform-wrapper.
     // 16 bytes.
 
-    // 25519-curve cryptography.
-    std::unique_ptr<std::array<uint8_t, 32>> SigningkeyPublic{ Allocate<std::array<uint8_t, 32>>() };     // Shared static key.
-    std::unique_ptr<std::array<uint8_t, 64>> SigningkeyPrivate{ Allocate<std::array<uint8_t, 64>>() };    // Derived from authentication.
-    std::unique_ptr<std::array<uint8_t, 32>> EncryptionkeyPrivate{ Allocate<std::array<uint8_t, 32>>() }; // Transient session-key.
+    // 25519-curve cryptography, random or derived from authentication. Primary account identifier.
+    std::unique_ptr<std::array<uint8_t, 32>> SigningkeyPublic{ Allocate<std::array<uint8_t, 32>>() };
+    std::unique_ptr<std::array<uint8_t, 64>> SigningkeyPrivate{ Allocate<std::array<uint8_t, 64>>() };
+    std::unique_ptr<std::array<uint8_t, 32>> EncryptionkeyPrivate{ Allocate<std::array<uint8_t, 32>>() };
     // 28 / 40 bytes.
 
     // Rarely used (for now), but good to have in the future.
