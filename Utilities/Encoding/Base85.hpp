@@ -194,19 +194,19 @@ namespace Base85
     }
 
     // Should be constexpr in C++20, questionable compiler support though.
-    template <B85Internal::Complexstring_t T> [[nodiscard]] constexpr std::string Encode(const T &Input)
+    template <typename C = char, B85Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
     {
-        return Encode(B85Internal::Flatten(Input));
+        return Encode<C>(B85Internal::Flatten(Input));
     }
-    template <B85Internal::Complexstring_t T> [[nodiscard]] constexpr std::string Decode(const T &Input)
+    template <typename C = char, B85Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
     {
-        return Decode(B85Internal::Flatten(Input));
+        return Decode<C>(B85Internal::Flatten(Input));
     }
-    template <B85Internal::Simplestring_t T> [[nodiscard]] constexpr std::string Encode(const T &Input)
+    template <typename C = char, B85Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C>Encode(const T &Input)
     {
         size_t Outputposition{};
         const auto N = std::ranges::size(Input);
-        std::string Result(Encodesize_padded(N), '\0');
+        std::basic_string<C> Result(Encodesize_padded(N), '\0');
 
         for (size_t i = 0; i < N; i += 4)
         {
@@ -225,11 +225,11 @@ namespace Base85
 
         return Result;
     }
-    template <B85Internal::Simplestring_t T> [[nodiscard]] constexpr std::string Decode(const T &Input)
+    template <typename C = char, B85Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
     {
         size_t Outputposition{};
         const auto N = std::ranges::size(Input);
-        std::string Result(Decodesize_padded(N), '\0');
+        std::basic_string<C> Result(Decodesize_padded(N), '\0');
 
         for (size_t i = 0; i < N; i += 5)
         {

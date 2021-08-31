@@ -73,15 +73,15 @@ namespace Base58
     }
 
     // Should be constexpr in C++20, questionable compiler support though.
-    template <B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::string Encode(const T &Input)
+    template <typename C = char, B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
     {
-        return Encode(B58Internal::Flatten(Input));
+        return Encode<C>(B58Internal::Flatten(Input));
     }
-    template <B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::string Decode(const T &Input)
+    template <typename C = char, B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
     {
-        return Decode(B58Internal::Flatten(Input));
+        return Decode<C>(B58Internal::Flatten(Input));
     }
-    template <B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::string Encode(const T &Input)
+    template <typename C = char, B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
     {
         const auto N = std::ranges::size(Input);
         Blob Buffer(Encodesize(N), 0x00);
@@ -107,7 +107,7 @@ namespace Base58
         }
 
         // Reverse emplace from the map.
-        std::string Result(Leadingzeros + Outputposition, '1');
+        std::basic_string<C> Result(Leadingzeros + Outputposition, '1');
         for (size_t i = 0; i < Outputposition; ++i)
         {
             Result[Leadingzeros + i] = B58Internal::Table[Buffer[Outputposition - 1 - i]];
@@ -115,7 +115,7 @@ namespace Base58
 
         return Result;
     }
-    template <B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::string Decode(const T &Input)
+    template <typename C = char, B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
     {
         const auto N = std::ranges::size(Input);
         size_t Outputposition{ 1 };
