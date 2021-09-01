@@ -12,7 +12,7 @@ namespace Services
     namespace Fileshare { void Initialize(); }
     namespace Usergroups { void Initialize(); }
     namespace Matchmaking { void Initialize(); }
-    namespace Socialpresence { void Initialize(); }
+    namespace Clientpresence { void Initialize(); }
     namespace Groupmessaging { void Initialize(); }
     namespace Clientmessaging { void Initialize(); }
     namespace Clientrelations { void Initialize(); }
@@ -71,6 +71,7 @@ namespace Services
     inline void Initialize()
     {
         Clientinfo::Initialize();
+        Clientpresence::Initialize();
         Clientrelations::Initialize();
     }
 }

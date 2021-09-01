@@ -8,7 +8,7 @@
 
 namespace Services::Clientrelations
 {
-    // Clientrelations::Insert
+    // Let the local network know about us.
     static void insertRelation(uint32_t AccountID, bool isFriend, bool isBlocked)
     {
         const auto Object = JSON::Object_t({

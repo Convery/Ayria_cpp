@@ -139,6 +139,53 @@ namespace AyriaAPI
         return A.second || B.second;
     }
 
+    // Clients presence, key-value storage.
+    using Presence = std::pair<std::string, std::string>; using Provider = std::string;
+    inline std::unordered_map<Provider, std::vector<Presence>> dumpClientpresence(uint32_t AccountID)
+    {
+        std::unordered_map<Provider, std::vector<Presence>> Result{};
+
+        try
+        {
+            Query()
+                << "SELECT * FROM Presence WHERE AccountID = ?;"
+                << AccountID
+                >> [&](uint32_t, const std::string &Provider, const std::string &Key, const std::string &Value)
+                {
+                    Result[Provider].emplace_back(Key, Value);
+                };
+        } catch (...) {}
+
+        return Result;
+    }
+    inline std::unordered_set<uint32_t> findClientpresence(const std::string &Provider, const std::string &Key)
+    {
+        std::unordered_set<uint32_t> Result{};
+
+        try
+        {
+            Query()
+                << "SELECT AccountID FROM Presence WHERE (Provider = ? AND Key = ?);"
+                << Provider << Key
+                >> [&](uint32_t AccountID) { Result.insert(AccountID); };
+        } catch (...) {}
+
+        return Result;
+    }
+    inline std::string getClientpresence(uint32_t AccountID, const std::string &Provider, const std::string &Key)
+    {
+        std::string Result{};
+
+        try
+        {
+            Query()
+                << "SELECT Value FROM Presence WHERE (AccountID = ? AND Provider = ? AND Key = ?);"
+                << AccountID << Provider << Key >> Result;
+        } catch (...) {}
+
+        return Result;
+    }
+
 
 }
 #endif
