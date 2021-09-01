@@ -8,7 +8,7 @@
 
 namespace Services::Clientpresence
 {
-    // Let the local network know about us.
+    // Process incoming messages from the network.
     static void __cdecl Handleinsert(uint64_t, uint32_t AccountID, const char *Message, unsigned int Length)
     {
         const JSON::Array_t Request = JSON::Parse(std::string_view(Message, Length));

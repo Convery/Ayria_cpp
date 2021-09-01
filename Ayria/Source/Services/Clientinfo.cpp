@@ -27,6 +27,12 @@ namespace Services::Clientinfo
             Result.insert(Client);
         return Result;
     }
+    std::optional<Client_t> getOfflineclient(uint32_t AccountID)
+    {
+        const auto [Client, Valid] = fromJSON(AyriaAPI::getClientinfo(AccountID));
+        if (!Valid) return {};
+        return Client;
+    }
 
     // Let the local network know about us.
     static void __cdecl Clienthello()
