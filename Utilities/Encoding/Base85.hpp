@@ -246,8 +246,49 @@ namespace Base85
 
             Outputposition += 4;
         }
+    }
 
-        return Result;
+    // No need for extra allocations, assume the caller knows what they are doing.
+    template <typename C = char, B85Internal::Simplestring_t T> constexpr void Encode(const T &Input, C *Result)
+    {
+        size_t Outputposition{};
+        const auto N = std::ranges::size(Input);
+
+        for (size_t i = 0; i < N; i += 4)
+        {
+            uint32_t A, B;
+
+            // Big-endian to native.
+            A = (Input[i + 0] << 24) | (Input[i + 1] << 16) | (Input[i + 2] << 8) | Input[i + 3];
+
+            B = B85Internal::Div(A); Result[Outputposition + 4] = B85Internal::Table[A - B * 85]; A = B;
+            B = B85Internal::Div(A); Result[Outputposition + 3] = B85Internal::Table[A - B * 85]; A = B;
+            B = B85Internal::Div(A); Result[Outputposition + 2] = B85Internal::Table[A - B * 85]; A = B;
+            B = B85Internal::Div(A); Result[Outputposition + 1] = B85Internal::Table[A - B * 85];
+            Result[Outputposition + 0] = B85Internal::Table[B];
+            Outputposition += 5;
+        }
+    }
+    template <typename C = char, B85Internal::Simplestring_t T> constexpr void Decode(const T &Input, C *Result)
+    {
+        size_t Outputposition{};
+        const auto N = std::ranges::size(Input);
+
+        for (size_t i = 0; i < N; i += 5)
+        {
+            uint32_t A = B85Internal::Reversetable[((uint8_t)Input[i + 0] - 0x20) & 0x7F];
+            A = A * 85 + B85Internal::Reversetable[((uint8_t)Input[i + 1] - 0x20) & 0x7F];
+            A = A * 85 + B85Internal::Reversetable[((uint8_t)Input[i + 2] - 0x20) & 0x7F];
+            A = A * 85 + B85Internal::Reversetable[((uint8_t)Input[i + 3] - 0x20) & 0x7F];
+            A = A * 85 + B85Internal::Reversetable[((uint8_t)Input[i + 4] - 0x20) & 0x7F];
+
+            Result[Outputposition + 0] = (A >> 24) & 0xFF;
+            Result[Outputposition + 1] = (A >> 16) & 0xFF;
+            Result[Outputposition + 2] = (A >> 8) & 0xFF;
+            Result[Outputposition + 3] = (A >> 0) & 0xFF;
+
+            Outputposition += 4;
+        }
     }
 
     // Verify that the string is valid, MSVC STL does not have String.contains yet.

@@ -143,6 +143,66 @@ namespace Base58
         return { Buffer.rbegin(), Buffer.rend() };
     }
 
+    // No need for extra allocations, assume the caller knows what they are doing.
+    template <typename C = char, B58Internal::Simplestring_t T> constexpr void Encode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        Blob Buffer(Encodesize(N), 0x00);
+        size_t Outputposition{ 1 };
+        size_t Leadingzeros{};
+
+        // Count leading zeros.
+        while (Input[Leadingzeros] == 0) Leadingzeros++;
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            auto Item = static_cast<uint32_t>(Input[i]);
+
+            for (size_t c = 0; c < Outputposition; c++)
+            {
+                Item += static_cast<uint32_t>(Buffer[c] << 8);
+                Buffer[c] = static_cast<uint8_t>(Item % 58);
+                Item /= 58;
+            }
+
+            for (; Item; Item /= 58)
+                Buffer[Outputposition++] = static_cast<uint8_t>(Item % 58);
+        }
+
+        // Reverse emplace from the map.
+        for (size_t i = 0; i < Outputposition; ++i)
+        {
+            Result[Leadingzeros + i] = B58Internal::Table[Buffer[Outputposition - 1 - i]];
+        }
+    }
+    template <typename C = char, B58Internal::Simplestring_t T> constexpr void Decode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        size_t Outputposition{ 1 };
+        size_t Leadingzeros{};
+
+        // Count leading ones and spaces (zero in output).
+        while (Input[Leadingzeros] == '1' || B58Internal::isSpace(Input[Leadingzeros])) Leadingzeros++;
+        Blob Buffer(Decodesize(N) + Leadingzeros, 0x00);
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            auto Item = static_cast<uint32_t>(B58Internal::Reversetable[Input[i] & 0x7F]);
+
+            for (size_t c = 0; c < Outputposition; c++)
+            {
+                Item += static_cast<uint32_t>(Buffer[c]) * 58;
+                Buffer[c] = Item & 0xFF;
+                Item >>= 8;
+            }
+
+            for (; Item; Item >>= 8)
+                Buffer[Outputposition++] = Item & 0xFF;
+        }
+
+        std::ranges::move(Buffer.rbegin(), Buffer.rend(), Result);
+    }
+
     // Verify that the string is valid, MSVC STL does not have String.contains yet.
     [[nodiscard]] inline bool isValid(std::string_view Input)
     {

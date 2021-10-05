@@ -271,6 +271,59 @@ namespace Base64
         return { Input, Outputposition };
     }
 
+    // No need for extra allocations, assume the caller knows what they are doing.
+    template <typename C = char, B64Internal::Simplestring_t T> constexpr void Encode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
+        }
+
+        while (Outputposition < Encodesize(N))
+            Result[Outputposition++] = '=';
+    }
+    template <typename C = char, B64Internal::Simplestring_t T> constexpr void Decode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
+            if (Item == '=') [[unlikely]] continue;
+
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
+            }
+        }
+    }
+
     // Verify that the string is valid.
     [[nodiscard]] constexpr bool isValid(std::string_view Input)
     {
