@@ -152,6 +152,6 @@ namespace Base58
             if (!std::memchr(Valid, Item, sizeof(Valid))) [[unlikely]]
                 return false;
         }
-        return !Input.empty();
+        return true;
     }
 }

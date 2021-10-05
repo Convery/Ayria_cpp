@@ -259,7 +259,7 @@ namespace Base85
             if (!std::memchr(Valid, Item, sizeof(Valid))) [[unlikely]]
                 return false;
         }
-        return !Input.empty();
+        return true;
     }
 
     // Sanity checking.

@@ -285,7 +285,7 @@ namespace Base64
             return false;
         }
 
-        return !Input.empty();
+        return true;
     }
 
     // RFC7515 compatibility.
