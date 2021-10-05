@@ -56,6 +56,13 @@ class Ringbuffer_t
     [[nodiscard]] bool empty() const noexcept { return Size == 0; }
     [[nodiscard]] bool full() const noexcept { return Size == N; }
     [[nodiscard]] size_t capacity() const noexcept { return N; }
+    [[nodiscard]] bool contains(T Item) const noexcept
+    {
+        for (size_t i = 0; i < Size; ++i)
+            if (Storage[i] == Item)
+                return true;
+        return false;
+    }
 
     void clear() noexcept
     {

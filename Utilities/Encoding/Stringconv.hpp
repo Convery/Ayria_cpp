@@ -26,7 +26,7 @@ namespace Encoding
                 if (Intptr[i] & 0x80808080)
                     return false;
 
-            // Don't care about over-reads.
+            // Don't care about over-reads, little-endian assumed.
             if (Remaining == 3) return !(Intptr[Count32] & 0x00808080);
             if (Remaining == 2) return !(Intptr[Count32] & 0x00008080);
             if (Remaining == 1) return !(Intptr[Count32] & 0x00000080);
@@ -66,7 +66,7 @@ namespace Encoding
                 }
 
                 // 16-bit.
-                if (Codepoint < 0x10000)
+                if (Codepoint < 0x10000) [[likely]]
                 {
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0xF000) >> 12) | 0xE0));
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
@@ -75,7 +75,7 @@ namespace Encoding
                 }
 
                 // 21-bit.
-                if (Codepoint < 0x200000)
+                if (Codepoint < 0x200000) [[unlikely]]
                 {
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x1C0000) >> 18) | 0xF0));
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
@@ -85,7 +85,7 @@ namespace Encoding
                 }
 
                 // 26-bit.
-                if (Codepoint < 0x4000000)
+                if (Codepoint < 0x4000000) [[unlikely]]
                 {
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3000000) >> 24) | 0xF8));
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC000) >> 18) | 0x80));
@@ -96,7 +96,7 @@ namespace Encoding
                 }
 
                 // 30-bit.
-                if (Codepoint < 0x80000000)
+                if (Codepoint < 0x80000000) [[unlikely]]
                 {
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x40000000) >> 30) | 0xFC));
                     Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000000) >> 24) | 0x80));
@@ -158,7 +158,7 @@ namespace Encoding
         {
             const auto pStop = Offset(Input, Stop);
             const auto pStart = Offset(Input, Start);
-            if (pStart == (size_t)-1) return {};
+            if (pStart == pStop) [[unlikely]] return {};
 
             return std::u8string_view(&Input[pStart], pStop - pStart);
         }
@@ -225,6 +225,7 @@ namespace Encoding
         return std::u8string(Input.data(), Input.size());
     }
 
+    // Depending on size of wchar_t, char32_t characters will be replaced with '?'
     [[nodiscard]] inline std::wstring toWide(std::u8string_view Input)
     {
         std::wstring Result{}; Result.reserve(Input.size());
@@ -258,7 +259,7 @@ namespace Encoding
             }
 
             // 21-bit.
-            if ((Controlbyte & 0xF8) == 0xF0)
+            if ((Controlbyte & 0xF8) == 0xF0) [[unlikely]]
             {
                 const auto Databyte = Input[i++];
                 const auto Extrabyte = Input[i++];
@@ -267,11 +268,12 @@ namespace Encoding
                 if constexpr (sizeof(wchar_t) == 4)
                     Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x07) << 18) | ((Databyte & 0x3F) << 12)
                                          | ((Extrabyte & 0x3F) << 6) | (Triplebyte & 0x3F)));
+                else Result.push_back(L'?');
                 continue;
             }
 
             // 26-bit.
-            if ((Controlbyte & 0xFC) == 0xF8)
+            if ((Controlbyte & 0xFC) == 0xF8) [[unlikely]]
             {
                 const auto Databyte = Input[i++];
                 const auto Extrabyte = Input[i++];
@@ -280,13 +282,15 @@ namespace Encoding
 
                 if constexpr (sizeof(wchar_t) == 4)
                     Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x03) << 24) | ((Databyte & 0x3F) << 18) |
-                                         ((Extrabyte & 0x3F) << 12) | ((Triplebyte & 0x3F) << 6)
-                                         | (Quadbyte & 0x3F)));
+                        ((Extrabyte & 0x3F) << 12) | ((Triplebyte & 0x3F) << 6)
+                        | (Quadbyte & 0x3F)));
+                else Result.push_back(L'?');
+
                 continue;
             }
 
             // 30-bit.
-            if ((Controlbyte & 0xFE) == 0xFC)
+            if ((Controlbyte & 0xFE) == 0xFC) [[unlikely]]
             {
                 const auto Databyte = Input[i++];
                 const auto Extrabyte = Input[i++];
@@ -298,6 +302,7 @@ namespace Encoding
                     Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x01) << 30) | ((Databyte & 0x3F) << 24) |
                                          ((Extrabyte & 0x3F) << 18) | ((Triplebyte & 0x3F) << 12)
                                          | ((Quadbyte & 0x3F) << 6) | (Pentabyte & 0x3F)));
+                else Result.push_back(L'?');
                 continue;
             }
 
@@ -307,6 +312,12 @@ namespace Encoding
 
         return Result;
     }
+    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
+    {
+        return toWide(toUTF8(Input));
+    }
+
+    // Non-ASCII characters will be converted to their \uXXXX sequence.
     [[nodiscard]] inline std::string toNarrow(std::u8string_view Input)
     {
         if (UTF8::isASCII(Input)) [[likely]]
@@ -329,11 +340,6 @@ namespace Encoding
         }
 
         return Result;
-    }
-
-    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
-    {
-        return toWide(toUTF8(Input));
     }
     [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
     {

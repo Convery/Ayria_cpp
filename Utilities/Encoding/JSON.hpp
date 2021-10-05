@@ -150,10 +150,24 @@ namespace JSON
         }
 
         //
+        template <typename ...Args> [[nodiscard]] bool contains_all(Args&&... va) const
+        {
+            if (Type != Type_t::Object) return false;
+            return (contains(va) && ...);
+        }
+        template <typename ...Args> [[nodiscard]] bool contains_any(Args&&... va) const
+        {
+            if (Type != Type_t::Object) return false;
+            return (contains(va) || ...);
+        }
         [[nodiscard]] bool contains(std::string_view Key) const
         {
             if (Type != Type_t::Object) return false;
             return asPtr(Object_t)->contains(Key.data());
+        }
+        [[nodiscard]] bool isNull() const
+        {
+            return Type == Type_t::Null;
         }
         [[nodiscard]] bool empty() const
         {
@@ -161,10 +175,6 @@ namespace JSON
             if (Type == Type_t::Object) return asPtr(Object_t)->empty();
             if (Type == Type_t::Array) return asPtr(Array_t)->empty();
             return true;
-        }
-        [[nodiscard]] bool isNull() const
-        {
-            return Type == Type_t::Null;
         }
 
         //
@@ -242,16 +252,18 @@ namespace JSON
                 }
             }
 
-            return {};
+            // Allow NULL-ness to be checked in if-statements.
+            if constexpr (std::is_same_v<T, bool>) return !isNull();
+            else return {};
         }
         template<typename T> T get() const
         {
             return *this;
         }
-        template<typename T> T &get()
+        template<typename T> std::remove_pointer_t<T> *get()
         {
-            if (Type == Type_t::Null) *this = Value_t(T());
-            return *asPtr(T);
+            if (isNull()) return {};
+            return *asPtr(std::remove_pointer_t<T>);
         }
 
         //
@@ -265,7 +277,6 @@ namespace JSON
             if (Type != Type_t::Object) return *this;
             return *asPtr(Object_t)->at({ Key, N });
         }
-
 
         //
         template<typename T, size_t N> Value_t(const std::array<T, N> &Input)
