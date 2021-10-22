@@ -441,10 +441,11 @@ namespace JSON
         if (JSONString.empty()) return {};
         return Parse(std::string_view(JSONString));
     }
-    inline Value_t Parse(const char *JSONString)
+    inline Value_t Parse(const char *JSONString, size_t Length = 0)
     {
         if (!JSONString) return {};
-        return Parse(std::string(JSONString));
+        if (Length == 0) return Parse(std::string(JSONString));
+        else return Parse(std::string_view(JSONString, Length));
     }
 }
 #pragma warning(pop)
