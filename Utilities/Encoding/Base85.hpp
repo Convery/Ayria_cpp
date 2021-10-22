@@ -246,6 +246,8 @@ namespace Base85
 
             Outputposition += 4;
         }
+
+        return Result;
     }
 
     // No need for extra allocations, assume the caller knows what they are doing.
