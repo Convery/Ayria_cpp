@@ -19,6 +19,7 @@ namespace Backend
     using Task_t = struct { uint64_t Last, Period; void(__cdecl *Callback)(); };
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
     static Defaultmutex Threadsafe{};
+    static Spinlock Databaselock{};
 
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
@@ -54,11 +55,60 @@ namespace Backend
         }
     }
 
+    // Set the global cryptokey from various sources.
+    void setCryptokey_CRED(std::string_view Cred1, std::string_view Cred2)
+    {
+        uint8_t Seed[32]{};
+        const auto Ret = PKCS5_PBKDF2_HMAC(Cred1.data(), Cred1.size(),
+            (uint8_t *)Cred2.data(), Cred2.size(), 12345, EVP_sha256(), 32, Seed);
+        if (!Ret) [[unlikely]] return;
+
+        std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(std::to_array(Seed));
+    }
+    void setCryptokey_TEMP()
+    {
+        uint8_t Seed[32]{};
+        RAND_bytes(Seed, 32);
+        std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(std::to_array(Seed));
+    }
+    void setCryptokey_HWID()
+    {
+        const auto [MOBO, UUID] = GenerateHWID();
+        const auto Seed = Hash::SHA256(Hash::SHA256(MOBO) + Hash::SHA256(UUID));
+        std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(Seed);
+    }
+
     // For debugging.
     static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
     {
         (void)DBName; (void)Errorcode; (void)Errorstring;
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
+    }
+
+    // Fetch information about updated tables.
+    static Hashmap<std::string, Hashset<int64_t>> Modifiedrows{};
+    Hashset<int64_t> getModified(const std::string &Tablename)
+    {
+        Hashset<int64_t> Temp{};
+
+        std::scoped_lock Lock(Databaselock);
+        Modifiedrows[Tablename].swap(Temp);
+        return Temp;
+    }
+    static void UpdateCB(void *, int Type, const char *, const char *Table, int64_t RowID)
+    {
+        // We don't care about deletions..
+        if (Type == SQLITE_INSERT || Type == SQLITE_UPDATE) [[likely]]
+        {
+            const auto lTable = std::string(Table);
+
+            // Nor do we care about internal tables..
+            if (lTable == "Messagestream" || lTable == "Account") [[likely]]
+                return;
+
+            std::scoped_lock Lock(Databaselock);
+            Modifiedrows[lTable].insert(RowID);
+        }
     }
 
     // Interface with the client database, remember try-catch.
@@ -76,10 +126,49 @@ namespace Backend
 
             // Intercept updates from plugins writing to the DB.
             if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.db");
+            sqlite3_update_hook(Ptr, UpdateCB, nullptr);
             sqlite3_extended_result_codes(Ptr, false);
 
             // Close the DB at exit to ensure everything's flushed.
             Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+
+            // Basic initialization.
+            try
+            {
+                sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
+                sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+
+                sqlite::database(Database) <<
+                    "CREATE TABLE IF NOT EXISTS Account ("
+                    "Publickey TEXT NOT NULL PRIMARY KEY );";
+
+                sqlite::database(Database) <<
+                    "CREATE TABLE IF NOT EXISTS Messagestream ("
+                    "Sender TEXT REFERENCES Account (Publickey) ON DELETE CASCADE, "
+                    "Messagetype INTEGER NOT NULL, "
+                    "Timestamp INTEGER NOT NULL, "
+                    "Signature TEXT NOT NULL, "
+                    "Message TEXT NOT NULL, "
+                    "isProcessed BOOLEAN, "
+                    "UNIQUE (Sender, Signature) );";
+
+            } catch (...) {}
+
+            // Perform cleanup on exit.
+            std::atexit([]()
+            {
+                if (!Global.Settings.pruneDB)
+                {
+                    const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::hours(24)).time_since_epoch();
+                    try { Backend::Database() << "DELETE FROM Messagestream WHERE Timestamp < ?;" << Timestamp.count(); } catch (...) {}
+                }
+
+                try
+                {
+                    Backend::Database() << "PRAGMA optimize;";
+                    Backend::Database() << "PRAGMA incremental_vacuum;";
+                } catch (...) {}
+            });
         }
         return sqlite::database(Database);
     }
@@ -96,44 +185,9 @@ namespace Backend
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Object));
     }
 
-    // Perform startup authentication if credentials have been provided.
-    static bool Initialauth()
-    {
-        const auto Commandline = std::wstring(GetCommandLineW());
-        if (Commandline.find(L"--Auth") == std::wstring::npos) return false;
-
-        const auto [MOBO, UUID] = GenerateHWID();
-        const auto Seed = Hash::SHA256(Hash::SHA256(MOBO) + Hash::SHA256(UUID));
-
-        ED25519_keypair_from_seed(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data(), (uint8_t *)Seed.data());
-        const auto Hash = Hash::SHA256(Hash::SHA256(*Global.SigningkeyPrivate) + "Authed");
-
-        // The encryption-key is RFC 7748 compliant.
-        std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
-        (*Global.EncryptionkeyPrivate)[0] |= ~248;
-        (*Global.EncryptionkeyPrivate)[31] &= ~64;
-        (*Global.EncryptionkeyPrivate)[31] |= ~127;
-
-        // TODO(tcn): Notify Ayria server.
-        return true;
-    }
-
     // Initialize the system.
     void Initialize()
     {
-        // Initialize the signing key-pair with random data.
-        ED25519_keypair(Global.SigningkeyPublic->data(), Global.SigningkeyPrivate->data());
-        const auto Hash = Hash::SHA256(Hash::SHA256(*Global.SigningkeyPrivate) + "Noauth");
-
-        // The encryption-key is RFC 7748 compliant.
-        std::memcpy(Global.EncryptionkeyPrivate->data(), Hash.data(), Hash.size());
-        (*Global.EncryptionkeyPrivate)[0] |= ~248;
-        (*Global.EncryptionkeyPrivate)[31] &= ~64;
-        (*Global.EncryptionkeyPrivate)[31] |= ~127;
-
-        // Try to authenticate and get proper keys.
-        Global.Settings.isAuthenticated = Initialauth();
-
         // Load the last configuration from disk.
         const auto Config = JSON::Parse(FS::Readfile<char>(L"./Ayria/Settings.json"));
         Global.Settings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
@@ -141,11 +195,15 @@ namespace Backend
         Global.Settings.enableFileshare = Config.value<bool>("enableFileshare");
         *Global.Username = Config.value("Username", u8"AYRIA"s);
 
+        // Select a source for crypto, credentials are used from the GUI.
+        if (std::strstr(GetCommandLineA(), "--randID")) setCryptokey_TEMP();
+        else setCryptokey_HWID();
+
         // Notify the user about the current settings.
-        Infoprint("Loaded settings:");
-        Infoprint(va("Username: %*s", Global.Username->size(), Global.Username->data()));
-        Infoprint(va("LongID: %s", Global.getLongID().c_str()));
+        Infoprint("Loaded account:");
         Infoprint(va("ShortID: 0x08X", Global.getShortID()));
+        Infoprint(va("LongID: %s", Global.getLongID().c_str()));
+        Infoprint(va("Username: %*s", Global.Username->size(), Global.Username->data()));
 
         // If there was no config, force-save one for the user instantly.
         std::atexit([]() { if (Global.Settings.modifiedConfig) Saveconfig(); });
@@ -158,8 +216,12 @@ namespace Backend
         timeBeginPeriod(1);
 
         // Initialize subsystems that plugins may need.
-        Networking::Initialize();
+        Messagebus::Initialize();
+        Messageprocessing::Initialize();
+        Notifications::Initialize();
         Services::Initialize();
+        Console::Initialize();
+        Plugins::Initialize();
 
         // Create a worker-thread in the background.
         CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
