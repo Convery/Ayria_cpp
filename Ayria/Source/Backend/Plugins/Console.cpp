@@ -12,7 +12,7 @@ namespace Console
     static Spinlock Writelock{};
     constexpr size_t Loglimit = 256;
     static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
-    static Hashmap<std::string, Functioncallback_t> Commands{};
+    static Hashmap<std::string, Hashset<Functioncallback_t>> Commands{};
 
     // Threadsafe injection into and fetching from the global log.
     template <typename T> void addMessage(const std::basic_string<T> &Message, Color_t RGBColor)
@@ -88,9 +88,9 @@ namespace Console
     }
 
     // Helper to manage the commands.
-    static Functioncallback_t Findcommand(std::string_view Functionname)
+    static std::optional<Hashset<Functioncallback_t>> Findcommand(std::string_view Functionname)
     {
-        for (const auto &[Name, Callback] : Commands)
+        for (const auto &[Name, Callbacks] : Commands)
         {
             if (Name.size() != Functionname.size()) continue;
 
@@ -101,10 +101,10 @@ namespace Console
                 return std::toupper(Char1) != std::toupper(Char2);
             })) continue;
 
-            return Callback;
+            return Callbacks;
         }
 
-        return nullptr;
+        return {};
     }
 
     // Manage and execute the commandline, with optional logging.
@@ -134,8 +134,8 @@ namespace Console
         }
 
         // Find the command by name (first argument).
-        const auto Callback = Findcommand(Heapstorage.front());
-        if (!Callback) [[unlikely]]
+        const auto Callbacks = Findcommand(Heapstorage.front());
+        if (!Callbacks) [[unlikely]]
         {
             Errorprint(va("No command named: %s", Heapstorage.front().c_str()));
             return;
@@ -148,7 +148,13 @@ namespace Console
         }
 
         // And finally evaluate.
-        Callback(Size - 1, &Arguments[1]);
+        for (const auto &Callback : *Callbacks)
+        {
+            if (Callback) [[likely]]
+            {
+                Callback(Size - 1, &Arguments[1]);
+            }
+        }
     }
     template <typename T> void execCommand(const std::basic_string<T> &Commandline, bool Log)
     {
@@ -157,10 +163,7 @@ namespace Console
     template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback)
     {
         if (!Callback || Name.empty()) [[unlikely]] return;
-        if (!Findcommand(Encoding::toNarrow(Name)))
-        {
-            Commands.emplace(Encoding::toNarrow(Name), Callback);
-        }
+        Commands[Encoding::toNarrow(Name)].insert(Callback);
     }
     template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback)
     {
@@ -179,7 +182,7 @@ namespace Console
         extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, void(__cdecl *Callback)(int Argc, const char **Argv))
         {
             if (!Name || !Callback) [[unlikely]] return;
-            addCommand(std::string_view{ Name }, Callback);
+            addCommand(Encoding::toUTF8(Name), Callback);
         }
 
         // JSON endpoints.
@@ -217,7 +220,7 @@ namespace Console
 
         static const auto List = [](int, const char **)
         {
-            std::string Output; Output.reserve(16 * Commands.size());
+            std::string Output; Output.reserve(20 * Commands.size());
             for (const auto &[Index, Tuple] : lz::enumerate(Commands, 1))
             {
                 Output += "    ";
@@ -231,8 +234,8 @@ namespace Console
         addCommand("List"sv, List);
         addCommand("Help"sv, List);
 
-        ::API::addEndpoint("Console::Exec", API::execCommand);
-        ::API::addEndpoint("Console::Print", API::printLine);
+        Layer3::addEndpoint("Console::Exec", API::execCommand);
+        Layer3::addEndpoint("Console::Print", API::printLine);
     }
 
     // Instantiate the templates to make MSVC happy.
