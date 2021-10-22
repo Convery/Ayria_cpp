@@ -21,6 +21,7 @@
 #include <functional>
 #include <algorithm>
 #include <execution>
+#include <concepts>
 #include <optional>
 #include <cassert>
 #include <cstdint>

@@ -69,7 +69,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/MarcDirven/cpp-lazy
     GIT_TAG "4.0.0"
     UPDATE_DISCONNECTED YES)
-add_definitions(-DLZ_STANDALONE)
+set(CPP-LAZY_USE_STANDALONE TRUE)
 FetchContent_MakeAvailable(cpp-lazy)
 include_directories("${cpp-lazy_SOURCE_DIR}/include")
 

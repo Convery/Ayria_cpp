@@ -41,7 +41,7 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     if (nReason == DLL_PROCESS_ATTACH)
     {
         // TODO(tcn): For 1.0, check profiler if _MM_HINT_T0 is the better choice (fill all cache-levels rather than 1-way tagging).
-        // Although it should already be touched by the ctors, ensure it's propagated and prioritised.
+        // Although it should already be touched by the ctors, ensure it's propagated and prioritized.
         _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_NTA);
 
         // Ensure that Ayrias default directories exist.
