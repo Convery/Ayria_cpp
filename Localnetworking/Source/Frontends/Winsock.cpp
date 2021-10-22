@@ -5,14 +5,16 @@
 */
 
 #include "../Localnetworking.hpp"
-#include <Ws2tcpip.h>
+#include <Ws2Tcpip.h>
 
 namespace Winsock
 {
     #define Calloriginal(Name) ((decltype(Name) *)Originalfunctions[#Name])
-    std::unordered_map<std::string_view, void *> Originalfunctions;
-    std::unordered_map<size_t, sockaddr_in> Connections;
-    std::unordered_map<size_t, sockaddr_in> Bindings;
+    Hashmap<size_t, sockaddr_in> Directedconnections;
+    Hashmap<std::string, void *> Originalfunctions;
+    Hashmap<size_t, sockaddr_in> Connections;
+    Hashmap<size_t, sockaddr_in> Bindings;
+    Hashset<size_t> Datagramsockets;
 
     // Utility functionality.
     inline std::string getAddress(const struct sockaddr *Sockaddr)
@@ -26,6 +28,12 @@ namespace Winsock
 
         return Address;
     }
+    inline std::string getPort(const struct sockaddr *Sockaddr)
+    {
+        if (Sockaddr->sa_family == AF_INET)
+            return va("%u", ntohs(((struct sockaddr_in *)Sockaddr)->sin_port));
+        return va("%u", ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port));
+    }
 
     // Connects proxied sockets to the backend.
     int __stdcall Connectsocket(size_t Socket, struct sockaddr *Name, int Namelength)
@@ -34,7 +42,17 @@ namespace Winsock
         if (const auto Proxyserver = Localnetworking::getProxyserver((sockaddr_in *)Name))
         {
             Debugprint("Connecting to proxied server: "s + Proxyserver->Hostname);
-            Localnetworking::Connectserver(Socket, Proxyserver->Instance);
+
+            // For some edge-cases devs call connect on a datagram socket and we need to proxy.
+            if (Datagramsockets.contains(Socket)) [[unlikely]]
+            {
+                Directedconnections[Socket] = *(sockaddr_in *)Name;
+                bind(Socket, Name, Namelength);
+            }
+            else
+            {
+                Localnetworking::Connectserver(Socket, Proxyserver->Instance);
+            }
             return 0;
         }
 
@@ -44,9 +62,9 @@ namespace Winsock
             // Debugprint may invalidate the last-error, so we had to save it.
             const auto Lasterror = WSAGetLastError();
 
-            // Our own system connects to localhost a lot, so ignore that.
-            if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
-                Debugprint("Failed to connect to: "s + getAddress(Name));
+            // Not actually a failure.
+            if (Lasterror != WSAEWOULDBLOCK)
+                Debugprint("Failed to connect to: "s + getAddress(Name) + ":" + getPort(Name));
 
             WSASetLastError(Lasterror);
             return Result;
@@ -54,7 +72,7 @@ namespace Winsock
 
         // Our own system connects to localhost a lot, so ignore that.
         if (((sockaddr_in *)Name)->sin_addr.s_addr != ntohl(INADDR_LOOPBACK))
-            Debugprint("Connected to: "s + getAddress(Name));
+            Debugprint("Connected to: "s + getAddress(Name) + ":" + getPort(Name));
 
         return 0;
     }
@@ -74,7 +92,7 @@ namespace Winsock
         // We don't allow binding to internal addresses, just localhost.
         if (0 == std::memcmp(Readableaddress.c_str(), "192.168.", 8) || 0 == std::memcmp(Readableaddress.c_str(), "10.", 3))
         {
-            if(Name->sa_family == AF_INET) ((sockaddr_in *)Name)->sin_addr.s_addr = INADDR_LOOPBACK;
+            if (Name->sa_family == AF_INET) ((sockaddr_in *)Name)->sin_addr.s_addr = INADDR_LOOPBACK;
         }
 
         const auto Result = Calloriginal(bind)(Socket, Name, Namelength);
@@ -92,7 +110,7 @@ namespace Winsock
             {
                 if (FNV::Equal(Item.second.sin_addr, ((sockaddr_in *)To)->sin_addr))
                 {
-                    return send(Item.first, Buffer, Length, NULL);
+                    return Calloriginal(send)(Item.first, Buffer, Length, NULL);
                 }
             }
 
@@ -103,7 +121,7 @@ namespace Winsock
             unsigned long Argument{ 1 };
             ioctlsocket(Localsocket, FIONBIO, &Argument);
             Connections[Localsocket] = *(sockaddr_in *)To;
-            return send(Localsocket, Buffer, Length, NULL);
+            return Calloriginal(send)(Localsocket, Buffer, Length, NULL);
         }
 
         return Calloriginal(sendto)(Socket, Buffer, Length, Flags, To, Tolength);
@@ -124,9 +142,9 @@ namespace Winsock
                 //if (Bindings[Socket].sin_port != Item.second.sin_port) continue;
                 if (Bindings[Socket].sin_addr.s_addr && !FNV::Equal(Bindings[Socket].sin_addr, Item.second.sin_addr)) continue;
 
-                *Fromlength = sizeof(SOCKADDR_IN);
-                *((sockaddr_in *)From) = Item.second;
-                return recv(Item.first, Buffer, Length, 0);
+                if (From)*((sockaddr_in *)From) = Item.second;
+                if (Fromlength) *Fromlength = sizeof(SOCKADDR_IN);
+                return Calloriginal(recv)(Item.first, Buffer, Length, 0);
             }
         }
 
@@ -170,25 +188,53 @@ namespace Winsock
         return lResult;
     }
 
-    // For debugging only.
-    #if !defined(NDEBUG)
+    // Hackery to support directed connections.
+    int __stdcall Send(size_t Socket, const char *Buffer, int Length, int Flags)
+    {
+        if (!Datagramsockets.contains(Socket)) [[likely]] return Calloriginal(send)(Socket, Buffer, Length, Flags);
+        return Sendto(Socket, Buffer, Length, Flags, (sockaddr *)&Directedconnections[Socket], sizeof(sockaddr_in));
+    }
+    int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
+    {
+        if (!Datagramsockets.contains(Socket)) [[likely]] return Calloriginal(recv)(Socket, Buffer, Length, Flags);
+        return Receivefrom(Socket, Buffer, Length, Flags, nullptr, nullptr);
+    }
+
+    // Mainly for debug-logging.
     size_t __stdcall Createsocket(int Family, int Type, int Protocol)
     {
         const auto Result = Calloriginal(socket)(Family, Type, Protocol);
 
         Debugprint(va("Creating a %s socket for %s over %s protocol (ID 0x%X)",
-                   [&]() { if (Family == AF_INET) return "IPv4"s; if (Family == AF_INET6) return "IPv6"s; if (Family == AF_IPX) return "IPX "s; return va("%u", Family); }().c_str(),
-                   [&]() { if (Type == SOCK_STREAM) return "streaming"s; if (Type == SOCK_DGRAM) return "datagrams"s; return va("%u", Type); }().c_str(),
-                   [&]()
+        [&]()
         {
-            switch (Protocol)
-            {
-                // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
-                case IPPROTO_IP: return "Any"s; case IPPROTO_ICMP: return "ICMP"s; case IPPROTO_TCP: return "TCP"s; case IPPROTO_UDP: return "UDP"s;
-                case /*NSPROTO_IPX*/ 1000: return "IPX"s; case /*NSPROTO_SPX*/ 1256: return "SPX"s; case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
-                default: return va("%u", Protocol);
-            }
-        }().c_str(), Result));
+            if (Family == AF_INET) return "IPv4"s;
+            if (Family == AF_INET6) return "IPv6"s;
+            if (Family == AF_IPX) return "IPX "s;
+            return va("%u", Family);
+        }().c_str(),
+        [&]()
+        {
+            if (Type == SOCK_STREAM) return "streaming"s;
+            if (Type == SOCK_DGRAM) return "datagrams"s;
+            return va("%u", Type);
+        }().c_str(),
+        [&]()
+        {
+             switch (Protocol)
+             {
+                 // NOTE(tcn): Case 0 (IPPROTO_IP) is listed as IPPROTO_HOPOPTS, but everyone uses it as 'any' protocol.
+                 case IPPROTO_IP: return "Any"s;
+                 case IPPROTO_ICMP: return "ICMP"s;
+                 case IPPROTO_TCP: return "TCP"s;
+                 case IPPROTO_UDP: return "UDP"s;
+                 case /*NSPROTO_IPX*/ 1000: return "IPX"s;
+                 case /*NSPROTO_SPX*/ 1256: return "SPX"s;
+                 case /*NSPROTO_SPXII*/ 1257: return "SPX2"s;
+                 default: return va("%u", Protocol);
+             }
+        }().c_str(),
+        Result));
 
         /*
             TODO(tcn):
@@ -197,9 +243,11 @@ namespace Winsock
             It was a very popular protocol in older games for LAN-play.
         */
 
+        // For some edge-cases devs call connect on a datagram socket and we need to track that.
+        if (Type == SOCK_DGRAM) Datagramsockets.insert(Result);
+
         return Result;
     }
-    #endif
 }
 
 namespace Localnetworking
@@ -210,7 +258,7 @@ namespace Localnetworking
         // Proxy Winsocks exports with our own information.
         const auto Hook = [&](const char *Name, void *Target)
         {
-            auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name);
+            const auto Address1 = GetProcAddress(LoadLibraryA("wsock32.dll"), Name);
             auto Address2 = GetProcAddress(LoadLibraryA("ws2_32.dll"), Name);
             if (Address1 == Address2) Address2 = 0;
 
@@ -235,9 +283,9 @@ namespace Localnetworking
         Hook("sendto", (void *)Winsock::Sendto);
         Hook("bind", (void *)Winsock::Bind);
 
-        // For debugging.
-        #if !defined(NDEBUG)
-        Hook("socket", Winsock::Createsocket);
-        #endif
+        // TODO(tcn): Make these optional.
+        Hook("socket", (void *)Winsock::Createsocket);
+        Hook("recv", (void *)Winsock::Receive);
+        Hook("send", (void *)Winsock::Send);
     }
 }

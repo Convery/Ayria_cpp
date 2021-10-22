@@ -10,26 +10,39 @@
 
 namespace Steam
 {
-    static std::any Hackery;
-    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+    enum EMatchMakingServerResponse
+    {
+        eServerResponded = 0,
+        eServerFailedToRespond,
+        eNoServersListedOnMasterServer // for the Internet query type, returned in response callback if no servers of this type match
+    };
+    enum EMatchMakingType
+    {
+        eInternetServer = 0,
+        eLANServer,
+        eFriendsServer,
+        eFavoritesServer,
+        eHistoryServer,
+        eSpectatorServer,
+        eInvalidServer
+    };
 
     // Callbacks.
-    struct MatchmakingKV { char Key[256], Value[256]; };
     struct ISteamMatchmakingServerListResponse001
     {
         virtual void ServerResponded(int iServer) = 0;
         virtual void ServerFailedToRespond(int iServer) = 0;
-        virtual void RefreshComplete(uint32_t response) = 0;
+        virtual void RefreshComplete(EMatchMakingServerResponse response) = 0;
     };
     struct ISteamMatchmakingServerListResponse002
     {
-        virtual void ServerResponded(void *hRequest, int iServer) = 0;
-        virtual void ServerFailedToRespond(void *hRequest, int iServer) = 0;
-        virtual void RefreshComplete(void *hRequest, uint32_t response) = 0;
+        virtual void ServerResponded(HServerListRequest hRequest, int iServer) = 0;
+        virtual void ServerFailedToRespond(HServerListRequest hRequest, int iServer) = 0;
+        virtual void RefreshComplete(HServerListRequest hRequest, EMatchMakingServerResponse response) = 0;
     };
     struct ISteamMatchmakingPingResponse
     {
-        virtual void ServerResponded(void *server) = 0;
+        virtual void ServerResponded(gameserveritem_t *server) = 0;
         virtual void ServerFailedToRespond() = 0;
     };
     struct ISteamMatchmakingPlayersResponse
@@ -45,119 +58,353 @@ namespace Steam
         virtual void RulesRefreshComplete() = 0;
     };
 
-    // Save the callback between calls.
-    ISteamMatchmakingServerListResponse001 *Responsecallback1{};
-    ISteamMatchmakingServerListResponse002 *Responsecallback2{};
+    // SQL <-> Steam management.
+    static Hashmap<uint32_t, gameserveritem_t, decltype(WW::Hash), decltype(WW::Equal)> Gameservers{};
+    static Hashmap<HServerListRequest, EMatchMakingType> Requests{};
+    static void Pollservers()
+    {
+        static auto lLastupdate = GetTickCount();
+        const auto Currenttime = GetTickCount();
+
+        // Only update once in a while.
+        if (Currenttime - lLastupdate < 5000) return;
+        lLastupdate = Currenttime;
+
+        // Get active servers.
+        const auto HostIDs = AyriaDB::Matchmakingsessions::Get::byGame(Global.ApplicationID);
+        for (const auto &ID : HostIDs)
+        {
+            auto Ayriaserver = AyriaDB::Matchmakingsessions::Get::byID(ID);
+            const uint32_t Hostaddress = Ayriaserver["Hostaddress"];
+            const uint32_t Lastupdate = Ayriaserver["Lastupdate"];
+            const std::string Gamedata = Ayriaserver["Gamedata"];
+            const uint16_t Hostport = Ayriaserver["Hostport"];
+            const uint32_t GameID = Ayriaserver["GameID"];
+            const uint32_t HostID = Ayriaserver["HostID"];
+
+            // Outdated server..
+            if (time(NULL) - Lastupdate > 30) [[unlikely]]
+            {
+                Gameservers.erase(HostID);
+                continue;
+            }
+
+            gameserveritem_t Server{};
+            const auto Object = JSON::Parse(Gamedata);
+
+            Server.m_bPassword = Object.value<bool>("isPasswordprotected");
+            Server.m_nMaxPlayers = Object.value<uint32_t>("Playermax");
+            Server.m_nBotPlayers = Object.value<uint32_t>("Botcount");
+            Server.m_nPlayers = Object.value<uint32_t>("Playercount");
+            Server.m_bSecure = Object.value<bool>("isSecure");
+            Server.m_bHadSuccessfulResponse = true;
+            Server.m_bDoNotRefresh = true;
+            Server.m_nAppID = GameID;
+            Server.m_nPing = 33;
+
+            Server.m_NetAdr.m_usConnectionPort = Object.value<uint16_t>("Gameport");
+            Server.m_NetAdr.m_usQueryPort = Object.value<uint16_t>("Queryport");
+            Server.m_NetAdr.m_unIP = Object.value<uint32_t>("Hostaddress");
+
+            const auto Versionstring = Object.value<std::string>("Version");
+            if (!Versionstring.empty())
+            {
+                uint8_t A{}, B{}, C{}, D{};
+                std::sscanf(Versionstring.c_str(), "%hhu.%hhu.%hhu.%hhu", &A, &B, &C, &D);
+                Server.m_nServerVersion |= A << 24;
+                Server.m_nServerVersion |= B << 16;
+                Server.m_nServerVersion |= C << 8;
+                Server.m_nServerVersion |= D << 0;
+            }
+
+            Server.m_steamID.Accounttype = SteamID_t::Accounttype_t::Gameserver;
+            Server.m_steamID.Universe = SteamID_t::Universe_t::Public;
+            Server.m_steamID.UserID = HostID;
+
+            std::strncpy(Server.m_szGameDescription, Object.value<std::string>("Gamedescription").c_str(), sizeof(Server.m_szGameDescription));
+            std::strncpy(Server.m_szServerName, Object.value<std::string>("Servername").c_str(), sizeof(Server.m_szServerName));
+            std::strncpy(Server.m_szGameTags, Object.value<std::string>("Gametags").c_str(), sizeof(Server.m_szGameTags));
+            std::strncpy(Server.m_szGameDir, Object.value<std::string>("Gamedir").c_str(), sizeof(Server.m_szGameDir));
+            std::strncpy(Server.m_szMap, Object.value<std::string>("Mapname").c_str(), sizeof(Server.m_szMap));
+
+            Gameservers.emplace(HostID, Server);
+        }
+    }
 
     struct SteamMatchmakingServers
     {
-        // TODO(tcn): Actually filter the servers.
-        void *RequestInternetServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        HServerListRequest RequestFavoritesServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
         {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void *RequestLANServerList1(uint32_t iApp, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
-        {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void *RequestFriendsServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
-        {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void *RequestFavoritesServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
-        {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void *RequestHistoryServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
-        {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void *RequestSpectatorServerList1(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
-        {
-            Responsecallback2 = pRequestServersResponse;
-            return this;
-        }
-        void ReleaseRequest(void *hServerListRequest) { Traceprint(); };
-
-        void RequestInternetServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse; }
-        void RequestLANServerList0(uint32_t iApp, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
-        void RequestFriendsServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
-        void RequestFavoritesServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
-        void RequestHistoryServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
-        void RequestSpectatorServerList0(uint32_t iApp, MatchmakingKV **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse) { Responsecallback1 = pRequestServersResponse;  }
-
-        Callbacks::gameserveritem_t *GetServerDetails1(uint32_t eType, int iServer) { Traceprint(); return {}; };
-        Callbacks::gameserveritem_t *GetServerDetails2(void *hRequest, int iServer) const
-        {
-            auto Serialized = new Callbacks::gameserveritem_t();
-            auto Servers = *Matchmaking::getNetworkservers();
-
-            if (Servers.size() <= size_t(iServer)) return 0;
-            auto Server = &Servers[iServer];
-
-            // Address in host-order.
-            Serialized->m_NetAdr.m_unIP = Server->Hostinfo.value("IPAddress", 0);
-            Serialized->m_NetAdr.m_usQueryPort = Server->Hostinfo.value("Queryport", 0);
-            Serialized->m_NetAdr.m_usConnectionPort = Server->Hostinfo.value("Gameport", 0);
-
-            // String-properties.
-            std::strncpy(Serialized->m_szGameDescription, Server->Gameinfo.value("Productdesc", "").c_str(), 64);
-            std::strncpy(Serialized->m_szGameDir, Server->Hostinfo.value("Gamemod", "").c_str(), 32);
-            std::strncpy(Serialized->m_szServerName, Server->Hostinfo.value("Servername", "").c_str(), 64);
-            std::strncpy(Serialized->m_szGameTags, Server->Gameinfo.value("Gametags", "").c_str(), 128);
-            std::strncpy(Serialized->m_szMap, Server->Gameinfo.value("Mapname", "").c_str(), 32);
-
-            // TODO(tcn): Get some real information.
-            Serialized->m_bSecure = Serialized->m_bPassword = Server->Hostinfo.value("isSecure", false);
-            Serialized->m_steamID = CSteamID(Server->HostID, 1, k_EAccountTypeGameServer);
-            Serialized->m_nServerVersion = Server->Hostinfo.value("Versionint", 1001);
-            Serialized->m_bPassword = Server->Hostinfo.value("isPrivate", false);
-
-            Serialized->m_nAppID = Server->Hostinfo.value("AppID", Steam.ApplicationID);
-            Serialized->m_nPlayers = Server->Gameinfo.value("Currentplayers", 0);
-            Serialized->m_nBotPlayers = Server->Gameinfo.value("Botplayers", 0);
-            Serialized->m_nMaxPlayers = Server->Gameinfo.value("Maxplayers", 0);
-            Serialized->m_bHadSuccessfulResponse = true;
-            Serialized->m_bDoNotRefresh = false;
-            Serialized->m_ulTimeLastPlayed = 0;
-            Serialized->m_nPing = 33;
-
-            return Serialized;
-        }
-        void CancelQuery(uint32_t eType) { Traceprint(); };
-        void RefreshQuery(uint32_t eType) { Traceprint(); };
-        bool IsRefreshing(uint32_t eType) { Traceprint(); return {}; };
-        int GetServerCount(uint32_t eType)
-        {
-            // Complete the listing as we did it in the background.
-            const auto Servers = *Matchmaking::getNetworkservers();
-            for(int i = 0; i < int(Servers.size()); ++i)
-            {
-                if (Responsecallback1) Responsecallback1->ServerResponded(i);
-                if (Responsecallback2) Responsecallback2->ServerResponded(this, i);
-            }
-
-            if (Responsecallback2) Responsecallback2->RefreshComplete(this, 0);
-            if (Responsecallback1) Responsecallback1->RefreshComplete(0);
-
-            return int(Servers.size());
-        }
-        void RefreshServer(uint32_t eType, int iServer) { Traceprint(); };
-        int PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse)
-        {
+            pRequestServersResponse->RefreshComplete(0, eNoServersListedOnMasterServer);
             return 0;
         }
-        int PlayerDetails(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPlayersResponse *pRequestServersResponse) { Traceprint(); return {}; };
-        int ServerRules(uint32_t unIP, uint16_t usPort, ISteamMatchmakingRulesResponse *pRequestServersResponse) { Traceprint(); return {}; };
-        void CancelServerQuery(int hServerQuery) { Traceprint(); };
+        HServerListRequest RequestFriendsServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(0, eNoServersListedOnMasterServer);
+            return 0;
+        }
+        HServerListRequest RequestHistoryServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(0, eNoServersListedOnMasterServer);
+            return 0;
+        }
+        HServerListRequest RequestInternetServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        {
+            size_t Handle = GetTickCount();
+            Requests.emplace(Handle, eInternetServer);
+
+            Pollservers();
+            int Serverindex{-1};
+
+            for (const auto &[HostID, Server] : Gameservers)
+            {
+                const auto Octet = Server.m_NetAdr.m_unIP & 0xFF000000;
+                Serverindex++;
+
+                // Only want WAN servers.
+                if (Octet == 192 || Octet == 10)
+                    continue;
+
+                // And servers for this game.
+                if (Server.m_nAppID != iApp)
+                    continue;
+
+                pRequestServersResponse->ServerResponded(Handle, Serverindex);
+            }
+
+            pRequestServersResponse->RefreshComplete(Handle, Gameservers.empty() ? eNoServersListedOnMasterServer : eServerResponded);
+            return Handle;
+        }
+        HServerListRequest RequestSpectatorServerList1(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(0, eNoServersListedOnMasterServer);
+            return 0;
+        }
+        HServerListRequest RequestLANServerList1(AppID_t iApp, ISteamMatchmakingServerListResponse002 *pRequestServersResponse)
+        {
+            size_t Handle = GetTickCount();
+            Requests.emplace(Handle, eLANServer);
+
+            Pollservers();
+            int Serverindex{-1};
+
+            for (const auto &[HostID, Server] : Gameservers)
+            {
+                const auto Octet = Server.m_NetAdr.m_unIP & 0xFF000000;
+                Serverindex++;
+
+                // Only want LAN servers.
+                if (Octet != 192 && Octet != 10)
+                    continue;
+
+                // And servers for this game.
+                if (Server.m_nAppID != iApp)
+                    continue;
+
+                pRequestServersResponse->ServerResponded(Handle, Serverindex);
+            }
+
+            pRequestServersResponse->RefreshComplete(Handle, Gameservers.empty() ? eNoServersListedOnMasterServer : eServerResponded);
+            return Handle;
+        }
+
+        HServerQuery PingServer(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPingResponse *pRequestServersResponse)
+        {
+            for (auto It = Gameservers.begin(); It != Gameservers.end(); ++It)
+            {
+                if (It->second.m_NetAdr.m_unIP == unIP && It->second.m_NetAdr.m_usQueryPort == usPort)
+                {
+                    pRequestServersResponse->ServerResponded(&It->second);
+                    return GetTickCount();
+                }
+            }
+
+            pRequestServersResponse->ServerFailedToRespond();
+            return GetTickCount();
+        }
+        HServerQuery PlayerDetails(uint32_t unIP, uint16_t usPort, ISteamMatchmakingPlayersResponse *pRequestServersResponse)
+        {
+            for (const auto &[ID, Server] : Gameservers)
+            {
+                if (Server.m_NetAdr.m_unIP != unIP || Server.m_NetAdr.m_usQueryPort != usPort) continue;
+
+                const std::string Steamdata = AyriaDB::Matchmakingsessions::Get::byID(ID)["Gamedata"];
+                const JSON::Array_t Userdata = JSON::Parse(Steamdata).value("Userdata");
+
+                for (const auto &Object : Userdata)
+                {
+                    const auto Username = Object.value<std::string>("Username");
+                    const auto Userscore = Object.value<uint32_t>("Userscore");
+
+                    pRequestServersResponse->AddPlayerToList(Username.c_str(), Userscore, 60.0f);
+                }
+
+                break;
+            }
+
+            pRequestServersResponse->PlayersRefreshComplete();
+            return GetTickCount();
+        }
+        HServerQuery ServerRules(uint32_t unIP, uint16_t usPort, ISteamMatchmakingRulesResponse *pRequestServersResponse)
+        {
+            for (const auto &[ID, Server] : Gameservers)
+            {
+                if (Server.m_NetAdr.m_unIP != unIP || Server.m_NetAdr.m_usQueryPort != usPort) continue;
+
+                const std::string Steamdata = AyriaDB::Matchmakingsessions::Get::byID(ID)["Gamedata"];
+                const JSON::Object_t Rules = JSON::Parse(Steamdata).value("Keyvalues");
+
+                for (const auto &[Key, Value] : Rules)
+                {
+                    pRequestServersResponse->RulesResponded(Key.c_str(), Value.get<std::string>().c_str());
+                }
+
+                break;
+            }
+
+            pRequestServersResponse->RulesRefreshComplete();
+            return GetTickCount();
+        }
+
+        bool IsRefreshing0(EMatchMakingType eType)
+        {
+            return false;
+        }
+        bool IsRefreshing1(HServerListRequest hRequest)
+        {
+            return false;
+        }
+
+        gameserveritem_t *GetServerDetails0(EMatchMakingType eType, int iServer)
+        {
+            for(auto It = Gameservers.begin(); It != Gameservers.end(); ++It)
+            {
+                const auto Octet = It->second.m_NetAdr.m_unIP & 0xFF000000;
+                if (eType == eLANServer && (Octet == 192 || Octet == 10)) iServer--;
+                if (eType == eInternetServer && (Octet != 192 && Octet != 10)) iServer--;
+
+                if (iServer == -1) return &It->second;
+            }
+
+            return nullptr;
+        }
+        gameserveritem_t *GetServerDetails1(HServerListRequest hRequest, int iServer)
+        {
+            return GetServerDetails0(Requests[hRequest], iServer);
+        }
+
+        int GetServerCount0(EMatchMakingType eType)
+        {
+            Pollservers();
+            int Servercount{};
+
+            for (const auto &[HostID, Server] : Gameservers)
+            {
+                const auto Octet = Server.m_NetAdr.m_unIP & 0xFF000000;
+                if (eType == eLANServer && (Octet == 192 || Octet == 10)) Servercount++;
+                if (eType == eInternetServer && (Octet != 192 && Octet != 10)) Servercount++;
+            }
+
+            return Servercount;
+        }
+        int GetServerCount1(HServerListRequest hRequest)
+        {
+            return GetServerCount0(Requests[hRequest]);
+        }
+
+        void CancelQuery0(EMatchMakingType eType)
+        {
+        }
+        void CancelQuery1(HServerListRequest hRequest)
+        {
+        }
+        void CancelServerQuery(HServerQuery hServerQuery)
+        {
+        }
+        void RefreshQuery0(EMatchMakingType eType)
+        {
+            Pollservers();
+        }
+        void RefreshQuery1(HServerListRequest hRequest)
+        {
+            Pollservers();
+        }
+        void RefreshServer0(EMatchMakingType eType, int iServer)
+        {}
+        void RefreshServer1(HServerListRequest hRequest, int iServer)
+        {}
+        void ReleaseRequest(HServerListRequest hServerListRequest)
+        {
+        }
+
+        void RequestFavoritesServerList0(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(eNoServersListedOnMasterServer);
+        }
+        void RequestFriendsServerList0(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(eNoServersListedOnMasterServer);
+        }
+        void RequestHistoryServerList0(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(eNoServersListedOnMasterServer);
+        }
+        void RequestInternetServerList0(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            Pollservers();
+            int Serverindex{-1};
+
+            for (const auto &[HostID, Server] : Gameservers)
+            {
+                const auto Octet = Server.m_NetAdr.m_unIP & 0xFF000000;
+                Serverindex++;
+
+                // Only want WAN servers.
+                if (Octet == 192 || Octet == 10)
+                    continue;
+
+                // And servers for this game.
+                if (Server.m_nAppID != iApp)
+                    continue;
+
+                pRequestServersResponse->ServerResponded(Serverindex);
+            }
+
+            pRequestServersResponse->RefreshComplete(Gameservers.empty() ? eNoServersListedOnMasterServer : eServerResponded);
+        }
+        void RequestSpectatorServerList0(AppID_t iApp, MatchMakingKeyValuePair_t **ppchFilters, uint32_t nFilters, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            pRequestServersResponse->RefreshComplete(eNoServersListedOnMasterServer);
+        }
+        void RequestLANServerList0(AppID_t iApp, ISteamMatchmakingServerListResponse001 *pRequestServersResponse)
+        {
+            Pollservers();
+            int Serverindex{-1};
+
+            for (const auto &[HostID, Server] : Gameservers)
+            {
+                const auto Octet = Server.m_NetAdr.m_unIP & 0xFF000000;
+                Serverindex++;
+
+                // Only want LAN servers.
+                if (Octet != 192 && Octet != 10)
+                    continue;
+
+                // And servers for this game.
+                if (Server.m_nAppID != iApp)
+                    continue;
+
+                pRequestServersResponse->ServerResponded(Serverindex);
+            }
+
+            pRequestServersResponse->RefreshComplete(Gameservers.empty() ? eNoServersListedOnMasterServer : eServerResponded);
+        }
     };
 
-    struct SteamMatchmakingservers001 : Interface_t
+    static std::any Hackery;
+    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+
+    struct SteamMatchmakingservers001 : Interface_t<16>
     {
         SteamMatchmakingservers001()
         {
@@ -167,19 +414,19 @@ namespace Steam
             Createmethod(3, SteamMatchmakingServers, RequestFavoritesServerList0);
             Createmethod(4, SteamMatchmakingServers, RequestHistoryServerList0);
             Createmethod(5, SteamMatchmakingServers, RequestSpectatorServerList0);
-            Createmethod(6, SteamMatchmakingServers, GetServerDetails1);
-            Createmethod(7, SteamMatchmakingServers, CancelQuery);
-            Createmethod(8, SteamMatchmakingServers, RefreshQuery);
-            Createmethod(9, SteamMatchmakingServers, IsRefreshing);
-            Createmethod(10, SteamMatchmakingServers, GetServerCount);
-            Createmethod(11, SteamMatchmakingServers, RefreshServer);
+            Createmethod(6, SteamMatchmakingServers, GetServerDetails0);
+            Createmethod(7, SteamMatchmakingServers, CancelQuery0);
+            Createmethod(8, SteamMatchmakingServers, RefreshQuery0);
+            Createmethod(9, SteamMatchmakingServers, IsRefreshing0);
+            Createmethod(10, SteamMatchmakingServers, GetServerCount0);
+            Createmethod(11, SteamMatchmakingServers, RefreshServer0);
             Createmethod(12, SteamMatchmakingServers, PingServer);
             Createmethod(13, SteamMatchmakingServers, PlayerDetails);
             Createmethod(14, SteamMatchmakingServers, ServerRules);
             Createmethod(15, SteamMatchmakingServers, CancelServerQuery);
         };
     };
-    struct SteamMatchmakingservers002 : Interface_t
+    struct SteamMatchmakingservers002 : Interface_t<17>
     {
         SteamMatchmakingservers002()
         {
@@ -190,12 +437,12 @@ namespace Steam
             Createmethod(4, SteamMatchmakingServers, RequestHistoryServerList1);
             Createmethod(5, SteamMatchmakingServers, RequestSpectatorServerList1);
             Createmethod(6, SteamMatchmakingServers, ReleaseRequest);
-            Createmethod(7, SteamMatchmakingServers, GetServerDetails2);
-            Createmethod(8, SteamMatchmakingServers, CancelQuery);
-            Createmethod(9, SteamMatchmakingServers, RefreshQuery);
-            Createmethod(10, SteamMatchmakingServers, IsRefreshing);
-            Createmethod(11, SteamMatchmakingServers, GetServerCount);
-            Createmethod(12, SteamMatchmakingServers, RefreshServer);
+            Createmethod(7, SteamMatchmakingServers, GetServerDetails1);
+            Createmethod(8, SteamMatchmakingServers, CancelQuery1);
+            Createmethod(9, SteamMatchmakingServers, RefreshQuery1);
+            Createmethod(10, SteamMatchmakingServers, IsRefreshing1);
+            Createmethod(11, SteamMatchmakingServers, GetServerCount1);
+            Createmethod(12, SteamMatchmakingServers, RefreshServer1);
             Createmethod(13, SteamMatchmakingServers, PingServer);
             Createmethod(14, SteamMatchmakingServers, PlayerDetails);
             Createmethod(15, SteamMatchmakingServers, ServerRules);
@@ -207,7 +454,7 @@ namespace Steam
     {
         Steammatchmakingserverloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers001", SteamMatchmakingservers001);
             Register(Interfacetype_t::MATCHMAKINGSERVERS, "SteamMatchmakingservers002", SteamMatchmakingservers002);
         }

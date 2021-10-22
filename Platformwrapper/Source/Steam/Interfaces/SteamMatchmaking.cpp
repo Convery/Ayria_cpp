@@ -9,10 +9,145 @@
 
 namespace Steam
 {
+    enum ELobbyDistanceFilter
+    {
+        k_ELobbyDistanceFilterClose,		// only lobbies in the same immediate region will be returned
+        k_ELobbyDistanceFilterDefault,		// only lobbies in the same region or near by regions
+        k_ELobbyDistanceFilterFar,			// for games that don't have many latency requirements, will return lobbies about half-way around the globe
+        k_ELobbyDistanceFilterWorldwide,	// no filtering, will match lobbies as far as India to NY (not recommended, expect multiple seconds of latency between the clients)
+    };
+    enum ELobbyComparison
+    {
+        k_ELobbyComparisonEqualToOrLessThan = -2,
+        k_ELobbyComparisonLessThan = -1,
+        k_ELobbyComparisonEqual = 0,
+        k_ELobbyComparisonGreaterThan = 1,
+        k_ELobbyComparisonEqualToOrGreaterThan = 2,
+        k_ELobbyComparisonNotEqual = 3,
+    };
+    enum EChatEntryType
+    {
+        k_EChatEntryTypeInvalid = 0,
+        k_EChatEntryTypeChatMsg = 1,		    // Normal text message from another user
+        k_EChatEntryTypeTyping = 2,			    // Another user is typing (not used in multi-user chat)
+        k_EChatEntryTypeInviteGame = 3,		    // Invite from other user into that users current game
+        k_EChatEntryTypeEmote = 4,			    // text emote message (deprecated, should be treated as ChatMsg)
+        //k_EChatEntryTypeLobbyGameStart = 5,	// lobby game is starting (dead - listen for LobbyGameCreated_t callback instead)
+        k_EChatEntryTypeLeftConversation = 6,   // user has left the conversation ( closed chat window )
+        // Above are previous FriendMsgType entries, now merged into more generic chat entry types
+        k_EChatEntryTypeEntered = 7,		    // user has entered the conversation (used in multi-user chat and group chat)
+        k_EChatEntryTypeWasKicked = 8,		    // user was kicked (data: 64-bit steamid of actor performing the kick)
+        k_EChatEntryTypeWasBanned = 9,		    // user was banned (data: 64-bit steamid of actor performing the ban)
+        k_EChatEntryTypeDisconnected = 10,	    // user disconnected
+        k_EChatEntryTypeHistoricalChat = 11,	// a chat message from user's chat history or offilne message
+        //k_EChatEntryTypeReserved1 = 12,       // No longer used
+        //k_EChatEntryTypeReserved2 = 13,       // No longer used
+        k_EChatEntryTypeLinkBlocked = 14,       // a link was removed by the chat filter.
+    };
+    enum ELobbyType
+    {
+        k_ELobbyTypePrivate = 0,		// only way to join the lobby is to invite to someone else
+        k_ELobbyTypeFriendsOnly = 1,	// shows for friends or invitees, but not in lobby list
+        k_ELobbyTypePublic = 2,			// visible for friends and in lobby list
+        k_ELobbyTypeInvisible = 3,		// returned by search, but not visible to other friends
+                                        //    useful if you want a user in two lobbies, for example matching groups together
+                                        //	  a user can be in only one regular lobby, and up to two invisible lobbies
+        k_ELobbyTypePrivateUnique = 4,	// private, unique and does not delete when empty - only one of these may exist per unique keypair set
+                                        // can only create from webapi
+    };
+
+    struct SteamMatchmaking
+    {
+        SteamAPICall_t CreateLobby2(ELobbyType eLobbyType);
+        SteamAPICall_t CreateLobby3(ELobbyType eLobbyType, int cMaxMembers);
+        SteamAPICall_t JoinLobby1(SteamID_t steamIDLobby);
+
+        SteamID_t GetLobbyByIndex(int iLobby);
+        SteamID_t GetLobbyMemberByIndex(SteamID_t steamIDLobby, int iMember);
+        SteamID_t GetLobbyOwner(SteamID_t steamIDLobby);
+
+        bool DeleteLobbyData(SteamID_t steamIDLobby, const char *pchKey);
+        bool GetFavoriteGame0(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer)
+        { return false;}
+        bool GetFavoriteGame1(int iGame, AppID_t *pnAppID, uint32_t *pnIP, uint16_t *pnConnPort, uint16_t *pnQueryPort, uint32_t *punFlags, uint32_t *pRTime32LastPlayedOnServer)
+        { return false; }
+        bool GetLobbyDataByIndex(SteamID_t steamIDLobby, int iLobbyData, char *pchKey, int cchKeyBufferSize, char *pchValue, int cchValueBufferSize);
+        bool GetLobbyGameServer(SteamID_t steamIDLobby, uint32_t *punGameServerIP, uint16_t *punGameServerPort, SteamID_t *psteamIDGameServer);
+        bool InviteUserToLobby(SteamID_t steamIDLobby, SteamID_t steamIDInvitee);
+        bool RemoveFavoriteGame0(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags)
+        { return true; }
+        bool RemoveFavoriteGame1(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags)
+        { return true; }
+        bool RequestFriendsLobbies()
+        {
+            return true;
+        }
+        bool RequestLobbyData(SteamID_t steamIDLobby)
+        {
+            return true;
+        }
+        bool SendLobbyChatMsg(SteamID_t steamIDLobby, const void *pvMsgBody, int cubMsgBody);
+        bool SetLinkedLobby(SteamID_t steamIDLobby, SteamID_t steamIDLobbyDependent);
+        bool SetLobbyData1(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        bool SetLobbyJoinable(SteamID_t steamIDLobby, bool bLobbyJoinable);
+        bool SetLobbyMemberLimit(SteamID_t steamIDLobby, int cMaxMembers);
+        bool SetLobbyOwner(SteamID_t steamIDLobby, SteamID_t steamIDNewOwner);
+        bool SetLobbyType(SteamID_t steamIDLobby, ELobbyType eLobbyType);
+
+        const char *GetLobbyData(SteamID_t steamIDLobby, const char *pchKey);
+        const char *GetLobbyMemberData(SteamID_t steamIDLobby, SteamID_t steamIDUser, const char *pchKey);
+
+        int AddFavoriteGame0(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint32_t unFlags, uint32_t rTime32LastPlayedOnServer);
+        int AddFavoriteGame1(AppID_t nAppID, uint32_t nIP, uint16_t nConnPort, uint16_t nQueryPort, uint32_t unFlags, uint32_t rTime32LastPlayedOnServer);
+        int GetFavoriteGameCount();
+        int GetLobbyChatEntry(SteamID_t steamIDLobby, int iChatID, SteamID_t *pSteamIDUser, void *pvData, int cubData, EChatEntryType *peChatEntryType);
+        int GetLobbyDataCount(SteamID_t steamIDLobby);
+        int GetLobbyMemberLimit(SteamID_t steamIDLobby);
+        int GetNumLobbyMembers(SteamID_t steamIDLobby);
+
+        double GetLobbyDistance(SteamID_t steamIDLobby)
+        {
+            // DEPRECATED
+            return 0.0;
+        }
+
+        void AddRequestLobbyListCompatibleMembersFilter(SteamID_t steamIDLobby);
+        void AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter eLobbyDistanceFilter);
+        void AddRequestLobbyListFilter(const char *pchKeyToMatch, const char *pchValueToMatch);
+        void AddRequestLobbyListFilterSlotsAvailable(int nSlotsAvailable);
+        void AddRequestLobbyListNearValueFilter(const char *pchKeyToMatch, int nValueToBeCloseTo);
+        void AddRequestLobbyListNumericalFilter(const char *pchKeyToMatch, int nValueToMatch, ELobbyComparison eComparisonType);
+        void AddRequestLobbyListResultCountFilter(int cMaxResults);
+        void AddRequestLobbyListSlotsAvailableFilter();
+        void AddRequestLobbyListStringFilter(const char *pchKeyToMatch, const char *pchValueToMatch, ELobbyComparison eComparisonType);
+        void ChangeLobbyAdmin(SteamID_t steamIDLobby, SteamID_t steamIDNewAdmin);
+        void CreateLobby0(uint64_t ulGameID, bool bPrivate);
+        void CreateLobby1(bool bPrivate);
+        void JoinLobby0(SteamID_t steamIDLobby)
+        {
+            JoinLobby1(steamIDLobby);
+        }
+        void LeaveLobby(SteamID_t steamIDLobby);
+        void RequestLobbyList0(uint64_t ulGameID, MatchMakingKeyValuePair_t *pFilters, uint32_t nFilters)
+        {
+        }
+        void RequestLobbyList1()
+        {
+        }
+        void SetLobbyData0(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue)
+        {
+            SetLobbyData1(steamIDLobby, pchKey, pchValue);
+        }
+        void SetLobbyGameServer(SteamID_t steamIDLobby, uint32_t unGameServerIP, uint16_t unGameServerPort, SteamID_t steamIDGameServer);
+        void SetLobbyMemberData(SteamID_t steamIDLobby, const char *pchKey, const char *pchValue);
+        void SetLobbyVoiceEnabled(SteamID_t steamIDLobby, bool bEnabled);
+    };
+
+
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamMatchmaking
+    /* struct SteamMatchmaking2
     {
         int GetFavoriteGameCount()
         {
@@ -55,16 +190,16 @@ namespace Steam
         }
         CSteamID GetLobbyByIndex(int iLobby)
         {
-            const auto Serverlist = Matchmaking::getNetworkservers();
-            if (Serverlist->size() < iLobby) return k_steamIDNil;
+            const auto Serverlist = Matchmaking::getLANSessions();
+            if ((int)Serverlist.size() < iLobby) return k_steamIDNil;
 
-            return CSteamID(Serverlist->at(iLobby).HostID, 1, k_EAccountTypeGameServer);
+            return CSteamID(Serverlist.at(iLobby)->HostID, 1, k_EAccountTypeGameServer);
         }
         void CreateLobby0(uint64_t ulGameID, bool bPrivate)
         {
             auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["isPrivate"] = bPrivate;
-            Matchmaking::Update();
+            Session->Steam.isPrivate = bPrivate;
+            Matchmaking::Invalidatesession();
         }
         void JoinLobby0(CSteamID steamIDLobby)
         {
@@ -82,21 +217,21 @@ namespace Steam
         int GetNumLobbyMembers(CSteamID steamIDLobby)
         {
             const auto HostID = steamIDLobby.GetAccountID();
-            for (const auto &Session : *Matchmaking::getNetworkservers())
-                if (HostID == Session.HostID)
-                    return int(Session.Playerdata.size());
+            for (const auto &Session : Matchmaking::getLANSessions())
+                if (HostID == Session->HostID)
+                    return int(Session->Players.size());
 
             return 0;
         }
         CSteamID GetLobbyMemberByIndex(CSteamID steamIDLobby, int iMember)
         {
             const auto HostID = steamIDLobby.GetAccountID();
-            for (const auto &Session : *Matchmaking::getNetworkservers())
+            for (const auto &Session : Matchmaking::getLANSessions())
             {
-                if (HostID == Session.HostID)
+                if (HostID == Session->HostID)
                 {
-                    if (iMember > Session.Playerdata.size()) return k_steamIDNil;
-                    return CSteamID(Session.Playerdata.at(iMember).value("PlayerID", uint32_t()), 1, k_EAccountTypeIndividual);
+                    if (iMember > (int)Session->Players.size()) return k_steamIDNil;
+                    return CSteamID(Session->Players.at(iMember).PlayerID, 1, k_EAccountTypeIndividual);
                 }
             }
 
@@ -109,17 +244,17 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 static std::string Result;
-                Result = Matchmaking::getLocalsession()->Sessiondata.value(pchKey, "").c_str();
+                Result = Matchmaking::getLocalsession()->Steam.Keyvalues.value(pchKey, "").c_str();
                 return Result.c_str();
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
                         static std::string Result;
-                        Result = Session.Sessiondata.value(pchKey, "");
+                        Result = Session->Steam.Keyvalues.value(pchKey, "");
                         return Result.c_str();
                     }
                 }
@@ -133,8 +268,8 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
-                Matchmaking::getLocalsession()->Sessiondata[pchKey] = pchValue;
-                Matchmaking::Update();
+                Matchmaking::getLocalsession()->Steam.Keyvalues[pchKey] = pchValue;
+                Matchmaking::Invalidatesession();
             }
         }
         const char *GetLobbyMemberData(CSteamID steamIDLobby, CSteamID steamIDUser, const char *pchKey)
@@ -144,30 +279,26 @@ namespace Steam
 
             if (HostID == Steam.XUID.GetAccountID())
             {
-                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                for (auto &Item : Matchmaking::getLocalsession()->Players)
                 {
-                    if (Item.value("PlayerID", uint32_t()) == UserID)
+                    if(Item.PlayerID == UserID)
                     {
-                        static std::string Result;
-                        Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
-                        return Result.c_str();
+                        return Item.Gamedata.value(pchKey, "").c_str();
                     }
                 }
                 return "";
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
-                        for (const auto &Item : Session.Playerdata)
+                        for (const auto &Item : Session->Players)
                         {
-                            if (Item.value("PlayerID", uint32_t()) == UserID)
+                            if (Item.PlayerID == UserID)
                             {
-                                static std::string Result;
-                                Result = Item.value("Steamdata", nlohmann::json::object()).value(pchKey, "").c_str();
-                                return Result.c_str();
+                                return Item.Gamedata.value(pchKey, "").c_str();
                             }
                         }
 
@@ -187,17 +318,16 @@ namespace Steam
             if (HostID == Steam.XUID.GetAccountID())
             {
                 Infoprint(va("%s - Key: \"%s\" - Value: \"%s\"", __FUNCTION__, pchKey, pchValue));
-                for (auto &Player : Matchmaking::getLocalsession()->Playerdata)
+                for (auto &Player : Matchmaking::getLocalsession()->Players)
                 {
-                    if (Player.value("PlayerID", uint32_t()) == UserID)
+                    if (Player.PlayerID == UserID)
                     {
-                        if (!Player.contains("Steamdata")) Player["Steamdata"] = nlohmann::json::object();
-                        Player["Steamdata"][pchKey] = pchValue;
+                        Player.Gamedata[pchKey] = pchValue;
                         break;
                     }
                 }
 
-                Matchmaking::Update();
+                Matchmaking::Invalidatesession();
             }
         }
         void ChangeLobbyAdmin(CSteamID steamIDLobby, CSteamID steamIDNewAdmin)
@@ -211,22 +341,20 @@ namespace Steam
 
             if (HostID == Steam.XUID.GetAccountID())
             {
-                for (const auto &Item : Matchmaking::getLocalsession()->Playerdata)
+                for (const auto &Item : Matchmaking::getLocalsession()->Players)
                 {
-                    const auto ID = Item.value("PlayerID", uint32_t());
-                    if (ID) Users.push_back(ID);
+                    Users.push_back(Item.PlayerID);
                 }
             }
             else
             {
-                for (const auto &Session : *Matchmaking::getNetworkservers())
+                for (const auto &Session : Matchmaking::getLANSessions())
                 {
-                    if (HostID == Session.HostID)
+                    if (HostID == Session->HostID)
                     {
-                        for (const auto &Item : Session.Playerdata)
+                        for (const auto &Item : Session->Players)
                         {
-                            const auto ID = Item.value("PlayerID", uint32_t());
-                            if (ID) Users.push_back(ID);
+                            Users.push_back(Item.PlayerID);
                         }
 
                         break;
@@ -234,36 +362,45 @@ namespace Steam
                 }
             }
 
-            const std::string Safestring((const char *)pvMsgBody, cubMsgBody);
-            if (const auto Callback = Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social) [[likely]]
             {
-                auto Object = nlohmann::json::object();
-                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
-                Object["Message"] = Safestring;
-                Object["Clients"] = Users;
-
-                Callback(Ayria.toFunctionID("SendIM"), Object.dump().c_str());
+                const auto Payload = nlohmann::json::object({ { "Type", Hash::FNV1_32("Steamlobbychat")},
+                    { "Body", std::string((const char *)pvMsgBody, cubMsgBody) },
+                    { "GroupID", steamIDLobby.GetAccountID()} });
+                const auto Object = nlohmann::json::object({ { "Targets", Users}, { "Message", Payload.dump() } });
+                const auto Result = Callback(Ayria.toFunctionID("Sendmessage"), DumpJSON(Object).c_str());
+                return !!std::strstr(Result, "OK");
             }
 
             return true;
         }
-        int GetLobbyChatEntry(CSteamID steamIDLobby, int iChatID, CSteamID *pSteamIDUser, void *pvData, int cubData, uint32_t  *peChatEntryType)
+        int GetLobbyChatEntry(CSteamID steamIDLobby, int iChatID, CSteamID *pSteamIDUser, void *pvData, int cubData, uint32_t *peChatEntryType)
         {
-            if (const auto Callback = Ayria.API_Social)
+            if (const auto Callback = Ayria.API_Social) [[likely]]
             {
-                auto Object = nlohmann::json::object();
-                Object["Type"] = Hash::FNV1_32("Steamlobbychat");
-                Object["Offset"] = iChatID;
-                Object["Count"] = 1;
+                const auto Result = Callback(Ayria.toFunctionID("Readmessages"), nullptr);
+                const auto LobbyID = steamIDLobby.GetAccountID();
+                const auto Array = ParseJSON(Result);
 
-                const auto Result = ParseJSON(Callback(Ayria.toFunctionID("ReadIM"), Object.dump().c_str()));
-                const auto Value = Result.empty() ? nlohmann::json::object() : Result.at(0);
-                if (!Value.contains("Message")) return 0;
+                for (const auto &Message : Array)
+                {
+                    const auto Payload = ParseJSON(Message.value("Message", std::string()));
+                    const auto GroupID = Payload.value("GroupID", uint32_t());
+                    const auto Type = Payload.value("Type", uint32_t());
 
-                *peChatEntryType = Value.value("Type", 0);
-                pSteamIDUser->Set(Value.value("Sender", 0), 1, k_EAccountTypeIndividual);
-                std::strncpy((char *)pvData, Value["Message"].get<std::string>().c_str(), cubData);
-                return (int)std::strlen((char *)pvData);
+                    // Skip to relevant group messages.
+                    if (Hash::FNV1_32("Steamlobbychat") != Type) continue;
+                    if (GroupID != LobbyID) continue;
+                    if (iChatID--) continue;
+
+                    const auto Body = Payload.value("Body", std::string());
+                    const auto Size = std::min(Body.size(), size_t(cubData));
+                    std::memcpy(pvData, Body.data(), Size);
+
+                    const auto Sender = Message.value("Source", uint64_t());
+                    *pSteamIDUser = CSteamID(uint32_t(Sender & 0xFFFFFFFF), 1, k_EAccountTypeIndividual);
+                    return int(Size);
+                }
             }
 
             return 0;
@@ -331,8 +468,8 @@ namespace Steam
         {
             if (steamIDLobby.GetAccountID() == Steam.XUID.GetAccountID())
             {
-                Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
-                Matchmaking::Update();
+                Matchmaking::getLocalsession()->Steam.Maxplayers = cMaxMembers;
+                Matchmaking::Invalidatesession();
                 return true;
             }
 
@@ -342,10 +479,10 @@ namespace Steam
         {
             const auto HostID = steamIDLobby.GetAccountID();
 
-            for (const auto &Session : *Matchmaking::getNetworkservers())
+            for (const auto &Session : Matchmaking::getLANSessions())
             {
-                if (Session.HostID == HostID)
-                    return Session.Gameinfo.value("Maxplayers", 6);
+                if (Session->HostID == HostID)
+                    return Session->Steam.Maxplayers;
             }
 
             return 6;
@@ -366,15 +503,15 @@ namespace Steam
         uint64_t CreateLobby2(uint32_t eLobbyType)
         {
             const auto LobbyID = CSteamID(Steam.XUID.GetAccountID(), 0x40000, 1, k_EAccountTypeGameServer);
-            auto Response = new Callbacks::LobbyCreated_t();
-            const auto RequestID = Callbacks::Createrequest();
+            auto Response = new LobbyCreated_t();
+            const auto RequestID = Createrequest();
 
             Response->m_eResult = EResult::k_EResultOK;
             Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();
             Infoprint(va("Creating a lobby of type %d.", eLobbyType));
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
+            Completerequest(RequestID, k_iSteamMatchmakingCallbacks + 13, Response);
 
-            Matchmaking::Update();
+            Matchmaking::Invalidatesession();
             return RequestID;
         }
         uint64_t JoinLobby1(CSteamID steamIDLobby) const
@@ -411,16 +548,16 @@ namespace Steam
         uint64_t CreateLobby3(uint32_t eLobbyType, int cMaxMembers) const
         {
             const auto LobbyID = CSteamID(Steam.XUID.GetAccountID(), 0x40000, 1, k_EAccountTypeGameServer);
-            auto Response = new Callbacks::LobbyCreated_t();
-            const auto RequestID = Callbacks::Createrequest();
+            auto Response = new LobbyCreated_t();
+            const auto RequestID = Createrequest();
 
             Response->m_eResult = EResult::k_EResultOK;
             Response->m_ulSteamIDLobby = LobbyID.ConvertToUint64();
             Infoprint(va("Creating a lobby of type %d for %d players.", eLobbyType, cMaxMembers));
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamMatchmakingCallbacks + 13, Response);
+            Completerequest(RequestID, k_iSteamMatchmakingCallbacks + 13, Response);
 
-            Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cMaxMembers;
-            Matchmaking::Update();
+            Matchmaking::getLocalsession()->Steam.Maxplayers = cMaxMembers;
+            Matchmaking::Invalidatesession();
             return RequestID;
         }
         int GetLobbyDataCount(CSteamID steamIDLobby)
@@ -465,9 +602,9 @@ namespace Steam
             Traceprint();
             return true;
         }
-    };
+    }; */
 
-    struct SteamMatchmaking001 : Interface_t
+    struct SteamMatchmaking001 : Interface_t<23>
     {
         SteamMatchmaking001()
         {
@@ -475,9 +612,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame0);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame0);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame0);
-            Createmethod(4, SteamMatchmaking, GetFavoriteGame2);
-            Createmethod(5, SteamMatchmaking, AddFavoriteGame2);
-            Createmethod(6, SteamMatchmaking, RemoveFavoriteGame2);
+            Createmethod(4, SteamMatchmaking, GetFavoriteGame1);
+            Createmethod(5, SteamMatchmaking, AddFavoriteGame1);
+            Createmethod(6, SteamMatchmaking, RemoveFavoriteGame1);
             Createmethod(7, SteamMatchmaking, RequestLobbyList0);
             Createmethod(8, SteamMatchmaking, GetLobbyByIndex);
             Createmethod(9, SteamMatchmaking, CreateLobby0);
@@ -496,7 +633,7 @@ namespace Steam
             Createmethod(22, SteamMatchmaking, RequestLobbyData);
         };
     };
-    struct SteamMatchmaking002 : Interface_t
+    struct SteamMatchmaking002 : Interface_t<20>
     {
         SteamMatchmaking002()
         {
@@ -521,7 +658,7 @@ namespace Steam
             Createmethod(19, SteamMatchmaking, SetLobbyGameServer);
         };
     };
-    struct SteamMatchmaking003 : Interface_t
+    struct SteamMatchmaking003 : Interface_t<28>
     {
         SteamMatchmaking003()
         {
@@ -529,9 +666,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter0);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListSlotsAvailableFilter);
             Createmethod(8, SteamMatchmaking, GetLobbyByIndex);
             Createmethod(9, SteamMatchmaking, CreateLobby1);
@@ -555,7 +692,7 @@ namespace Steam
             Createmethod(27, SteamMatchmaking, RequestFriendsLobbies);
         };
     };
-    struct SteamMatchmaking004 : Interface_t
+    struct SteamMatchmaking004 : Interface_t<27>
     {
         SteamMatchmaking004()
         {
@@ -563,9 +700,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter0);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListSlotsAvailableFilter);
             Createmethod(8, SteamMatchmaking, GetLobbyByIndex);
             Createmethod(9, SteamMatchmaking, CreateLobby1);
@@ -588,7 +725,7 @@ namespace Steam
             Createmethod(26, SteamMatchmaking, RequestFriendsLobbies);
         };
     };
-    struct SteamMatchmaking005 : Interface_t
+    struct SteamMatchmaking005 : Interface_t<31>
     {
         SteamMatchmaking005()
         {
@@ -596,9 +733,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter0);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListSlotsAvailableFilter);
             Createmethod(8, SteamMatchmaking, AddRequestLobbyListNearValueFilter);
             Createmethod(9, SteamMatchmaking, GetLobbyByIndex);
@@ -625,7 +762,7 @@ namespace Steam
             Createmethod(30, SteamMatchmaking, GetLobbyDistance);
         };
     };
-    struct SteamMatchmaking006 : Interface_t
+    struct SteamMatchmaking006 : Interface_t<28>
     {
         SteamMatchmaking006()
         {
@@ -633,9 +770,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter0);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListNearValueFilter);
             Createmethod(8, SteamMatchmaking, GetLobbyByIndex);
             Createmethod(9, SteamMatchmaking, CreateLobby2);
@@ -659,7 +796,7 @@ namespace Steam
             Createmethod(27, SteamMatchmaking, GetLobbyOwner);
         };
     };
-    struct SteamMatchmaking007 : Interface_t
+    struct SteamMatchmaking007 : Interface_t<34>
     {
         SteamMatchmaking007()
         {
@@ -667,9 +804,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListStringFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter1);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListNearValueFilter);
             Createmethod(8, SteamMatchmaking, AddRequestLobbyListFilterSlotsAvailable);
             Createmethod(9, SteamMatchmaking, GetLobbyByIndex);
@@ -699,7 +836,7 @@ namespace Steam
             Createmethod(33, SteamMatchmaking, SetLobbyOwner);
         };
     };
-    struct SteamMatchmaking008 : Interface_t
+    struct SteamMatchmaking008 : Interface_t<36>
     {
         SteamMatchmaking008()
         {
@@ -707,9 +844,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListStringFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter1);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListNearValueFilter);
             Createmethod(8, SteamMatchmaking, AddRequestLobbyListFilterSlotsAvailable);
             Createmethod(9, SteamMatchmaking, AddRequestLobbyListDistanceFilter);
@@ -741,7 +878,7 @@ namespace Steam
             Createmethod(35, SteamMatchmaking, SetLobbyOwner);
         };
     };
-    struct SteamMatchmaking009 : Interface_t
+    struct SteamMatchmaking009 : Interface_t<38>
     {
         SteamMatchmaking009()
         {
@@ -749,9 +886,9 @@ namespace Steam
             Createmethod(1, SteamMatchmaking, GetFavoriteGame1);
             Createmethod(2, SteamMatchmaking, AddFavoriteGame1);
             Createmethod(3, SteamMatchmaking, RemoveFavoriteGame1);
-            Createmethod(4, SteamMatchmaking, RequestLobbyList2);
+            Createmethod(4, SteamMatchmaking, RequestLobbyList1);
             Createmethod(5, SteamMatchmaking, AddRequestLobbyListStringFilter);
-            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter1);
+            Createmethod(6, SteamMatchmaking, AddRequestLobbyListNumericalFilter);
             Createmethod(7, SteamMatchmaking, AddRequestLobbyListNearValueFilter);
             Createmethod(8, SteamMatchmaking, AddRequestLobbyListFilterSlotsAvailable);
             Createmethod(9, SteamMatchmaking, AddRequestLobbyListDistanceFilter);
@@ -790,7 +927,7 @@ namespace Steam
     {
         Steammatchmakingloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking001", SteamMatchmaking001);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking002", SteamMatchmaking002);
             Register(Interfacetype_t::MATCHMAKING, "SteamMatchmaking003", SteamMatchmaking003);

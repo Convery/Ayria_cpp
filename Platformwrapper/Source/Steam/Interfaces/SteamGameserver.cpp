@@ -9,437 +9,444 @@
 
 namespace Steam
 {
-    static std::any Hackery;
-    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+    enum ESteamIPType
+    {
+        k_ESteamIPTypeIPv4 = 0,
+        k_ESteamIPTypeIPv6 = 1,
+    };
+    struct SteamIPAddress_t
+    {
+        union
+        {
+
+            uint32_t m_unIPv4;		    // Host order
+            uint8_t m_rgubIPv6[16];		// Network order! Same as inaddr_in6.  (0011:2233:4455:6677:8899:aabb:ccdd:eeff)
+            uint64_t m_ipv6Qword[2];	// big endian
+        };
+        ESteamIPType m_eType;
+    };
+    constexpr auto IPv4Any = SteamIPAddress_t{ .m_eType = k_ESteamIPTypeIPv4 };
+    constexpr auto IPv6Any = SteamIPAddress_t{ .m_eType = k_ESteamIPTypeIPv6 };
+    constexpr auto IPv6Loopback = SteamIPAddress_t{ .m_ipv6Qword = {0, 1}, .m_eType = k_ESteamIPTypeIPv6 };
+    constexpr auto IPv4Loopback = SteamIPAddress_t{ .m_unIPv4 = 0x7f000001, .m_eType = k_ESteamIPTypeIPv6 };
+
+    struct Steamserver_t
+    {
+        SteamIPAddress_t PublicIP;
+        bool isDedicated, isSecure, isPasswordprotected, isLAN;
+
+        uint16_t Spectatorport, Gameport, Authport, Queryport;
+        uint32_t Playercount, Playermax, Botcount, Spawncount;
+        uint32_t Serverflags;
+
+        std::string Gamedata, Gametags, Gametype, Gamedescription, Gamedir;
+        std::string Servername, Mapname, Spectatorname;
+        std::string Moddir, Region, Product, Version;
+
+        std::unordered_map<std::string, std::string> Keyvalues;
+        Hashmap<uint64_t, std::pair<std::string, uint32_t>> Userdata;
+    };
+    static Steamserver_t Localserver{};
+    static std::string getGamedata()
+    {
+        JSON::Array_t Userdata;
+        Userdata.reserve(Localserver.Userdata.size());
+        for (const auto &[UserID, Pair] : Localserver.Userdata)
+        {
+            const auto &[Username, Userscore] = Pair;
+
+            Userdata.emplace_back(JSON::Object_t({
+                { "Userscore", Userscore },
+                { "Username", Username },
+                { "UserID", UserID }
+            }));
+        }
+
+        const auto Steamgamedata = JSON::Object_t({
+            { "isPasswordprotected", Localserver.isPasswordprotected },
+            { "isDedicated", Localserver.isDedicated },
+            { "isSecure", Localserver.isSecure },
+            { "isLAN", Localserver.isLAN },
+
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Spectatorport", Localserver.Spectatorport },
+            { "Queryport", Localserver.Queryport },
+            { "Gameport", Localserver.Gameport },
+            { "Authport", Localserver.Authport },
+
+            { "Serverflags", Localserver.Serverflags },
+            { "Playercount", Localserver.Playercount },
+            { "Spawncount", Localserver.Spawncount },
+            { "Playermax", Localserver.Playermax },
+            { "Botcount", Localserver.Botcount },
+
+            { "Gamedescription", Localserver.Gamedescription },
+            { "Gamedata", Localserver.Gamedata },
+            { "Gametags", Localserver.Gametags },
+            { "Gametype", Localserver.Gametype },
+            { "Gamedir", Localserver.Gamedir },
+
+            { "Spectatorname", Localserver.Spectatorname },
+            { "Product", Localserver.Product },
+            { "Version", Localserver.Version },
+            { "Moddir", Localserver.Moddir },
+            { "Region", Localserver.Region },
+
+            { "Keyvalues", Localserver.Keyvalues },
+            { "Userdata", Userdata },
+
+            { "Servername", Localserver.Servername },
+            { "Mapname", Localserver.Mapname }
+        });
+
+        return JSON::Dump(Steamgamedata);
+    }
+
+    bool isServeractive = false;
+    static bool Initializedcallback = false;
+    static void Serverupdate()
+    {
+        if (isServeractive)
+            AyriaDB::Matchmakingsessions::Set::Gamedata(Global.XUID.UserID, getGamedata());
+    }
+
+    bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion)
+    {
+        Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+        Localserver.Spectatorport = usSpectatorPort;
+        Localserver.PublicIP.m_unIPv4 = unGameIP;
+        Localserver.Serverflags = unServerFlags;
+        Localserver.Authport = usSteamPort;
+        Localserver.Queryport = usQueryPort;
+        Localserver.Gameport = unGamePort;
+        Localserver.Gamedir = pchGameDir;
+        Localserver.Version = pchVersion;
+
+        const auto Request = JSON::Object_t({
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Hostport", Localserver.Gameport },
+            { "GameID", Global.ApplicationID },
+            { "Gamedata", getGamedata() }
+        });
+        Ayriarequest("Matchmakingsessions::Starthosting", Request);
+        isServeractive = true;
+
+        if (!Initializedcallback)
+        {
+            Initializedcallback = true;
+            Ayria.Createperiodictask(2000, Serverupdate);
+        }
+
+        return true;
+    }
+    bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion)
+    {
+        Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+        Localserver.PublicIP.m_unIPv4 = unGameIP;
+        Localserver.Serverflags = unServerFlags;
+        Localserver.Queryport = usQueryPort;
+        Localserver.Authport = usSteamPort;
+        Localserver.Gameport = unGamePort;
+        Localserver.Version = pchVersion;
+
+        const auto Request = JSON::Object_t({
+            { "Hostaddress", Localserver.PublicIP.m_unIPv4 },
+            { "Hostport", Localserver.Gameport },
+            { "GameID", Global.ApplicationID },
+            { "Gamedata", getGamedata() }
+            });
+        Ayriarequest("Matchmakingsessions::Starthosting", Request);
+        isServeractive = true;
+
+        if (!Initializedcallback)
+        {
+            Initializedcallback = true;
+            Ayria.Createperiodictask(2000, Serverupdate);
+        }
+        return true;
+    }
 
     struct SteamGameserver
     {
-        void LogOn0()
+        enum EBeginAuthSessionResult
         {
-        }
-        void LogOff()
+            k_EBeginAuthSessionResultOK = 0,						// Ticket is valid for this game and this steamID.
+            k_EBeginAuthSessionResultInvalidTicket = 1,				// Ticket is not valid.
+            k_EBeginAuthSessionResultDuplicateRequest = 2,			// A ticket has already been submitted for this steamID
+            k_EBeginAuthSessionResultInvalidVersion = 3,			// Ticket is from an incompatible interface version
+            k_EBeginAuthSessionResultGameMismatch = 4,				// Ticket is not for this game
+            k_EBeginAuthSessionResultExpiredTicket = 5,				// Ticket has expired
+        };
+        enum EUserHasLicenseForAppResult
         {
-            Traceprint();
+            k_EUserHasLicenseResultHasLicense = 0,					// User has a license for specified app
+            k_EUserHasLicenseResultDoesNotHaveLicense = 1,			// User does not have a license for the specified app
+            k_EUserHasLicenseResultNoAuth = 2,						// User has not been authenticated
+        };
+
+        EBeginAuthSessionResult BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, SteamID_t steamID)
+        {
+            return k_EBeginAuthSessionResultOK;
         }
+        EUserHasLicenseForAppResult UserHasLicenseForApp(SteamID_t steamID, AppID_t appID)
+        {
+            return k_EUserHasLicenseResultHasLicense;
+        }
+        HAuthTicket GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket);
+        SteamAPICall_t AssociateWithClan(SteamID_t steamIDClan);
+        SteamAPICall_t ComputeNewPlayerCompatibility(SteamID_t steamIDNewPlayer);
+        SteamAPICall_t GetServerReputation();
+        SteamID_t CreateUnauthenticatedUserConnection();
+        SteamID_t GetSteamID()
+        {
+            return Global.XUID;
+        }
+        SteamIPAddress_t GetPublicIP1()
+        {
+            // TODO(tcn): Win adapter info
+            return Localserver.PublicIP;
+        }
+
+        bool BGetUserAchievementStatus(SteamID_t steamID, const char *pchAchievementName);
         bool BLoggedOn()
         {
-            Traceprint();
-            return true;
-        }
-        void SetSpawnCount(uint32_t ucSpawn)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Gameinfo["Spawncount"] = ucSpawn;
-            Matchmaking::Update();
-        }
-        bool GetSteam2GetEncryptionKeyToSendToNewClient(void *pvEncryptionKey, uint32_t *pcbEncryptionKey, uint32_t cbMaxEncryptionKey)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendSteam2UserConnect(uint32_t unUserID, const void *pvRawKey, uint32_t unKeyLen, uint32_t unIPPublic, uint16_t usPort, const void *pvCookie, uint32_t cubCookie)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendSteam3UserConnect(CSteamID steamID, uint32_t unIPPublic, const void *pvCookie, uint32_t cubCookie)
-        {
-            Traceprint();
-            return false;
-        }
-        bool RemoveUserConnect(uint32_t unUserID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendUserDisconnect0(CSteamID steamID, uint32_t unUserID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendUserStatusResponse(CSteamID steamID, int nSecondsConnected, int nSecondsSinceLast)
-        {
-            Traceprint();
-            return false;
-        }
-        bool Obsolete_GSSetStatus(int32_t nAppIdServed, uint32_t unServerFlags, int cPlayers, int cPlayersMax, int cBotPlayers, int unGamePort, const char *pchServerName, const char *pchGameDir, const char *pchMapName, const char *pchVersion)
-        {
-            Traceprint();
-            return false;
-        }
-        bool UpdateStatus0(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Servername"] = pchServerName;
-            Session->Gameinfo["Currentplayers"] = cPlayers;
-            Session->Gameinfo["Botplayers"] = cBotPlayers;
-            Session->Gameinfo["Maxplayers"] = cPlayersMax;
-            Session->Gameinfo["Mapname"] = pchMapName;
-            Matchmaking::Update();
             return true;
         }
         bool BSecure()
         {
-            Traceprint();
-
-            const auto Request = new Callbacks::GSPolicyResponse_t();
-            const auto RequestID = Callbacks::Createrequest();
-            Request->m_bSecure = true;
-
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 15, Request);
-
-            return true;
-        }
-        CSteamID GetSteamID()
-        {
-            auto ID = Steam.XUID;
-            ID.Set(ID.GetAccountID(), ID.GetEUniverse(), k_EAccountTypeGameServer);
-            return ID;
-        }
-        bool SetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint32_t unGamePort, const char *pchGameDir, const char *pchVersion)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Serverflags"] = unServerFlags;
-            Session->Hostinfo["Versionstring"] = pchVersion;
-            Session->Hostinfo["Gameport"] = unGamePort;
-            Session->Hostinfo["IPAddress"] = unGameIP;
-            Session->Hostinfo["AppID"] = nGameAppId;
-            Session->Gameinfo["Gamemod"] = pchGameDir;
-            Matchmaking::Update();
-            return true;
-        }
-        bool SetServerType1(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Spectatorport"] = usSpectatorPort;
-            Session->Hostinfo["Serverflags"] = unServerFlags;
-            Session->Hostinfo["Versionstring"] = pchVersion;
-            Session->Hostinfo["Queryport"] = usQueryPort;
-            Session->Hostinfo["Gameport"] = unGamePort;
-            Session->Hostinfo["IPAddress"] = unGameIP;
-            Session->Hostinfo["AppID"] = nGameAppId;
-            Session->Hostinfo["isLAN"] = bLANMode;
-            Session->Gameinfo["Gamemod"] = pchGameDir;
-            Matchmaking::Update();
-            return true;
-        }
-        bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Gameinfo["Currentplayers"] = cPlayers;
-            Session->Gameinfo["Botplayers"] = cBotPlayers;
-            Session->Gameinfo["Maxplayers"] = cPlayersMax;
-            Session->Gameinfo["Mapname"] = pchMapName;
-            Session->Hostinfo["Spectatorname"] = pSpectatorServerName;
-            Session->Hostinfo["Servername"] = pchServerName;
-            Matchmaking::Update();
-            return true;
-        }
-        bool CreateUnauthenticatedUser(CSteamID *pSteamID)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SetUserData(CSteamID steamIDUser, const char *pchPlayerName, uint32_t uScore)
-        {
-            bool hasPlayer = false;
-            auto Session = Matchmaking::getLocalsession();
-            const auto PlayerID = steamIDUser.GetAccountID();
-
-            for (auto &Object : Session->Playerdata)
-            {
-                if (Object.value("PlayerID", uint32_t()) == PlayerID)
-                {
-                    Object["Playername"] = pchPlayerName;
-                    Object["Score"] = uScore;
-                    hasPlayer = true;
-                }
-            }
-
-            if (!hasPlayer)
-                Session->Playerdata += { { "PlayerID", PlayerID }, { "Playername", pchPlayerName }, { "Score", uScore }  };
-
-            Matchmaking::Update();
-            return true;
-        }
-        void UpdateSpectatorPort(uint16_t unSpectatorPort)
-        {
-            Matchmaking::getLocalsession()->Hostinfo["Spectatorport"] = unSpectatorPort;
-            Matchmaking::Update();
-        }
-        void SetGameType(const char *pchGameType)
-        {
-            Matchmaking::getLocalsession()->Gameinfo["Gametype"] = pchGameType;
-            Matchmaking::Update();
-        }
-        bool SendUserConnect(uint32_t, uint32_t, uint16_t, const void *, uint32_t)
-        {
-            Traceprint();
-            return false;
-        }
-        bool GetUserAchievementStatus(CSteamID steamID, const char *pchAchievementName)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendUserConnectAndAuthenticate0(CSteamID steamIDUser, uint32_t, void *, uint32_t)
-        {
-            Traceprint();
-            return false;
-        }
-        CSteamID CreateUnauthenticatedUserConnection()
-        {
-            Traceprint();
-            return Steam.XUID;
-        }
-        void SendUserDisconnect1(CSteamID steamIDUser)
-        {
-            Traceprint();
-        }
-        bool BUpdateUserData(CSteamID steamIDUser, const char *pchPlayerName, uint32_t uScore)
-        {
-            SetUserData(steamIDUser, pchPlayerName, uScore);
-            return true;
+            return Localserver.isSecure;
         }
         bool BSetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
-            return SetServerType1(nGameAppId, unServerFlags, unGameIP, unGamePort, usSpectatorPort, usQueryPort, pchGameDir, pchVersion, bLANMode);
-        }
-        bool BGetUserAchievementStatus(CSteamID steamID, const char *pchAchievementName)
-        {
-            Traceprint();
-            return false;
-        }
-        bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, CSteamID *pSteamIDUser)
-        {
-            Traceprint();
-
-            const auto Request = new Callbacks::GSClientApprove_t();
-            *pSteamIDUser = *(CSteamID *)pvAuthBlob;
-            Request->m_OwnerSteamID = *pSteamIDUser;
-            Request->m_SteamID = *pSteamIDUser;
-
-            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamGameServerCallbacks + 1, Request);
+            Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+            Localserver.Spectatorport = usSpectatorPort;
+            Localserver.PublicIP.m_unIPv4 = unGameIP;
+            Localserver.Serverflags = unServerFlags;
+            Localserver.Queryport = usQueryPort;
+            Localserver.Gameport = unGamePort;
+            Localserver.Gamedir = pchGameDir;
+            Localserver.Version = pchVersion;
+            Localserver.isLAN = bLANMode;
             return true;
         }
         bool BSetServerType1(uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t unSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
         {
-            return SetServerType1(Steam.ApplicationID, unServerFlags, unGameIP, unGamePort, unSpectatorPort, usQueryPort, pchGameDir, pchVersion, bLANMode);
-        }
-        void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
-        {
-            UpdateStatus1(cPlayers, cPlayersMax, cBotPlayers, pchServerName, pSpectatorServerName, pchMapName);
-        }
-        void GetGameplayStats()
-        {
-            Traceprint();
-        }
-        bool RequestUserGroupStatus(CSteamID steamIDUser, CSteamID steamIDGroup)
-        {
-            Traceprint();
-            return false;
-        }
-        uint32_t GetPublicIP()
-        {
-            Traceprint();
-            return ntohl(inet_addr("240.0.0.1"));
-        }
-        uint32_t UserHasLicenseForApp(CSteamID steamID, uint32_t appID)
-        {
-            Traceprint();
-            return 0;
-        }
-        void SetGameTags(const char *pchGameTags)
-        {
-            Matchmaking::getLocalsession()->Gameinfo["Gametags"] = pchGameTags;
-            Matchmaking::Update();
-        }
-        uint64_t GetServerReputation()
-        {
-            Traceprint();
-            return 0;
-        }
-        uint32_t GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
-        {
-            const auto Request = new Callbacks::GetAuthSessionTicketResponse_t();
-            Request->m_eResult = EResult::k_EResultOK;
-            Request->m_hAuthTicket = 1337;
-            *pcbTicket = cbMaxTicket;
-            Traceprint();
-
-            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 63, Request);
-            return Request->m_hAuthTicket;
-        }
-        uint32_t BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, CSteamID steamID) const
-        {
-            Debugprint(va("%s for 0x%llx", __func__, steamID.ConvertToUint64()));
-            const auto Request = new Callbacks::ValidateAuthTicketResponse_t();
-            Request->m_eAuthSessionResponse = 0; // k_EBeginAuthSessionResultOK
-            Request->m_OwnerSteamID = steamID;
-            Request->m_SteamID = steamID;
-
-            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::k_iSteamUserCallbacks + 43, Request);
-            return 0; // k_EBeginAuthSessionResultOK
-        }
-        void EndAuthSession(CSteamID steamID)
-        {
-            Traceprint();
-        }
-        void CancelAuthTicket(uint32_t hAuthTicket)
-        {
-            Traceprint();
-        }
-        bool InitGameServer(uint32_t unGameIP, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, uint32_t nAppID, const char *pchVersion)
-        {
-            auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Serverflags"] = unServerFlags;
-            Session->Hostinfo["Versionstring"] = pchVersion;
-            Session->Hostinfo["IPAddress"] = unGameIP;
-            Session->Hostinfo["Gameport"] = unGamePort;
-            Session->Hostinfo["AppID"] = nAppID;
-            Matchmaking::Update();
+            Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+            Localserver.Spectatorport = unSpectatorPort;
+            Localserver.PublicIP.m_unIPv4 = unGameIP;
+            Localserver.Serverflags = unServerFlags;
+            Localserver.Queryport = usQueryPort;
+            Localserver.Gameport = unGamePort;
+            Localserver.Gamedir = pchGameDir;
+            Localserver.Version = pchVersion;
+            Localserver.isLAN = bLANMode;
             return true;
         }
-        void SetProduct(const char *pchProductName)
+        bool BUpdateUserData(SteamID_t steamIDUser, const char *pchPlayerName, uint32_t uScore)
         {
-            Matchmaking::getLocalsession()->Gameinfo["Productname"] = pchProductName;
-            Matchmaking::Update();
+            return SetUserData(steamIDUser, pchPlayerName, uScore);
         }
-        void SetGameDescription(const char *pchGameDescription)
+        bool CreateUnauthenticatedUser(SteamID_t *pSteamID);
+        bool GSSetStatus(int32_t nAppIdServed, uint32_t unServerFlags, int cPlayers, int cPlayersMax, int cBotPlayers, int unGamePort, const char *pchServerName, const char *pchGameDir, const char *pchMapName, const char *pchVersion)
         {
-            Matchmaking::getLocalsession()->Gameinfo["Productdesc"] = pchGameDescription;
-            Matchmaking::Update();
+            Localserver.Serverflags = unServerFlags;
+            Localserver.Servername = pchServerName;
+            Localserver.Playermax = cPlayersMax;
+            Localserver.Botcount = cBotPlayers;
+            Localserver.Playercount = cPlayers;
+            Localserver.Gameport = unGamePort;
+            Localserver.Version = pchVersion;
+            Localserver.Gamedir = pchGameDir;
+            Localserver.Mapname = pchMapName;
+            return true;
         }
-        void SetModDir(const char *pchModDir)
+        bool GetSteam2GetEncryptionKeyToSendToNewClient(void *pvEncryptionKey, uint32_t *pcbEncryptionKey, uint32_t cbMaxEncryptionKey);
+        bool GetUserAchievementStatus(SteamID_t steamID, const char *pchAchievementName)
         {
-            Matchmaking::getLocalsession()->Gameinfo["Gamemod"] = pchModDir;
-            Matchmaking::Update();
+            return BGetUserAchievementStatus(steamID, pchAchievementName);
         }
-        void SetDedicatedServer(bool bDedicatedServer)
+        bool HandleIncomingPacket(const void *pData, int cbData, uint32_t srcIP, uint16_t srcPort) { return true; }
+        bool InitGameServer(uint32_t unGameIP, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion)
         {
-            Matchmaking::getLocalsession()->Hostinfo["isDedicated"] = bDedicatedServer;
-            Matchmaking::Update();
+            return Initgameserver(unGameIP, 0, unGamePort, usQueryPort, unServerFlags, nAppID, pchVersion);
         }
-        void LogOn1(const char *pszAccountName, const char *pszPassword)
+        bool RemoveUserConnect(uint32_t unUserID) { return true; }
+        bool RequestUserGroupStatus(SteamID_t steamIDUser, SteamID_t steamIDGroup) { return true; }
+        bool SendSteam2UserConnect(uint32_t unUserID, const void *pvRawKey, uint32_t unKeyLen, uint32_t unIPPublic, uint16_t usPort, const void *pvCookie, uint32_t cubCookie);
+        bool SendSteam3UserConnect(SteamID_t steamID, uint32_t unIPPublic, const void *pvCookie, uint32_t cubCookie);
+        bool SendUserConnect(uint32_t, uint32_t, uint16_t, const void *, uint32_t);
+        bool SendUserConnectAndAuthenticate0(SteamID_t steamIDUser, uint32_t, void *, uint32_t);
+        bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, SteamID_t *pSteamIDUser);
+        bool SendUserDisconnect0(SteamID_t steamID, uint32_t unUserID)
         {
+            SendUserDisconnect1(steamID);
+            return true;
         }
-        void LogOnAnonymous()
+        bool SendUserStatusResponse(SteamID_t steamID, int nSecondsConnected, int nSecondsSinceLast);
+        bool SetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint32_t unGamePort, const char *pchGameDir, const char *pchVersion)
         {
+            Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+            Localserver.PublicIP.m_unIPv4 = unGameIP;
+            Localserver.Serverflags = unServerFlags;
+            Localserver.Gameport = unGamePort;
+            Localserver.Gamedir = pchGameDir;
+            Localserver.Version = pchVersion;
+            return true;
+        }
+        bool SetServerType1(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, const char *pchGameDir, const char *pchVersion, bool bLANMode)
+        {
+            Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
+            Localserver.Spectatorport = usSpectatorPort;
+            Localserver.PublicIP.m_unIPv4 = unGameIP;
+            Localserver.Serverflags = unServerFlags;
+            Localserver.Queryport = usQueryPort;
+            Localserver.Gameport = unGamePort;
+            Localserver.Gamedir = pchGameDir;
+            Localserver.Version = pchVersion;
+            Localserver.isLAN = bLANMode;
+            return true;
+        }
+        bool SetUserData(SteamID_t steamIDUser, const char *pchPlayerName, uint32_t uScore)
+        {
+            Localserver.Userdata[steamIDUser.FullID] = { pchPlayerName, uScore };
+            return true;
+        }
+        bool UpdateStatus0(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
+        {
+            Localserver.Spectatorname = pSpectatorServerName;
+            Localserver.Playermax = cPlayersMax;
+            Localserver.Playercount = cPlayers;
+            Localserver.Botcount = cBotPlayers;
+            Localserver.Mapname = pchMapName;
+            return true;
+        }
+        bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
+        {
+            Localserver.Playermax = cPlayersMax;
+            Localserver.Playercount = cPlayers;
+            Localserver.Botcount = cBotPlayers;
+            Localserver.Mapname = pchMapName;
+            return true;
         }
         bool WasRestartRequested()
         {
-            Traceprint();
             return false;
         }
-        void SetMaxPlayerCount(int cPlayersMax)
+
+        int GetNextOutgoingPacket(void *pOut, int cbMaxOut, uint32_t *pNetAdr, uint16_t *pPort)
         {
-            Matchmaking::getLocalsession()->Gameinfo["Maxplayers"] = cPlayersMax;
-            Matchmaking::Update();
+            return 0;
         }
-        void SetBotPlayerCount(int cBotPlayers)
+        uint32_t GetPublicIP0()
         {
-            Matchmaking::getLocalsession()->Gameinfo["Botplayers"] = cBotPlayers;
-            Matchmaking::Update();
+            // TODO(tcn): Win adapter info
+            return Localserver.PublicIP.m_unIPv4;
         }
-        void SetServerName(const char *pszServerName)
+
+        void CancelAuthTicket(HAuthTicket hAuthTicket) {}
+        void ClearAllKeyValues()
         {
-            Matchmaking::getLocalsession()->Hostinfo["Servername"] = pszServerName;
-            Matchmaking::Update();
+            Localserver.Keyvalues.clear();
+        }
+        void EnableHeartbeats(bool bActive) {}
+        void EndAuthSession(SteamID_t steamID) {}
+        void ForceHeartbeat() {}
+        void GetGameplayStats() {}
+        void LogOff() { isServeractive = false; }
+        void LogOn0() {}
+        void LogOn1(const char *pszAccountName, const char *pszPassword) {}
+        void LogOn2(const char *pszToken) {}
+        void LogOnAnonymous() {}
+        void SendUserDisconnect1(SteamID_t steamIDUser);
+        void SetBotPlayerCount(int cBotplayers)
+        {
+            Localserver.Botcount = cBotplayers;
+        }
+        void SetDedicatedServer(bool bDedicatedServer)
+        {
+            Localserver.isDedicated = bDedicatedServer;
+        }
+        void SetGameData(const char *pchGameData)
+        {
+            Localserver.Gamedata = pchGameData;
+        }
+        void SetGameDescription(const char *pchGameDescription)
+        {
+            Localserver.Gamedescription = pchGameDescription;
+        }
+        void SetGameTags(const char *pchGameTags)
+        {
+            Localserver.Gametags = pchGameTags;
+        }
+        void SetGameType(const char *pchGameType)
+        {
+            Localserver.Gametype = pchGameType;
+        }
+        void SetHeartbeatInterval(int iHeartbeatInterval) {}
+        void SetKeyValue(const char *pKey, const char *pValue)
+        {
+            Localserver.Keyvalues[pKey] = pValue;
         }
         void SetMapName(const char *pszMapName)
         {
-            Matchmaking::getLocalsession()->Gameinfo["Mapname"] = pszMapName;
-            Matchmaking::Update();
+            Localserver.Mapname = pszMapName;
+        }
+        void SetMaxPlayerCount(int cPlayersMax)
+        {
+            Localserver.Playermax = cPlayersMax;
+        }
+        void SetModDir(const char *pchModDir)
+        {
+            Localserver.Moddir = pchModDir;
         }
         void SetPasswordProtected(bool bPasswordProtected)
         {
-            Matchmaking::getLocalsession()->Hostinfo["isPrivate"] = bPasswordProtected;
-            Matchmaking::Update();
+            Localserver.isPasswordprotected = bPasswordProtected;
         }
-        void SetSpectatorPort(uint16_t unSpectatorPort)
+        void SetProduct(const char *pchProductName)
         {
-            Matchmaking::getLocalsession()->Hostinfo["Spectatorport"] = unSpectatorPort;
-            Matchmaking::Update();
-        }
-        void SetSpectatorServerName(const char *pszSpectatorServerName)
-        {
-            Matchmaking::getLocalsession()->Hostinfo["Spectatorname"] = pszSpectatorServerName;
-            Matchmaking::Update();
-        }
-        void ClearAllKeyValues()
-        {
-            Traceprint();
-        }
-        void SetKeyValue(const char *pKey, const char *pValue)
-        {
-            Matchmaking::getLocalsession()->Sessiondata[pKey] = pValue;
-            Matchmaking::Update();
-        }
-        void SetGameinfo(const char *pchGameinfo)
-        {
-            Matchmaking::getLocalsession()->Gameinfo["Infostring"] = pchGameinfo;
-            Matchmaking::Update();
+            Localserver.Product = pchProductName;
         }
         void SetRegion(const char *pchRegionName)
         {
-            Matchmaking::getLocalsession()->Hostinfo["Region"] = pchRegionName;
-            Matchmaking::Update();
+            Localserver.Region = pchRegionName;
         }
-        int SendUserConnectAndAuthenticate2(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, CSteamID *pSteamIDUser)
+        void SetServerName(const char *pszServerName)
         {
-            Traceprint();
-            return 0;
+            Localserver.Servername = pszServerName;
         }
-        bool HandleIncomingPacket(const void *pData, int cbData, uint32_t srcIP, uint16_t srcPort)
+        void SetSpawnCount(uint32_t ucSpawn)
         {
-            Traceprint();
-            return false;
+            Localserver.Spawncount = ucSpawn;
         }
-        int GetNextOutgoingPacket(void *pOut, int cbMaxOut, uint32_t *pNetAdr, uint16_t *pPort)
+        void SetSpectatorPort(uint16_t unSpectatorPort)
         {
-            Traceprint();
-            return 0;
+            Localserver.Spectatorport = unSpectatorPort;
         }
-        void EnableHeartbeats(bool bActive)
+        void SetSpectatorServerName(const char *pszSpectatorServerName)
         {
-            Traceprint();
+            Localserver.Spectatorname = pszSpectatorServerName;
         }
-        void SetHeartbeatInterval(int iHeartbeatInterval)
+        void UpdateServerStatus(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pSpectatorServerName, const char *pchMapName)
         {
-            Traceprint();
+            UpdateStatus0(cPlayers, cPlayersMax, cBotPlayers, pchServerName, pSpectatorServerName, pchMapName);
         }
-        void ForceHeartbeat()
+        void UpdateSpectatorPort(uint16_t unSpectatorPort)
         {
-            Traceprint();
-        }
-        uint64_t AssociateWithClan(CSteamID clanID)
-        {
-            Traceprint();
-            return 0;
-        }
-        uint64_t ComputeNewPlayerCompatibility(CSteamID steamID)
-        {
-            Traceprint();
-            return 0;
-        }
-        void LogOn2(const char *pszUnk)
-        {
-            Traceprint();
-        }
-        void LogOn3(const char *pszAccountName, const char *pszPassword)
-        {
-            Traceprint();
+            SetSpectatorPort(unSpectatorPort);
         }
     };
 
-    struct SteamGameserver001 : Interface_t
+    static std::any Hackery;
+    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+    struct SteamGameserver001 : Interface_t<>
     {
         SteamGameserver001()
         {
             /* No steamworks SDK info */
         };
     };
-    struct SteamGameserver002 : Interface_t
+    struct SteamGameserver002 : Interface_t<21>
     {
         SteamGameserver002()
         {
@@ -453,7 +460,7 @@ namespace Steam
             Createmethod(7, SteamGameserver, RemoveUserConnect);
             Createmethod(8, SteamGameserver, SendUserDisconnect0);
             Createmethod(9, SteamGameserver, SendUserStatusResponse);
-            Createmethod(10, SteamGameserver, Obsolete_GSSetStatus);
+            Createmethod(10, SteamGameserver, GSSetStatus);
             Createmethod(11, SteamGameserver, UpdateStatus0);
             Createmethod(12, SteamGameserver, BSecure);
             Createmethod(13, SteamGameserver, GetSteamID);
@@ -466,7 +473,7 @@ namespace Steam
             Createmethod(20, SteamGameserver, SetGameType);
         };
     };
-    struct SteamGameserver003 : Interface_t
+    struct SteamGameserver003 : Interface_t<17>
     {
         SteamGameserver003()
         {
@@ -489,7 +496,7 @@ namespace Steam
             Createmethod(16, SteamGameserver, GetUserAchievementStatus);
         };
     };
-    struct SteamGameserver004 : Interface_t
+    struct SteamGameserver004 : Interface_t<14>
     {
         SteamGameserver004()
         {
@@ -509,7 +516,7 @@ namespace Steam
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
         };
     };
-    struct SteamGameserver005 : Interface_t
+    struct SteamGameserver005 : Interface_t<15>
     {
         SteamGameserver005()
         {
@@ -530,7 +537,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
         };
     };
-    struct SteamGameserver006 : Interface_t
+    struct SteamGameserver006 : Interface_t<15>
     {
         SteamGameserver006()
         {
@@ -551,7 +558,7 @@ namespace Steam
             Createmethod(14, SteamGameserver, GetGameplayStats);
         };
     };
-    struct SteamGameserver007 : Interface_t
+    struct SteamGameserver007 : Interface_t<16>
     {
         SteamGameserver007()
         {
@@ -573,7 +580,7 @@ namespace Steam
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
         };
     };
-    struct SteamGameserver008 : Interface_t
+    struct SteamGameserver008 : Interface_t<17>
     {
         SteamGameserver008()
         {
@@ -593,10 +600,10 @@ namespace Steam
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
             Createmethod(14, SteamGameserver, GetGameplayStats);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(16, SteamGameserver, GetPublicIP);
+            Createmethod(16, SteamGameserver, GetPublicIP0);
         };
     };
-    struct SteamGameserver009 : Interface_t
+    struct SteamGameserver009 : Interface_t<19>
     {
         SteamGameserver009()
         {
@@ -616,13 +623,12 @@ namespace Steam
             Createmethod(13, SteamGameserver, BGetUserAchievementStatus);
             Createmethod(14, SteamGameserver, GetGameplayStats);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(16, SteamGameserver, GetPublicIP);
-            Createmethod(17, SteamGameserver, SetGameinfo);
+            Createmethod(16, SteamGameserver, GetPublicIP0);
+            Createmethod(17, SteamGameserver, SetGameData);
             Createmethod(18, SteamGameserver, UserHasLicenseForApp);
-
         };
     };
-    struct SteamGameserver010 : Interface_t
+    struct SteamGameserver010 : Interface_t<23>
     {
         SteamGameserver010()
         {
@@ -642,8 +648,8 @@ namespace Steam
             Createmethod(13, SteamGameserver, GetGameplayStats);
             Createmethod(14, SteamGameserver, GetServerReputation);
             Createmethod(15, SteamGameserver, RequestUserGroupStatus);
-            Createmethod(16, SteamGameserver, GetPublicIP);
-            Createmethod(17, SteamGameserver, SetGameinfo);
+            Createmethod(16, SteamGameserver, GetPublicIP0);
+            Createmethod(17, SteamGameserver, SetGameData);
             Createmethod(18, SteamGameserver, UserHasLicenseForApp);
             Createmethod(19, SteamGameserver, GetAuthSessionTicket);
             Createmethod(20, SteamGameserver, BeginAuthSession);
@@ -651,9 +657,59 @@ namespace Steam
             Createmethod(22, SteamGameserver, CancelAuthTicket);
         };
     };
-    struct SteamGameserver011 : Interface_t
+    struct SteamGameserver011 : Interface_t<44>
     {
         SteamGameserver011()
+        {
+            Createmethod(0, SteamGameserver, InitGameServer);
+            Createmethod(1, SteamGameserver, SetProduct);
+            Createmethod(2, SteamGameserver, SetGameDescription);
+            Createmethod(3, SteamGameserver, SetModDir);
+            Createmethod(4, SteamGameserver, SetDedicatedServer);
+            Createmethod(5, SteamGameserver, LogOn1);
+            Createmethod(6, SteamGameserver, LogOnAnonymous);
+            Createmethod(7, SteamGameserver, LogOff);
+            Createmethod(8, SteamGameserver, BLoggedOn);
+            Createmethod(9, SteamGameserver, BSecure);
+            Createmethod(10, SteamGameserver, GetSteamID);
+            Createmethod(11, SteamGameserver, WasRestartRequested);
+            Createmethod(12, SteamGameserver, SetMaxPlayerCount);
+            Createmethod(13, SteamGameserver, SetBotPlayerCount);
+            Createmethod(14, SteamGameserver, SetServerName);
+            Createmethod(15, SteamGameserver, SetMapName);
+            Createmethod(16, SteamGameserver, SetPasswordProtected);
+            Createmethod(17, SteamGameserver, SetSpectatorPort);
+            Createmethod(18, SteamGameserver, SetSpectatorServerName);
+            Createmethod(19, SteamGameserver, ClearAllKeyValues);
+            Createmethod(20, SteamGameserver, SetKeyValue);
+            Createmethod(21, SteamGameserver, SetGameTags);
+            Createmethod(22, SteamGameserver, SetGameData);
+            Createmethod(23, SteamGameserver, SetRegion);
+            Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate1);
+            Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);
+            Createmethod(26, SteamGameserver, SendUserDisconnect1);
+            Createmethod(27, SteamGameserver, BUpdateUserData);
+            Createmethod(28, SteamGameserver, GetAuthSessionTicket);
+            Createmethod(29, SteamGameserver, BeginAuthSession);
+            Createmethod(30, SteamGameserver, EndAuthSession);
+            Createmethod(31, SteamGameserver, CancelAuthTicket);
+            Createmethod(32, SteamGameserver, UserHasLicenseForApp);
+            Createmethod(33, SteamGameserver, RequestUserGroupStatus);
+            Createmethod(34, SteamGameserver, GetGameplayStats);
+            Createmethod(35, SteamGameserver, GetServerReputation);
+            Createmethod(36, SteamGameserver, GetPublicIP0);
+            Createmethod(37, SteamGameserver, HandleIncomingPacket);
+            Createmethod(38, SteamGameserver, GetNextOutgoingPacket);
+            Createmethod(39, SteamGameserver, EnableHeartbeats);
+            Createmethod(40, SteamGameserver, SetHeartbeatInterval);
+            Createmethod(41, SteamGameserver, ForceHeartbeat);
+            Createmethod(42, SteamGameserver, AssociateWithClan);
+            Createmethod(43, SteamGameserver, ComputeNewPlayerCompatibility);
+        };
+    };
+    struct SteamGameserver012 : Interface_t<44>
+    {
+        SteamGameserver012()
         {
             Createmethod(0, SteamGameserver, InitGameServer);
             Createmethod(1, SteamGameserver, SetProduct);
@@ -677,7 +733,7 @@ namespace Steam
             Createmethod(19, SteamGameserver, ClearAllKeyValues);
             Createmethod(20, SteamGameserver, SetKeyValue);
             Createmethod(21, SteamGameserver, SetGameTags);
-            Createmethod(22, SteamGameserver, SetGameinfo);
+            Createmethod(22, SteamGameserver, SetGameData);
             Createmethod(23, SteamGameserver, SetRegion);
             Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate1);
             Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);
@@ -691,7 +747,7 @@ namespace Steam
             Createmethod(33, SteamGameserver, RequestUserGroupStatus);
             Createmethod(34, SteamGameserver, GetGameplayStats);
             Createmethod(35, SteamGameserver, GetServerReputation);
-            Createmethod(36, SteamGameserver, GetPublicIP);
+            Createmethod(36, SteamGameserver, GetPublicIP0);
             Createmethod(37, SteamGameserver, HandleIncomingPacket);
             Createmethod(38, SteamGameserver, GetNextOutgoingPacket);
             Createmethod(39, SteamGameserver, EnableHeartbeats);
@@ -701,16 +757,16 @@ namespace Steam
             Createmethod(43, SteamGameserver, ComputeNewPlayerCompatibility);
         };
     };
-    struct SteamGameserver012 : Interface_t
+    struct SteamGameserver013 : Interface_t<44>
     {
-        SteamGameserver012()
+        SteamGameserver013()
         {
             Createmethod(0, SteamGameserver, InitGameServer);
             Createmethod(1, SteamGameserver, SetProduct);
             Createmethod(2, SteamGameserver, SetGameDescription);
             Createmethod(3, SteamGameserver, SetModDir);
             Createmethod(4, SteamGameserver, SetDedicatedServer);
-            Createmethod(5, SteamGameserver, LogOn3);
+            Createmethod(5, SteamGameserver, LogOn2);
             Createmethod(6, SteamGameserver, LogOnAnonymous);
             Createmethod(7, SteamGameserver, LogOff);
             Createmethod(8, SteamGameserver, BLoggedOn);
@@ -727,9 +783,9 @@ namespace Steam
             Createmethod(19, SteamGameserver, ClearAllKeyValues);
             Createmethod(20, SteamGameserver, SetKeyValue);
             Createmethod(21, SteamGameserver, SetGameTags);
-            Createmethod(22, SteamGameserver, SetGameinfo);
+            Createmethod(22, SteamGameserver, SetGameData);
             Createmethod(23, SteamGameserver, SetRegion);
-            Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate2);
+            Createmethod(24, SteamGameserver, SendUserConnectAndAuthenticate1);
             Createmethod(25, SteamGameserver, CreateUnauthenticatedUserConnection);
             Createmethod(26, SteamGameserver, SendUserDisconnect1);
             Createmethod(27, SteamGameserver, BUpdateUserData);
@@ -741,7 +797,7 @@ namespace Steam
             Createmethod(33, SteamGameserver, RequestUserGroupStatus);
             Createmethod(34, SteamGameserver, GetGameplayStats);
             Createmethod(35, SteamGameserver, GetServerReputation);
-            Createmethod(36, SteamGameserver, GetPublicIP);
+            Createmethod(36, SteamGameserver, GetPublicIP1);
             Createmethod(37, SteamGameserver, HandleIncomingPacket);
             Createmethod(38, SteamGameserver, GetNextOutgoingPacket);
             Createmethod(39, SteamGameserver, EnableHeartbeats);
@@ -756,7 +812,7 @@ namespace Steam
     {
         Steamgameserverloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver001", SteamGameserver001);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver002", SteamGameserver002);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver003", SteamGameserver003);
@@ -769,6 +825,7 @@ namespace Steam
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver010", SteamGameserver010);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver011", SteamGameserver011);
             Register(Interfacetype_t::GAMESERVER, "SteamGameserver012", SteamGameserver012);
+            Register(Interfacetype_t::GAMESERVER, "SteamGameserver013", SteamGameserver013);
         }
     };
     static Steamgameserverloader Interfaceloader{};

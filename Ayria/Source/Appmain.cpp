@@ -1,10 +1,9 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2020-04-17
+    Started: 2021-08-12
     License: MIT
 */
 
-#include <Stdinclude.hpp>
 #include <Global.hpp>
 
 // Some applications do not handle exceptions well.
@@ -41,9 +40,13 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     // On startup.
     if (nReason == DLL_PROCESS_ATTACH)
     {
+        // TODO(tcn): For 1.0, check profiler if _MM_HINT_T0 is the better choice (fill all cache-levels rather than 1-way tagging).
+        // Although it should already be touched by the ctors, ensure it's propagated and prioritized.
+        _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_NTA);
+
         // Ensure that Ayrias default directories exist.
         std::filesystem::create_directories("./Ayria/Logs");
-        std::filesystem::create_directories("./Ayria/Assets");
+        std::filesystem::create_directories("./Ayria/Storage");
         std::filesystem::create_directories("./Ayria/Plugins");
 
         // Only keep a log for this session.
@@ -55,8 +58,9 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
 
-        // Initialize the backend; in-case plugins need access.
+        // Initialize the backend and console; in-case plugins need access.
         Backend::Initialize();
+        Console::Initialize();
 
         // If injected, we can't hook. So just load all plugins directly.
         if (lpvReserved == NULL) Plugins::Initialize();
@@ -75,46 +79,4 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     }
 
     return TRUE;
-}
-
-// Entrypoint when running as a hostprocess.
-int main(int, char **)
-{
-    printf("Host startup..\n");
-
-    // Register the window.
-    WNDCLASSEXW Windowclass{};
-    Windowclass.cbSize = sizeof(WNDCLASSEXW);
-    Windowclass.lpfnWndProc = DefWindowProcW;
-    Windowclass.lpszClassName = L"Hostwindow";
-    Windowclass.hInstance = GetModuleHandleA(NULL);
-    Windowclass.hbrBackground = CreateSolidBrush(0xFF00FF);
-    Windowclass.style = CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT;
-    if (NULL == RegisterClassExW(&Windowclass)) return 2;
-
-    const auto hDC = GetDC(GetDesktopWindow());
-    const auto swidth = GetDeviceCaps(hDC, HORZRES);
-    const auto sheight = GetDeviceCaps(hDC, VERTRES);
-    ReleaseDC(GetDesktopWindow(), hDC);
-
-    // Create a simple window.
-    const auto Windowhandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"HOST", NULL, swidth / 4, sheight / 4,
-        swidth / 2, sheight / 2, NULL, NULL, Windowclass.hInstance, NULL);
-    if (!Windowhandle) return 1;
-    ShowWindow(Windowhandle, SW_SHOW);
-
-    // Initialize the backend to test features.
-    Backend::Initialize();
-
-    // Poll until quit.
-    MSG Message;
-    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
-    {
-        TranslateMessage(&Message);
-
-        if (Message.message == WM_QUIT) return 3;
-        else DispatchMessageW(&Message);
-    }
-
-    return 0;
 }

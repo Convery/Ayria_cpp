@@ -7,308 +7,230 @@
 #include "../Steam.hpp"
 #pragma warning(disable : 4100)
 
-// Steams interface exports.
-extern "C"
-{
-    // Initialization and shutdown.
-    EXPORT_ATTR bool SteamAPI_Init();
-    EXPORT_ATTR bool SteamAPI_InitSafe();
-    EXPORT_ATTR void SteamAPI_Shutdown();
-    EXPORT_ATTR bool SteamAPI_IsSteamRunning();
-    EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath();
-    EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID);
-
-    // Callback management.
-    EXPORT_ATTR void SteamAPI_RunCallbacks();
-    EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback);
-    EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback);
-    EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall);
-    EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *pCallback, uint64_t hAPICall);
-
-    // Steam proxy.
-    EXPORT_ATTR int32_t SteamAPI_GetHSteamUser();
-    EXPORT_ATTR int32_t SteamAPI_GetHSteamPipe();
-    EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser();
-    EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe();
-    EXPORT_ATTR bool SteamGameServer_BSecure();
-    EXPORT_ATTR void SteamGameServer_Shutdown();
-    EXPORT_ATTR void SteamGameServer_RunCallbacks();
-    EXPORT_ATTR uint64_t SteamGameServer_GetSteamID();
-    EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...);
-    // TODO(tcn): Replace with vararg versions.
-    EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString);
-    EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString);
-
-    // Interface access.
-    EXPORT_ATTR void *SteamAppList();
-    EXPORT_ATTR void *SteamApps();
-    EXPORT_ATTR void *SteamClient();
-    EXPORT_ATTR void *SteamController();
-    EXPORT_ATTR void *SteamFriends();
-    EXPORT_ATTR void *SteamGameServer();
-    EXPORT_ATTR void *SteamGameServerHTTP();
-    EXPORT_ATTR void *SteamGameServerInventory();
-    EXPORT_ATTR void *SteamGameServerNetworking();
-    EXPORT_ATTR void *SteamGameServerStats();
-    EXPORT_ATTR void *SteamGameServerUGC();
-    EXPORT_ATTR void *SteamGameServerUtils();
-    EXPORT_ATTR void *SteamHTMLSurface();
-    EXPORT_ATTR void *SteamHTTP();
-    EXPORT_ATTR void *SteamInventory();
-    EXPORT_ATTR void *SteamMatchmaking();
-    EXPORT_ATTR void *SteamMatchmakingServers();
-    EXPORT_ATTR void *SteamMusic();
-    EXPORT_ATTR void *SteamMusicRemote();
-    EXPORT_ATTR void *SteamNetworking();
-    EXPORT_ATTR void *SteamRemoteStorage();
-    EXPORT_ATTR void *SteamScreenshots();
-    EXPORT_ATTR void *SteamUnifiedMessages();
-    EXPORT_ATTR void *SteamUGC();
-    EXPORT_ATTR void *SteamUser();
-    EXPORT_ATTR void *SteamUserStats();
-    EXPORT_ATTR void *SteamUtils();
-    EXPORT_ATTR void *SteamVideo();
-    EXPORT_ATTR void *SteamMasterServerUpdater();
-    EXPORT_ATTR void *SteamInternal_CreateInterface(const char *Interfacename);
-}
-
 namespace Steam
 {
+    using SteamAPI_PostAPIResultInProcess_t = void(*)(SteamAPICall_t callHandle, void *, uint32_t unCallbackSize, int iCallbackNum);
+    using SteamAPI_CheckCallbackRegistered_t = uint32_t(*)( int iCallbackNum );
+    using SteamAPIWarningMessageHook_t = void(__cdecl *)(int, const char *);
+
+    // User innterface for GetIVAC if anyone wants to implement it.
+    struct IVAC
+    {
+        virtual bool BVACCreateProcess(void *lpVACBlob, unsigned int cbBlobSize, const char *lpApplicationName,
+            char *lpCommandLine, uint32_t dwCreationFlags, void *lpEnvironment, char *lpCurrentDirectory, uint32_t nGameID) = 0;
+
+        virtual void KillAllVAC() = 0;
+
+        virtual uint8_t *PbLoadVacBlob(int *pcbVacBlob) = 0;
+        virtual void FreeVacBlob(uint8_t *pbVacBlob) = 0;
+
+        virtual void RealHandleVACChallenge(int nClientGameID, uint8_t *pubChallenge, int cubChallenge) = 0;
+    };
+
     struct SteamClient
     {
-        // Version 6.
-        int32_t CreateSteamPipe()
+        HSteamPipe CreateSteamPipe()
         {
             Traceprint();
-            return 0;
+            return 1;
         }
-        bool BReleaseSteamPipe(int32_t hSteamPipe)
+        HSteamUser CreateGlobalUser(HSteamPipe hSteamPipe)
         {
             Traceprint();
+            return 1;
+        }
+        HSteamUser ConnectToGlobalUser(HSteamPipe hSteamPipe)
+        {
+            Traceprint();
+            return 1;
+        }
+        HSteamUser CreateLocalUser0(HSteamPipe *phSteamPipe)
+        {
+            Traceprint();
+            return 1;
+        }
+        HSteamUser CreateLocalUser1(HSteamPipe *phSteamPipe, uint32_t eAccountType)
+        {
+            Traceprint();
+            return 1;
+        }
+        bool BReleaseSteamPipe(HSteamPipe hSteamPipe)
+        {
+            return true;
+        }
+        bool BShutdownIfAllPipesClosed()
+        {
+            // TODO(tcn): Investigate if we should call std::exit here.
             return false;
         }
-        int32_t CreateGlobalUser(int32_t *phSteamPipe)
+        void ReleaseUser(HSteamPipe hSteamPipe, HSteamUser hUser) {}
+        void Remove_SteamAPI_CPostAPIResultInProcess(SteamAPI_PostAPIResultInProcess_t func) {}
+        void RunFrame() {}
+        void SetLocalIPBinding(uint32_t unIP, uint16_t usPort) { Traceprint(); }
+        void SetWarningMessageHook(SteamAPIWarningMessageHook_t pFunction) { }
+        void Set_SteamAPI_CCheckCallbackRegisteredInProcess(SteamAPI_CheckCallbackRegistered_t func) { }
+        void Set_SteamAPI_CPostAPIResultInProcess(SteamAPI_PostAPIResultInProcess_t func) { }
+        void DestroyAllInterfaces() { }
+
+        void *GetISteamGenericInterface(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return 0;
-        }
-        int32_t ConnectToGlobalUser(int32_t hSteamPipe)
-        {
-            Traceprint();
-            return 0;
-        }
-        int32_t CreateLocalUser(int32_t *phSteamPipe)
-        {
-            Traceprint();
-            return 0;
-        }
-        void ReleaseUser(int32_t hSteamPipe, int32_t hUser)
-        {
-            Traceprint();
-            return;
-        }
-        void *GetISteamUser(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamUser();
-        }
-        void *GetIVAC(int32_t hSteamUser)
-        {
-            Traceprint();
-            return nullptr;
-        }
-        void *GetISteamGameServer(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamGameServer();
-        }
-        void SetLocalIPBinding(uint32_t unIP, uint16_t usPort)
-        {
-            Traceprint();
-            return;
+            return Fetchinterface(pchVersion);
         }
         const char *GetUniverseName(uint32_t eUniverse)
         {
-            Traceprint();
+            switch (eUniverse)
+            {
+                case 0: return "Invalid";
+                case 1: return "Public";
+                case 2: return "Beta";
+                case 3: return "Internal";
+                case 4: return "Dev";
+                case 5: return "RC";
+            }
+
             return "Public";
         }
-        void *GetISteamFriends(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamFriends();
-        }
-        void *GetISteamUtils(int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamUtils();
-        }
-        void *GetISteamBilling(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        IVAC *GetIVAC(int32_t hSteamUser)
         {
             Traceprint();
             return nullptr;
-        }
-        void *GetISteamMatchmaking(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamMatchmaking();
-        }
-        void *GetISteamContentServer(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return nullptr;
-        }
-        void *GetISteamApps(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamApps();
-        }
-        void *GetISteamMasterServerUpdater(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return nullptr;
-        }
-        void *GetISteamMatchmakingServers(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
-        {
-            Traceprint();
-            return SteamMatchmakingServers();
-        }
-        void RunFrame()
-        {
         }
         uint32_t GetIPCCallCount()
         {
-            Traceprint();
-            return 20;
+            // TODO(tcn): Investigate if this is used in release-builds.
+            return 42;
         }
 
-        // Version 7.
-        void *GetISteamGenericInterface(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamAppList(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamInternal_CreateInterface(pchVersion);
+            return Fetchinterface("STEAMAPPLIST_INTERFACE_VERSION"s + pchVersion);
         }
-        void *GetISteamUserStats(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamApps(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamUserStats();
+            return Fetchinterface("STEAMAPPS_INTERFACE_VERSION"s + pchVersion);
         }
-        void *GetISteamNetworking(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamBilling(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamNetworking();
+            return Fetchinterface("SteamBilling"s + pchVersion);
         }
-        void SetWarningMessageHook(void *pFunction)
+        void *GetISteamContentServer(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return;
+            return Fetchinterface("SteamContentServer"s + pchVersion);
         }
-        void *GetISteamRemoteStorage(int32_t hSteamuser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamController(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamRemoteStorage();
+            return Fetchinterface("SteamController"s + pchVersion);
         }
-
-        // Version 9.
-        void *GetISteamGameServerStats(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamFriends(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamGameServerStats();
+            return Fetchinterface("SteamFriends"s + pchVersion);
         }
-
-        // Version 10.
-        bool BShutdownIfAllPipesClosed()
+        void *GetISteamGameSearch(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return false;
+            return Fetchinterface("SteamMatchGameSearch"s + pchVersion);
         }
-        void *GetISteamHTTP(int32_t hSteamuser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamGameServer(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamHTTP();
+            return Fetchinterface("SteamGameServer"s + pchVersion);
         }
-
-        // Version 11.
-        void *GetISteamScreenshots(int32_t hSteamuser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamGameServerStats(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamScreenshots();
+            return Fetchinterface("SteamGameServerStats"s + pchVersion);
         }
-
-        // Version 12.
-        void *GetISteamUnifiedMessages(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamHTMLSurface(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamUnifiedMessages();
+            return Fetchinterface("STEAMHTMLSURFACE_INTERFACE_VERSION_"s + pchVersion);
         }
-        void *GetISteamController(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamHTTP(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamController();
+            return Fetchinterface("STEAMHTTP_INTERFACE_VERSION"s + pchVersion);
         }
-
-        // Version 13.
-        void *GetISteamUGC(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamInput(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamUGC();
+            return Fetchinterface("SteamInput"s + pchVersion);
         }
-        void *GetISteamInventory(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamInventory(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamInventory();
+            return Fetchinterface("STEAMINVENTORY_INTERFACE_V"s + pchVersion);
         }
-        void *GetISteamVideo(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamMasterServerUpdater(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamVideo();
+            return Fetchinterface("SteamMasterServerUpdater"s + pchVersion);
         }
-        void *GetISteamAppList(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamMatchmaking(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamAppList();
+            return Fetchinterface("SteamMatchMaking"s + pchVersion);
         }
-
-        // Version 14.
-        void *GetISteamMusic(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamMatchmakingServers(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamMusic();
+            return Fetchinterface("SteamMatchMakingServers"s + pchVersion);
         }
-
-        // Version 15.
-        void *GetISteamMusicRemote(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamMusic(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamMusicRemote();
+            return Fetchinterface("STEAMMUSIC_INTERFACE_VERSION"s + pchVersion);
         }
-
-        // Version 16.
-        void *GetISteamHTMLSurface(int32_t hSteamUser, int32_t hSteamPipe, const char *pchVersion)
+        void *GetISteamMusicRemote(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return SteamHTMLSurface();
+            return Fetchinterface("STEAMMUSICREMOTE_INTERFACE_VERSION"s + pchVersion);
         }
-        void Set_SteamAPI_CPostAPIResultInProcess(void(*)(uint64_t callHandle, void *, uint32_t unCallbackSize, int iCallbackNum))
+        void *GetISteamNetworking(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return;
+            return Fetchinterface("SteamNetworking"s + pchVersion);
         }
-        void Remove_SteamAPI_CPostAPIResultInProcess(void(*)(uint64_t callHandle, void *, uint32_t unCallbackSize, int iCallbackNum))
+        void *GetISteamPS3OverlayRender()
         {
-            Traceprint();
-            return;
+            return Fetchinterface("SteamPS3Overlay");
         }
-        void Set_SteamAPI_CCheckCallbackRegisteredInProcess(unsigned int(*)(int iCallbackNum))
+        void *GetISteamParentalSettings(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
         {
-            Traceprint();
-            return;
+            return Fetchinterface("STEAMPARENTALSETTINGS_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamParties(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("SteamParties"s + pchVersion);
+        }
+        void *GetISteamRemotePlay(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMREMOTEPLAY_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamRemoteStorage(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMREMOTESTORAGE_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamScreenshots(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMSCREENSHOTS_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamUGC(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMUGC_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamUnifiedMessages(HSteamUser hSteamuser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMUNIFIEDMESSAGES_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamUser(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("SteamUser"s + pchVersion);
+        }
+        void *GetISteamUserStats(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMUSERSTATS_INTERFACE_VERSION"s + pchVersion);
+        }
+        void *GetISteamUtils(HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("SteamUtils"s + pchVersion);
+        }
+        void *GetISteamVideo(HSteamUser hSteamUser, HSteamPipe hSteamPipe, const char *pchVersion)
+        {
+            return Fetchinterface("STEAMVIDEO_INTERFACE_V"s + pchVersion);
         }
     };
 
     static std::any Hackery;
     #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
 
-    struct SteamClient001 : Interface_t
+    struct SteamClient001 : Interface_t<>
     {
         SteamClient001()
         {
@@ -317,7 +239,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient002 : Interface_t
+    struct SteamClient002 : Interface_t<>
     {
         SteamClient002()
         {
@@ -326,7 +248,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient003 : Interface_t
+    struct SteamClient003 : Interface_t<>
     {
         SteamClient003()
         {
@@ -335,7 +257,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient004 : Interface_t
+    struct SteamClient004 : Interface_t<>
     {
         SteamClient004()
         {
@@ -344,7 +266,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient005 : Interface_t
+    struct SteamClient005 : Interface_t<>
     {
         SteamClient005()
         {
@@ -353,7 +275,7 @@ namespace Steam
             */
         };
     };
-    struct SteamClient006 : Interface_t
+    struct SteamClient006 : Interface_t<21>
     {
         SteamClient006()
         {
@@ -361,7 +283,7 @@ namespace Steam
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, CreateGlobalUser);
             Createmethod(3, SteamClient, ConnectToGlobalUser);
-            Createmethod(4, SteamClient, CreateLocalUser);
+            Createmethod(4, SteamClient, CreateLocalUser0);
             Createmethod(5, SteamClient, ReleaseUser);
             Createmethod(6, SteamClient, GetISteamUser);
             Createmethod(7, SteamClient, GetIVAC);
@@ -380,14 +302,14 @@ namespace Steam
             Createmethod(20, SteamClient, GetIPCCallCount);
         };
     };
-    struct SteamClient007 : Interface_t
+    struct SteamClient007 : Interface_t<22>
     {
         SteamClient007()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser0);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -408,14 +330,14 @@ namespace Steam
             Createmethod(21, SteamClient, GetISteamRemoteStorage);
         };
     };
-    struct SteamClient008 : Interface_t
+    struct SteamClient008 : Interface_t<21>
     {
         SteamClient008()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -435,14 +357,14 @@ namespace Steam
             Createmethod(20, SteamClient, SetWarningMessageHook);
         };
     };
-    struct SteamClient009 : Interface_t
+    struct SteamClient009 : Interface_t<22>
     {
         SteamClient009()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -463,14 +385,14 @@ namespace Steam
             Createmethod(21, SteamClient, SetWarningMessageHook);
         };
     };
-    struct SteamClient010 : Interface_t
+    struct SteamClient010 : Interface_t<24>
     {
         SteamClient010()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -493,14 +415,14 @@ namespace Steam
             Createmethod(23, SteamClient, GetISteamHTTP);
         };
     };
-    struct SteamClient011 : Interface_t
+    struct SteamClient011 : Interface_t<25>
     {
         SteamClient011()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -524,14 +446,14 @@ namespace Steam
             Createmethod(24, SteamClient, GetISteamHTTP);
         };
     };
-    struct SteamClient012 : Interface_t
+    struct SteamClient012 : Interface_t<26>
     {
         SteamClient012()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -556,14 +478,14 @@ namespace Steam
             Createmethod(25, SteamClient, GetISteamController);
         };
     };
-    struct SteamClient013 : Interface_t
+    struct SteamClient013 : Interface_t<30>
     {
         SteamClient013()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -592,14 +514,14 @@ namespace Steam
             Createmethod(29, SteamClient, GetISteamAppList);
         };
     };
-    struct SteamClient014 : Interface_t
+    struct SteamClient014 : Interface_t<31>
     {
         SteamClient014()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -629,14 +551,14 @@ namespace Steam
             Createmethod(30, SteamClient, GetISteamMusic);
         };
     };
-    struct SteamClient015 : Interface_t
+    struct SteamClient015 : Interface_t<32>
     {
         SteamClient015()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -667,14 +589,14 @@ namespace Steam
             Createmethod(31, SteamClient, GetISteamMusicRemote);
         };
     };
-    struct SteamClient016 : Interface_t
+    struct SteamClient016 : Interface_t<36>
     {
         SteamClient016()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -709,14 +631,14 @@ namespace Steam
             Createmethod(35, SteamClient, Set_SteamAPI_CCheckCallbackRegisteredInProcess);
         };
     };
-    struct SteamClient017 : Interface_t
+    struct SteamClient017 : Interface_t<36>
     {
         SteamClient017()
         {
             Createmethod(0, SteamClient, CreateSteamPipe);
             Createmethod(1, SteamClient, BReleaseSteamPipe);
             Createmethod(2, SteamClient, ConnectToGlobalUser);
-            Createmethod(3, SteamClient, CreateLocalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
             Createmethod(4, SteamClient, ReleaseUser);
             Createmethod(5, SteamClient, GetISteamUser);
             Createmethod(6, SteamClient, GetISteamGameServer);
@@ -751,12 +673,154 @@ namespace Steam
             Createmethod(35, SteamClient, GetISteamVideo);
         };
     };
+    struct SteamClient018 : Interface_t<40>
+    {
+        SteamClient018()
+        {
+            Createmethod(0, SteamClient, CreateSteamPipe);
+            Createmethod(1, SteamClient, BReleaseSteamPipe);
+            Createmethod(2, SteamClient, ConnectToGlobalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
+            Createmethod(4, SteamClient, ReleaseUser);
+            Createmethod(5, SteamClient, GetISteamUser);
+            Createmethod(6, SteamClient, GetISteamGameServer);
+            Createmethod(7, SteamClient, SetLocalIPBinding);
+            Createmethod(8, SteamClient, GetISteamFriends);
+            Createmethod(9, SteamClient, GetISteamUtils);
+            Createmethod(10, SteamClient, GetISteamMatchmaking);
+            Createmethod(11, SteamClient, GetISteamMatchmakingServers);
+            Createmethod(12, SteamClient, GetISteamGenericInterface);
+            Createmethod(13, SteamClient, GetISteamUserStats);
+            Createmethod(14, SteamClient, GetISteamGameServerStats);
+            Createmethod(15, SteamClient, GetISteamApps);
+            Createmethod(16, SteamClient, GetISteamNetworking);
+            Createmethod(17, SteamClient, GetISteamRemoteStorage);
+            Createmethod(18, SteamClient, GetISteamScreenshots);
+            Createmethod(19, SteamClient, GetISteamGameSearch);
+            Createmethod(20, SteamClient, RunFrame);
+            Createmethod(21, SteamClient, GetIPCCallCount);
+            Createmethod(22, SteamClient, SetWarningMessageHook);
+            Createmethod(23, SteamClient, BShutdownIfAllPipesClosed);
+            Createmethod(24, SteamClient, GetISteamHTTP);
+            Createmethod(25, SteamClient, GetISteamUnifiedMessages);
+            Createmethod(26, SteamClient, GetISteamController);
+            Createmethod(27, SteamClient, GetISteamUGC);
+            Createmethod(28, SteamClient, GetISteamAppList);
+            Createmethod(29, SteamClient, GetISteamMusic);
+            Createmethod(30, SteamClient, GetISteamMusicRemote);
+            Createmethod(31, SteamClient, GetISteamHTMLSurface);
+            Createmethod(32, SteamClient, Set_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(33, SteamClient, Remove_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(34, SteamClient, Set_SteamAPI_CCheckCallbackRegisteredInProcess);
+            Createmethod(35, SteamClient, GetISteamInventory);
+            Createmethod(36, SteamClient, GetISteamVideo);
+            Createmethod(37, SteamClient, GetISteamParentalSettings);
+            Createmethod(38, SteamClient, GetISteamInput);
+            Createmethod(39, SteamClient, GetISteamParties);
+
+        };
+    };
+    struct SteamClient019 : Interface_t<41>
+    {
+        SteamClient019()
+        {
+            Createmethod(0, SteamClient, CreateSteamPipe);
+            Createmethod(1, SteamClient, BReleaseSteamPipe);
+            Createmethod(2, SteamClient, ConnectToGlobalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
+            Createmethod(4, SteamClient, ReleaseUser);
+            Createmethod(5, SteamClient, GetISteamUser);
+            Createmethod(6, SteamClient, GetISteamGameServer);
+            Createmethod(7, SteamClient, SetLocalIPBinding);
+            Createmethod(8, SteamClient, GetISteamFriends);
+            Createmethod(9, SteamClient, GetISteamUtils);
+            Createmethod(10, SteamClient, GetISteamMatchmaking);
+            Createmethod(11, SteamClient, GetISteamMatchmakingServers);
+            Createmethod(12, SteamClient, GetISteamGenericInterface);
+            Createmethod(13, SteamClient, GetISteamUserStats);
+            Createmethod(14, SteamClient, GetISteamGameServerStats);
+            Createmethod(15, SteamClient, GetISteamApps);
+            Createmethod(16, SteamClient, GetISteamNetworking);
+            Createmethod(17, SteamClient, GetISteamRemoteStorage);
+            Createmethod(18, SteamClient, GetISteamScreenshots);
+            Createmethod(19, SteamClient, GetISteamGameSearch);
+            Createmethod(20, SteamClient, RunFrame);
+            Createmethod(21, SteamClient, GetIPCCallCount);
+            Createmethod(22, SteamClient, SetWarningMessageHook);
+            Createmethod(23, SteamClient, BShutdownIfAllPipesClosed);
+            Createmethod(24, SteamClient, GetISteamHTTP);
+            Createmethod(25, SteamClient, GetISteamUnifiedMessages);
+            Createmethod(26, SteamClient, GetISteamController);
+            Createmethod(27, SteamClient, GetISteamUGC);
+            Createmethod(28, SteamClient, GetISteamAppList);
+            Createmethod(29, SteamClient, GetISteamMusic);
+            Createmethod(30, SteamClient, GetISteamMusicRemote);
+            Createmethod(31, SteamClient, GetISteamHTMLSurface);
+            Createmethod(32, SteamClient, Set_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(33, SteamClient, Remove_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(34, SteamClient, Set_SteamAPI_CCheckCallbackRegisteredInProcess);
+            Createmethod(35, SteamClient, GetISteamInventory);
+            Createmethod(36, SteamClient, GetISteamVideo);
+            Createmethod(37, SteamClient, GetISteamParentalSettings);
+            Createmethod(38, SteamClient, GetISteamInput);
+            Createmethod(39, SteamClient, GetISteamParties);
+            Createmethod(40, SteamClient, GetISteamRemotePlay);
+        };
+    };
+    struct SteamClient020 : Interface_t<42>
+    {
+        SteamClient020()
+        {
+            Createmethod(0, SteamClient, CreateSteamPipe);
+            Createmethod(1, SteamClient, BReleaseSteamPipe);
+            Createmethod(2, SteamClient, ConnectToGlobalUser);
+            Createmethod(3, SteamClient, CreateLocalUser1);
+            Createmethod(4, SteamClient, ReleaseUser);
+            Createmethod(5, SteamClient, GetISteamUser);
+            Createmethod(6, SteamClient, GetISteamGameServer);
+            Createmethod(7, SteamClient, SetLocalIPBinding);
+            Createmethod(8, SteamClient, GetISteamFriends);
+            Createmethod(9, SteamClient, GetISteamUtils);
+            Createmethod(10, SteamClient, GetISteamMatchmaking);
+            Createmethod(11, SteamClient, GetISteamMatchmakingServers);
+            Createmethod(12, SteamClient, GetISteamGenericInterface);
+            Createmethod(13, SteamClient, GetISteamUserStats);
+            Createmethod(14, SteamClient, GetISteamGameServerStats);
+            Createmethod(15, SteamClient, GetISteamApps);
+            Createmethod(16, SteamClient, GetISteamNetworking);
+            Createmethod(17, SteamClient, GetISteamRemoteStorage);
+            Createmethod(18, SteamClient, GetISteamScreenshots);
+            Createmethod(19, SteamClient, GetISteamGameSearch);
+            Createmethod(20, SteamClient, RunFrame);
+            Createmethod(21, SteamClient, GetIPCCallCount);
+            Createmethod(22, SteamClient, SetWarningMessageHook);
+            Createmethod(23, SteamClient, BShutdownIfAllPipesClosed);
+            Createmethod(24, SteamClient, GetISteamHTTP);
+            Createmethod(25, SteamClient, GetISteamUnifiedMessages);
+            Createmethod(26, SteamClient, GetISteamController);
+            Createmethod(27, SteamClient, GetISteamUGC);
+            Createmethod(28, SteamClient, GetISteamAppList);
+            Createmethod(29, SteamClient, GetISteamMusic);
+            Createmethod(30, SteamClient, GetISteamMusicRemote);
+            Createmethod(31, SteamClient, GetISteamHTMLSurface);
+            Createmethod(32, SteamClient, Set_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(33, SteamClient, Remove_SteamAPI_CPostAPIResultInProcess);
+            Createmethod(34, SteamClient, Set_SteamAPI_CCheckCallbackRegisteredInProcess);
+            Createmethod(35, SteamClient, GetISteamInventory);
+            Createmethod(36, SteamClient, GetISteamVideo);
+            Createmethod(37, SteamClient, GetISteamParentalSettings);
+            Createmethod(38, SteamClient, GetISteamInput);
+            Createmethod(39, SteamClient, GetISteamParties);
+            Createmethod(40, SteamClient, GetISteamRemotePlay);
+            Createmethod(41, SteamClient, DestroyAllInterfaces);
+        };
+    };
 
     struct Steamclientloader
     {
         Steamclientloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::CLIENT, "SteamClient001", SteamClient001);
             Register(Interfacetype_t::CLIENT, "SteamClient002", SteamClient002);
             Register(Interfacetype_t::CLIENT, "SteamClient003", SteamClient003);
@@ -774,6 +838,9 @@ namespace Steam
             Register(Interfacetype_t::CLIENT, "SteamClient015", SteamClient015);
             Register(Interfacetype_t::CLIENT, "SteamClient016", SteamClient016);
             Register(Interfacetype_t::CLIENT, "SteamClient017", SteamClient017);
+            Register(Interfacetype_t::CLIENT, "SteamClient018", SteamClient018);
+            Register(Interfacetype_t::CLIENT, "SteamClient019", SteamClient019);
+            Register(Interfacetype_t::CLIENT, "SteamClient020", SteamClient020);
         }
     };
     static Steamclientloader Interfaceloader{};

@@ -9,94 +9,130 @@
 
 namespace Steam
 {
-    static std::any Hackery;
-    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+    static Hashmap<std::string, std::string> Keyvalues{};
+    static Hashset<std::string> Masterservers{};
+    static JSON::Object_t Localsession{};
+    static bool Initialized{};
+    static bool Active{};
+
+    static void Sendupdate()
+    {
+        if (!Active) return;
+
+        JSON::Object_t KVs;
+        KVs.reserve(Keyvalues.size());
+        for (const auto &[Key, Value] : Keyvalues)
+            KVs[Key] = Value;
+
+        auto Gamedata = Localsession;
+        Gamedata["Keyvalues"] = KVs;
+
+        const auto Request = JSON::Object_t({
+            { "B64Gamedata", Base64::Encode(JSON::Dump(Gamedata))},
+            { "ProviderID", Hash::WW32("Steam_Masterserver") },
+            { "GameID", Global.ApplicationID }
+        });
+
+        Ayriarequest("Matchmakingsessions::Update", Request);
+    }
 
     struct SteamMasterServerUpdater
     {
-        void SetActive(bool bActive)
+        bool AddMasterServer(const char *pServerAddress)
         {
-            Traceprint();
-        }
-        void SetHeartbeatInterval(int iHeartbeatInterval)
-        {
-            Traceprint();
+            Masterservers.insert(pServerAddress);
+            return true;
         }
         bool HandleIncomingPacket(const void *pData, int cbData, uint32_t srcIP, uint16_t srcPort)
         {
-            Traceprint();
-            return {};
-        }
-        int  GetNextOutgoingPacket(void *pOut, int cbMaxOut, uint32_t *pNetAdr, uint16_t *pPort)
-        {
-            Traceprint();
-            return {};
-        }
-        void SetBasicServerData(unsigned short nProtocolVersion, bool bDedicatedServer, const char *pRegionName, const char *pProductName, unsigned short nMaxReportedClients, bool bPasswordProtected, const char *pGameDescription) const
-        {
-            Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n> Product: %s\n> Description: %s\n> Maxplayers: %u",
-                          bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
-
-            auto Session = Matchmaking::getLocalsession();
-            Session->Hostinfo["Region"] = pRegionName;
-            Session->Gameinfo["Maxplayers"] = nMaxReportedClients;
-            Session->Gameinfo["Productname"] = pProductName;
-            Session->Gameinfo["Productdesc"] = pGameDescription;
-            Session->Hostinfo["Protocol"] = nProtocolVersion;
-            Session->Hostinfo["isDedicated"] = bDedicatedServer;
-            Session->Hostinfo["isPrivate"] = bPasswordProtected;
-
-            Matchmaking::Update();
-        }
-        void ClearAllKeyValues()
-        {
-            Traceprint();
-        }
-        void SetKeyValue(const char *pKey, const char *pValue) const
-        {
-            Matchmaking::getLocalsession()->Sessiondata[pKey] = pValue;
-            Matchmaking::Update();
-        }
-        void NotifyShutdown()
-        {
-            if (const auto Callback = Ayria.API_Matchmake)
-            {
-                Callback(Ayria.toFunctionID("Terminatesession"), nullptr);
-            }
-        }
-        bool WasRestartRequested()
-        {
-            Traceprint();
-            return {};
-        }
-        void ForceHeartbeat()
-        {
-            Traceprint();
-        }
-        bool AddMasterServer(const char *pServerAddress)
-        {
-            Traceprint();
-            return {};
+            return false;
         }
         bool RemoveMasterServer(const char *pServerAddress)
         {
-            Traceprint();
-            return {};
+            Masterservers.erase(pServerAddress);
+            return true;
         }
-        int  GetNumMasterServers()
+        bool WasRestartRequested()
         {
-            // NOTE(tcn): Some servers use this for an 'is online' check.
-            return 0; // Set to 1 for Internet-mode.
+            return false;
         }
-        int  GetMasterServerAddress(int iServer, char *pOut, int outBufferSize)
+
+        int GetMasterServerAddress(int iServer, char *pOut, int outBufferSize)
         {
-            // TODO(tcn): Returns bytes written, investigate this when needed.
-            Traceprint();
+            if (iServer >= Masterservers.size()) return 0;
+
+            for (const auto &String : Masterservers)
+            {
+                if (iServer-- == 0)
+                {
+                    int Length = std::min(outBufferSize, (int)String.size());
+                    std::strncpy(pOut, String.c_str(), Length);
+                    return Length;
+                }
+            }
+
             return 0;
+        }
+        int GetNextOutgoingPacket( void *pOut, int cbMaxOut, uint32_t *pNetAdr, uint16_t *pPort )
+        {
+            return 0;
+        }
+        int GetNumMasterServers()
+        {
+            return (int)Masterservers.size();
+        }
+
+        void ClearAllKeyValues()
+        {
+            Keyvalues.clear();
+        }
+        void ForceHeartbeat()
+        {
+        }
+        void NotifyShutdown()
+        {
+            Active = false;
+
+            const auto Request = JSON::Object_t({ { "ProviderID", Hash::WW32("Steam_Masterserver") } });
+            Ayriarequest("Matchmakingsessions::Terminate", Request);
+        }
+        void SetActive(bool bActive)
+        {
+            if (bActive && !Initialized)
+            {
+                Initialized = true;
+                Ayria.Createperiodictask(5000, Sendupdate);
+            }
+
+            Active = bActive;
+        }
+        void SetBasicServerData(unsigned short nProtocolVersion, bool bDedicatedServer, const char *pRegionName,
+            const char *pProductName, unsigned short nMaxReportedClients, bool bPasswordProtected, const char *pGameDescription)
+        {
+            Debugprint(va("Update Steam-gameserver:\n> Dedicated: %s\n> Passwordprotected: %s\n> Product: %s\n> Description: %s\n> Maxplayers: %u",
+                bDedicatedServer ? "TRUE" : "FALSE", bPasswordProtected ? "TRUE" : "FALSE", pProductName, pGameDescription, nMaxReportedClients));
+
+            Localsession["Gamedescription"] = std::string(pGameDescription);
+            Localsession["isPasswordprotected"] = bPasswordProtected;
+            Localsession["Protocolversion"] = nProtocolVersion;
+            Localsession["Product"] = std::string(pProductName);
+            Localsession["Region"] = std::string(pRegionName);
+            Localsession["Playermax"] = nMaxReportedClients;
+            Localsession["isDedicated"] = bDedicatedServer;
+        }
+        void SetHeartbeatInterval(int iHeartbeatInterval)
+        {
+        }
+        void SetKeyValue(const char *pKey, const char *pValue)
+        {
+            Keyvalues[pKey] = pValue;
         }
     };
 
-    struct SteamMasterserverupdater001 : Interface_t
+    static std::any Hackery;
+    #define Createmethod(Index, Class, Function) Hackery = &Class::Function; VTABLE[Index] = *(void **)&Hackery;
+
+    struct SteamMasterserverupdater001 : Interface_t<14>
     {
         SteamMasterserverupdater001()
         {
@@ -121,7 +157,7 @@ namespace Steam
     {
         SteamMasterserverupdaterloader()
         {
-            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, &HACK ## z);
+            #define Register(x, y, z) static z HACK ## z{}; Registerinterface(x, y, (Interface_t<> *)&HACK ## z);
             Register(Interfacetype_t::MASTERSERVERUPDATER, "SteamMasterserverupdater001", SteamMasterserverupdater001);
         }
     };

@@ -23,6 +23,85 @@ inline Blob S2B(std::string &&Input) { return Blob(Input.begin(), Input.end()); 
 
 namespace FS
 {
+    class MMappedfile_t
+    {
+        // Internal.
+        void *Nativehandle{};
+        int NativeFD{};
+
+        public:
+        size_t Size{};
+        void *Data{};
+
+        explicit MMappedfile_t(const std::string &Path)
+        {
+            #if defined(_WIN32)
+            NativeFD = _open(Path.c_str(), 0x800, 0);
+            if (NativeFD == -1) return;
+
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            if (!Nativehandle) return;
+
+            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+
+            MEMORY_BASIC_INFORMATION Info{};
+            VirtualQuery(Data, &Info, sizeof(Info));
+
+            Size = Info.RegionSize;
+
+            #else
+
+            NativeFD = open(Path.c_str(), 0, 0);
+            if (NativeFD == -1) return {};
+
+            Size = lseek(NativeFD, 0, SEEK_END);
+            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
+
+            #endif
+        }
+        explicit MMappedfile_t(const std::wstring &Path)
+        {
+            #if defined(_WIN32)
+            NativeFD = _wopen(Path.c_str(), 0x800, 0);
+            if (NativeFD == -1) return;
+
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            if (!Nativehandle) return;
+
+            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+
+            MEMORY_BASIC_INFORMATION Info{};
+            VirtualQuery(Data, &Info, sizeof(Info));
+
+            Size = Info.RegionSize;
+
+            #else
+
+            NativeFD = open(Encoding::toNarrow(Path).c_str(), 0, 0);
+            if (NativeFD == -1) return {};
+
+            Size = lseek(NativeFD, 0, SEEK_END);
+            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
+
+            #endif
+        }
+        ~MMappedfile_t()
+        {
+            #if defined(_WIN32)
+            UnmapViewOfFile(Data);
+            CloseHandle(Nativehandle);
+            _close(NativeFD);
+
+            #else
+
+            munmap((void *)Data, Size);
+            close(NativeFD);
+            #endif
+        }
+    };
+
     [[nodiscard]] inline bool Fileexists(std::string_view Path)
     {
         return std::filesystem::exists(Path);
@@ -32,13 +111,13 @@ namespace FS
         return std::filesystem::exists(Path);
     }
 
-    [[nodiscard]] inline size_t Filesize(std::string_view Path)
+    [[nodiscard]] inline uintmax_t Filesize(std::string_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);
         return Code.value() ? 0 : Size;
     }
-    [[nodiscard]] inline size_t Filesize(std::wstring_view Path)
+    [[nodiscard]] inline uintmax_t Filesize(std::wstring_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);
@@ -47,18 +126,17 @@ namespace FS
 
     namespace Internal
     {
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_large(std::string_view Path, size_t Size)
         {
             #if defined(_WIN32)
                 const auto FD = _open(Path.data(), 0x800, 0);
                 if (FD == -1) return {};
 
-                const auto Handle = CreateFileMappingA((HANDLE)_get_osfhandle(FD), NULL,
-                                                       PAGE_READONLY, 0, Size & 0xFFFFFFFF, NULL);
+                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
                 if (!Handle) return {};
 
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_COPY | FILE_MAP_READ, 0, 0, Size & 0xFFFFFFFF);
+                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
                 if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
 
                 std::basic_string<T> Filebuffer(Size, 0);
@@ -83,20 +161,19 @@ namespace FS
 
             return Filebuffer;
         }
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_large(std::wstring_view Path, size_t Size)
         {
             #if !defined(_WIN32)
-                return Readfile_large(toNarrow(Path), Size);
+                return Readfile_large(Encoding::toNarrow(Path), Size);
             #else
                 const auto FD = _wopen(Path.data(), 0x800, 0);
                 if (FD == -1) return {};
 
-                const auto Handle = CreateFileMappingA((HANDLE)_get_osfhandle(FD), NULL,
-                                                       PAGE_READONLY, 0, Size & 0xFFFFFFFF, NULL);
+                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
                 if (!Handle) return {};
 
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_COPY | FILE_MAP_READ, 0, 0, Size & 0xFFFFFFFF);
+                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
                 if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
 
                 std::basic_string<T> Filebuffer(Size, 0);
@@ -110,29 +187,29 @@ namespace FS
             #endif
         }
 
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_small(std::string_view Path, size_t Size)
         {
             std::FILE *Filehandle = std::fopen(Path.data(), "rb");
             if (!Filehandle) return {};
 
-            const auto Buffer = std::make_unique<uint8_t[]>(Size);
+            const auto Buffer = std::make_unique<T[]>(Size);
             std::fread(Buffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
             return std::basic_string<T>(Buffer.get(), Size);
         }
-        template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
         [[nodiscard]] inline std::basic_string<T> Readfile_small(std::wstring_view Path, size_t Size)
         {
             #if defined(_WIN32)
             std::FILE *Filehandle = _wfopen(Path.data(), L"rb");
             #else
-            std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "rb");
+            std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "rb");
             #endif
             if (!Filehandle) return {};
 
-            const auto Buffer = std::make_unique<uint8_t[]>(Size);
+            const auto Buffer = std::make_unique<T[]>(Size);
             std::fread(Buffer.get(), Size, 1, Filehandle);
             std::fclose(Filehandle);
 
@@ -140,19 +217,20 @@ namespace FS
         }
     }
 
-    template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
     [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
     {
         const auto Size = Filesize(Path);
-        if (Size > 4096) return Internal::Readfile_large(Path, Size);
-        else return Internal::Readfile_small(Path, Size);
+
+        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
+        else return Internal::Readfile_small<T>(Path, Size);
     }
-    template <typename T = uint8_t, typename = std::enable_if_t<sizeof(T) == 1, T>>
+    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
     [[nodiscard]] inline std::basic_string<T> Readfile(std::wstring_view Path)
     {
         const auto Size = Filesize(Path);
-        if (Size > 4096) return Internal::Readfile_large(Path, Size);
-        else return Internal::Readfile_small(Path, Size);
+        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
+        else return Internal::Readfile_small<T>(Path, Size);
     }
 
     template<typename T>
@@ -175,7 +253,7 @@ namespace FS
         #if defined(_WIN32)
         std::FILE *Filehandle = _wfopen(Path.data(), L"wb");
         #else
-        std::FILE *Filehandle = std::fopen(toNarrow(Path).c_str(), "wb");
+        std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "wb");
         #endif
         if (!Filehandle) return false;
 
@@ -194,7 +272,7 @@ namespace FS
 
         if (!Recursive)
         {
-            for (const auto &File : std::filesystem::directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -205,7 +283,7 @@ namespace FS
         }
         else
         {
-            for (const auto &File : std::filesystem::recursive_directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::recursive_directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -223,7 +301,7 @@ namespace FS
 
         if (!Recursive)
         {
-            for (const auto &File : std::filesystem::directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -234,7 +312,7 @@ namespace FS
         }
         else
         {
-            for (const auto &File : std::filesystem::recursive_directory_iterator(Directorypath))
+            for (const auto Items = std::filesystem::recursive_directory_iterator(Directorypath); const auto &File : Items)
             {
                 if (File.is_directory()) continue;
 
@@ -265,7 +343,7 @@ namespace FS
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #else
         struct stat Buffer;
-        if (stat(toNarrow(Path).c_str(), &Buffer) == -1) return {};
+        if (stat(Encoding::toNarrow(Path).c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #endif
     }

@@ -11,20 +11,113 @@
 namespace Steam
 {
     // Global state.
-    Steaminfo_t Steam{};
+    Globalstate_t Global{};
+
+    // Contained in SteamGameserver.cpp
+    extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
+        uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion);
+    extern bool Initgameserver(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort,
+        uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion);
+    extern bool isServeractive;
+
+    // Unified creation and initialization for the SteamDB.
+    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    {
+        Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
+    }
+    sqlite::database Database()
+    {
+        static std::shared_ptr<sqlite3> Database{};
+        if (!Database)
+        {
+            sqlite3 *Ptr{};
+
+            // :memory: should never fail unless the client has more serious problems.
+            const auto Result = sqlite3_open_v2("./Ayria/Steam.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.db");
+            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+
+            // Initialize the database with the interfaces tables.
+            {
+                // Steamapps tables.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS DLCInfo ("
+                           "DLCID integer not null, "
+                           "AppID integer not null, "
+                           "Checkfile text, "   // Relative path to a file in the DLC.
+                           "Name text, "
+                           "PRIMARY KEY (DLCID, AppID) );";
+
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS DLCData ("
+                           "AppID integer not null, "
+                           "Key text not null, "
+                           "Value text, "
+                           "PRIMARY KEY (AppID, Key) );";
+
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Appinfo ("
+                           "AppID integer primary key unique not null, "
+                           "Languages text not null);";
+                }
+
+                // Steam remote-storage.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Clientfiles ("
+                           "Visibility integer, "
+                           "Thumbnailfile text, "
+                           "Description text, "
+                           "Changelog text, "
+                           "Filename text, "
+                           "FileID integer, "
+                           "AppID integer, "
+                           "Title text, "
+                           "Tags text, "
+                           "PRIMARY KEY (AppID, FileID) );";
+                }
+
+                // Steam achievements and stats.
+                {
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Achievement ("
+                           "API_Name text not null, "
+                           "AppID integer not null, "
+                           "Maxprogress integer, "
+                           "Name text not null, "
+                           "Description text, "
+                           "Icon text, "
+                           "PRIMARY_KEY(API_Name, AppID) );";
+
+                    sqlite::database(Database)
+                        << "CREATE TABLE IF NOT EXISTS Achievementprogress ("
+                           "ClientID integer not null, "
+                           "Currentprogress integer, "
+                           "AppID integer not null, "
+                           "Name text not null, "
+                           "Unlocktime integer, "
+                           "PRIMARY KEY (Name, ClientID, AppID) );";
+                }
+            }
+        }
+        return sqlite::database(Database);
+    }
 
     // Exported Steam interface.
     extern "C"
     {
         // Initialization and shutdown.
-        bool isInitialized{};
+        static bool isInitialized{};
         EXPORT_ATTR bool SteamAPI_Init()
         {
             if (isInitialized) return true;
             isInitialized = true;
 
             // For usage tracking.
-            Steam.Startuptime = time(NULL);
+            Global.Startuptime = uint32_t(time(NULL));
 
             // Legacy compatibility.
             Redirectmodulehandle();
@@ -37,97 +130,115 @@ namespace Steam
 
             // Modern games provide the ApplicationID via SteamAPI_RestartAppIfNecessary.
             // While legacy/dedis have hardcoded steam_apis. Thus we need a configuration file.
-            if (Steam.ApplicationID == 0)
+            if (Global.ApplicationID == 0)
             {
                 // Check for configuration files.
                 if (const auto Filehandle = std::fopen("steam_appid.txt", "r"))
                 {
-                    std::fscanf(Filehandle, "%u", &Steam.ApplicationID);
+                    std::fscanf(Filehandle, "%u", &Global.ApplicationID);
                     std::fclose(Filehandle);
                 }
                 if (const auto Filehandle = std::fopen("ayria_appid.txt", "r"))
                 {
-                    std::fscanf(Filehandle, "%u", &Steam.ApplicationID);
+                    std::fscanf(Filehandle, "%u", &Global.ApplicationID);
                     std::fclose(Filehandle);
                 }
 
                 // Else we need to at least warn the user, although it should be an error.
-                if (Steam.ApplicationID == 0)
+                if (Global.ApplicationID == 0)
                 {
                     Errorprint("Platformwrapper could not find the games Application ID.");
                     Errorprint("This may cause errors, contact the developer if you experience issues.");
                     Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\" with the ID");
 
-                    Steam.ApplicationID = Hash::FNV1a_32("Ayria");
+                    Global.ApplicationID = Hash::FNV1a_32("Ayria");
                 }
             }
 
-            // Ask Ayria nicely for data on the client.
-            {
-                Steam.Username = "Ayria"s;
-                Steam.Locale = "english"s;
-                Steam.XUID = 0x1100001DEADC0DEULL;
-
-                if (const auto Callback = Ayria.API_Client)
-                {
-                    const auto Object = ParseJSON(Callback(Ayria.toFunctionID("Accountinfo"), nullptr));
-                    Steam.XUID = 0x0110000100000000ULL | Object.value("ClientID", 0xDEADC0DE);
-                    Steam.Username = Object.value("Username", u8"Ayria"s);
-                    Steam.Locale = Object.value("Locale", u8"english"s);
-                }
-            }
-
-            // Query the Steam platform for installation-location.
+            // Fetch Steam information from the registry.
             #if defined(_WIN32)
             {
                 HKEY Registrykey;
-                constexpr auto Steamregistry = Build::is64bit ? "Software\\Wow6432Node\\Valve\\Steam" : "Software\\Valve\\Steam";
-
-                if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, Steamregistry, 0, KEY_QUERY_VALUE, &Registrykey) == ERROR_SUCCESS)
+                constexpr auto Steamregistry = Build::is64bit ? L"Software\\Wow6432Node\\Valve\\Steam" : L"Software\\Valve\\Steam";
+                if (ERROR_SUCCESS == RegOpenKeyW(HKEY_LOCAL_MACHINE, Steamregistry, &Registrykey))
                 {
-                    unsigned long Size = 260; unsigned char Buffer[260]{};
-                    RegQueryValueExA(Registrykey, "InstallPath", NULL, NULL, Buffer, &Size);
-                    Steam.Installpath = std::u8string((char8_t *)Buffer);
+                    {
+                        wchar_t Buffer[260]{}; DWORD Size{ 260 };
+                        if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"InstallPath", nullptr, nullptr, (LPBYTE)Buffer, &Size))
+                            Global.Installpath = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer)));
+                    }
+                    {
+                        wchar_t Buffer[260]{}; DWORD Size{ 260 };
+                        if (ERROR_SUCCESS == RegQueryValueExW(Registrykey, L"Language", nullptr, nullptr, (LPBYTE)Buffer, &Size))
+                            Global.Locale = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer)));
+                    }
                     RegCloseKey(Registrykey);
                 }
             }
             #endif
 
-            // Some legacy applications query the application info from the environment.
-            SetEnvironmentVariableA("SteamAppId", va("%lu", Steam.ApplicationID).c_str());
-            SetEnvironmentVariableA("SteamGameId", va("%llu", Steam.ApplicationID & 0xFFFFFF).c_str());
-            #if defined(_WIN32)
+            // Ask Ayria nicely for data on the client.
             {
-                HKEY Registrykey;
-                if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Valve\\Steam\\ActiveProcess", 0, KEY_QUERY_VALUE, &Registrykey) == ERROR_SUCCESS)
+                const auto Object = JSON::Parse(Ayriarequest("Clientinfo::getSelf", {}));
+                const auto AccountID = Object.value("AccountID", uint32_t(0xDEADC0DEU));
+                const auto Username = Object.value("Username", "Steam_user"s);
+
+                std::memcpy(Global.Username, Username.data(), std::min(sizeof(Global.Username), Username.size()));
+                Global.Locale = std::make_unique<std::string>("english");
+                Global.XUID = { 0x0110000100000000ULL | AccountID };
+
+                // Ensure that we have a path available.
+                if (!Global.Installpath)
                 {
-                    DWORD ProcessID = GetCurrentProcessId();
-                    DWORD UserID = Steam.XUID.GetAccountID();
-
-                    // Legacy wants the dlls loaded.
-                    const auto Clientpath64 = Steam.Installpath.asUTF8() + u8"\\steamclient64.dll"s;
-                    const auto Clientpath32 = Steam.Installpath.asUTF8() + u8"\\steamclient.dll"s;
-                    if (Build::is64bit) LoadLibraryA((char *)Clientpath64.c_str());
-                    else LoadLibraryA((char *)Clientpath32.c_str());
-
-                    RegSetValueExA(Registrykey, "pid", NULL, REG_DWORD, (LPBYTE)&ProcessID, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "ActiveUser", NULL, REG_DWORD, (LPBYTE)&UserID, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "Universe", NULL, REG_SZ, (LPBYTE)"Public", (DWORD)std::strlen("Public") + 1);
-                    RegSetValueExA(Registrykey, "SteamClientDll", NULL, REG_SZ, (LPBYTE)Clientpath32.c_str(), (DWORD)Clientpath32.length() + 1);
-                    RegSetValueExA(Registrykey, "SteamClientDll64", NULL, REG_SZ, (LPBYTE)Clientpath64.c_str(), (DWORD)Clientpath64.length() + 1);
-
-                    RegCloseKey(Registrykey);
+                    wchar_t Buffer[260]{};
+                    const auto Size = GetCurrentDirectoryW(260, Buffer);
+                    Global.Installpath = std::make_unique<std::string>(Encoding::toNarrow(std::wstring(Buffer, Size)));
                 }
 
-                DWORD Disposition;
-                if (RegCreateKeyExA(HKEY_CURRENT_USER, va("Software\\Valve\\Steam\\Apps\\%i", Steam.ApplicationID).c_str(), 0, NULL, 0, KEY_WRITE, NULL, &Registrykey, &Disposition) == ERROR_SUCCESS)
+                // Update the client info with the AppID.
+                AyriaDB::Clientinfo::Set::GameID(AccountID, Global.ApplicationID);
+            }
+
+            // Some legacy applications query the application info from the environment.
+            SetEnvironmentVariableW(L"SteamAppId", va(L"%u", Global.ApplicationID).c_str());
+            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Global.ApplicationID & 0xFFFFFF).c_str());
+            #if defined(_WIN32)
+            {
                 {
-                    DWORD Running = TRUE;
+                    HKEY Registrykey;
+                    constexpr auto Steamregistry = Build::is64bit ? L"Software\\Wow6432Node\\Valve\\Steam\\ActiveProcess" : L"Software\\Valve\\Steam\\ActiveProcess";
+                    if (ERROR_SUCCESS == RegOpenKeyW(HKEY_CURRENT_USER, Steamregistry, &Registrykey))
+                    {
+                        const auto ProcessID = GetCurrentProcessId();
+                        const auto UserID = Global.XUID.UserID;
 
-                    RegSetValueExA(Registrykey, "Installed", NULL, REG_DWORD, (LPBYTE)&Running, sizeof(DWORD));
-                    RegSetValueExA(Registrykey, "Running", NULL, REG_DWORD, (LPBYTE)&Running, sizeof(DWORD));
+                        // Legacy wants the dlls loaded.
+                        const auto Clientpath64 = Encoding::toWide(*Global.Installpath + "\\steamclient64.dll"s);
+                        const auto Clientpath32 = Encoding::toWide(*Global.Installpath + "\\steamclient.dll"s);
+                        if (Build::is64bit) LoadLibraryW(Clientpath64.c_str());
+                        else LoadLibraryW(Clientpath32.c_str());
 
-                    RegCloseKey(Registrykey);
+                        RegSetValueW(Registrykey, L"SteamClientDll64", REG_SZ, Clientpath64.c_str(), (DWORD)Clientpath64.length() + 1);
+                        RegSetValueW(Registrykey, L"SteamClientDll", REG_SZ, Clientpath32.c_str(), (DWORD)Clientpath32.length() + 1);
+                        RegSetValueW(Registrykey, L"ActiveUser", REG_DWORD, (LPCWSTR)&UserID, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"pid", REG_DWORD, (LPCWSTR)&ProcessID, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"Universe", REG_SZ, L"Public", 7);
+                        RegCloseKey(Registrykey);
+                    }
+                }
+                {
+                    HKEY Registrykey;
+                    auto Steamregistry = Build::is64bit ?
+                        L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.ApplicationID) :
+                        L"Software\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.ApplicationID);
+                    if (ERROR_SUCCESS == RegCreateKeyW(HKEY_CURRENT_USER, Steamregistry.c_str(), &Registrykey))
+                    {
+                        DWORD Running = TRUE;
+
+                        RegSetValueW(Registrykey, L"Installed", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
+                        RegSetValueW(Registrykey, L"Running", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
+                        RegCloseKey(Registrykey);
+                    }
                 }
             }
             #endif
@@ -136,35 +247,33 @@ namespace Steam
             #if defined(_WIN32)
             if (std::strstr(GetCommandLineA(), "-overlay"))
             {
-                constexpr auto Gameoverlay = Build::is64bit ? u8"gameoverlayrenderer64.dll" : u8"gameoverlayrenderer.dll";
-                constexpr auto Clientlibrary = Build::is64bit ? u8"steamclient64.dll" : u8"steamclient.dll";
+                constexpr auto Gameoverlay = Build::is64bit ? "gameoverlayrenderer64.dll" : "gameoverlayrenderer.dll";
+                constexpr auto Clientlibrary = Build::is64bit ? "steamclient64.dll" : "steamclient.dll";
 
-                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Clientlibrary).c_str());
-                LoadLibraryA((char *)(Steam.Installpath.asUTF8() + Gameoverlay).c_str());
+                LoadLibraryA((*Global.Installpath + Clientlibrary).c_str());
+                LoadLibraryA((*Global.Installpath + Gameoverlay).c_str());
             }
             #endif
 
             // Notify the game that it's properly connected.
             const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::k_iSteamUserCallbacks + 1, nullptr);
+            Completerequest(RequestID, Types::SteamServersConnected_t, nullptr);
 
             // Notify the plugins that we are initialized.
-            const auto Callback = GetProcAddress(Ayria.Modulehandle, "onInitialized");
-            if (Callback) (reinterpret_cast<void (*)(bool)>(Callback))(false);
+            if (const auto Callback = Ayria.onInitialized) Callback(false);
 
             return true;
         }
         EXPORT_ATTR void SteamAPI_Shutdown() { Traceprint(); }
         EXPORT_ATTR bool SteamAPI_IsSteamRunning() { return true; }
         EXPORT_ATTR bool SteamAPI_InitSafe() { return SteamAPI_Init(); }
-        EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Steam.ApplicationID = unOwnAppID; return false; }
-        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { const auto Path = Steam.Installpath.asUTF8(); return (char *)Path.c_str(); }
+        EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Global.ApplicationID = unOwnAppID; return false; }
+        EXPORT_ATTR const char *SteamAPI_GetSteamInstallPath() { return Global.Installpath->c_str(); }
 
         // Callback management.
         EXPORT_ATTR void SteamAPI_RunCallbacks()
         {
             Callbacks::Runcallbacks();
-            Matchmaking::doFrame();
         }
         EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
         {
@@ -185,12 +294,13 @@ namespace Steam
         EXPORT_ATTR int32_t SteamGameServer_GetHSteamUser() { Traceprint(); return { }; }
         EXPORT_ATTR int32_t SteamGameServer_GetHSteamPipe() { Traceprint(); return { }; }
         EXPORT_ATTR bool SteamGameServer_BSecure() { Traceprint(); return { }; }
-        EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); }
+        EXPORT_ATTR void SteamGameServer_Shutdown() { Traceprint(); isServeractive = false; }
         EXPORT_ATTR void SteamGameServer_RunCallbacks() { Callbacks::Runcallbacks(); }
-        EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Steam.XUID.ConvertToUint64(); }
-        EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, ...)
+        EXPORT_ATTR uint64_t SteamGameServer_GetSteamID() { return Global.XUID.FullID; }
+
+        EXPORT_ATTR bool SteamGameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, ...)
         {
-            // For AppID.
+            // Ensure that we are initialized.
             SteamAPI_Init();
 
             // Per-version initialization.
@@ -205,49 +315,18 @@ namespace Steam
                     const uint16_t usQueryPort = va_arg(Args, uint16_t);
                     const uint32_t eServerMode = va_arg(Args, uint32_t);
                     const char *pchGameDir = va_arg(Args, char *);
-                    const char *pchVersionString = va_arg(Args, char *);
+                    const char *pchVersion = va_arg(Args, char *);
 
-                    Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Spectator-port: %u\n> Query-port: %u\n> Version \"%s\"",
-                        ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
-                        usPort, usGamePort, usSpectatorPort, usQueryPort, pchVersionString));
-
-                    // New session for the server.
-                    auto Session = Matchmaking::getLocalsession();
-                    Session->Hostinfo["Authport"] = usPort;
-                    Session->Hostinfo["Gameport"] = usGamePort;
-                    Session->Hostinfo["Queryport"] = usQueryPort;
-                    Session->Hostinfo["Spectatorport"] = usSpectatorPort;
-                    Session->Gameinfo["Gamemod"] = pchGameDir;
-                    Session->Hostinfo["IPAddress"] = unIP;
-
-                    uint32_t a{}, b{}, c{}, d{};
-                    std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Hostinfo["Versionint"] = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Hostinfo["Versionstring"] = pchVersionString;
-                    Matchmaking::Update();
+                    Initgameserver(unIP, usSteamPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode,
+                        pchGameDir, pchVersion);
                 }
-                if (Version == 11 || Version == 12)
+                if (Version == 11 || Version == 12 || Version == 13)
                 {
                     const uint16_t usQueryPort = va_arg(Args, uint16_t);
                     const uint32_t eServerMode = va_arg(Args, uint32_t);
-                    const char *pchVersionString = va_arg(Args, char *);
+                    const char *pchVersion = va_arg(Args, char *);
 
-                    Infoprint(va("Starting a Steam-gameserver\n> Address: %u.%u.%u.%u\n> Auth-port: %u\n> Game-port: %u\n> Query-port: %u\n> Version \"%s\"",
-                        ((uint8_t *)&unIP)[3], ((uint8_t *)&unIP)[2], ((uint8_t *)&unIP)[1], ((uint8_t *)&unIP)[0],
-                        usPort, usGamePort, usQueryPort, pchVersionString));
-
-                    // New session for the server.
-                    auto Session = Matchmaking::getLocalsession();
-                    Session->Hostinfo["Authport"] = usPort;
-                    Session->Hostinfo["Gameport"] = usGamePort;
-                    Session->Hostinfo["Queryport"] = usQueryPort;
-                    Session->Hostinfo["IPAddress"] = unIP;
-
-                    uint32_t a{}, b{}, c{}, d{};
-                    std::sscanf(pchVersionString, "%u.%u.%u.%u", &a, &b, &c, &d);
-                    Session->Hostinfo["Versionint"] = d + (c * 10) + (b * 100) + (a * 1000);
-                    Session->Hostinfo["Versionstring"] = pchVersionString;
-                    Matchmaking::Update();
+                    Initgameserver(unIP, usSteamPort, usGamePort, usQueryPort, eServerMode, Global.ApplicationID, pchVersion);
                 }
 
                 va_end(Args);
@@ -255,13 +334,20 @@ namespace Steam
 
             return true;
         }
-        EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersionString)
+        EXPORT_ATTR bool SteamGameServer_InitSafe(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchGameDir, const char *pchVersion)
         {
-            return SteamGameServer_Init(unIP, usPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode, pchGameDir, pchVersionString);
+            // Ensure that we are initialized.
+            SteamAPI_Init();
+
+            return Initgameserver(unIP, usSteamPort, usGamePort, usSpectatorPort, usQueryPort, eServerMode,
+                pchGameDir, pchVersion);
         }
-        EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersionString)
+        EXPORT_ATTR bool SteamInternal_GameServer_Init(uint32_t unIP, uint16_t usSteamPort, uint16_t usGamePort, uint16_t usQueryPort, uint32_t eServerMode, const char *pchVersion)
         {
-            return SteamGameServer_Init(unIP, usSteamPort, usGamePort, 0, usQueryPort, eServerMode, "", pchVersionString);
+            // Ensure that we are initialized.
+            SteamAPI_Init();
+
+            return Initgameserver(unIP, usSteamPort, usGamePort, usQueryPort, eServerMode, Global.ApplicationID, pchVersion);
         }
 
         // For debugging interface access.
@@ -277,6 +363,7 @@ namespace Steam
         EXPORT_ATTR void *SteamClient() { Printcaller(); return Fetchinterface(Interfacetype_t::CLIENT); }
         EXPORT_ATTR void *SteamController() { Printcaller(); return Fetchinterface(Interfacetype_t::CONTROLLER); }
         EXPORT_ATTR void *SteamFriends() { Printcaller(); return Fetchinterface(Interfacetype_t::FRIENDS); }
+        EXPORT_ATTR void *SteamGameSearch() { Printcaller(); return Fetchinterface(Interfacetype_t::GAMESEARCH); }
         EXPORT_ATTR void *SteamGameServer() { Printcaller(); return Fetchinterface(Interfacetype_t::GAMESERVER); }
         EXPORT_ATTR void *SteamGameServerHTTP() { Printcaller(); return Fetchinterface(Interfacetype_t::HTTP); }
         EXPORT_ATTR void *SteamGameServerInventory() { Printcaller(); return Fetchinterface(Interfacetype_t::INVENTORY); }
@@ -360,6 +447,7 @@ namespace Steam
         Hook(SteamClient);
         Hook(SteamController);
         Hook(SteamFriends);
+        Hook(SteamGameSearch);
         Hook(SteamGameServer);
         Hook(SteamGameServerHTTP);
         Hook(SteamGameServerInventory);

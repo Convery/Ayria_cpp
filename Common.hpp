@@ -8,7 +8,7 @@
 
 // Fixup some Visual Studio builds not defining this.
 #if !defined(_DEBUG) && !defined(NDEBUG)
-#define NDEBUG
+    #define NDEBUG
 #endif
 
 // Platform identification.
@@ -24,14 +24,14 @@
 
 // Remove some Windows annoyance.
 #if defined(_WIN32)
+#define _HAS_DEPRECATED_RESULT_OF 1
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN
+#define _CRT_RAND_S
 #define NOMINMAX
 #endif
-
-// Where to keep the log.
-#define LOGPATH "./Ayria/Logs"
 
 // Produce a smaller build by not including third-party detours.
 // #define NO_HOOKLIB
@@ -47,6 +47,13 @@ namespace Build
     constexpr bool isWindows = false;
     #endif
 
+    #if defined(__linux__)
+    constexpr bool isLinux = true;
+    #else
+    constexpr bool isLinux = false;
+    #endif
+
+
     #if defined(NDEBUG)
     constexpr bool isDebug = false;
     #else
@@ -55,22 +62,28 @@ namespace Build
 }
 
 // Information logging.
+namespace Logging { template <typename T> extern void Print(char Prefix, T Message); }
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)
 #if !defined(NDEBUG)
-#define Debugprint(string) Logging::Print('D', string)
-#define Traceprint() Logging::Print('>', __FUNCTION__)
+    #define Debugprint(string) Logging::Print('D', string)
+    #define Traceprint() Logging::Print('>', __FUNCTION__)
 #else
-#define Debugprint(string) ((void)0)
-#define Traceprint() ((void)0)
+    #define Debugprint(string) ((void)0)
+    #define Traceprint() ((void)0)
+#endif
+
+// Where to keep the log.
+#if !defined(LOG_PATH)
+    #define LOG_PATH "./Ayria/Logs"
 #endif
 
 // Helper to switch between debug and release mutex's.
 #if defined(NDEBUG)
-#define Defaultmutex Spinlock
+    #define Defaultmutex Spinlock
 #else
-#define Defaultmutex Debugmutex
+    #define Defaultmutex Debugmutex
 #endif
 
 // Ignore ANSI compatibility for structs.
@@ -81,37 +94,3 @@ namespace Build
 
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)
-
-// Server interfaces for localnetworking-plugins.
-// Callbacks return false on error or if there's no data.
-struct IServer
-{
-    struct Address_t { unsigned int IPv4; unsigned short Port; };
-
-    // No complaints.
-    virtual ~IServer() = default;
-
-    // Utility functionality.
-    virtual void onConnect() {}
-    virtual void onDisconnect() {}
-
-    // Stream-based IO for protocols such as TCP.
-    virtual bool onStreamread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onStreamwrite(const void *Databuffer, unsigned int Datasize) = 0;
-
-    // Packet-based IO for protocols such as UDP and ICMP.
-    virtual bool onPacketread(void *Databuffer, unsigned int *Datasize) = 0;
-    virtual bool onPacketwrite(const void *Databuffer, unsigned int Datasize, const Address_t *Endpoint) = 0;
-};
-struct IStreamserver : IServer
-{
-    // Nullsub packet-based IO.
-    bool onPacketread(void *, unsigned int *) override { return false; }
-    bool onPacketwrite(const void *, unsigned int, const Address_t *) override { return false; }
-};
-struct IDatagramserver : IServer
-{
-    // Nullsub stream-based IO.
-    bool onStreamread(void *, unsigned int *) override { return false; }
-    bool onStreamwrite(const void *, unsigned int) override { return false; }
-};

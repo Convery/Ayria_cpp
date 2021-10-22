@@ -1,28 +1,37 @@
 /*
-    Initial author: Convery (tcn@ayria.se)
-    Started: 2019-03-14
-    License: MIT
+Initial author: Convery (tcn@ayria.se)
+Started: 2019-03-14
+License: MIT
 */
 
 #pragma once
+#include <array>
 #include <cstdint>
+#include <concepts>
 #include <string_view>
 using Blob = std::basic_string<uint8_t>;
 using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base64
 {
-    namespace Internal
+    template <typename T> concept Byte_t = sizeof(T) == 1;
+    constexpr size_t Decodesize(size_t N)  { return (N * 3 / 4) - 1; }
+    constexpr size_t Encodesize(size_t N)  { return ((N + 2) / 3 * 4); }
+    template <size_t N> constexpr size_t Decodesize()  { return (N * 3 / 4) - 1; }
+    template <size_t N> constexpr size_t Encodesize()  { return ((N + 2) / 3 * 4); }
+
+    namespace B64Internal
     {
-        constexpr char Table[64] =
+        constexpr uint8_t Table[64] =
         {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
             'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
             'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
             'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
             's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
-            '3', '4', '5', '6', '7', '8', '9', '+', '/' };
-        constexpr char Reversetable[128] =
+            '3', '4', '5', '6', '7', '8', '9', '+', '/'
+        };
+        constexpr uint8_t Reversetable[128] =
         {
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
             64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
@@ -33,126 +42,292 @@ namespace Base64
             64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
             41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64
         };
+
+        template <typename T> concept Range_t = requires (const T &t) { std::ranges::begin(t); std::ranges::end(t); };
+        template <typename T> concept Complexstring_t = Range_t<T> && !Byte_t<typename T::value_type>;
+        template <typename T> concept Simplestring_t = Range_t<T> && Byte_t<typename T::value_type>;
+        template <Complexstring_t T> [[nodiscard]] constexpr Blob Flatten(const T &Input)
+        {
+            Blob Bytearray; Bytearray.reserve(Input.size() * sizeof(typename T::value_type));
+            static_assert(sizeof(typename T::value_type) <= 8, "Dude..");
+
+            for (auto &&Item : Input)
+            {
+                if constexpr (sizeof(typename T::value_type) > 7) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 6) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 5) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 4) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 3) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 2) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+                if constexpr (sizeof(typename T::value_type) > 1) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+
+                Bytearray.append(Item & 0xFF);
+            }
+
+            return Bytearray;
+        }
     }
 
-    [[nodiscard]] inline std::string Encode(std::string_view Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize<N>()> Encode(const std::array<T, N> &Input)
     {
-        std::string Result((((Input.size() + 2) / 3) * 4), '=');
+        std::array<char, Encodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
-        uint32_t Bits{};
+        uint8_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
+            const auto Item = Input[i];
             Accumulator = (Accumulator << 8) | (Item & 0xFF);
+
             Bits += 8;
             while (Bits >= 6)
             {
                 Bits -= 6;
-                Result[Outputposition++] = Internal::Table[(Accumulator >> Bits) & 0x3F];
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
             }
         }
 
         if (Bits)
         {
-            Accumulator <<= (6 - Bits);
-            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
         }
+
+        while (Outputposition < Encodesize<N>())
+            Result[Outputposition++] = '=';
 
         return Result;
     }
-    [[nodiscard]] inline std::string Decode(std::string_view Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize<N>()> Decode(const std::array<T, N> &Input)
     {
-        std::string Result(((Input.size() / 4) * 3), '\0');
+        std::array<T, Decodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
-        uint32_t Bits{};
+        uint8_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
-            if (Item == '=') continue;
+            const auto Item = Input[i];
+            if (Item == '=') [[unlikely]] continue;
 
-            Accumulator = (Accumulator << 6) | Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
             Bits += 6;
 
             if (Bits >= 8)
             {
                 Bits -= 8;
-                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
+                Result[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
             }
         }
 
         return Result;
     }
-
-    [[nodiscard]] inline Blob Encode(Blob_view Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<char, Encodesize<N>()> Encode(const T (&Input)[N])
     {
-        Blob Result((((Input.size() + 2) / 3) * 4), '=');
+        std::array<char, Encodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
-        uint32_t Bits{};
+        uint8_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < (N - 1); ++i)
         {
+            const auto Item = Input[i];
             Accumulator = (Accumulator << 8) | (Item & 0xFF);
+
             Bits += 8;
             while (Bits >= 6)
             {
                 Bits -= 6;
-                Result[Outputposition++] = Internal::Table[(Accumulator >> Bits) & 0x3F];
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
             }
         }
 
         if (Bits)
         {
-            Accumulator <<= (6 - Bits);
-            Result[Outputposition] = Internal::Table[Accumulator & 0x3F];
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
         }
+
+        while (Outputposition < Encodesize<N>())
+            Result[Outputposition++] = '=';
 
         return Result;
     }
-    [[nodiscard]] inline Blob Decode(Blob_view Input)
+    template <size_t N, Byte_t T> [[nodiscard]] constexpr std::array<T, Decodesize<N>()> Decode(const T(&Input)[N])
     {
-        Blob Result(((Input.size() / 4) * 3), '\0');
+        std::array<T, Decodesize<N>()> Result{};
         size_t Outputposition{};
         uint32_t Accumulator{};
-        uint32_t Bits{};
+        uint8_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < (N - 1); ++i)
         {
-            if (Item == '=') continue;
+            const auto Item = Input[i];
+            if (Item == '=') [[unlikely]] continue;
 
-            Accumulator = (Accumulator << 6) | Internal::Reversetable[static_cast<uint8_t>(Item)];
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
             Bits += 6;
 
             if (Bits >= 8)
             {
                 Bits -= 8;
-                Result[Outputposition++] = static_cast<char>((Accumulator >> Bits) & 0xFF);
+                Result[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
             }
         }
 
         return Result;
     }
 
-    [[nodiscard]] constexpr bool isValid(Blob_view Input)
+    // Should be constexpr in C++20, questionable compiler support though.
+    template <typename C = char, B64Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
     {
-        if (Input.size() % 4 != 0) return false;
+        return Encode<C>(B64Internal::Flatten(Input));
+    }
+    template <typename C = char, B64Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
+    {
+        return Decode<C>(B64Internal::Flatten(Input));
+    }
+    template <typename C = char, B64Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
+    {
+        const auto N = std::ranges::size(Input);
+        std::basic_string<C> Result(Encodesize(N), '\0');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
 
-        for (const auto &Item : Input)
+        for (size_t i = 0; i < N; ++i)
         {
-            if (Item >= 'A' && Item <= 'Z') continue;
-            if (Item >= 'a' && Item <= 'z') continue;
-            if (Item >= '/' && Item <= '9') continue;
-            if (Item == '=' || Item == '+') continue;
-            return false;
+            const auto Item = Input[i];
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
+            }
         }
 
-        return !Input.empty();
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
+        }
+
+        while (Outputposition < Encodesize(N))
+            Result[Outputposition++] = '=';
+
+        return Result;
     }
+    template <typename C = char, B64Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
+    {
+        const auto N = std::ranges::size(Input);
+        std::basic_string<C> Result(Decodesize(N), '\0');
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
+            if (Item == '=') [[unlikely]] continue;
+
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
+            }
+        }
+
+        return Result;
+    }
+
+    // No need for extra allocations.
+    template <Byte_t T> constexpr std::basic_string_view<T> Decode_inplace(T *Input, size_t Length)
+    {
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint32_t Bits{};
+
+        for (size_t i = 0; i < Length; ++i)
+        {
+            if (Input[i] == '=') continue;
+
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[Input[i] & 0x7F];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Input[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
+            }
+        }
+
+        Input[Outputposition] = '\0';
+        return { Input, Outputposition };
+    }
+
+    // No need for extra allocations, assume the caller knows what they are doing.
+    template <typename C = char, B64Internal::Simplestring_t T> constexpr void Encode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
+            Accumulator = (Accumulator << 8) | (Item & 0xFF);
+
+            Bits += 8;
+            while (Bits >= 6)
+            {
+                Bits -= 6;
+                Result[Outputposition++] = B64Internal::Table[Accumulator >> Bits & 0x3F];
+            }
+        }
+
+        if (Bits)
+        {
+            Accumulator <<= 6 - Bits;
+            Result[Outputposition++] = B64Internal::Table[Accumulator & 0x3F];
+        }
+
+        while (Outputposition < Encodesize(N))
+            Result[Outputposition++] = '=';
+    }
+    template <typename C = char, B64Internal::Simplestring_t T> constexpr void Decode(const T &Input, C *Result)
+    {
+        const auto N = std::ranges::size(Input);
+        size_t Outputposition{};
+        uint32_t Accumulator{};
+        uint8_t Bits{};
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            const auto Item = Input[i];
+            if (Item == '=') [[unlikely]] continue;
+
+            Accumulator = (Accumulator << 6) | B64Internal::Reversetable[static_cast<uint8_t>(Item & 0x7F)];
+            Bits += 6;
+
+            if (Bits >= 8)
+            {
+                Bits -= 8;
+                Result[Outputposition++] = static_cast<char>(Accumulator >> (Bits & 0xFF));
+            }
+        }
+    }
+
+    // Verify that the string is valid.
     [[nodiscard]] constexpr bool isValid(std::string_view Input)
     {
-        if (Input.size() % 4 != 0) return false;
+        if ((Input.size() & 3) != 0) return false;
 
         for (const auto &Item : Input)
         {
@@ -163,11 +338,45 @@ namespace Base64
             return false;
         }
 
-        return !Input.empty();
+        return true;
     }
 
     // RFC7515 compatibility.
-    [[nodiscard]] inline std::string toURL(std::string &&Input)
+    [[nodiscard]] inline std::string toURL(std::string_view Input)
+    {
+        while (Input.back() == '=')
+            Input.remove_suffix(1);
+
+        std::string Result(Input);
+        for (auto &Item : Result)
+        {
+            if (Item == '+') Item = '-';
+            if (Item == '/') Item = '_';
+        }
+
+        return Result;
+    }
+    [[nodiscard]] inline std::string fromURL(std::string_view Input)
+    {
+        std::string Result(Input);
+
+        for (auto &Item : Result)
+        {
+            if (Item == '-') Item = '+';
+            if (Item == '_') Item = '/';
+        }
+
+        switch (Result.size() & 3)
+        {
+            case 3: Result += "==="; break;
+            case 2: Result += "=="; break;
+            case 1: Result += "="; break;
+            default: break;
+        }
+
+        return Result;
+    }
+    [[nodiscard]] inline std::string_view toURL(std::string &Input)
     {
         while (Input.back() == '=')
             Input.pop_back();
@@ -178,9 +387,9 @@ namespace Base64
             if (Item == '/') Item = '_';
         }
 
-        return std::move(Input);
+        return Input;
     }
-    [[nodiscard]] inline std::string fromURL(std::string &&Input)
+    [[nodiscard]] inline std::string_view fromURL(std::string &Input)
     {
         for (auto &Item : Input)
         {
@@ -188,13 +397,17 @@ namespace Base64
             if (Item == '_') Item = '/';
         }
 
-        switch (Input.size() % 4)
+        switch (Input.size() & 3)
         {
+            case 3: Input += "==="; break;
             case 2: Input += "=="; break;
             case 1: Input += "="; break;
             default: break;
         }
 
-        return std::move(Input);
+        return Input;
     }
+
+    // Sanity checking.
+    static_assert(Decode("MTIzNDU=") == Decode(Encode("12345")), "Someone fucked with the Base64 encoding..");
 }

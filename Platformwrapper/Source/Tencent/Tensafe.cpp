@@ -9,7 +9,6 @@
 
 #include <winternl.h>
 #include <Stdinclude.hpp>
-#include "../Common.hpp"
 #pragma warning(disable : 4100)
 
 #pragma region Datatypes

@@ -20,14 +20,14 @@ namespace Encoding
         {
             const auto Count32 = Input.size() / 4;
             const auto Remaining = Input.size() & 3;
-            const auto Intptr = (uint32_t*)Input.data();
+            const auto Intptr = (uint32_t *)Input.data();
 
             for (size_t i = 0; i < Count32; ++i)
                 if (Intptr[i] & 0x80808080)
                     return false;
 
-            // Don't care about over-reads.
-            if (Remaining == 3) return !(Intptr[Count32] & 0x00800080);
+            // Don't care about over-reads, little-endian assumed.
+            if (Remaining == 3) return !(Intptr[Count32] & 0x00808080);
             if (Remaining == 2) return !(Intptr[Count32] & 0x00008080);
             if (Remaining == 1) return !(Intptr[Count32] & 0x00000080);
             return true;
@@ -42,6 +42,7 @@ namespace Encoding
             if ((Code & 0xFE) == 0xFC) return 6;
             return 1;   // Fallback.
         }
+
         inline std::u8string toUTF8Chars(Codepoint_t Codepoint)
         {
             std::u8string Result{};
@@ -56,55 +57,55 @@ namespace Encoding
                     break;
                 }
 
-                    // 11-bit.
-                    if (Codepoint < 0x800) [[likely]]
-                    {
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x7C0) >> 6) | 0xC0));
-                        Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
-                        break;
-                    }
+                // 11-bit.
+                if (Codepoint < 0x800) [[likely]]
+                {
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x7C0) >> 6) | 0xC0));
+                    Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
+                    break;
+                }
 
-                        // 16-bit.
-                        if (Codepoint < 0x10000)
-                        {
-                            Result.push_back(static_cast<uint8_t>(((Codepoint & 0xF000) >> 12) | 0xE0));
-                            Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
-                            Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
-                            break;
-                        }
+                // 16-bit.
+                if (Codepoint < 0x10000) [[likely]]
+                {
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xF000) >> 12) | 0xE0));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
+                    Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
+                    break;
+                }
 
-                    // 21-bit.
-                    if (Codepoint < 0x200000)
-                    {
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x1C0000) >> 18) | 0xF0));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
-                        Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
-                        break;
-                    }
+                // 21-bit.
+                if (Codepoint < 0x200000) [[unlikely]]
+                {
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x1C0000) >> 18) | 0xF0));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
+                    Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
+                    break;
+                }
 
-                    // 26-bit.
-                    if (Codepoint < 0x4000000)
-                    {
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3000000) >> 24) | 0xF8));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC000) >> 18) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
-                        Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
-                        break;
-                    }
+                // 26-bit.
+                if (Codepoint < 0x4000000) [[unlikely]]
+                {
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3000000) >> 24) | 0xF8));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC000) >> 18) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
+                    Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
+                    break;
+                }
 
-                    // 30-bit.
-                    if (Codepoint < 0x80000000)
-                    {
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x40000000) >> 30) | 0xFC));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000000) >> 24) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC000) >> 18) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
-                        Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
-                        Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
-                        break;
-                    }
+                // 30-bit.
+                if (Codepoint < 0x80000000) [[unlikely]]
+                {
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x40000000) >> 30) | 0xFC));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000000) >> 24) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC000) >> 18) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0x3F000) >> 12) | 0x80));
+                    Result.push_back(static_cast<uint8_t>(((Codepoint & 0xFC0) >> 6) | 0x80));
+                    Result.push_back(static_cast<uint8_t>((Codepoint & 0x3F) | 0x80));
+                    break;
+                }
 
             } while (false);
 
@@ -117,7 +118,7 @@ namespace Encoding
                 return Input.size();
 
             size_t Size{};
-            for (const auto& Byte : Input)
+            for (const auto &Byte : Input)
                 Size += (Byte & 0xC0) != 0x80;
 
             return Size;
@@ -133,8 +134,7 @@ namespace Encoding
             return Input.size();
         }
 
-
-        inline std::u8string::iterator at(std::u8string& Input, size_t Index)
+        inline std::u8string::iterator at(std::u8string &Input, size_t Index)
         {
             for (auto it = Input.begin(); it != Input.end();)
             {
@@ -158,7 +158,7 @@ namespace Encoding
         {
             const auto pStop = Offset(Input, Stop);
             const auto pStart = Offset(Input, Start);
-            if (pStart == (size_t)-1) return {};
+            if (pStart == pStop) [[unlikely]] return {};
 
             return std::u8string_view(&Input[pStart], pStop - pStart);
         }
@@ -168,7 +168,7 @@ namespace Encoding
     {
         // Do we even have any code-points to process?
         if (Input.find("\\u") == static_cast<size_t>(-1)) [[likely]]
-            return std::u8string((char8_t*)Input.data(), Input.size());
+            return std::u8string((char8_t *)Input.data(), Input.size());
 
         // Common case is ASCII with the code-points being smaller than text.
         std::u8string Result{}; Result.reserve(Input.size());
@@ -180,7 +180,7 @@ namespace Encoding
             if (Point == static_cast<size_t>(-1)) break;
 
             // ASCII part.
-            Result.append((char8_t*)Input.data(), Point);
+            Result.append((char8_t *)Input.data(), Point);
             Input.remove_prefix(Point + 2);
 
             // U+0000
@@ -207,7 +207,7 @@ namespace Encoding
             }
         }
 
-        Result.append((char8_t*)Input.data(), Input.size());
+        Result.append((char8_t *)Input.data(), Input.size());
         return Result;
     }
     [[nodiscard]] inline std::u8string toUTF8(std::wstring_view Input)
@@ -215,7 +215,7 @@ namespace Encoding
         // Common case is ASCII, so we pre-allocate for it, next realloc should be enough for 11-bit UTF.
         std::u8string Result{}; Result.reserve(Input.size());
 
-        for (const auto& WChar : Input)
+        for (const auto &WChar : Input)
             Result.append(UTF8::toUTF8Chars(WChar));
 
         return Result;
@@ -225,6 +225,7 @@ namespace Encoding
         return std::u8string(Input.data(), Input.size());
     }
 
+    // Depending on size of wchar_t, char32_t characters will be replaced with '?'
     [[nodiscard]] inline std::wstring toWide(std::u8string_view Input)
     {
         std::wstring Result{}; Result.reserve(Input.size());
@@ -240,73 +241,83 @@ namespace Encoding
                 continue;
             }
 
-                // 11-bit.
-                if ((Controlbyte & 0xE0) == 0xC0) [[likely]]
-                {
-                    const auto Databyte = Input[i++];
-                    Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x1F) << 6) | (Databyte & 0x3F)));
-                    continue;
-                }
+            // 11-bit.
+            if ((Controlbyte & 0xE0) == 0xC0) [[likely]]
+            {
+                const auto Databyte = Input[i++];
+                Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x1F) << 6) | (Databyte & 0x3F)));
+                continue;
+            }
 
-                    // 16-bit.
-                    if ((Controlbyte & 0xF0) == 0xE0) [[likely]]
-                    {
-                        const auto Databyte = Input[i++];
-                        const auto Extrabyte = Input[i++];
-                        Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x0F) << 12) | ((Databyte & 0x3F) << 6) | (Extrabyte & 0x3F)));
-                        continue;
-                    }
+            // 16-bit.
+            if ((Controlbyte & 0xF0) == 0xE0) [[likely]]
+            {
+                const auto Databyte = Input[i++];
+                const auto Extrabyte = Input[i++];
+                Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x0F) << 12) | ((Databyte & 0x3F) << 6) | (Extrabyte & 0x3F)));
+                continue;
+            }
 
-                        // 21-bit.
-                        if ((Controlbyte & 0xF8) == 0xF0)
-                        {
-                            const auto Databyte = Input[i++];
-                            const auto Extrabyte = Input[i++];
-                            const auto Triplebyte = Input[i++];
+            // 21-bit.
+            if ((Controlbyte & 0xF8) == 0xF0) [[unlikely]]
+            {
+                const auto Databyte = Input[i++];
+                const auto Extrabyte = Input[i++];
+                const auto Triplebyte = Input[i++];
 
-                            if constexpr (sizeof(wchar_t) == 4)
-                                Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x07) << 18) | ((Databyte & 0x3F) << 12)
-                                    | ((Extrabyte & 0x3F) << 6) | (Triplebyte & 0x3F)));
-                            continue;
-                        }
+                if constexpr (sizeof(wchar_t) == 4)
+                    Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x07) << 18) | ((Databyte & 0x3F) << 12)
+                                         | ((Extrabyte & 0x3F) << 6) | (Triplebyte & 0x3F)));
+                else Result.push_back(L'?');
+                continue;
+            }
 
-                    // 26-bit.
-                    if ((Controlbyte & 0xFC) == 0xF8)
-                    {
-                        const auto Databyte = Input[i++];
-                        const auto Extrabyte = Input[i++];
-                        const auto Triplebyte = Input[i++];
-                        const auto Quadbyte = Input[i++];
+            // 26-bit.
+            if ((Controlbyte & 0xFC) == 0xF8) [[unlikely]]
+            {
+                const auto Databyte = Input[i++];
+                const auto Extrabyte = Input[i++];
+                const auto Triplebyte = Input[i++];
+                const auto Quadbyte = Input[i++];
 
-                        if constexpr (sizeof(wchar_t) == 4)
-                            Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x03) << 24) | ((Databyte & 0x3F) << 18) |
-                                ((Extrabyte & 0x3F) << 12) | ((Triplebyte & 0x3F) << 6)
-                                | (Quadbyte & 0x3F)));
-                        continue;
-                    }
+                if constexpr (sizeof(wchar_t) == 4)
+                    Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x03) << 24) | ((Databyte & 0x3F) << 18) |
+                        ((Extrabyte & 0x3F) << 12) | ((Triplebyte & 0x3F) << 6)
+                        | (Quadbyte & 0x3F)));
+                else Result.push_back(L'?');
 
-                    // 30-bit.
-                    if ((Controlbyte & 0xFE) == 0xFC)
-                    {
-                        const auto Databyte = Input[i++];
-                        const auto Extrabyte = Input[i++];
-                        const auto Triplebyte = Input[i++];
-                        const auto Quadbyte = Input[i++];
-                        const auto Pentabyte = Input[i++];
+                continue;
+            }
 
-                        if constexpr (sizeof(wchar_t) == 4)
-                            Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x01) << 30) | ((Databyte & 0x3F) << 24) |
-                                ((Extrabyte & 0x3F) << 18) | ((Triplebyte & 0x3F) << 12)
-                                | ((Quadbyte & 0x3F) << 6) | (Pentabyte & 0x3F)));
-                        continue;
-                    }
+            // 30-bit.
+            if ((Controlbyte & 0xFE) == 0xFC) [[unlikely]]
+            {
+                const auto Databyte = Input[i++];
+                const auto Extrabyte = Input[i++];
+                const auto Triplebyte = Input[i++];
+                const auto Quadbyte = Input[i++];
+                const auto Pentabyte = Input[i++];
 
-                    // No header info, probably a raw codepoint.
-                    Result.push_back(static_cast<wchar_t>(Controlbyte));
+                if constexpr (sizeof(wchar_t) == 4)
+                    Result.push_back(static_cast<wchar_t>(((Controlbyte & 0x01) << 30) | ((Databyte & 0x3F) << 24) |
+                                         ((Extrabyte & 0x3F) << 18) | ((Triplebyte & 0x3F) << 12)
+                                         | ((Quadbyte & 0x3F) << 6) | (Pentabyte & 0x3F)));
+                else Result.push_back(L'?');
+                continue;
+            }
+
+            // No header info, probably a raw codepoint.
+            Result.push_back(static_cast<wchar_t>(Controlbyte));
         }
 
         return Result;
     }
+    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
+    {
+        return toWide(toUTF8(Input));
+    }
+
+    // Non-ASCII characters will be converted to their \uXXXX sequence.
     [[nodiscard]] inline std::string toNarrow(std::u8string_view Input)
     {
         if (UTF8::isASCII(Input)) [[likely]]
@@ -315,7 +326,7 @@ namespace Encoding
         std::string Result;
         Result.reserve(Input.size() * sizeof(wchar_t));
 
-        for (const auto& Char : toWide(Input))
+        for (const auto Items = toWide(Input); const auto &Char : Items)
         {
             if (Char < 0x80) [[likely]]
                 Result.push_back(Char & 0x7F);
@@ -330,42 +341,70 @@ namespace Encoding
 
         return Result;
     }
-
-    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
-    {
-        return toWide(toUTF8(Input));
-    }
     [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
     {
         return toNarrow(toUTF8(Input));
     }
+
+    // Complements for for easier template coding.
+    [[nodiscard]] inline std::wstring toWide(std::wstring_view Input) { return { Input.data(), Input.size() }; }
+    [[nodiscard]] inline std::string toNarrow(std::string_view Input) { return { Input.data(), Input.size() }; }
 }
 
-struct String_t
+#if defined (HAS_ABSEIL)
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
 {
-    std::u8string Storage{};
+    return absl::StrSplit(String, absl::ByAnyChar(Needle), absl::SkipEmpty());
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
+{
+    return absl::StrSplit(String, absl::ByChar(Needle), absl::SkipEmpty());
+}
+#else
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
+{
+    const std::regex rxFields("([^" + std::string(Needle) + "]*)", std::regex_constants::optimize);
+    auto It = std::sregex_iterator(String.cbegin(), String.cend(), rxFields);
+    const auto Size = std::distance(It, std::sregex_iterator());
+    std::vector<std::string> Results;
+    Results.reserve(Size);
 
-    String_t() = default;
-    String_t(std::string_view Input) : Storage(Encoding::toUTF8(Input)) {}
-    String_t(std::wstring_view Input) : Storage(Encoding::toUTF8(Input)) {}
-    String_t(const std::string& Input) : Storage(Encoding::toUTF8(Input)) {}
-    String_t(const std::wstring& Input) : Storage(Encoding::toUTF8(Input)) {}
-    String_t(std::u8string_view Input) : Storage(Encoding::toUTF8(Input)) {}
-    String_t(const std::u8string& Input) : Storage(Input) {}
-
-    std::u8string asUTF8() const { return Storage; }
-    std::wstring asWCHAR() const { return Encoding::toWide(Storage); }
-    std::string asASCII() const { return Encoding::toNarrow(Storage); }
-
-    String_t& operator+=(std::string_view Input) { Storage.append(Encoding::toUTF8(Input)); return *this; }
-    String_t& operator+=(std::wstring_view Input) { Storage.append(Encoding::toUTF8(Input)); return *this; }
-    String_t& operator+=(std::u8string_view Input)
+    for (ptrdiff_t i = 0; i < Size; ++i)
     {
-        Storage.append(Encoding::toUTF8(Input));
-        return *this;
+        const auto Match = (It++)->str();
+        if (!Match.empty()) Results.emplace_back(std::move(Match));
     }
 
-    size_t size() const { return Storage.size(); }
-    auto begin() const { return Storage.begin(); }
-    auto end() const { return Storage.end(); }
-};
+    return Results;
+}
+[[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
+{
+    std::vector<std::string> Results;
+    Results.reserve(8);
+
+    while (!String.empty())
+    {
+        const auto Offset = String.find_first_of(Needle);
+        Results.emplace_back(String.substr(0, Offset));
+        String.remove_prefix(Offset);
+    }
+
+    return Results;
+}
+#endif
+[[nodiscard]] inline std::vector<std::wstring> Tokenizestring(const std::wstring &String, std::wstring_view Needle)
+{
+    const auto Tokens = Tokenizestring(Encoding::toNarrow(String), Encoding::toNarrow(Needle));
+    std::vector<std::wstring> Result; Result.reserve(Tokens.size());
+
+    for (const auto &Token : Tokens) Result.emplace_back(Encoding::toWide(Token));
+    return Result;
+}
+[[nodiscard]] inline std::vector<std::wstring> Tokenizestring(std::wstring_view String, wchar_t Needle)
+{
+    const auto Tokens = Tokenizestring(Encoding::toNarrow(String), Encoding::toNarrow(std::wstring(1, Needle)));
+    std::vector<std::wstring> Result; Result.reserve(Tokens.size());
+
+    for (const auto &Token : Tokens) Result.emplace_back(Encoding::toWide(Token));
+    return Result;
+}

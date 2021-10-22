@@ -1,5 +1,5 @@
 # Convery (tcn@ayria.se)
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.11)
 project(AYRIA)
 
 # Use the latest standard at this time.
@@ -18,17 +18,22 @@ set(CMAKE_DEBUG_POSTFIX "d")
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
-    if(CMAKE_BUILD_TYPE MATCHES Release)
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /W4 /Ogsiytyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except- /arch:AVX")
-        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
+    if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /W4 /Oiysyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except-")
+        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
     else()
-        set(EXTRA_CMPFLAGS ${EXTRA_CMPFLAGS} "/permissive- /Gy /utf-8 /fp:except- /arch:AVX") # /d2cgsummary
-        set(EXTRA_LNKFLAGS ${EXTRA_LNKFLAGS} "/time /debug:full /cgthreads:8")
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /Gy /utf-8 /fp:except-") # /d2TPReport
+        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /debug:full /cgthreads:8")
+    endif()
+
+    # Need to specify the arch for x86.
+    if(${CMAKE_SIZEOF_VOID_P} EQUAL 4)
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /arch:SSE2")
     endif()
 
     # Force static runtime, warnings, and override default flags.
     foreach(Flag
-            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO
             CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE)
         string(REGEX REPLACE "/W[0-4]" "/W4" ${Flag} "${${Flag}}")
         string(REPLACE "/GR " "/GR- " ${Flag} "${${Flag}}")
@@ -50,16 +55,23 @@ else()
     endif()
 endif()
 
-# If we have VCPKG installed, add the directories based on a common package.
-find_package(OPENSSL)
-if(OPENSSL_FOUND)
-    find_path(VCPKG_INC openssl/aes.h)
-    find_library(VCPKG_LIB_RAW libssl.lib)
-    get_filename_component(VCPKG_LIB ${VCPKG_LIB_RAW} DIRECTORY)
+# Try to add the lib directories based on a required package.
+find_path(STD_INC openssl/aes.h)
+find_library(STD_LIB_RAW sqlite3.lib)
+get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
+include_directories(${STD_INC})
+link_directories(${STD_LIB})
 
-    include_directories(${VCPKG_INC})
-    link_directories(${VCPKG_LIB})
-endif()
+# Extra packages.
+include(FetchContent)
+FetchContent_Declare(
+    cpp-lazy
+    GIT_REPOSITORY https://github.com/MarcDirven/cpp-lazy
+    GIT_TAG "4.0.0"
+    UPDATE_DISCONNECTED YES)
+set(CPP-LAZY_USE_STANDALONE TRUE)
+FetchContent_MakeAvailable(cpp-lazy)
+include_directories("${cpp-lazy_SOURCE_DIR}/include")
 
 # Global utilities.
 include_directories("${PROJECT_SOURCE_DIR}")
@@ -68,9 +80,9 @@ add_subdirectory(Utilities)
 
 # Add the sub-projects.
 add_subdirectory(Ayria)
-add_subdirectory(Injector)
-add_subdirectory(Localnetworking)
-add_subdirectory(Platformwrapper)
+#add_subdirectory(Injector)
+#add_subdirectory(Localnetworking)
+#add_subdirectory(Platformwrapper)
 
-# Examples.
-add_subdirectory(Plugintemplate)
+## Examples.
+#add_subdirectory(Plugintemplate)
