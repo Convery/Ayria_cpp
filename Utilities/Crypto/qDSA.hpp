@@ -25,8 +25,8 @@ namespace qDSA
 
             constexpr FE128_t() : Byte{} {}
             constexpr FE128_t(const FE128_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE128_t(FE128_t &&Input) noexcept : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE128_t(std::array<uint8_t, 128 / 8> &&Input) : Byte{} { std::ranges::copy(Input, Byte); }
+            constexpr FE128_t(FE128_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
+            constexpr FE128_t(std::array<uint8_t, 128 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
             constexpr FE128_t(const std::array<uint8_t, 128 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
 
             // Just copy the bytes.
@@ -67,8 +67,8 @@ namespace qDSA
 
             constexpr FE256_t() : Byte{} {}
             constexpr FE256_t(const FE256_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE256_t(FE256_t &&Input) noexcept : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE256_t(std::array<uint8_t, 256 / 8> &&Input) : Byte{} { std::ranges::copy(Input, Byte); }
+            constexpr FE256_t(FE256_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
+            constexpr FE256_t(std::array<uint8_t, 256 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
             constexpr FE256_t(const std::array<uint8_t, 256 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
 
             constexpr FE256_t(const FE128_t &A, const FE128_t &B) { X = A; Y = B; }
@@ -105,8 +105,8 @@ namespace qDSA
 
             constexpr FE512_t() : Byte{} {}
             constexpr FE512_t(const FE512_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE512_t(FE512_t &&Input) noexcept : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE512_t(std::array<uint8_t, 512 / 8> &&Input) : Byte{} { std::ranges::copy(Input, Byte); }
+            constexpr FE512_t(FE512_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
+            constexpr FE512_t(std::array<uint8_t, 512 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
             constexpr FE512_t(const std::array<uint8_t, 512 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
 
             // Just copy the bytes.
@@ -328,7 +328,6 @@ namespace qDSA
         // Point helpers.
         constexpr bool isZero(const FE128_t &Input)
         {
-
             return std::to_array(Input.Byte) == std::to_array(FE128_t{}.Byte);
         }
         constexpr bool isZero(const FE256_t &Input)
@@ -525,20 +524,6 @@ namespace qDSA
                 Temp[i] = Input[i];
             return Reduce(Temp);
         }
-        constexpr FE256_t getScalar32(const std::array<uint8_t, 32> &Input)
-        {
-            FE512_t Temp{};
-            for (uint8_t i = 0; i < 32; ++i)
-                Temp[i] = Input[i];
-            return Reduce(Temp);
-        }
-        constexpr FE256_t getScalar64(const std::array<uint8_t, 64> &Input)
-        {
-            FE512_t Temp;
-            for (uint8_t i = 0; i < 64; ++i)
-                Temp[i] = Input[i];
-            return Reduce(Temp);
-        }
         constexpr FE256_t getPositive(const FE256_t &Input)
         {
             if (Input[0] & 1) return Negate(Input);
@@ -570,7 +555,7 @@ namespace qDSA
                 (Input.Y * Input.Z) * Input.W,
                 Input.Z * Input.W,
                 Input.Y * Input.W,
-                Input.Y * Input.Z
+                (Input.Y * Input.Z)
             };
         }
 
@@ -604,9 +589,8 @@ namespace qDSA
         }
         constexpr FE512_t Ladder(FE512_t *Xq, const FE512_t &Xd, const FE256_t &Scalars, int Bits)
         {
-            constexpr FE512_t mu{ FE128_t{{ 0x0B, 0x00 }}, FE128_t{{ 0x16, 0x00 }}, FE128_t{{ 0x13, 0x00 }}, FE128_t{{ 0x03, 0x00 }} };
+            FE512_t Xp{ {{ 0x0B, 0x00 }}, {{ 0x16, 0x00 }}, {{ 0x13, 0x00 }}, {{ 0x03, 0x00 }} };
             int Previous{};
-            auto Xp{ mu };
 
             for(int i = Bits; i >= 0; i--)
             {
@@ -643,31 +627,31 @@ namespace qDSA
         {
             FE128_t A, B;
 
-            A = L1 * L2 * FE128_t{{ 0x11, 0x12 }};
+            A = L1 * L2 * FE128_t{ { 0x11, 0x12 } };
 
             if (Tau)
             {
-                B = L1 * FE128_t{{ 0xF7, 0x0D }};
+                B = L1 * FE128_t{ { 0xF7, 0x0D } };
                 A += B;
 
-                B = L2 * FE128_t{{ 0x99, 0x25 }};
+                B = L2 * FE128_t{ { 0x99, 0x25 } };
                 A -= B;
             }
 
-            A *= {{ 0xE3, 0x2F }};
+            A *= FE128_t{ { 0xE3, 0x2F } };
             A += A;
 
-            B = L1 * FE128_t{{ 0x33, 0x1D }};
+            B = L1 * FE128_t{ { 0x33, 0x1D } };
             B *= B;
             A = B - A;
 
-            B = L2 * FE128_t{{ 0xE3, 0x2F }};
+            B = L2 * FE128_t{ { 0xE3, 0x2F } };
             B *= B;
             A += B;;
 
             if (Tau)
             {
-                B = {{ 0x0B, 0x2C }};
+                B = FE128_t{ { 0x0B, 0x2C } };
                 B *= B;
                 A += B;
             }
@@ -683,30 +667,30 @@ namespace qDSA
 
             if (Tau)
             {
-                C = {{ 0x01, 0x00 }};
+                C = FE128_t{ { 0x01, 0x00 } };
                 A += C;
                 B += C;
                 C = A + B;
             }
 
-            A *= L2 * FE128_t{{ 0xF7, 0x0D }};
-            B *= L1 * FE128_t{{ 0x99, 0x25 }};
+            A *= L2 * FE128_t{ { 0xF7, 0x0D } };
+            B *= L1 * FE128_t{ { 0x99, 0x25 } };
             A -= B;
 
             if (Tau)
             {
-                B = {{ 0x01, 0x00 }};
+                B = FE128_t{ { 0x01, 0x00 } };
                 C -= B;
                 C -= B;
-                C *= {{ 0x11, 0x12 }};
+                C *= FE128_t{ { 0x11, 0x12 } };
                 A += C;
             }
 
-            A *= {{ 0xE3, 0x2F }};
+            A *= FE128_t{ { 0xE3, 0x2F } };
 
             if (Tau)
             {
-                B = L1 * L2 * FE128_t{{ 0x79, 0x17 }} * FE128_t{{ 0xD7, 0xAB }};
+                B = L1 * L2 * (FE128_t{ { 0x79, 0x17 } } *FE128_t{ { 0xD7, 0xAB } });
                 A -= B;
             }
 
@@ -719,24 +703,24 @@ namespace qDSA
 
             if (Tau)
             {
-                A = L1 * FE128_t{{ 0x99, 0x25 }};
-                B = L2 * FE128_t{{ 0xF7, 0x0D }};
+                A = L1 * FE128_t{ { 0x99, 0x25 } };
+                B = L2 * FE128_t{ { 0xF7, 0x0D } };
                 B -= A;
 
-                B += {{ 0x11, 0x12 }};
-                B *= L1 * L2 * FE128_t{{ 0xE3, 0x2F }};
+                B += FE128_t{ { 0x11, 0x12 } };
+                B *= L1 * L2 * FE128_t{ { 0xE3, 0x2F } };
                 B += B;
 
-                A = L1 * FE128_t{{ 0xE3, 0x2F }};
+                A = L1 * FE128_t{ { 0xE3, 0x2F } };
                 A *= A;
                 B = A - B;
 
-                A = L2 * FE128_t{{ 0x33, 0x1D }};
+                A = L2 * FE128_t{ { 0x33, 0x1D } };
                 A *= A;
                 B += A;
             }
 
-            A = L1 * L2 * FE128_t{{ 0x0B, 0x2C }};
+            A = L1 * L2 * FE128_t{ { 0x0B, 0x2C } };
             A *= A;
 
             if (Tau) A += B;
@@ -980,8 +964,6 @@ namespace qDSA
             if (isZero(R)) return false;
             R.X = Negate(R.X); R = Hadamard(R); R.W = Negate(R.W);
 
-            //
-
             // B_1,2
             auto Bij = bijValues(P, Q, muHat);
             if (!isQuad(Bij, Bii.Y, Bii.X, R.X, R.Y)) return false;
@@ -1013,10 +995,11 @@ namespace qDSA
         }
     }
 
-    template <typename T> requires (sizeof(T) == 1)
-    inline std::array<uint8_t, 64> Sign(const std::array<uint8_t, 32> &Publickey,
-                                        const std::array<uint8_t, 32> &Privatekey,
-                                        const T *Message, size_t Length)
+
+    template <typename T> concept Range_t = requires (const T && t) { t.data(); t.size(); sizeof(t[0]) == 1; };
+
+    template <Range_t A, Range_t B, Range_t C>
+    constexpr std::array<uint8_t, 64> Sign(A &&Publickey, B &&Privatekey, C &&Message)
     {
         // First point.
         const auto Seed1 = [&]()
@@ -1028,7 +1011,7 @@ namespace qDSA
 
             EVP_DigestInit(Context, EVP_sha512());
             EVP_DigestUpdate(Context, PRND.data(), 32);
-            EVP_DigestUpdate(Context, Message, Length);
+            EVP_DigestUpdate(Context, Message.data(), Message.size());
             EVP_DigestFinal(Context, Buffer.get(), nullptr);
 
             return std::move(Buffer);
@@ -1046,7 +1029,7 @@ namespace qDSA
             EVP_DigestUpdate(Context, P.Z.Byte, 16);
             EVP_DigestUpdate(Context, P.W.Byte, 16);
             EVP_DigestUpdate(Context, Publickey.data(), 32);
-            EVP_DigestUpdate(Context, Message, Length);
+            EVP_DigestUpdate(Context, Message.data(), Message.size());
             EVP_DigestFinal(Context, Buffer.get(), {});
 
             return std::move(Buffer);
@@ -1064,11 +1047,11 @@ namespace qDSA
         return Signature;
     }
 
-    template <typename T> requires (sizeof(T) == 1)
-    inline bool Verify(const std::array<uint8_t, 32> &Publickey,
-                       const std::array<uint8_t, 64> &Signature,
-                       const T *Message, size_t Length)
+    template <Range_t A, Range_t B, Range_t C>
+    constexpr bool Verify(A &&Publickey, B &&Signature, C &&Message)
     {
+        const auto KP = *(FE512_t *)Signature.data();
+
         // Validate compression.
         auto P = Decompress(FE256_t{ Publickey });
         if (isZero(P)) return false;
@@ -1080,9 +1063,9 @@ namespace qDSA
             const auto Context = EVP_MD_CTX_create();
 
             EVP_DigestInit(Context, EVP_sha512());
-            EVP_DigestUpdate(Context, Signature.data(), 32);
-            EVP_DigestUpdate(Context, Publickey.data(), 32);
-            EVP_DigestUpdate(Context, Message, Length);
+            EVP_DigestUpdate(Context, Signature.data(), Signature.size());
+            EVP_DigestUpdate(Context, Publickey.data(), Publickey.size());
+            EVP_DigestUpdate(Context, Message.data(), Message.size());
             EVP_DigestFinal(Context, Buffer.get(), {});
 
             return std::move(Buffer);
@@ -1091,18 +1074,16 @@ namespace qDSA
 
         // Third point.
         auto W = Ladder(&P, Wrap(P), Q, 250);
-        P = Ladder(getScalar32(FE512_t{ Signature }.Low.Byte), 250);
+        P = Ladder(getScalar32(KP.Low.Byte), 250);
 
-        return Check(P, W, FE512_t{ Signature }.High);
+        return Check(P, W, KP.High);
     }
 
-    inline std::array<uint8_t, 32> Generatesecret(const uint8_t *Publickey, const std::array<uint8_t, 32> &Privatekey)
+    template <Range_t A, Range_t B>
+    constexpr std::array<uint8_t, 32> Generatesecret(A &&Publickey, B &&Privatekey)
     {
-        std::array<uint8_t, 32> Tmp{};
-        std::memcpy(Tmp.data(), Publickey, 32);
-
         const auto Scalar = getScalar32(Privatekey.data());
-        auto PK = Decompress(Tmp);
+        auto PK = Decompress(*(FE256_t *)Publickey.data());
         const auto PKW = Wrap(PK);
 
         auto Secret = Ladder(&PK, PKW, Scalar, 250);
@@ -1114,42 +1095,16 @@ namespace qDSA
 
         return Result;
     }
-    inline std::array<uint8_t, 32> Generatesecret(const std::array<uint8_t, 32> &Publickey, const std::array<uint8_t, 32> &Privatekey)
+
+    template <Range_t A, typename = std::enable_if<sizeof(A) >= 32>>
+    constexpr std::tuple<std::array<uint8_t, 32>, std::array<uint8_t, 32>> Createkeypair(A &&Seed)
     {
-        const auto Scalar = getScalar32(Privatekey.data());
-        auto PK = Decompress({ Publickey });
-        const auto PKW = Wrap(PK);
-
-        auto Secret = Ladder(&PK, PKW, Scalar, 250);
-        std::tie(Secret.Z, Secret.W) = Compress(Secret);
-
-        std::array<uint8_t, 32> Result;
-        std::memcpy(Result.data() + 0, Secret.Z.Byte, 16);
-        std::memcpy(Result.data() + 16, Secret.W.Byte, 16);
-
-        return Result;
-    }
-    inline std::tuple<std::array<uint8_t, 32>, std::array<uint8_t, 32>> Createkeypair(std::array<uint8_t, 32> Seed)
-    {
-        auto PK = Ladder(getScalar32(Seed), 250);
-        std::tie(PK.X, PK.Y) = Compress(PK);
+        const auto [X, Y] = Compress(Ladder(getScalar32((const uint8_t *)Seed.data()), 250));
 
         std::array<uint8_t, 32> Pub{}, Private{};
-        std::memcpy(Pub.data() + 0, PK.X.Byte, 16);
-        std::memcpy(Pub.data() + 16, PK.Y.Byte, 16);
+        std::memcpy(Pub.data() + 0, X.Byte, 16);
+        std::memcpy(Pub.data() + 16, Y.Byte, 16);
         std::memcpy(Private.data(), Seed.data(), 32);
-
-        return { Pub, Private };
-    }
-    inline std::tuple<std::array<uint8_t, 32>, std::array<uint8_t, 32>> Createkeypair(uint8_t *Seed)
-    {
-        auto PK = Ladder(getScalar32(Seed), 250);
-        std::tie(PK.X, PK.Y) = Compress(PK);
-
-        std::array<uint8_t, 32> Pub{}, Private{};
-        std::memcpy(Pub.data() + 0, PK.X.Byte, 16);
-        std::memcpy(Pub.data() + 16, PK.Y.Byte, 16);
-        std::memcpy(Private.data(), Seed, 32);
 
         return { Pub, Private };
     }
