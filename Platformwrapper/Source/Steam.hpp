@@ -10,20 +10,58 @@
 
 namespace Steam
 {
+    // Keep global data together, but remember to keep natural alignment for pointers!
     #pragma pack(push, 1)
     struct Globalstate_t
     {
-        SteamID_t XUID { 0x1100001DEADC0DEULL };
-        uint32_t ApplicationID{};
-        char8_t Username[20];
+        // Helper to initialize the pointers in the same region.
+        static inline std::pmr::monotonic_buffer_resource Internal{ 256 };
+        template <typename T, typename ...Args> static auto Allocate(Args&& ...va)
+        { auto Buffer = Internal.allocate(sizeof(T)); return new (Buffer) T(std::forward<Args>(va)...); }
 
-        uint32_t Startuptime{ uint32_t(uint32_t(time(NULL))) };
-        std::unique_ptr<std::string> Installpath;
-        std::unique_ptr<std::string> Locale;
-        std::unique_ptr<std::string> Clan;
+        uint32_t Startuptime{ uint32_t(time(NULL)) };
+        SteamID_t XUID { 0x1100001DEADC0DEULL };
+        uint32_t AppID{}, ModID{};
+        uint32_t Padding;
+
+        std::unique_ptr<std::pmr::u8string> Installpath{ Allocate<std::pmr::u8string>(&Internal) };
+        std::unique_ptr<std::pmr::string> Username{ Allocate<std::pmr::string>(&Internal) };
+        std::unique_ptr<std::pmr::string> Locale{ Allocate<std::pmr::string>(&Internal) };
+        std::unique_ptr<std::pmr::string> Clan{ Allocate<std::pmr::string>(&Internal) };
+
+        // Just copy Ayrias settings, might be useful later.
+        union
+        {
+            uint16_t Raw;
+            struct
+            {
+                uint16_t
+                    // Application internal.
+                    enableExternalconsole : 1,
+                    enableIATHooking : 1,
+                    enableFileshare : 1,
+                    modifiedConfig : 1,
+                    noNetworking : 1,
+                    pruneDB : 1,
+
+                    // Social state.
+                    isPrivate : 1,
+                    isAway : 1,
+
+                    // Matchmaking state.
+                    isHosting : 1,
+                    isIngame : 1,
+
+                    // 6 bits available.
+                    PLACEHOLDER : 6;
+            };
+        } Settings{};
     };
-    extern Globalstate_t Global;
     #pragma pack(pop)
+
+    // Let's ensure that modifications do not extend the global state too much.
+    static_assert(sizeof(Globalstate_t) <= 64, "Do not cross cache lines with Globalstate_t!");
+    extern Globalstate_t Global;
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
@@ -87,4 +125,12 @@ namespace Steam
         void Runcallbacks();
     }
 
+    // Server interaction, contained in SteamGameserver.cpp
+    namespace Gameserver
+    {
+        bool Start(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion);
+        bool Start(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion);
+        bool Terminate();
+        bool isActive();
+    }
 }
