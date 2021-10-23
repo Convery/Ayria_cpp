@@ -9,11 +9,12 @@
 
 #if defined(__cplusplus)
 #include <Stdinclude.hpp>
+#else
+#include <stdint.h>
+#include <assert.h>
 #endif
 
 // Helper to access Ayria.dll exports, no ABI stability implied.
-static const char *__cdecl Nullsub1(...) { assert(false); return ""; }
-static void __cdecl Nullsub2(...) { assert(false); }
 struct Ayriamodule_t
 {
     // Run a periodic task on the systems background thread.
@@ -46,6 +47,7 @@ struct Ayriamodule_t
 
     // Helpers for C++, C users will have to create their own methods.
     #if defined(__cplusplus)
+
     JSON::Value_t doRequest(const std::string &Endpoint, const JSON::Value_t &Payload)
     {
         return JSON::Parse(JSONRequest(Endpoint.c_str(), JSON::Dump(Payload).c_str()));
@@ -54,6 +56,10 @@ struct Ayriamodule_t
     {
         return doRequest(Endpoint, Payload);
     }
+
+    // Trigger asserts instead of having to check the pointers validity.
+    static const char *__cdecl AYA_Nullsub1(...) { assert(false); return ""; }
+    static void __cdecl AYA_Nullsub2(...) { assert(false); }
 
     Ayriamodule_t()
     {
@@ -88,23 +94,23 @@ struct Ayriamodule_t
         }
         else
         {
-            addConsolemessage = decltype(addConsolemessage)(Nullsub2);
-            addConsolecommand = decltype(addConsolecommand)(Nullsub2);
+            addConsolemessage = decltype(addConsolemessage)(AYA_Nullsub2);
+            addConsolecommand = decltype(addConsolecommand)(AYA_Nullsub2);
 
-            subscribeMessage = decltype(subscribeMessage)(Nullsub2);
-            publishMessage = decltype(publishMessage)(Nullsub2);
-            connectUser = decltype(connectUser)(Nullsub2);
+            subscribeMessage = decltype(subscribeMessage)(AYA_Nullsub2);
+            publishMessage = decltype(publishMessage)(AYA_Nullsub2);
+            connectUser = decltype(connectUser)(AYA_Nullsub2);
 
-            createPeriodictask = decltype(createPeriodictask)(Nullsub2);
-            onInitialized = decltype(onInitialized)(Nullsub2);
-            JSONRequest = decltype(JSONRequest)(Nullsub1);
+            createPeriodictask = decltype(createPeriodictask)(AYA_Nullsub2);
+            onInitialized = decltype(onInitialized)(AYA_Nullsub2);
+            JSONRequest = decltype(JSONRequest)(AYA_Nullsub1);
 
-            subscribeNotification = decltype(subscribeNotification)(Nullsub2);
-            publishNotification = decltype(publishNotification)(Nullsub2);
+            subscribeNotification = decltype(subscribeNotification)(AYA_Nullsub2);
+            publishNotification = decltype(publishNotification)(AYA_Nullsub2);
 
             #if !defined(NDEBUG)
-            unloadPlugin = decltype(unloadPlugin)(Nullsub2);
-            loadPlugins = decltype(loadPlugins)(Nullsub2);
+            unloadPlugin = decltype(unloadPlugin)(AYA_Nullsub2);
+            loadPlugins = decltype(loadPlugins)(AYA_Nullsub2);
             #endif
         }
     }
