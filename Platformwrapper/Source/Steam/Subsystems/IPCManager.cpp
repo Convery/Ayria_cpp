@@ -1,14 +1,15 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2019-04-09
+    Started: 2021-10-23
     License: MIT
 */
 
-#include "../Steam.hpp"
+#include <Steam.hpp>
 
 namespace Steam
 {
-    void *Originalfunction;
+    static void *Originalfunction;
+
     // Also redirect module lookups for legacy compatibility.
     BOOL __stdcall Callback(DWORD Flags, LPCSTR Modulename, HMODULE *Handle)
     {

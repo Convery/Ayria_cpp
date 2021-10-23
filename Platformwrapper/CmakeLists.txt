@@ -29,4 +29,3 @@ add_definitions(-DMODULENAME="${MODULENAME}")
 set_target_properties(${MODULENAME} PROPERTIES PREFIX "")
 target_link_libraries(${MODULENAME} ${PLATFORM_LIBS} ${MODULE_LIBS})
 set_target_properties(${MODULENAME} PROPERTIES COMPILE_FLAGS "${EXTRA_CMPFLAGS}" LINK_FLAGS "${EXTRA_LNKFLAGS}")
-

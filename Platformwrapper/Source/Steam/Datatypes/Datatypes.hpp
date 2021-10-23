@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-02-02
+    Started: 2021-10-23
     License: MIT
 */
 
@@ -137,4 +137,4 @@ namespace Steam
 }
 
 #include "Resultcodes.hpp"
-#include "Callbackdata.hpp"
+#include "Taskresults.hpp"

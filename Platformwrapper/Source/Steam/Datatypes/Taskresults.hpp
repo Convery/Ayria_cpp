@@ -1,17 +1,17 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-02-02
+    Started: 2021-10-23
     License: MIT
 */
 
 #pragma once
-#include <Stdinclude.hpp>
-#include "Datatypes.hpp"
+#include <Steam.hpp>
+#include "Resultcodes.hpp"
 
-// Asynchronous tasks.
-namespace Steam::Callbacks
+// Asynchronous task-results.
+namespace Steam::Tasks
 {
-    #pragma region Callbackstructs
+    #pragma region Resultstructs
     struct AppProofOfPurchaseKeyResponse_t { EResult m_eResult; uint32_t m_nAppID; uint32_t m_cchKeyLength; char m_rgchKey[240]; };
     struct AssociateWithClanResult_t { EResult m_eResult; };
     struct AvatarImageLoaded_t { SteamID_t m_steamID; int m_iImage; int m_iWide; int m_iTall; };
@@ -190,10 +190,10 @@ namespace Steam::Callbacks
     struct gameserveritem_t { servernetadr_t m_NetAdr; int m_nPing; bool m_bHadSuccessfulResponse; bool m_bDoNotRefresh; char m_szGameDir[32]; char m_szMap[32]; char m_szGameDescription[64]; uint32_t m_nAppID; int m_nPlayers; int m_nMaxPlayers; int m_nBotPlayers; bool m_bPassword; bool m_bSecure; uint32_t m_ulTimeLastPlayed; int m_nServerVersion; char m_szServerName[64]; char m_szGameTags[128]; SteamID_t m_steamID; };
     #pragma endregion
 
-    #pragma region Callbacktypes
+    #pragma region Resulttypes
     namespace Types
     {
-        enum ECallbackType : int32_t
+        enum class ECallbackType : int32_t
         {
             // Base callbacks.
             k_iSteamUserCallbacks = 100,
@@ -657,433 +657,21 @@ namespace Steam::Callbacks
             SteamRemotePlaySessionDisconnected_t = k_iSteamRemotePlayCallbacks + 2,
         };
 
-        constexpr const char *asString(ECallbackType Code)
+        // Readble representation for debugging.
+        namespace { static std::string TMP; }
+        constexpr const char *toString(ECallbackType Code)
         {
-            switch (Code)
+            if constexpr (Build::isDebug)
             {
-                case k_iSteamUserCallbacks: return "k_iSteamUserCallbacks";
-                case SteamServersConnected_t: return "SteamServersConnected_t";
-                case SteamServerConnectFailure_t: return "SteamServerConnectFailure_t";
-                case SteamServersDisconnected_t: return "SteamServersDisconnected_t";
-                case BeginLogonRetry_t: return "BeginLogonRetry_t";
-                case ClientGameServerDeny_t: return "ClientGameServerDeny_t";
-                case PrimaryChatDestinationSetOld_t: return "PrimaryChatDestinationSetOld_t";
-                case GSPolicyResponse_t: return "GSPolicyResponse_t";
-                case IPCFailure_t: return "IPCFailure_t";
-                case LicensesUpdated_t: return "LicensesUpdated_t";
-                case AppLifetimeNotice_t: return "AppLifetimeNotice_t";
-                case DRMSDKFileTransferResult_t: return "DRMSDKFileTransferResult_t";
-                case ValidateAuthTicketResponse_t: return "ValidateAuthTicketResponse_t";
-                case MicroTxnAuthorizationResponse_t: return "MicroTxnAuthorizationResponse_t";
-                case EncryptedAppTicketResponse_t: return "EncryptedAppTicketResponse_t";
-                case GetAuthSessionTicketResponse_t: return "GetAuthSessionTicketResponse_t";
-                case GameWebCallback_t: return "GameWebCallback_t";
-                case StoreAuthURLResponse_t: return "StoreAuthURLResponse_t";
-                case MarketEligibilityResponse_t: return "MarketEligibilityResponse_t";
-                case DurationControl_t: return "DurationControl_t";
-                case k_iSteamGameServerCallbacks: return "k_iSteamGameServerCallbacks";
-                case GSClientApprove_t: return "GSClientApprove_t";
-                case GSClientDeny_t: return "GSClientDeny_t";
-                case GSClientKick_t: return "GSClientKick_t";
-                case GSClientSteam2Deny_t: return "GSClientSteam2Deny_t";
-                case GSClientSteam2Accept_t: return "GSClientSteam2Accept_t";
-                case GSClientAchievementStatus_t: return "GSClientAchievementStatus_t";
-                case GSGameplayStats_t: return "GSGameplayStats_t";
-                case GSClientGroupStatus_t: return "GSClientGroupStatus_t";
-                case GSReputation_t: return "GSReputation_t";
-                case AssociateWithClanResult_t: return "AssociateWithClanResult_t";
-                case ComputeNewPlayerCompatibilityResult_t: return "ComputeNewPlayerCompatibilityResult_t";
-                case k_iSteamFriendsCallbacks: return "k_iSteamFriendsCallbacks";
-                case PersonaStateChange_t: return "PersonaStateChange_t";
-                case GameOverlayActivated_t: return "GameOverlayActivated_t";
-                case GameServerChangeRequested_t: return "GameServerChangeRequested_t";
-                case GameLobbyJoinRequested_t: return "GameLobbyJoinRequested_t";
-                case AvatarImageLoaded_t: return "AvatarImageLoaded_t";
-                case ClanOfficerListResponse_t: return "ClanOfficerListResponse_t";
-                case FriendRichPresenceUpdate_t: return "FriendRichPresenceUpdate_t";
-                case GameRichPresenceJoinRequested_t: return "GameRichPresenceJoinRequested_t";
-                case GameConnectedClanChatMsg_t: return "GameConnectedClanChatMsg_t";
-                case GameConnectedChatJoin_t: return "GameConnectedChatJoin_t";
-                case GameConnectedChatLeave_t: return "GameConnectedChatLeave_t";
-                case DownloadClanActivityCountsResult_t: return "DownloadClanActivityCountsResult_t";
-                case JoinClanChatRoomCompletionResult_t: return "JoinClanChatRoomCompletionResult_t";
-                case GameConnectedFriendChatMsg_t: return "GameConnectedFriendChatMsg_t";
-                case FriendsGetFollowerCount_t: return "FriendsGetFollowerCount_t";
-                case FriendsIsFollowing_t: return "FriendsIsFollowing_t";
-                case FriendsEnumerateFollowingList_t: return "FriendsEnumerateFollowingList_t";
-                case SetPersonaNameResponse_t: return "SetPersonaNameResponse_t";
-                case UnreadChatMessagesChanged_t: return "UnreadChatMessagesChanged_t";
-                case OverlayBrowserProtocolNavigation_t: return "OverlayBrowserProtocolNavigation_t";
-                case k_iSteamBillingCallbacks: return "k_iSteamBillingCallbacks";
-                case FinalPriceMsg_t: return "FinalPriceMsg_t";
-                case PurchaseMsg_t: return "PurchaseMsg_t";
-                case k_iSteamMatchmakingCallbacks: return "k_iSteamMatchmakingCallbacks";
-                case FavoritesListChangedOld_t: return "FavoritesListChangedOld_t";
-                case FavoritesListChanged_t: return "FavoritesListChanged_t";
-                case LobbyInvite_t: return "LobbyInvite_t";
-                case LobbyEnter_t: return "LobbyEnter_t";
-                case LobbyDataUpdate_t: return "LobbyDataUpdate_t";
-                case LobbyChatUpdate_t: return "LobbyChatUpdate_t";
-                case LobbyChatMsg_t: return "LobbyChatMsg_t";
-                case LobbyAdminChange_t: return "LobbyAdminChange_t";
-                case LobbyGameCreated_t: return "LobbyGameCreated_t";
-                case LobbyMatchList_t: return "LobbyMatchList_t";
-                case LobbyClosing_t: return "LobbyClosing_t";
-                case LobbyKicked_t: return "LobbyKicked_t";
-                case LobbyCreated_t: return "LobbyCreated_t";
-                case RequestFriendsLobbiesResponse_t: return "RequestFriendsLobbiesResponse_t";
-                case PSNGameBootInviteResult_t: return "PSNGameBootInviteResult_t";
-                case FavoritesListAccountsUpdated_t: return "FavoritesListAccountsUpdated_t";
-                case k_iSteamContentServerCallbacks: return "k_iSteamContentServerCallbacks";
-                case CSClientApprove_t: return "CSClientApprove_t";
-                case CSClientDeny_t: return "CSClientDeny_t";
-                case k_iSteamUtilsCallbacks: return "k_iSteamUtilsCallbacks";
-                case IPCountry_t: return "IPCountry_t";
-                case LowBatteryPower_t: return "LowBatteryPower_t";
-                case SteamAPICallCompleted_t: return "SteamAPICallCompleted_t";
-                case SteamShutdown_t: return "SteamShutdown_t";
-                case CheckFileSignature_t: return "CheckFileSignature_t";
-                case SteamConfigStoreChanged_t: return "SteamConfigStoreChanged_t";
-                case GamepadTextInputDismissed_t: return "GamepadTextInputDismissed_t";
-                case k_iClientFriendsCallbacks: return "k_iClientFriendsCallbacks";
-                case GameOverlayActivateRequested_t: return "GameOverlayActivateRequested_t";
-                case ClanEventReceived_t: return "ClanEventReceived_t";
-                case FriendAdded_t: return "FriendAdded_t";
-                case UserRequestingFriendship_t: return "UserRequestingFriendship_t";
-                case FriendChatMsg_t: return "FriendChatMsg_t";
-                case FriendInvited_t: return "FriendInvited_t";
-                case ChatRoomInvite_t: return "ChatRoomInvite_t";
-                case ChatRoomEnter_t: return "ChatRoomEnter_t";
-                case ChatMemberStateChange_t: return "ChatMemberStateChange_t";
-                case ChatRoomMsg_t: return "ChatRoomMsg_t";
-                case ChatRoomDlgClose_t: return "ChatRoomDlgClose_t";
-                case ChatRoomClosing_t: return "ChatRoomClosing_t";
-                case ChatRoomKicking_t: return "ChatRoomKicking_t";
-                case ChatRoomBanning_t: return "ChatRoomBanning_t";
-                case ChatRoomCreate_t: return "ChatRoomCreate_t";
-                case OpenChatDialog_t: return "OpenChatDialog_t";
-                case ChatRoomActionResult_t: return "ChatRoomActionResult_t";
-                case ChatRoomDlgSerialized_t: return "ChatRoomDlgSerialized_t";
-                case ClanInfoChanged_t: return "ClanInfoChanged_t";
-                case ChatMemberInfoChanged_t: return "ChatMemberInfoChanged_t";
-                case ChatRoomInfoChanged_t: return "ChatRoomInfoChanged_t";
-                case SteamRackBouncing_t: return "SteamRackBouncing_t";
-                case ChatRoomSpeakChanged_t: return "ChatRoomSpeakChanged_t";
-                case NotifyIncomingCall_t: return "NotifyIncomingCall_t";
-                case NotifyHangup_t: return "NotifyHangup_t";
-                case NotifyRequestResume_t: return "NotifyRequestResume_t";
-                case NotifyChatRoomVoiceStateChanged_t: return "NotifyChatRoomVoiceStateChanged_t";
-                case ChatRoomDlgUIChange_t: return "ChatRoomDlgUIChange_t";
-                case VoiceCallInitiated_t: return "VoiceCallInitiated_t";
-                case FriendIgnored_t: return "FriendIgnored_t";
-                case VoiceInputDeviceChanged_t: return "VoiceInputDeviceChanged_t";
-                case VoiceEnabledStateChanged_t: return "VoiceEnabledStateChanged_t";
-                case FriendsWhoPlayGameUpdate_t: return "FriendsWhoPlayGameUpdate_t";
-                case FriendProfileInfoResponse_t: return "FriendProfileInfoResponse_t";
-                case RichInviteReceived_t: return "RichInviteReceived_t";
-                case FriendsMenuChange_t: return "FriendsMenuChange_t";
-                case TradeInviteReceived_t: return "TradeInviteReceived_t";
-                case TradeInviteResponse_t: return "TradeInviteResponse_t";
-                case TradeStartSession_t: return "TradeStartSession_t";
-                case TradeInviteCanceled_t: return "TradeInviteCanceled_t";
-                case GameUsingVoice_t: return "GameUsingVoice_t";
-                case FriendsGroupCreated_t: return "FriendsGroupCreated_t";
-                case FriendsGroupDeleted_t: return "FriendsGroupDeleted_t";
-                case FriendsGroupRenamed_t: return "FriendsGroupRenamed_t";
-                case FriendsGroupMemberAdded_t: return "FriendsGroupMemberAdded_t";
-                case FriendsGroupMemberRemoved_t: return "FriendsGroupMemberRemoved_t";
-                case NameHistoryResponse_t: return "NameHistoryResponse_t";
-                case k_iClientUserCallbacks: return "k_iClientUserCallbacks";
-                case SystemIM_t: return "SystemIM_t";
-                case GuestPassGiftTarget_t: return "GuestPassGiftTarget_t";
-                case PrimaryChatDestinationSet_t: return "PrimaryChatDestinationSet_t";
-                case LicenseChanged_t: return "LicenseChanged_t";
-                case RequestClientAppListInfo_t: return "RequestClientAppListInfo_t";
-                case SetClientAppUpdateState_t: return "SetClientAppUpdateState_t";
-                case InstallClientApp_t: return "InstallClientApp_t";
-                case UninstallClientApp_t: return "UninstallClientApp_t";
-                case Steam2TicketChanged_t: return "Steam2TicketChanged_t";
-                case ClientAppNewsItemUpdate_t: return "ClientAppNewsItemUpdate_t";
-                case ClientSteamNewsItemUpdate_t: return "ClientSteamNewsItemUpdate_t";
-                case ClientSteamNewsClientUpdate_t: return "ClientSteamNewsClientUpdate_t";
-                case LegacyCDKeyRegistered_t: return "LegacyCDKeyRegistered_t";
-                case AccountInformationUpdated_t: return "AccountInformationUpdated_t";
-                case GuestPassSent_t: return "GuestPassSent_t";
-                case GuestPassAcked_t: return "GuestPassAcked_t";
-                case GuestPassRedeemed_t: return "GuestPassRedeemed_t";
-                case UpdateGuestPasses_t: return "UpdateGuestPasses_t";
-                case LogOnCredentialsChanged_t: return "LogOnCredentialsChanged_t";
-                case CheckPasswordResponse_t: return "CheckPasswordResponse_t";
-                case ResetPasswordResponse_t: return "ResetPasswordResponse_t";
-                case DRMDataRequest_t: return "DRMDataRequest_t";
-                case DRMDataResponse_t: return "DRMDataResponse_t";
-                case DRMFailureResponse_t: return "DRMFailureResponse_t";
-                case AppOwnershipTicketReceived_t: return "AppOwnershipTicketReceived_t";
-                case PasswordChangeResponse_t: return "PasswordChangeResponse_t";
-                case EmailChangeResponse_t: return "EmailChangeResponse_t";
-                case SecretQAChangeResponse_t: return "SecretQAChangeResponse_t";
-                case CreateAccountResponse_t: return "CreateAccountResponse_t";
-                case SendForgottonPasswordEmailResponse_t: return "SendForgottonPasswordEmailResponse_t";
-                case ResetForgottonPasswordResponse_t: return "ResetForgottonPasswordResponse_t";
-                case CreateAccountInformSteam3Response_t: return "CreateAccountInformSteam3Response_t";
-                case DownloadFromDFSResponse_t: return "DownloadFromDFSResponse_t";
-                case ClientMarketingMessageUpdate_t: return "ClientMarketingMessageUpdate_t";
-                case ValidateEmailResponse_t: return "ValidateEmailResponse_t";
-                case RequestChangeEmailResponse_t: return "RequestChangeEmailResponse_t";
-                case VerifyPasswordResponse_t: return "VerifyPasswordResponse_t";
-                case Steam2LoginResponse_t: return "Steam2LoginResponse_t";
-                case WebAuthRequestCallback_t: return "WebAuthRequestCallback_t";
-                case MicroTxnAuthRequestCallback_t: return "MicroTxnAuthRequestCallback_t";
-                case MicroTxnAuthResponse_t: return "MicroTxnAuthResponse_t";
-                case AppMinutesPlayedDataNotice_t: return "AppMinutesPlayedDataNotice_t";
-                case MicroTxnInfoUpdated_t: return "MicroTxnInfoUpdated_t";
-                case WalletBalanceUpdated_t: return "WalletBalanceUpdated_t";
-                case EnableMachineLockingResponse_t: return "EnableMachineLockingResponse_t";
-                case MachineLockProgressResponse_t: return "MachineLockProgressResponse_t";
-                case Steam3ExtraLoginProgress_t: return "Steam3ExtraLoginProgress_t";
-                case RequestAccountDataResult_t: return "RequestAccountDataResult_t";
-                case IsAccountNameInUseResult_t: return "IsAccountNameInUseResult_t";
-                case LoginInformationChanged_t: return "LoginInformationChanged_t";
-                case RequestSpecialSurveyResult_t: return "RequestSpecialSurveyResult_t";
-                case SendSpecialSurveyResponseResult_t: return "SendSpecialSurveyResponseResult_t";
-                case UpdateItemAnnouncement_t: return "UpdateItemAnnouncement_t";
-                case ChangeSteamGuardOptionsResponse_t: return "ChangeSteamGuardOptionsResponse_t";
-                case UpdateCommentNotification_t: return "UpdateCommentNotification_t";
-                case FriendUserStatusPublished_t: return "FriendUserStatusPublished_t";
-                case UpdateOfflineMessageNotification_t: return "UpdateOfflineMessageNotification_t";
-                case FriendMessageHistoryChatLog_t: return "FriendMessageHistoryChatLog_t";
-                case TestAvailablePasswordResponse_t: return "TestAvailablePasswordResponse_t";
-                case GetSteamGuardDetailsResponse_t: return "GetSteamGuardDetailsResponse_t";
-                case k_iSteamAppsCallbacks: return "k_iSteamAppsCallbacks";
-                case AppDataChanged_t: return "AppDataChanged_t";
-                case RequestAppCallbacksComplete_t: return "RequestAppCallbacksComplete_t";
-                case AppInfoUpdateComplete_t: return "AppInfoUpdateComplete_t";
-                case AppEventTriggered_t: return "AppEventTriggered_t";
-                case DlcInstalled_t: return "DlcInstalled_t";
-                case AppEventStateChange_t: return "AppEventStateChange_t";
-                case AppValidationComplete_t: return "AppValidationComplete_t";
-                case RegisterActivationCodeResponse_t: return "RegisterActivationCodeResponse_t";
-                case DownloadScheduleChanged_t: return "DownloadScheduleChanged_t";
-                case DlcInstallRequest_t: return "DlcInstallRequest_t";
-                case AppLaunchTenFootOverlay_t: return "AppLaunchTenFootOverlay_t";
-                case AppBackupStatus_t: return "AppBackupStatus_t";
-                case RequestAppProofOfPurchaseKeyResponse_t: return "RequestAppProofOfPurchaseKeyResponse_t";
-                case NewUrlLaunchParameters_t: return "NewUrlLaunchParameters_t";
-                case AppProofOfPurchaseKeyResponse_t: return "AppProofOfPurchaseKeyResponse_t";
-                case FileDetailsResult_t: return "FileDetailsResult_t";
-                case TimedTrialStatus_t: return "TimedTrialStatus_t";
-                case k_iSteamUserStatsCallbacks: return "k_iSteamUserStatsCallbacks";
-                case UserStatsReceived_t: return "UserStatsReceived_t";
-                case UserStatsStored_t: return "UserStatsStored_t";
-                case UserAchievementStored_t: return "UserAchievementStored_t";
-                case LeaderboardFindResult_t: return "LeaderboardFindResult_t";
-                case LeaderboardScoresDownloaded_t: return "LeaderboardScoresDownloaded_t";
-                case LeaderboardScoreUploaded_t: return "LeaderboardScoreUploaded_t";
-                case NumberOfCurrentPlayers_t: return "NumberOfCurrentPlayers_t";
-                case UserStatsUnloaded_t: return "UserStatsUnloaded_t";
-                case UserAchievementIconFetched_t: return "UserAchievementIconFetched_t";
-                case GlobalAchievementPercentagesReady_t: return "GlobalAchievementPercentagesReady_t";
-                case LeaderboardUGCSet_t: return "LeaderboardUGCSet_t";
-                case GlobalStatsReceived_t: return "GlobalStatsReceived_t";
-                case k_iSteamNetworkingCallbacks: return "k_iSteamNetworkingCallbacks";
-                case SocketStatusCallback_t: return "SocketStatusCallback_t";
-                case P2PSessionRequest_t: return "P2PSessionRequest_t";
-                case P2PSessionConnectFail_t: return "P2PSessionConnectFail_t";
-                case SteamNetworkingSocketsConfigUpdated_t: return "SteamNetworkingSocketsConfigUpdated_t";
-                case SteamNetworkingSocketsCert_t: return "SteamNetworkingSocketsCert_t";
-                case SteamNetworkingSocketsRecvP2PFailure_t: return "SteamNetworkingSocketsRecvP2PFailure_t";
-                case SteamNetworkingSocketsRecvP2PRendezvous_t: return "SteamNetworkingSocketsRecvP2PRendezvous_t";
-                case k_iSteamNetworkingSocketsCallbacks: return "k_iSteamNetworkingSocketsCallbacks";
-                case SteamNetConnectionStatusChangedCallback_t: return "SteamNetConnectionStatusChangedCallback_t";
-                case SteamNetAuthenticationStatus_t: return "SteamNetAuthenticationStatus_t";
-                case k_iSteamNetworkingMessagesCallbacks: return "k_iSteamNetworkingMessagesCallbacks";
-                case SteamNetworkingMessagesSessionRequest_t: return "SteamNetworkingMessagesSessionRequest_t";
-                case SteamNetworkingMessagesSessionFailed_t: return "SteamNetworkingMessagesSessionFailed_t";
-                case k_iSteamNetworkingUtilsCallbacks: return "k_iSteamNetworkingUtilsCallbacks";
-                case SteamRelayNetworkStatus_t: return "SteamRelayNetworkStatus_t";
-                case k_iClientRemoteStorageCallbacks: return "k_iClientRemoteStorageCallbacks";
-                case RemoteStorageAppSyncedClient_t: return "RemoteStorageAppSyncedClient_t";
-                case RemoteStorageAppSyncedServer_t: return "RemoteStorageAppSyncedServer_t";
-                case RemoteStorageAppSyncProgress_t: return "RemoteStorageAppSyncProgress_t";
-                case RemoteStorageAppInfoLoaded_t: return "RemoteStorageAppInfoLoaded_t";
-                case RemoteStorageAppSyncStatusCheck_t: return "RemoteStorageAppSyncStatusCheck_t";
-                case RemoteStorageConflictResolution_t: return "RemoteStorageConflictResolution_t";
-                case RemoteStorageFileShareResult_t: return "RemoteStorageFileShareResult_t";
-                case RemoteStorageDownloadUGCResultold_t: return "RemoteStorageDownloadUGCResultold_t";
-                case RemoteStoragePublishFileResult_t: return "RemoteStoragePublishFileResult_t";
-                case RemoteStorageGetPublishedFileDetailsResultold_t: return "RemoteStorageGetPublishedFileDetailsResultold_t";
-                case RemoteStorageDeletePublishedFileResult_t: return "RemoteStorageDeletePublishedFileResult_t";
-                case RemoteStorageEnumerateUserPublishedFilesResult_t: return "RemoteStorageEnumerateUserPublishedFilesResult_t";
-                case RemoteStorageSubscribePublishedFileResult_t: return "RemoteStorageSubscribePublishedFileResult_t";
-                case RemoteStorageEnumerateUserSubscribedFilesResult_t: return "RemoteStorageEnumerateUserSubscribedFilesResult_t";
-                case RemoteStorageUnsubscribePublishedFileResult_t: return "RemoteStorageUnsubscribePublishedFileResult_t";
-                case RemoteStorageUpdatePublishedFileResult_t: return "RemoteStorageUpdatePublishedFileResult_t";
-                case RemoteStorageDownloadUGCResult_t: return "RemoteStorageDownloadUGCResult_t";
-                case RemoteStorageGetPublishedFileDetailsResult_t: return "RemoteStorageGetPublishedFileDetailsResult_t";
-                case RemoteStorageEnumerateWorkshopFilesResult_t: return "RemoteStorageEnumerateWorkshopFilesResult_t";
-                case RemoteStorageGetPublishedItemVoteDetailsResult_t: return "RemoteStorageGetPublishedItemVoteDetailsResult_t";
-                case RemoteStoragePublishedFileSubscribed_t: return "RemoteStoragePublishedFileSubscribed_t";
-                case RemoteStoragePublishedFileUnsubscribed_t: return "RemoteStoragePublishedFileUnsubscribed_t";
-                case RemoteStoragePublishedFileDeleted_t: return "RemoteStoragePublishedFileDeleted_t";
-                case RemoteStorageUpdateUserPublishedItemVoteResult_t: return "RemoteStorageUpdateUserPublishedItemVoteResult_t";
-                case RemoteStorageUserVoteDetails_t: return "RemoteStorageUserVoteDetails_t";
-                case RemoteStorageEnumerateUserSharedWorkshopFilesResult_t: return "RemoteStorageEnumerateUserSharedWorkshopFilesResult_t";
-                case RemoteStorageSetUserPublishedFileActionResult_t: return "RemoteStorageSetUserPublishedFileActionResult_t";
-                case RemoteStorageEnumeratePublishedFilesByUserActionResult_t: return "RemoteStorageEnumeratePublishedFilesByUserActionResult_t";
-                case RemoteStoragePublishFileProgress_t: return "RemoteStoragePublishFileProgress_t";
-                case RemoteStoragePublishedFileUpdated_t: return "RemoteStoragePublishedFileUpdated_t";
-                case RemoteStorageFileWriteAsyncComplete_t: return "RemoteStorageFileWriteAsyncComplete_t";
-                case RemoteStorageFileReadAsyncComplete_t: return "RemoteStorageFileReadAsyncComplete_t";
-                case k_iClientDepotBuilderCallbacks: return "k_iClientDepotBuilderCallbacks";
-                    //case k_iSteamUserItemsCallbacks: return "k_iSteamUserItemsCallbacks";
-                case k_iSteamGameServerItemsCallbacks: return "k_iSteamGameServerItemsCallbacks";
-                case k_iClientUtilsCallbacks: return "k_iClientUtilsCallbacks";
-                case CellIDChanged_t: return "CellIDChanged_t";
-                case k_iSteamGameCoordinatorCallbacks: return "k_iSteamGameCoordinatorCallbacks";
-                case GCMessageAvailable_t: return "GCMessageAvailable_t";
-                case GCMessageFailed_t: return "GCMessageFailed_t";
-                    //case k_iSteamGameServerStatsCallbacks: return "k_iSteamGameServerStatsCallbacks";
-                case GSStatsReceived_t: return "GSStatsReceived_t";
-                case GSStatsStored_t: return "GSStatsStored_t";
-                case k_iSteam2AsyncCallbacks: return "k_iSteam2AsyncCallbacks";
-                case k_iSteamGameStatsCallbacks: return "k_iSteamGameStatsCallbacks";
-                case GameStatsSessionIssued_t: return "GameStatsSessionIssued_t";
-                case GameStatsSessionClosed_t: return "GameStatsSessionClosed_t";
-                case k_iClientHTTPCallbacks: return "k_iClientHTTPCallbacks";
-                case HTTPRequestCompleted_t: return "HTTPRequestCompleted_t";
-                case HTTPRequestHeadersReceived_t: return "HTTPRequestHeadersReceived_t";
-                case HTTPRequestDataReceived_t: return "HTTPRequestDataReceived_t";
-                case k_iClientScreenshotsCallbacks: return "k_iClientScreenshotsCallbacks";
-                case ScreenshotUploadProgress_t: return "ScreenshotUploadProgress_t";
-                case ScreenshotWritten_t: return "ScreenshotWritten_t";
-                case ScreenshotUploaded_t: return "ScreenshotUploaded_t";
-                case ScreenshotBatchComplete_t: return "ScreenshotBatchComplete_t";
-                case ScreenshotDeleted_t: return "ScreenshotDeleted_t";
-                case ScreenshotTriggered_t: return "ScreenshotTriggered_t";
-                case k_iSteamScreenshotsCallbacks: return "k_iSteamScreenshotsCallbacks";
-                case ScreenshotReady_t: return "ScreenshotReady_t";
-                case ScreenshotRequested_t: return "ScreenshotRequested_t";
-                case k_iClientAudioCallbacks: return "k_iClientAudioCallbacks";
-                case k_iClientUnifiedMessagesCallbacks: return "k_iClientUnifiedMessagesCallbacks";
-                case SteamUnifiedMessagesSendMethodResult_t: return "SteamUnifiedMessagesSendMethodResult_t";
-                case k_iSteamStreamLauncherCallbacks: return "k_iSteamStreamLauncherCallbacks";
-                case k_iClientControllerCallbacks: return "k_iClientControllerCallbacks";
-                case k_iSteamControllerCallbacks: return "k_iSteamControllerCallbacks";
-                case k_iClientParentalSettingsCallbacks: return "k_iClientParentalSettingsCallbacks";
-                case k_iClientDeviceAuthCallbacks: return "k_iClientDeviceAuthCallbacks";
-                case k_iClientNetworkDeviceManagerCallbacks: return "k_iClientNetworkDeviceManagerCallbacks";
-                case k_iClientMusicCallbacks: return "k_iClientMusicCallbacks";
-                case k_iClientRemoteClientManagerCallbacks: return "k_iClientRemoteClientManagerCallbacks";
-                case k_iClientUGCCallbacks: return "k_iClientUGCCallbacks";
-                case SteamUGCQueryCompleted_t: return "SteamUGCQueryCompleted_t";
-                case SteamUGCRequestUGCDetailsResult_t: return "SteamUGCRequestUGCDetailsResult_t";
-                case CreateItemResult_t: return "CreateItemResult_t";
-                case SubmitItemUpdateResult_t: return "SubmitItemUpdateResult_t";
-                case ItemInstalled_t: return "ItemInstalled_t";
-                case DownloadItemResult_t: return "DownloadItemResult_t";
-                case UserFavoriteItemsListChanged_t: return "UserFavoriteItemsListChanged_t";
-                case SetUserItemVoteResult_t: return "SetUserItemVoteResult_t";
-                case GetUserItemVoteResult_t: return "GetUserItemVoteResult_t";
-                case StartPlaytimeTrackingResult_t: return "StartPlaytimeTrackingResult_t";
-                case StopPlaytimeTrackingResult_t: return "StopPlaytimeTrackingResult_t";
-                case AddUGCDependencyResult_t: return "AddUGCDependencyResult_t";
-                case RemoveUGCDependencyResult_t: return "RemoveUGCDependencyResult_t";
-                case AddAppDependencyResult_t: return "AddAppDependencyResult_t";
-                case RemoveAppDependencyResult_t: return "RemoveAppDependencyResult_t";
-                case GetAppDependenciesResult_t: return "GetAppDependenciesResult_t";
-                case DeleteItemResult_t: return "DeleteItemResult_t";
-                case k_iSteamStreamClientCallbacks: return "k_iSteamStreamClientCallbacks";
-                case k_IClientProductBuilderCallbacks: return "k_IClientProductBuilderCallbacks";
-                case k_iClientShortcutsCallbacks: return "k_iClientShortcutsCallbacks";
-                case k_iClientRemoteControlManagerCallbacks: return "k_iClientRemoteControlManagerCallbacks";
-                case k_iSteamAppListCallbacks: return "k_iSteamAppListCallbacks";
-                case SteamAppInstalled_t: return "SteamAppInstalled_t";
-                case SteamAppUninstalled_t: return "SteamAppUninstalled_t";
-                case k_iSteamMusicCallbacks: return "k_iSteamMusicCallbacks";
-                case PlaybackStatusHasChanged_t: return "PlaybackStatusHasChanged_t";
-                case VolumeHasChanged_t: return "VolumeHasChanged_t";
-                case MusicPlayerWantsVolume_t: return "MusicPlayerWantsVolume_t";
-                case MusicPlayerSelectsQueueEntry_t: return "MusicPlayerSelectsQueueEntry_t";
-                case MusicPlayerSelectsPlaylistEntry_t: return "MusicPlayerSelectsPlaylistEntry_t";
-                case k_iSteamMusicRemoteCallbacks: return "k_iSteamMusicRemoteCallbacks";
-                case MusicPlayerRemoteWillActivate_t: return "MusicPlayerRemoteWillActivate_t";
-                case MusicPlayerRemoteWillDeactivate_t: return "MusicPlayerRemoteWillDeactivate_t";
-                case MusicPlayerRemoteToFront_t: return "MusicPlayerRemoteToFront_t";
-                case MusicPlayerWillQuit_t: return "MusicPlayerWillQuit_t";
-                case MusicPlayerWantsPlay_t: return "MusicPlayerWantsPlay_t";
-                case MusicPlayerWantsPause_t: return "MusicPlayerWantsPause_t";
-                case MusicPlayerWantsPlayPrevious_t: return "MusicPlayerWantsPlayPrevious_t";
-                case MusicPlayerWantsPlayNext_t: return "MusicPlayerWantsPlayNext_t";
-                case MusicPlayerWantsShuffled_t: return "MusicPlayerWantsShuffled_t";
-                case MusicPlayerWantsLooped_t: return "MusicPlayerWantsLooped_t";
-                case MusicPlayerWantsPlayingRepeatStatus_t: return "MusicPlayerWantsPlayingRepeatStatus_t";
-                case k_iClientVRCallbacks: return "k_iClientVRCallbacks";
-                case k_iSteamHTMLSurfaceCallbacks: return "k_iSteamHTMLSurfaceCallbacks";
-                case HTML_BrowserReady_t: return "HTML_BrowserReady_t";
-                case HTML_NeedsPaint_t: return "HTML_NeedsPaint_t";
-                case HTML_StartRequest_t: return "HTML_StartRequest_t";
-                case HTML_CloseBrowser_t: return "HTML_CloseBrowser_t";
-                case HTML_URLChanged_t: return "HTML_URLChanged_t";
-                case HTML_FinishedRequest_t: return "HTML_FinishedRequest_t";
-                case HTML_OpenLinkInNewTab_t: return "HTML_OpenLinkInNewTab_t";
-                case HTML_ChangedTitle_t: return "HTML_ChangedTitle_t";
-                case HTML_SearchResults_t: return "HTML_SearchResults_t";
-                case HTML_CanGoBackAndForward_t: return "HTML_CanGoBackAndForward_t";
-                case HTML_HorizontalScroll_t: return "HTML_HorizontalScroll_t";
-                case HTML_VerticalScroll_t: return "HTML_VerticalScroll_t";
-                case HTML_LinkAtPosition_t: return "HTML_LinkAtPosition_t";
-                case HTML_JSAlert_t: return "HTML_JSAlert_t";
-                case HTML_JSConfirm_t: return "HTML_JSConfirm_t";
-                case HTML_FileOpenDialog_t: return "HTML_FileOpenDialog_t";
-                case HTML_NewWindow_t: return "HTML_NewWindow_t";
-                case HTML_SetCursor_t: return "HTML_SetCursor_t";
-                case HTML_StatusText_t: return "HTML_StatusText_t";
-                case HTML_ShowToolTip_t: return "HTML_ShowToolTip_t";
-                case HTML_UpdateToolTip_t: return "HTML_UpdateToolTip_t";
-                case HTML_HideToolTip_t: return "HTML_HideToolTip_t";
-                case HTML_BrowserRestarted_t: return "HTML_BrowserRestarted_t";
-                case k_iClientVideoCallbacks: return "k_iClientVideoCallbacks";
-                case BroadcastUploadStart_t: return "BroadcastUploadStart_t";
-                case BroadcastUploadStop_t: return "BroadcastUploadStop_t";
-                case GetVideoURLResult_t: return "GetVideoURLResult_t";
-                case GetOPFSettingsResult_t: return "GetOPFSettingsResult_t";
-                    //case k_iClientInventoryCallbacks: return "k_iClientInventoryCallbacks";
-                case SteamInventoryResultReady_t: return "SteamInventoryResultReady_t";
-                case SteamInventoryFullUpdate_t: return "SteamInventoryFullUpdate_t";
-                case SteamInventoryDefinitionUpdate_t: return "SteamInventoryDefinitionUpdate_t";
-                case SteamInventoryEligiblePromoItemDefIDs_t: return "SteamInventoryEligiblePromoItemDefIDs_t";
-                case SteamInventoryStartPurchaseResult_t: return "SteamInventoryStartPurchaseResult_t";
-                case SteamInventoryRequestPricesResult_t: return "SteamInventoryRequestPricesResult_t";
-                case k_iClientBluetoothManagerCallbacks: return "k_iClientBluetoothManagerCallbacks";
-                case k_iClientSharedConnectionCallbacks: return "k_iClientSharedConnectionCallbacks";
-                case k_ISteamParentalSettingsCallbacks: return "k_ISteamParentalSettingsCallbacks";
-                case SteamParentalSettingsChanged_t: return "SteamParentalSettingsChanged_t";
-                case k_iClientShaderCallbacks: return "k_iClientShaderCallbacks";
-                case k_iSteamGameSearchCallbacks: return "k_iSteamGameSearchCallbacks";
-                case SearchForGameProgressCallback_t: return "SearchForGameProgressCallback_t";
-                case SearchForGameResultCallback_t: return "SearchForGameResultCallback_t";
-                case RequestPlayersForGameProgressCallback_t: return "RequestPlayersForGameProgressCallback_t";
-                case RequestPlayersForGameResultCallback_t: return "RequestPlayersForGameResultCallback_t";
-                case RequestPlayersForGameFinalResultCallback_t: return "RequestPlayersForGameFinalResultCallback_t";
-                case SubmitPlayerResultResultCallback_t: return "SubmitPlayerResultResultCallback_t";
-                case EndGameResultCallback_t: return "EndGameResultCallback_t";
-                case k_iSteamPartiesCallbacks: return "k_iSteamPartiesCallbacks";
-                case JoinPartyCallback_t: return "JoinPartyCallback_t";
-                case CreateBeaconCallback_t: return "CreateBeaconCallback_t";
-                case ReservationNotificationCallback_t: return "ReservationNotificationCallback_t";
-                case ChangeNumOpenSlotsCallback_t: return "ChangeNumOpenSlotsCallback_t";
-                case AvailableBeaconLocationsUpdated_t: return "AvailableBeaconLocationsUpdated_t";
-                case ActiveBeaconsUpdated_t: return "ActiveBeaconsUpdated_t";
-                case k_iClientPartiesCallbacks: return "k_iClientPartiesCallbacks";
-                case k_iSteamSTARCallbacks: return "k_iSteamSTARCallbacks";
-                case k_iClientSTARCallbacks: return "k_iClientSTARCallbacks";
-                case k_iSteamRemotePlayCallbacks: return "k_iSteamRemotePlayCallbacks";
-                case SteamRemotePlaySessionConnected_t: return "SteamRemotePlaySessionConnected_t";
-                case SteamRemotePlaySessionDisconnected_t: return "SteamRemotePlaySessionDisconnected_t";
-                case k_iClientCompatCallbacks: return "k_iClientCompatCallbacks";
-                case k_iSteamChatCallbacks: return "k_iSteamChatCallbacks";
-                default: return "unknown";
+                switch (Code)
+                {
+                    case ECallbackType::k_iSteamUserCallbacks: return "k_iSteamUserCallbacks";
+                    case ECallbackType::SteamServersConnected_t: return "SteamServersConnected_t";
+                }
             }
+
+            TMP = std::format("{}", (int32_t)Code);
+            return TMP.c_str();
         }
     }
     #pragma endregion

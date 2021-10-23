@@ -1,12 +1,12 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2019-04-09
+    Started: 2021-10-23
     License: MIT
 */
 
 #pragma once
-#include "Stdinclude.hpp"
-#include "Datatypes/Datatypes.hpp"
+#include <Stdinclude.hpp>
+#include "Steam/Datatypes/Datatypes.hpp"
 
 namespace Steam
 {
@@ -79,7 +79,7 @@ namespace Steam
     sqlite::database Database();
 
     // Asynchronous tasks.
-    namespace Callbacks
+    namespace Tasks
     {
         void Completerequest(uint64_t RequestID, int32_t Callbacktype, void *Databuffer);
         void Registercallback(void *Callback, int32_t Callbacktype);
@@ -87,5 +87,4 @@ namespace Steam
         void Runcallbacks();
     }
 
-    using namespace Callbacks;
 }
