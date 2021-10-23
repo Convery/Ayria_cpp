@@ -271,7 +271,7 @@ namespace Steam
 
             // Notify the game that it's properly connected.
             const auto RequestID = Tasks::Createrequest();
-            Tasks::Completerequest(RequestID, Tasks::SteamServersConnected_t, nullptr);
+            Tasks::Completerequest(RequestID, Tasks::ECallbackType::SteamServersConnected_t, nullptr);
 
             // Notify the plugins that we are initialized.
             if (const auto Callback = Ayria.onInitialized) Callback(false);

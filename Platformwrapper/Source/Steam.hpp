@@ -8,6 +8,9 @@
 #include <Stdinclude.hpp>
 #include "Steam/Datatypes/Datatypes.hpp"
 
+// A lot of interfaces will have unreferenced parameters, so ignore warnings.
+#pragma warning(disable: 4100)
+
 namespace Steam
 {
     // Keep global data together, but remember to keep natural alignment for pointers!
@@ -119,6 +122,7 @@ namespace Steam
     // Asynchronous tasks.
     namespace Tasks
     {
+        void Completerequest(uint64_t RequestID, ECallbackType Callbacktype, void *Databuffer);
         void Completerequest(uint64_t RequestID, int32_t Callbacktype, void *Databuffer);
         void Registercallback(void *Callback, int32_t Callbacktype);
         uint64_t Createrequest();

@@ -29,6 +29,10 @@ namespace Steam::Tasks
     std::string Taskname(int32_t Callbacktype);
 
     // Async requests to the backend.
+    void Completerequest(CallID_t RequestID, ECallbackType Callbacktype, void *Databuffer)
+    {
+        Results.push({ int32_t(Callbacktype), { RequestID, Databuffer } });
+    }
     void Completerequest(CallID_t RequestID, int32_t Callbacktype, void *Databuffer)
     {
         Results.push({ Callbacktype, { RequestID, Databuffer } });
