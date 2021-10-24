@@ -363,6 +363,20 @@ namespace AyriaAPI
 
             return Result;
         }
+
+        inline std::unordered_set<LongID_t> getMemberships(const LongID_t &UserID)
+        {
+            std::unordered_set<LongID_t> Result{};
+
+            Trycatch(
+                Prepare("SELECT GroupID FROM Groupmember WHERE MemberID = ?;", UserID) >> [&](const Base58_t &GroupID)
+                {
+                    Result.insert(GroupID);
+                };
+            );
+
+            return Result;
+        }
     }
 
     // Key-value store for the client, usually for social presence.
