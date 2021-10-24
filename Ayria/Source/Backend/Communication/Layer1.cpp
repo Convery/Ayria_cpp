@@ -369,4 +369,28 @@ namespace Backend::Messagebus
         Listenport = 0;
         return;
     }
+
+    namespace Export
+    {
+        extern "C" EXPORT_ATTR void __cdecl publishMessage(const char *Identifier, const char *Message, unsigned int Length)
+        {
+            if (!Identifier || !Message) [[unlikely]]
+            {
+                assert(false);
+                return;
+            }
+
+            Publish(Identifier, { Message, Length });
+        }
+        extern "C" EXPORT_ATTR void __cdecl connectUser(const char *IPv4, const char *Port)
+        {
+            if (!IPv4 || !Port) [[unlikely]]
+            {
+                assert(false);
+                return;
+            }
+
+            Connectuser(inet_addr(IPv4), htons(std::atoi(Port)));
+        }
+    }
 }

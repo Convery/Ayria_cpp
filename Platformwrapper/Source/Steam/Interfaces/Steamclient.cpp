@@ -1,11 +1,10 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2019-04-09
+    Started: 2021-10-24
     License: MIT
 */
 
-#include "../Steam.hpp"
-#pragma warning(disable : 4100)
+#include <Steam.hpp>
 
 namespace Steam
 {
@@ -235,7 +234,7 @@ namespace Steam
         SteamClient001()
         {
             /*
-                Missing SDK information.
+            Missing SDK information.
             */
         };
     };
@@ -244,7 +243,7 @@ namespace Steam
         SteamClient002()
         {
             /*
-                Missing SDK information.
+            Missing SDK information.
             */
         };
     };
@@ -253,7 +252,7 @@ namespace Steam
         SteamClient003()
         {
             /*
-                Missing SDK information.
+            Missing SDK information.
             */
         };
     };
@@ -262,7 +261,7 @@ namespace Steam
         SteamClient004()
         {
             /*
-                Missing SDK information.
+            Missing SDK information.
             */
         };
     };
@@ -271,7 +270,7 @@ namespace Steam
         SteamClient005()
         {
             /*
-                Missing SDK information.
+            Missing SDK information.
             */
         };
     };

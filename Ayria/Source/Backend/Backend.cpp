@@ -78,8 +78,8 @@ namespace Backend
         std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(Seed);
     }
 
-    // For debugging.
-    static void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    // For debugging, not static because MSVC < 17.0 does not like it.
+    [[maybe_unused]] void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
     {
         (void)DBName; (void)Errorcode; (void)Errorstring;
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));

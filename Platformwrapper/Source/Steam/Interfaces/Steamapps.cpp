@@ -1,11 +1,10 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2019-04-09
+    Started: 2021-10-23
     License: MIT
 */
 
-#include "../Steam.hpp"
-#pragma warning(disable : 4100)
+#include <Steam.hpp>
 
 namespace Steam
 {
@@ -27,7 +26,7 @@ namespace Steam
             try
             {
                 Database()
-                    << "SELECT * FROM DLCInfo WHERE AppID = ? LIMIT 1 OFFSET ?;" << Global.ApplicationID << iDLC
+                    << "SELECT * FROM DLCInfo WHERE AppID = ? LIMIT 1 OFFSET ?;" << Global.AppID << iDLC
                     >> [&](uint32_t DLCID, uint32_t AppID, const std::string &Checkfile, const std::string &Name)
                     {
                         if (!Name.empty()) std::strncpy(pchName, Name.c_str(), cchNameBufferSize);
@@ -50,13 +49,13 @@ namespace Steam
             const auto Filebuffer = FS::Readfile(pszFileName);
             const auto SHA = Hash::SHA1(Filebuffer.data(), Filebuffer.size());
 
-            const auto Request = new Callbacks::FileDetailsResult_t();
+            const auto Request = new Tasks::FileDetailsResult_t();
             Request->m_eResult = Filebuffer.empty() ? EResult::k_EResultFileNotFound : EResult::k_EResultOK;
             std::memcpy(Request->m_FileSHA, SHA.data(), std::min(size_t(20), SHA.size()));
             Request->m_ulFileSize = Filebuffer.size();
 
-            const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::Types::FileDetailsResult_t, Request);
+            const auto RequestID = Tasks::Createrequest();
+            Tasks::Completerequest(RequestID, Tasks::ECallbackType::FileDetailsResult_t, Request);
 
             return RequestID;
         }
@@ -68,7 +67,7 @@ namespace Steam
             {
                 Database()
                     << "SELECT Checkfile FROM DLCInfo WHERE (AppID = ? AND DLCID = ?) LIMIT 1;"
-                    << Global.ApplicationID << appID
+                    << Global.AppID << appID
                     >> [&](const std::string &Checkfile) { Result = FS::Fileexists(Checkfile); };
             } catch (...) {}
             if (!Result) Result = FS::Fileexists(L"./Ayria/DEV_DLC");
@@ -77,14 +76,14 @@ namespace Steam
         bool BIsAppInstalled(AppID_t appID)
         {
             // Naturally the current app is installed.
-            if (appID == Global.ApplicationID)
+            if (appID == Global.AppID)
                 return true;
 
             do
             {
                 HKEY Registrykey;
-                if (RegOpenKeyW(HKEY_LOCAL_MACHINE, va(L"Software\\Valve\\Steam\\Apps\\%u", Global.ApplicationID).c_str(), &Registrykey))
-                    if (RegOpenKeyW(HKEY_LOCAL_MACHINE, va(L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\%u", Global.ApplicationID).c_str(), &Registrykey))
+                if (RegOpenKeyW(HKEY_LOCAL_MACHINE, va(L"Software\\Valve\\Steam\\Apps\\%u", Global.AppID).c_str(), &Registrykey))
+                    if (RegOpenKeyW(HKEY_LOCAL_MACHINE, va(L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\%u", Global.AppID).c_str(), &Registrykey))
                         break;
 
                 DWORD Boolean{}; DWORD Size{ sizeof(DWORD) };
@@ -106,7 +105,7 @@ namespace Steam
         int32_t GetDLCCount()
         {
             int32_t Count{};
-            try { Database() << "SELECT COUNT(*) FROM DLCInfo WHERE AppID = ?;" << Global.ApplicationID >> Count; }
+            try { Database() << "SELECT COUNT(*) FROM DLCInfo WHERE AppID = ?;" << Global.AppID >> Count; }
             catch (...) {}
             return Count;
         }
@@ -131,7 +130,7 @@ namespace Steam
         uint32_t GetAppInstallDir(AppID_t appID, char *pchFolder, uint32_t cchFolderBufferSize)
         {
             // Some developers are a bit silly.
-            if (appID == Global.ApplicationID)
+            if (appID == Global.AppID)
             {
                 return GetCurrentDirectoryA(cchFolderBufferSize, pchFolder);
             }
@@ -147,7 +146,7 @@ namespace Steam
         }
         uint32_t GetInstalledDepots0(DepotID_t *pvecDepots, uint32_t cMaxDepots)
         {
-            return GetInstalledDepots1(Global.ApplicationID, pvecDepots, cMaxDepots);
+            return GetInstalledDepots1(Global.AppID, pvecDepots, cMaxDepots);
         }
         int32_t GetLaunchCommandLine(char *pszCommandLine, int32_t cubCommandLine)
         {
@@ -248,11 +247,11 @@ namespace Steam
             // Activation seems to only be relevant on consoles.
             Debugprint(va("%s: %s", __FUNCTION__, pchActivationCode));
 
-            const auto Request = new Callbacks::RegisterActivationCodeResponse_t();
+            const auto Request = new Tasks::RegisterActivationCodeResponse_t();
             Request->m_eResult = k_ERegisterActivationCodeResultOK;
 
-            const auto RequestID = Callbacks::Createrequest();
-            Callbacks::Completerequest(RequestID, Callbacks::Types::RegisterActivationCodeResponse_t, Request);
+            const auto RequestID = Tasks::Createrequest();
+            Tasks::Completerequest(RequestID, Tasks::ECallbackType::RegisterActivationCodeResponse_t, Request);
 
             return RequestID;
         }
@@ -264,12 +263,12 @@ namespace Steam
         {
             Warningprint("The game wants a proof of purchase token, inform the developer.");
 
-            const auto Request = new Callbacks::AppProofOfPurchaseKeyResponse_t();
+            const auto Request = new Tasks::AppProofOfPurchaseKeyResponse_t();
             Request->m_eResult = EResult::k_EResultOK;
             Request->m_cchKeyLength = 0;
             Request->m_nAppID = nAppID;
 
-            Callbacks::Completerequest(Callbacks::Createrequest(), Callbacks::Types::AppProofOfPurchaseKeyResponse_t, Request);
+            Tasks::Completerequest(Tasks::Createrequest(), Tasks::ECallbackType::AppProofOfPurchaseKeyResponse_t, Request);
         }
         void RequestAllProofOfPurchaseKeys() {}
 

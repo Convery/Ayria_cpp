@@ -47,4 +47,28 @@ namespace Backend::Notifications
     {
         Backend::Enqueuetask(200, doProcess);
     }
+
+    namespace Export
+    {
+        extern "C" EXPORT_ATTR void __cdecl subscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
+        {
+            if (!Identifier || !Callback) [[unlikely]]
+            {
+                assert(false);
+                return;
+            }
+
+            Subscribe(Identifier, Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl publishNotification(const char *Identifier, const char *JSONString)
+        {
+            if (!Identifier || !JSONString) [[unlikely]]
+            {
+                assert(false);
+                return;
+            }
+
+            Publish(Identifier, JSONString);
+        }
+    }
 }

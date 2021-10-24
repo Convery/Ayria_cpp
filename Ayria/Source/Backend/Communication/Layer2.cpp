@@ -59,20 +59,19 @@ namespace Backend::Messageprocessing
         } catch (...) {}
     }
 
-    //
-    namespace API
-    {
-        extern "C" void addMessagehandler(const char *Identifier, bool (__cdecl * Callback)(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length))
-        {
-            if (Identifier && Callback) [[likely]]
-                Messageprocessing::addMessagehandler(std::string_view{ Identifier }, Callback);
-        }
-    }
-
     // Set up the system.
     void Initialize()
     {
         // TODO(tcn): Profile and decide on a proper rate..
         Backend::Enqueuetask(100, doProcess);
+    }
+
+    namespace Export
+    {
+        extern "C" void subscribeMessage(const char *Identifier, bool (__cdecl * Callback)(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length))
+        {
+            if (Identifier && Callback) [[likely]]
+                Messageprocessing::addMessagehandler(std::string_view{ Identifier }, Callback);
+        }
     }
 }

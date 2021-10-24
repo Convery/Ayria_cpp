@@ -1,16 +1,16 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2019-04-09
+    Started: 2021-10-23
     License: MIT
 */
 
-#include "../Steam.hpp"
+#include <Steam.hpp>
 
 namespace Steam
 {
-    std::deque<std::pair<Interfacetype_t, Interface_t<> *>> *Interfacestore;
-    std::unordered_map<Interfacetype_t, Interface_t<> *> Currentinterfaces;
-    std::unordered_map<std::string_view, Interface_t<> *> *Interfacenames;
+    static std::deque<std::pair<Interfacetype_t, Interface_t<> *>> *Interfacestore;
+    static Hashmap<Interfacetype_t, Interface_t<> *> Currentinterfaces;
+    static Hashmap<std::string_view, Interface_t<> *> *Interfacenames;
     extern const Hashmap<std::string, std::string> Scanstrings;
 
     // A nice little dummy interface for debugging.
@@ -130,6 +130,7 @@ namespace Steam
     // Poke at a module until it gives up its secrets.
     bool Scanforinterfaces(std::string_view Filename)
     {
+        // The file should be less than 300 KB, so load it all.
         const auto Filebuffer = FS::Readfile(Filename);
         if(Filebuffer.empty()) return false;
         size_t Foundnames{};
