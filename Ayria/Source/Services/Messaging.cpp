@@ -29,6 +29,22 @@ namespace Services::Messaging
         return Result;
     }
 
+    // Helpers.
+    static std::unordered_set<std::string> getModerators(const std::string &GroupID)
+    {
+        std::unordered_set<std::string> Moderators;
+        for (const auto Tmp = AyriaAPI::Groups::getModerators(GroupID); const auto & Item : Tmp)
+            Moderators.insert(Item);
+        return Moderators;
+    }
+    static std::unordered_set<std::string> getMembers(const std::string &GroupID)
+    {
+        std::unordered_set<std::string> Members;
+        for (const auto Tmp = AyriaAPI::Groups::getMembers(GroupID); const auto & Item : Tmp)
+            Members.insert(Item);
+        return Members;
+    }
+
     // Internal access for the services.
     void sendUsermessage(const std::string &UserID, std::string_view Messagetype, std::string_view Payload)
     {
@@ -83,7 +99,7 @@ namespace Services::Messaging
             if (Newkey.empty()) [[unlikely]] return false;
             if (!Base85::isValid(Newkey)) [[unlikely]] return false;
             if (!Groups::getGroup(GroupID)) [[unlikely]] return false;
-            if (!AyriaAPI::Groups::getModerators(GroupID).contains(LongID)) [[unlikely]] return false;
+            if (!getModerators(GroupID).contains(LongID)) [[unlikely]] return false;
 
             // We can only decrypt if we have the key.
             if (const auto Cryptokey = getCryptokey(GroupID))
@@ -160,7 +176,7 @@ namespace Services::Messaging
             if (Payload.empty()) [[unlikely]] return false;
             if (!Base85::isValid(Payload)) [[unlikely]] return false;
             if (!Groups::getGroup(GroupID)) [[unlikely]] return false;
-            if (!AyriaAPI::Groups::getMembers(GroupID).contains(LongID)) [[unlikely]] return false;
+            if (!getMembers(GroupID).contains(LongID)) [[unlikely]] return false;
 
             // We can only decrypt if we have the key.
             if (const auto Cryptokey = getCryptokey(GroupID))
@@ -228,7 +244,7 @@ namespace Services::Messaging
             if (!Group) [[unlikely]] return R"({ "Error" : "Invalid / missing groupID" })";
             if (Group->isPublic) [[unlikely]] return R"({ "Error" : "Group is public." })";
             if (!Cryptokey && GroupID != Global.getLongID()) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
-            if (!AyriaAPI::Groups::getModerators(GroupID).contains(Global.getLongID())) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
+            if (!getModerators(GroupID).contains(Global.getLongID())) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
 
             // Generate a random-enough key.
             const auto Newkey = Hash::SHA256(Hash::SHA256(*Global.Privatekey) + Hash::SHA1(GetTickCount64()) + (Cryptokey ? Hash::SHA1(*Cryptokey) : ""));
@@ -241,7 +257,7 @@ namespace Services::Messaging
                     { "GroupID", GroupID }
                 }));
 
-                sendMultiusermessage(AyriaAPI::Groups::getMembers(GroupID), "Group::reKey", Payload);
+                sendMultiusermessage(getMembers(GroupID), "Group::reKey", Payload);
             }
             else
             {
@@ -314,7 +330,7 @@ namespace Services::Messaging
                     {
                         if (Checksum != Hash::WW32(Base85::Decode(Message))) [[unlikely]] return;
 
-                        if (AyriaAPI::Groups::getMembers(Target).contains(Global.getLongID()))
+                        if (getMembers(Target).contains(Global.getLongID()))
                         {
                             const auto Notification = JSON::Object_t({
                                 { "Messagetype", Messagetype },
@@ -342,7 +358,7 @@ namespace Services::Messaging
             const auto GroupID = Payload.value<std::string>("GroupID");
             const auto Newkey = Payload.value<std::string>("Newkey");
 
-            if (!AyriaAPI::Groups::getModerators(GroupID).contains(Sender)) [[unlikely]] return;
+            if (!getModerators(GroupID).contains(Sender)) [[unlikely]] return;
             setCryptokey(GroupID, Newkey);
         }
         static void __cdecl onRequest(const char *JSONString)

@@ -33,6 +33,7 @@ struct Ayriamodule_t
     void(__cdecl *connectUser)(const char *IPv4, const char *Port);
 
     // Listen and publish notifications to other plugins, e.g. new chat-message.
+    void(__cdecl *unsubscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *JSONString));
     void(__cdecl *subscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *JSONString));
     void(__cdecl *publishNotification)(const char *Identifier, const char *JSONString);
 
@@ -48,11 +49,11 @@ struct Ayriamodule_t
     // Helpers for C++, C users will have to create their own methods.
     #if defined(__cplusplus)
 
-    JSON::Value_t doRequest(const std::string &Endpoint, const JSON::Value_t &Payload)
+    JSON::Value_t doRequest(const std::string &Endpoint, const JSON::Value_t &Payload) const
     {
         return JSON::Parse(JSONRequest(Endpoint.c_str(), JSON::Dump(Payload).c_str()));
     }
-    JSON::Value_t doRequest(const std::string &Endpoint, JSON::Value_t &&Payload)
+    JSON::Value_t doRequest(const std::string &Endpoint, JSON::Value_t &&Payload) const
     {
         return doRequest(Endpoint, Payload);
     }
@@ -83,6 +84,7 @@ struct Ayriamodule_t
             Import(onInitialized);
             Import(JSONRequest);
 
+            Import(unsubscribeNotification);
             Import(subscribeNotification);
             Import(publishNotification);
 
@@ -105,6 +107,7 @@ struct Ayriamodule_t
             onInitialized = decltype(onInitialized)(AYA_Nullsub2);
             JSONRequest = decltype(JSONRequest)(AYA_Nullsub1);
 
+            unsubscribeNotification = decltype(unsubscribeNotification)(AYA_Nullsub2);
             subscribeNotification = decltype(subscribeNotification)(AYA_Nullsub2);
             publishNotification = decltype(publishNotification)(AYA_Nullsub2);
 
