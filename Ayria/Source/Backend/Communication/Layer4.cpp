@@ -11,6 +11,10 @@ namespace Backend::Notifications
     static Hashmap<std::string, Hashset<Processor_t>> ProcessingCB;
     static Hashmap<uint32_t, Hashset<Callback_t>> NotificationCB;
 
+    void Unsubscribe(std::string_view Identifier, Callback_t Handler)
+    {
+        NotificationCB[Hash::WW32(Identifier)].erase(Handler);
+    }
     void Publish(std::string_view Identifier, const char *JSONString)
     {
         const auto Hash = Hash::WW32(Identifier);
@@ -50,12 +54,22 @@ namespace Backend::Notifications
 
     namespace Export
     {
-        extern "C" EXPORT_ATTR void __cdecl subscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
+        extern "C" EXPORT_ATTR void __cdecl unsubscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
         {
             if (!Identifier || !Callback) [[unlikely]]
             {
                 assert(false);
                 return;
+            }
+
+            Unsubscribe(Identifier, Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl subscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
+        {
+            if (!Identifier || !Callback) [[unlikely]]
+            {
+                assert(false);
+            return;
             }
 
             Subscribe(Identifier, Callback);

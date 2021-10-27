@@ -11,6 +11,79 @@ namespace Steam
     // Keep the global state together.
     Globalstate_t Global{};
 
+    // Steam uses 32-bit IDs for the account, so we need to do some conversions.
+    static Hashmap<uint32_t, std::string> Accountmap;
+    SteamID_t toSteamID(const std::string &LongID)
+    {
+        const auto Hash = Hash::WW32(LongID);
+        if (!Accountmap.contains(Hash)) [[unlikely]]
+            Accountmap[Hash] = LongID;
+        return { 0x0110000100000000ULL | Hash };
+    }
+    std::string fromSteamID(SteamID_t AccountID)
+    {
+        return fromSteamID(AccountID.UserID);
+    }
+    std::string fromSteamID(uint32_t AccountID)
+    {
+        // Really fun and expensive to search for..
+        if (!Accountmap.contains(AccountID)) [[unlikely]]
+        {
+            // Try to find the user form the friendslist.
+            auto Friends = AyriaAPI::Relations::getFriendrequests(std::string(*Global.LongID));
+            Friends.merge(AyriaAPI::Relations::getFriendproposals(std::string(*Global.LongID)));
+            for (const auto &Item : Friends)
+            {
+                if (AccountID == Hash::WW32(Item)) [[unlikely]]
+                {
+                    Accountmap[AccountID] = Item;
+                    return Item;
+                }
+            }
+
+            // Check clan/group members.
+            const auto Groups = AyriaAPI::Groups::getMemberships(std::string(*Global.LongID));
+            for (const auto &Item : Groups)
+            {
+                const auto Members = AyriaAPI::Groups::getMembers(Item);
+                for (const auto &ID : Members)
+                {
+                    if (AccountID == Hash::WW32(ID)) [[unlikely]]
+                    {
+                        Accountmap[AccountID] = ID;
+                        return ID;
+                    }
+                }
+            }
+
+            // Cry ourselves to sleep..
+            std::string Result{};
+            try
+            {
+                size_t Count{};
+                AyriaAPI::Prepare("SELECT COUNT(*) FROM Account;") >> Count;
+
+                for (size_t Offset = 0; Offset < Count; Offset += 50)
+                {
+                    if (!Result.empty()) [[unlikely]] break;
+
+                    AyriaAPI::Prepare("SELECT * FROM Account LIMIT 50 OFFSET ?;", Offset) >> [&](const std::string &LongID)
+                    {
+                        if (AccountID == Hash::WW32(LongID)) [[unlikely]]
+                        {
+                            Accountmap[AccountID] = LongID;
+                            Result = LongID;
+                        }
+                    };
+                }
+            } catch (...) {}
+
+            return Result;
+        }
+
+        return Accountmap[AccountID];
+    }
+
     // For debugging, not static because MSVC < 17.0 does not like it.
     [[maybe_unused]] void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
     {
@@ -197,7 +270,7 @@ namespace Steam
             // Ask Ayria nicely for data on the client.
             {
                 const auto Object = Ayria.doRequest("Client::getLocalclient", {});
-                Global.XUID = { 0x0110000100000000ULL | Object.value("ShortID", uint32_t(0xDEADC0DEU)) };
+                Global.XUID = toSteamID(Object.value<std::string>("LongID", "G06He"));
                 *Global.Username = Object.value("Username", "Steam_user"s);
                 if (Global.Locale->empty()) *Global.Locale = "english";
 

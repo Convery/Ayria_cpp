@@ -221,6 +221,19 @@ namespace AyriaAPI
 
             return {};
         }
+
+        // Internal table, do not expect Hyrums law to be respected.
+        inline uint32_t Lastmessage(const LongID_t &ClientID)
+        {
+            uint64_t Timestamp{};
+            auto PS = Prepare("SELECT Timestamp FROM Messagestream WHERE Sender = ? LIMIT 1 ORDER BY Timestamp;", ClientID);
+            Trycatch(PS >> Timestamp; );
+
+            if (0 == Timestamp) [[unlikely]] return 0x7FFFFFFF;
+
+            const auto Duration = std::chrono::utc_clock::now().time_since_epoch() - std::chrono::utc_clock::duration(Timestamp);
+            return std::chrono::duration_cast<std::chrono::seconds>(Duration).count();
+        }
     }
 
     // Client-client relationships.
@@ -255,6 +268,19 @@ namespace AyriaAPI
 
             auto PS = Prepare("SELECT Target FROM Relation WHERE (Source = ? AND isBlocked = true);", Source);
             Trycatch(PS >> [&](LongID_t ID) { Result.insert(ID); };);
+            return Result;
+        }
+        inline std::unordered_set<LongID_t> getFriends(const LongID_t &Source)
+        {
+            std::unordered_set<LongID_t> Temp{}, Result{};
+
+            auto PS = Prepare("SELECT Target FROM Relation WHERE (Source = ? AND isFriend = true);", Source);
+            Trycatch(PS >> [&](LongID_t ID) { Temp.insert(ID); };);
+
+            for (const auto &Item : Temp)
+                if (Get(Item, Source).first)
+                    Result.insert(Item);
+
             return Result;
         }
         inline std::unordered_set<LongID_t> getFriendrequests(const LongID_t &Target)
@@ -319,9 +345,9 @@ namespace AyriaAPI
 
             return {};
         }
-        inline std::unordered_set<LongID_t> getMembers(const LongID_t &GroupID)
+        inline std::vector<LongID_t> getMembers(const LongID_t &GroupID)
         {
-            std::unordered_set<LongID_t> Result{ GroupID };
+            std::set<LongID_t> Result{ GroupID };
 
             Trycatch(
                 Prepare("SELECT MemberID FROM Groupmember WHERE GroupID = ?;", GroupID) >> [&](const Base58_t &MemberID)
@@ -330,11 +356,11 @@ namespace AyriaAPI
                 };
             );
 
-            return Result;
+            return { Result.begin(), Result.end() };
         }
-        inline std::unordered_set<LongID_t> getModerators(const LongID_t &GroupID)
+        inline std::vector<LongID_t> getModerators(const LongID_t &GroupID)
         {
-            std::unordered_set<LongID_t> Result{ GroupID };
+            std::set<LongID_t> Result{ GroupID };
 
             Trycatch(
                 Prepare("SELECT MemberID FROM Groupmember WHERE (isModerator = true AND GroupID = ?);", GroupID) >> [&](const Base58_t &MemberID)
@@ -343,9 +369,22 @@ namespace AyriaAPI
                 };
             );
 
-            return Result;
+            return { Result.begin(), Result.end() };
         }
-        inline std::unordered_set<LongID_t> Enumerate(std::optional<bool> isPublic, std::optional<bool> isFull)
+        inline std::vector<LongID_t> getMemberships(const LongID_t &UserID)
+        {
+            std::set<LongID_t> Result{};
+
+            Trycatch(
+                Prepare("SELECT GroupID FROM Groupmember WHERE MemberID = ?;", UserID) >> [&](const Base58_t &GroupID)
+                {
+                    Result.insert(GroupID);
+                };
+            );
+
+            return { Result.begin(), Result.end() };
+        }
+        inline std::vector<LongID_t> Enumerate(std::optional<bool> isPublic, std::optional<bool> isFull)
         {
             // Not going to list all groups in one call.
             if (!isPublic && !isFull) [[unlikely]] return {};
@@ -358,10 +397,10 @@ namespace AyriaAPI
                 return Prepare(";");
             }();
 
-            std::unordered_set<LongID_t> Result{};
+            std::set<LongID_t> Result{};
             Trycatch(PS >> [&](const Base58_t &GroupID) { Result.insert(GroupID); }; );
 
-            return Result;
+            return { Result.begin(), Result.end() };
         }
     }
 
@@ -371,13 +410,13 @@ namespace AyriaAPI
         using Category_t = ASCII_t;
         using Keyvalue_t = std::pair<ASCII_t, ASCII_t>;
 
-        inline std::optional<std::vector<Keyvalue_t>> Dump(const LongID_t &ClientID, const ASCII_t &Category)
+        inline std::optional<std::map<ASCII_t, ASCII_t>> Dump(const LongID_t &ClientID, const ASCII_t &Category)
         {
             Trycatch(
-                std::vector<Keyvalue_t> Result{};
+                std::map<ASCII_t, ASCII_t> Result{};
                 Prepare("SELECT * FROM Presence WHERE (OwnerID = ? AND Category = ?);", ClientID, Category) >> Presencelambda
                 {
-                    Result.emplace_back(Key, Value.value_or(""));
+                    Result.emplace(Key, Value.value_or(""));
                 };
                 if (!Result.empty()) return Result;
             );
@@ -471,7 +510,7 @@ namespace AyriaAPI
             if (Messagetype) SQL += " AND Messagetype = ?";
             if (Offset) SQL += ") OFFSET ?";
             else SQL += ")";
-            SQL += " LIMIT 1;";
+            SQL += " SORT BY Sent LIMIT 1;";
 
             auto PS = Prepare(SQL, GroupID);
             if (Messagetype) PS << Messagetype.value();
@@ -495,14 +534,14 @@ namespace AyriaAPI
 
             return {};
         }
-        inline Result_t getMessage(const LongID_t &To, std::optional<uint32_t> From, std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
+        inline Result_t getMessage(const LongID_t &To, std::optional<LongID_t> From, std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
         {
             std::string SQL = "SELECT * FROM Usermessages WHERE (Target = ?";
             if (Messagetype) SQL += " AND Messagetype = ?";
             if (From) SQL += " AND Source = ?";
             if (Offset) SQL += ") OFFSET ?";
             else SQL += ")";
-            SQL += " LIMIT 1;";
+            SQL += " SORT BY Sent LIMIT 1;";
 
             auto PS = Prepare(SQL, To);
             if (Messagetype) PS << Messagetype.value();

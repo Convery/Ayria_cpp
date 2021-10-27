@@ -28,11 +28,27 @@ namespace Services::Groups
         return {};
     }
 
+    // Helpers.
+    static std::unordered_set<std::string> getModerators(const std::string &GroupID)
+    {
+        std::unordered_set<std::string> Moderators;
+        for (const auto Tmp = AyriaAPI::Groups::getModerators(GroupID); const auto & Item : Tmp)
+            Moderators.insert(Item);
+        return Moderators;
+    }
+    static std::unordered_set<std::string> getMembers(const std::string &GroupID)
+    {
+        std::unordered_set<std::string> Members;
+        for (const auto Tmp = AyriaAPI::Groups::getMembers(GroupID); const auto & Item : Tmp)
+            Members.insert(Item);
+        return Members;
+    }
+
     // Internal.
     void addMember(const std::string &GroupID, const std::string &MemberID)
     {
+        const auto Moderators = getModerators(GroupID);
         const auto Group = getGroup(GroupID);
-        const auto Moderators = AyriaAPI::Groups::getModerators(GroupID);
 
         // Sanity checking.
         if (!Group) [[unlikely]] return;
@@ -62,7 +78,7 @@ namespace Services::Groups
             if (Group->isFull) [[unlikely]] return false;
 
             // getModerators also includes the owner.
-            const auto Moderators = AyriaAPI::Groups::getModerators(GroupID);
+            const auto Moderators = getModerators(GroupID);
 
             // Only moderators can add users to private groups.
             if (!Group->isPublic && !Moderators.contains(LongID)) [[unlikely]] return false;
@@ -106,7 +122,7 @@ namespace Services::Groups
             }
 
             // Only the admin can kick a moderator.
-            const auto Moderators = AyriaAPI::Groups::getModerators(GroupID);
+            const auto Moderators = getModerators(GroupID);
             if (Moderators.contains(MemberID) && GroupID != LongID) return false;
 
             // And naturally only moderators can kick users.
@@ -137,7 +153,7 @@ namespace Services::Groups
             if (Group->isPublic != isPublic && GroupID != LongID) return false;
 
             // Moderators can set if the group is full though.
-            if (!AyriaAPI::Groups::getModerators(GroupID).contains(GroupID)) return false;
+            if (!getModerators(GroupID).contains(GroupID)) return false;
 
             try
             {
@@ -184,8 +200,9 @@ namespace Services::Groups
             const auto GroupID = Request.value<std::string>("GroupID");
             const auto Group = getGroup(GroupID);
 
+
             // Sanity checking.
-            const auto Moderators = AyriaAPI::Groups::getModerators(GroupID);
+            const auto Moderators = getModerators(GroupID);
             if (!Group) [[unlikely]] return R"({ "Error" : "Invalid group ID." })";
             if (Group->isFull) [[unlikely]] return R"({ "Error" : "Group is full." })";
             if (!Group->isPublic && !Moderators.contains(Global.getLongID())) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
@@ -215,7 +232,7 @@ namespace Services::Groups
 
             // Sanity checking.
             if (!Group) [[unlikely]] return R"({ "Error" : "Invalid group ID." })";
-            if (AyriaAPI::Groups::getMembers(GroupID).contains(MemberID)) [[unlikely]] return R"({ "Error" : "Invalid member ID." })";
+            if (!getMembers(GroupID).contains(MemberID)) [[unlikely]] return R"({ "Error" : "Invalid member ID." })";
 
             Layer1::Publish("Group::Leave", JSON::Dump(Request));
             return {};
@@ -255,7 +272,7 @@ namespace Services::Groups
                     << "SELECT * FROM Group WHERE rowid = ?;" << RowID
                     >> [](const std::string &GroupID, const std::string &Groupname, bool isPublic, bool isFull, uint32_t Membercount)
                     {
-                        if (!AyriaAPI::Groups::getMembers(GroupID).contains(Global.getLongID())) return;
+                        if (!getMembers(GroupID).contains(Global.getLongID())) return;
 
                         const auto Notification = JSON::Object_t({
                             { "Membercount", Membercount },
@@ -278,7 +295,7 @@ namespace Services::Groups
                     << "SELECT * FROM Groupmember WHERE rowid = ?;" << RowID
                     >> [](const std::string &MemberID, const std::string &GroupID, bool isModerator)
                     {
-                        if (!AyriaAPI::Groups::getMembers(GroupID).contains(Global.getLongID())) return;
+                        if (!getMembers(GroupID).contains(Global.getLongID())) return;
 
                         const auto Notification = JSON::Object_t({
                             { "isModerator", isModerator },

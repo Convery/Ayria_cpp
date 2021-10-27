@@ -69,6 +69,7 @@ namespace Backend::Notifications
     using Callback_t = void(__cdecl *)(const char *JSONString);
     void Subscribe(std::string_view Identifier, Callback_t Handler);
     void Publish(std::string_view Identifier, const char *JSONString);
+    void Unsubscribe(std::string_view Identifier, Callback_t Handler);
 
     // Internal.
     // static void __cdecl Callback(int64_t RowID);
