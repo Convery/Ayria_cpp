@@ -22,14 +22,13 @@ namespace Steam
         template <typename T, typename ...Args> static auto Allocate(Args&& ...va)
         { auto Buffer = Internal.allocate(sizeof(T)); return new (Buffer) T(std::forward<Args>(va)...); }
 
-        uint32_t Startuptime{ uint32_t(time(NULL)) };
         SteamID_t XUID { 0x1100001DEADC0DEULL };
         uint32_t AppID{}, ModID{};
-        uint32_t Padding;
 
         std::unique_ptr<std::pmr::u8string> Installpath{ Allocate<std::pmr::u8string>(&Internal) };
         std::unique_ptr<std::pmr::string> Username{ Allocate<std::pmr::string>(&Internal) };
         std::unique_ptr<std::pmr::string> Locale{ Allocate<std::pmr::string>(&Internal) };
+        std::unique_ptr<std::pmr::string> LongID{ Allocate<std::pmr::string>(&Internal) };
         std::unique_ptr<std::pmr::string> Clan{ Allocate<std::pmr::string>(&Internal) };
 
         // Just copy Ayrias settings, might be useful later.
@@ -65,6 +64,11 @@ namespace Steam
     // Let's ensure that modifications do not extend the global state too much.
     static_assert(sizeof(Globalstate_t) <= 64, "Do not cross cache lines with Globalstate_t!");
     extern Globalstate_t Global;
+
+    // Steam uses 32-bit IDs for the account, so we need to do some conversions.
+    SteamID_t toSteamID(const std::string &LongID);
+    std::string fromSteamID(SteamID_t AccountID);
+    std::string fromSteamID(uint32_t AccountID);
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
