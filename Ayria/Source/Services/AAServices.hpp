@@ -57,6 +57,9 @@ namespace Services
         // Fetch the client by ID, for use with services.
         std::shared_ptr<Client_t> getClient(const std::string &LongID);
 
+        // Internal helper to trigger an update when the global state changes.
+        void triggerUpdate();
+
         // Add the handlers and tasks.
         void Initialize();
     }
@@ -140,6 +143,57 @@ namespace Services
         void Initialize();
     }
 
+    namespace Matchmaking
+    {
+        struct Serverinfo_t
+        {
+            std::string GroupID, Hostaddress, Servername, Provider;
+            uint32_t  GameID, ModID;
+
+            // Internal.
+            uint64_t Timestamp;
+            std::string getLongID() const { return GroupID; }
+            uint64_t getShortID() const { return Hash::WW64(getLongID()); }
+        };
+
+        // Format as JSON so that other tools can read it.
+        inline std::optional<Serverinfo_t> fromJSON(const JSON::Value_t &Object)
+        {
+            // The required fields, we wont do partial parsing.
+            if (!Object.contains_all("GroupID", "Hostaddress", "GameID", "ModID")) [[unlikely]] return {};
+
+            Serverinfo_t Server{};
+            Server.ModID = Object.value<uint32_t>("ModID");
+            Server.GameID = Object.value<uint32_t>("GameID");
+            Server.GroupID = Object.value<std::string>("GroupID");
+            Server.Timestamp = Object.value<uint64_t>("Timestamp");
+            Server.Provider = Object.value<std::string>("Provider");
+            Server.Servername = Object.value<std::string>("Servername");
+            Server.Hostaddress = Object.value<std::string>("Hostaddress");
+
+            return Server;
+        }
+        inline std::optional<Serverinfo_t> fromJSON(std::string_view JSON)
+        {
+            return fromJSON(JSON::Parse(JSON));
+        }
+        inline JSON::Object_t toJSON(const Serverinfo_t &Server)
+        {
+            return JSON::Object_t({
+                { "ModID", Server.ModID },
+                { "GameID", Server.GameID },
+                { "GroupID", Server.GroupID },
+                { "Provider", Server.Provider },
+                { "Timestamp", Server.Timestamp },
+                { "Servername", Server.Servername },
+                { "Hostaddress", Server.Hostaddress }
+            });
+        }
+
+        // Add the handlers and tasks.
+        void Initialize();
+    }
+
     // Set up all our services.
     inline void Initialize()
     {
@@ -148,5 +202,7 @@ namespace Services
         Relations::Initialize();
         Presence::Initialize();
         Groups::Initialize();
+
+        Matchmaking::Initialize();
     }
 }

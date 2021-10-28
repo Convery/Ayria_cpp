@@ -29,26 +29,33 @@ namespace Steam
         // Really fun and expensive to search for..
         if (!Accountmap.contains(AccountID)) [[unlikely]]
         {
-            // Try to find the user form the friendslist.
-            auto Friends = AyriaAPI::Relations::getFriendrequests(std::string(*Global.LongID));
-            Friends.merge(AyriaAPI::Relations::getFriendproposals(std::string(*Global.LongID)));
-            for (const auto &Item : Friends)
+            Hashset<std::string> Keys{};
+            AyriaAPI::Prepare("SELECT * FROM Account WHERE WW32(Publickey) = ?;", AccountID)
+                              >> [&](const std::string &LongID) { Keys.insert(LongID); };
+
+            // Simplest case.
+            if (Keys.empty()) [[unlikely]] return "";
+            if (Keys.size() == 1) [[likely]] return *Keys.begin();
+
+            // With more than 1 result, try to find it in the friendslist.
+            const auto Friends = AyriaAPI::Relations::getFriends(Global.LongID->c_str());
+            for (const auto &Item : Keys)
             {
-                if (AccountID == Hash::WW32(Item)) [[unlikely]]
+                if (Friends.contains(Item))
                 {
                     Accountmap[AccountID] = Item;
                     return Item;
                 }
             }
 
-            // Check clan/group members.
+            // If not a friend, check the groups we are in.
             const auto Groups = AyriaAPI::Groups::getMemberships(std::string(*Global.LongID));
             for (const auto &Item : Groups)
             {
                 const auto Members = AyriaAPI::Groups::getMembers(Item);
                 for (const auto &ID : Members)
                 {
-                    if (AccountID == Hash::WW32(ID)) [[unlikely]]
+                    if (Keys.contains(ID))
                     {
                         Accountmap[AccountID] = ID;
                         return ID;
@@ -56,29 +63,9 @@ namespace Steam
                 }
             }
 
-            // Cry ourselves to sleep..
-            std::string Result{};
-            try
-            {
-                size_t Count{};
-                AyriaAPI::Prepare("SELECT COUNT(*) FROM Account;") >> Count;
-
-                for (size_t Offset = 0; Offset < Count; Offset += 50)
-                {
-                    if (!Result.empty()) [[unlikely]] break;
-
-                    AyriaAPI::Prepare("SELECT * FROM Account LIMIT 50 OFFSET ?;", Offset) >> [&](const std::string &LongID)
-                    {
-                        if (AccountID == Hash::WW32(LongID)) [[unlikely]]
-                        {
-                            Accountmap[AccountID] = LongID;
-                            Result = LongID;
-                        }
-                    };
-                }
-            } catch (...) {}
-
-            return Result;
+            // There's no other logic here, just use the first ID and pray.
+            Accountmap[AccountID] = *Keys.begin();
+            return *Keys.begin();
         }
 
         return Accountmap[AccountID];
@@ -100,12 +87,12 @@ namespace Steam
             sqlite3 *Ptr{};
 
             // :memory: should never fail unless the client has more serious problems.
-            auto Result = sqlite3_open_v2("./Ayria/Steam.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            auto Result = sqlite3_open_v2("./Ayria/Steam.sqlite", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             assert(Result == SQLITE_OK);
 
             // Intercept updates from plugins writing to the DB.
-            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.db");
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.sqlite");
             sqlite3_extended_result_codes(Ptr, false);
 
             // Close the DB at exit to ensure everything's flushed.
@@ -116,6 +103,10 @@ namespace Steam
             {
                 sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
                 sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+
+                // Helper functions for inline hashing.
+                sqlite::database(Database).define("WW32", [](std::string Data) { return Hash::WW32(Data); });
+                sqlite::database(Database).define("WW64", [](std::string Data) { return Hash::WW64(Data); });
 
                 // Steamapps tables.
                 {
@@ -147,8 +138,8 @@ namespace Steam
 
                 // Steam remote-storage.
                 {
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Clientfiles ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Clientfiles ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "FileID INTEGER NOT NULL, "
                         "Visibility INTEGER, "
@@ -163,8 +154,8 @@ namespace Steam
 
                 // Steam achievements and stats.
                 {
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Achievement ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Achievement ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "Maxprogress INTEGER NOT NULL, "
                         "API_Name TEXT NOT NULL, "
@@ -173,14 +164,21 @@ namespace Steam
                         "Icon TEXT, "
                         "PRIMARY_KEY(API_Name, AppID) );";
 
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Achievementprogress ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Achievementprogress ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "ClientID INTEGER NOT NULL, "
                         "Currentprogress INTEGER, "
                         "Name TEXT NOT NULL, "
                         "Unlocktime INTEGER, "
                         "PRIMARY KEY (Name, ClientID, AppID) );";
+                }
+
+                // Steam gameserver.
+                {
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Gameserver ("
+                        ");";
                 }
 
             } catch (...) {}

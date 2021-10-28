@@ -37,6 +37,12 @@ namespace Services::Clientinfo
         return {};
     }
 
+    // Internal helper to trigger an update when the global state changes.
+    void triggerUpdate()
+    {
+        Backend::Messagebus::Publish("Client::Update", JSON::Dump(toJSON(*getClient(Global.getLongID()))));
+    }
+
     // Layer 2 interaction.
     namespace Messagehandlers
     {
@@ -81,21 +87,23 @@ namespace Services::Clientinfo
     {
         static std::string __cdecl setGameinfo(JSON::Value_t &&Request)
         {
-            Global.ModID = Request.value("ModID", Global.ModID);
             Global.GameID = Request.value("GameID", Global.GameID);
-            Backend::Messagebus::Publish("Client::Update", JSON::Dump(toJSON(*getClient(Global.getLongID()))));
+            Global.ModID = Request.value("ModID", Global.ModID);
+            triggerUpdate();
             return {};
         }
         static std::string __cdecl setGamestate(JSON::Value_t &&Request)
         {
             Global.Settings.isHosting = Request.value("isHosting", Global.Settings.isHosting);
             Global.Settings.isIngame = Request.value("isIngame", Global.Settings.isIngame);
+            triggerUpdate();
             return {};
         }
         static std::string __cdecl setSocialstate(JSON::Value_t &&Request)
         {
             Global.Settings.isPrivate = Request.value("isPrivate", Global.Settings.isPrivate);
             Global.Settings.isAway = Request.value("isAway", Global.Settings.isAway);
+            triggerUpdate();
             return {};
         }
         static std::string __cdecl getLocalclient(JSON::Value_t &&)
