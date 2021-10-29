@@ -74,12 +74,20 @@ namespace AyriaAPI
 
     Presence (
     OwnerID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,
-    Category TEXT NOT NULL,	// Often provider of sorts, e.g. "Steam" or "myPlugin"
-    Key TEXT NOT NULL,      // Required.
-    Value TEXT,             // Optional.
+    Category TEXT,	    // Often provider of sorts, e.g. "Steam" or "myPlugin"
+    Key TEXT,           // Required.
+    Value TEXT,         // Optional.
     UNIQUE (OwnerID, Category, Key) )
     [&](const Base58_t &OwnerID, const ASCII_t &Category, const ASCII_t &Key, const std::optional<ASCII_t> &Value)
 
+    Matchmaking (
+    GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE,
+    Hostaddress TEXT,   // IPAddress:Port
+    Servername TEXT,    // Optional.
+    Provider TEXT,      // Where to look for more info.
+    GameID INTEGER,     // Required.
+    ModID INTEGER DEFAULT 0 )
+    [&](const Base58_t &GroupID, const ASCII_t &Hostaddress, const std::optional<ASCII_t> &Servername, const ASCII_t &Provider, uint32_t GameID, uint32_t ModID)
     */
     #pragma endregion
 
@@ -95,9 +103,42 @@ namespace AyriaAPI
                 sqlite3 * Ptr{};
 
                 // :memory: should never fail unless the client has more serious problems..
-                const auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+                const auto Result = sqlite3_open_v2("./Ayria/Client.sqlite", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
                 if (Result != SQLITE_OK) sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
                 Database = std::shared_ptr<sqlite3>(Ptr, sqlite3_close_v2);
+
+                // This should already have been called from Ayria.dll, but just in case.
+                try
+                {
+                    // Helper functions for inline hashing.
+                    const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    {
+                        if (argc == 0) return;
+                        if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                        // SQLite may invalidate the pointer if _bytes is called after text.
+                        const auto Length = sqlite3_value_bytes(argv[0]);
+                        const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
+                        sqlite3_result_int(context, Hash);
+                    };
+                    const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    {
+                        if (argc == 0) return;
+                        if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                        // SQLite may invalidate the pointer if _bytes is called after text.
+                        const auto Length = sqlite3_value_bytes(argv[0]);
+                        const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
+                        sqlite3_result_int64(context, Hash);
+                    };
+
+                    sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
+                    sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
+
+                    // Should probably fail.
+                    sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
+                    sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+                } catch (...) {}
             }
 
             return sqlite::database(Database);
@@ -119,6 +160,7 @@ namespace AyriaAPI
 
     // Helpers to make everything more readable / save my hands.
     #define Trycatch(...) try { __VA_ARGS__ } catch (const sqlite::sqlite_exception &e) { (void)e; Debugprint(va("SQL error: %s (%s)", e.what(), e.get_sql().c_str())); }
+    #define Matchmakinglambda   [&](const Base58_t &GroupID, const ASCII_t &Hostaddress, const std::optional<ASCII_t> &Servername, const ASCII_t &Provider, uint32_t GameID, uint32_t ModID)
     #define Messaginglambda     [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t Received, uint64_t Sent, const Base85_t &Message)
     #define Presencelambda      [&](const Base58_t &OwnerID, const ASCII_t &Category, const ASCII_t &Key, const std::optional<ASCII_t> &Value)
     #define Grouplambda         [&](const Base58_t &GroupID, const ASCII_t &Groupname, bool isPublic, bool isFull, uint32_t Membercount)
@@ -568,6 +610,12 @@ namespace AyriaAPI
         }
     }
 
+    // Let users know which groups are actively hosting.
+    namespace Matchmaking
+    {
+
+    }
+
     #pragma region Cleanup
     // Restore warning to default.
     #pragma warning(default: 4100)
@@ -580,6 +628,7 @@ namespace AyriaAPI
     #undef Relationlambda
     #undef Presencelambda
     #undef Messaginglambda
+    #undef Matchmakinglambda
     #undef Groupmemberlambda
     #undef Groupinterestlambda
     #pragma endregion

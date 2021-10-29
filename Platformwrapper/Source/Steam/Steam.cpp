@@ -105,8 +105,29 @@ namespace Steam
                 sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
 
                 // Helper functions for inline hashing.
-                sqlite::database(Database).define("WW32", [](std::string Data) { return Hash::WW32(Data); });
-                sqlite::database(Database).define("WW64", [](std::string Data) { return Hash::WW64(Data); });
+                const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int(context, Hash);
+                };
+                const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int64(context, Hash);
+                };
+
+                sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
+                sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
 
                 // Steamapps tables.
                 {
@@ -178,7 +199,44 @@ namespace Steam
                 {
                     sqlite::database(Database) <<
                         "CREATE TABLE IF NOT EXISTS Gameserver ("
-                        ");";
+
+                        // Required properties.
+                        "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
+                        "ServerID INTEGER NOT NULL PRIMARY KEY, "
+
+                        // Less used properties.
+                        "Gamedescription TEXT NOT NULL, "
+                        "Spectatorname TEXT NOT NULL, "
+                        "Servername TEXT NOT NULL, "
+                        "Gamedata TEXT NOT NULL, "
+                        "Gametags TEXT NOT NULL, "
+                        "Gametype TEXT NOT NULL, "
+                        "Gamedir TEXT NOT NULL, "
+                        "Mapname TEXT NOT NULL, "
+                        "Product TEXT NOT NULL, "
+                        "Version TEXT NOT NULL, "
+                        "Moddir TEXT NOT NULL, "
+                        "Region TEXT NOT NULL, "
+
+                        "Keyvalues TEXT NOT NULL, "
+                        "Userdata TEXT NOT NULL, "
+                        "PublicIP TEXT NOT NULL, "
+
+                        "Spectatorport INTEGER NOT NULL "
+                        "Queryport INTEGER NOT NULL, "
+                        "Gameport INTEGER NOT NULL, "
+                        "Authport INTEGER NOT NULL, "
+
+                        "Playercount INTEGER NOT NULL, "
+                        "Serverflags INTEGER NOT NULL, "
+                        "Spawncount INTEGER NOT NULL, "
+                        "Playermax INTEGER NOT NULL, "
+                        "Botcount INTEGER NOT NULL, "
+
+                        "isPasswordprotected BOOLEAN NOT NULL, "
+                        "isDedicated BOOLEAN NOT NULL, "
+                        "isActive BOOLEAN NOT NULL, "
+                        "isSecure BOOLEAN NOT NULL );";
                 }
 
             } catch (...) {}
@@ -339,6 +397,9 @@ namespace Steam
                 LoadLibraryA((Encoding::toNarrow(*Global.Installpath) + Gameoverlay).c_str());
             }
             #endif
+
+            // Initialize subsystems.
+            Gameserver::Initialize();
 
             // Notify the game that it's properly connected.
             const auto RequestID = Tasks::Createrequest();
