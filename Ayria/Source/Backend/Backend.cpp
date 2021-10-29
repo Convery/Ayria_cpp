@@ -120,12 +120,12 @@ namespace Backend
             sqlite3 *Ptr{};
 
             // :memory: should never fail unless the client has more serious problems.
-            auto Result = sqlite3_open_v2("./Ayria/Client.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            auto Result = sqlite3_open_v2("./Ayria/Client.sqlite", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             assert(Result == SQLITE_OK);
 
             // Intercept updates from plugins writing to the DB.
-            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.db");
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.sqlite");
             sqlite3_update_hook(Ptr, UpdateCB, nullptr);
             sqlite3_extended_result_codes(Ptr, false);
 
@@ -137,6 +137,31 @@ namespace Backend
             {
                 sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
                 sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+
+                // Helper functions for inline hashing.
+                const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int(context, Hash);
+                };
+                const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int64(context, Hash);
+                };
+
+                sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
+                sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
 
                 sqlite::database(Database) <<
                     "CREATE TABLE IF NOT EXISTS Account ("
@@ -151,7 +176,6 @@ namespace Backend
                     "Message TEXT NOT NULL, "
                     "isProcessed BOOLEAN, "
                     "UNIQUE (Sender, Signature) );";
-
             } catch (...) {}
 
             // Perform cleanup on exit.

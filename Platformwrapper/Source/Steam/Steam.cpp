@@ -29,26 +29,33 @@ namespace Steam
         // Really fun and expensive to search for..
         if (!Accountmap.contains(AccountID)) [[unlikely]]
         {
-            // Try to find the user form the friendslist.
-            auto Friends = AyriaAPI::Relations::getFriendrequests(std::string(*Global.LongID));
-            Friends.merge(AyriaAPI::Relations::getFriendproposals(std::string(*Global.LongID)));
-            for (const auto &Item : Friends)
+            Hashset<std::string> Keys{};
+            AyriaAPI::Prepare("SELECT * FROM Account WHERE WW32(Publickey) = ?;", AccountID)
+                              >> [&](const std::string &LongID) { Keys.insert(LongID); };
+
+            // Simplest case.
+            if (Keys.empty()) [[unlikely]] return "";
+            if (Keys.size() == 1) [[likely]] return *Keys.begin();
+
+            // With more than 1 result, try to find it in the friendslist.
+            const auto Friends = AyriaAPI::Relations::getFriends(Global.LongID->c_str());
+            for (const auto &Item : Keys)
             {
-                if (AccountID == Hash::WW32(Item)) [[unlikely]]
+                if (Friends.contains(Item))
                 {
                     Accountmap[AccountID] = Item;
                     return Item;
                 }
             }
 
-            // Check clan/group members.
+            // If not a friend, check the groups we are in.
             const auto Groups = AyriaAPI::Groups::getMemberships(std::string(*Global.LongID));
             for (const auto &Item : Groups)
             {
                 const auto Members = AyriaAPI::Groups::getMembers(Item);
                 for (const auto &ID : Members)
                 {
-                    if (AccountID == Hash::WW32(ID)) [[unlikely]]
+                    if (Keys.contains(ID))
                     {
                         Accountmap[AccountID] = ID;
                         return ID;
@@ -56,29 +63,9 @@ namespace Steam
                 }
             }
 
-            // Cry ourselves to sleep..
-            std::string Result{};
-            try
-            {
-                size_t Count{};
-                AyriaAPI::Prepare("SELECT COUNT(*) FROM Account;") >> Count;
-
-                for (size_t Offset = 0; Offset < Count; Offset += 50)
-                {
-                    if (!Result.empty()) [[unlikely]] break;
-
-                    AyriaAPI::Prepare("SELECT * FROM Account LIMIT 50 OFFSET ?;", Offset) >> [&](const std::string &LongID)
-                    {
-                        if (AccountID == Hash::WW32(LongID)) [[unlikely]]
-                        {
-                            Accountmap[AccountID] = LongID;
-                            Result = LongID;
-                        }
-                    };
-                }
-            } catch (...) {}
-
-            return Result;
+            // There's no other logic here, just use the first ID and pray.
+            Accountmap[AccountID] = *Keys.begin();
+            return *Keys.begin();
         }
 
         return Accountmap[AccountID];
@@ -100,12 +87,12 @@ namespace Steam
             sqlite3 *Ptr{};
 
             // :memory: should never fail unless the client has more serious problems.
-            auto Result = sqlite3_open_v2("./Ayria/Steam.db", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            auto Result = sqlite3_open_v2("./Ayria/Steam.sqlite", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             assert(Result == SQLITE_OK);
 
             // Intercept updates from plugins writing to the DB.
-            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.db");
+            if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Steam.sqlite");
             sqlite3_extended_result_codes(Ptr, false);
 
             // Close the DB at exit to ensure everything's flushed.
@@ -116,6 +103,31 @@ namespace Steam
             {
                 sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
                 sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+
+                // Helper functions for inline hashing.
+                const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int(context, Hash);
+                };
+                const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                {
+                    if (argc == 0) return;
+                    if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
+
+                    // SQLite may invalidate the pointer if _bytes is called after text.
+                    const auto Length = sqlite3_value_bytes(argv[0]);
+                    const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
+                    sqlite3_result_int64(context, Hash);
+                };
+
+                sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
+                sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
 
                 // Steamapps tables.
                 {
@@ -147,8 +159,8 @@ namespace Steam
 
                 // Steam remote-storage.
                 {
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Clientfiles ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Clientfiles ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "FileID INTEGER NOT NULL, "
                         "Visibility INTEGER, "
@@ -163,8 +175,8 @@ namespace Steam
 
                 // Steam achievements and stats.
                 {
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Achievement ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Achievement ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "Maxprogress INTEGER NOT NULL, "
                         "API_Name TEXT NOT NULL, "
@@ -173,14 +185,58 @@ namespace Steam
                         "Icon TEXT, "
                         "PRIMARY_KEY(API_Name, AppID) );";
 
-                    sqlite::database(Database)
-                        << "CREATE TABLE IF NOT EXISTS Achievementprogress ("
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Achievementprogress ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "ClientID INTEGER NOT NULL, "
                         "Currentprogress INTEGER, "
                         "Name TEXT NOT NULL, "
                         "Unlocktime INTEGER, "
                         "PRIMARY KEY (Name, ClientID, AppID) );";
+                }
+
+                // Steam gameserver.
+                {
+                    sqlite::database(Database) <<
+                        "CREATE TABLE IF NOT EXISTS Gameserver ("
+
+                        // Required properties.
+                        "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
+                        "ServerID INTEGER NOT NULL PRIMARY KEY, "
+
+                        // Less used properties.
+                        "Gamedescription TEXT NOT NULL, "
+                        "Spectatorname TEXT NOT NULL, "
+                        "Servername TEXT NOT NULL, "
+                        "Gamedata TEXT NOT NULL, "
+                        "Gametags TEXT NOT NULL, "
+                        "Gametype TEXT NOT NULL, "
+                        "Gamedir TEXT NOT NULL, "
+                        "Mapname TEXT NOT NULL, "
+                        "Product TEXT NOT NULL, "
+                        "Version TEXT NOT NULL, "
+                        "Moddir TEXT NOT NULL, "
+                        "Region TEXT NOT NULL, "
+
+                        "Keyvalues TEXT NOT NULL, "
+                        "Userdata TEXT NOT NULL, "
+                        "PublicIP TEXT NOT NULL, "
+
+                        "Spectatorport INTEGER NOT NULL "
+                        "Queryport INTEGER NOT NULL, "
+                        "Gameport INTEGER NOT NULL, "
+                        "Authport INTEGER NOT NULL, "
+
+                        "Playercount INTEGER NOT NULL, "
+                        "Serverflags INTEGER NOT NULL, "
+                        "Spawncount INTEGER NOT NULL, "
+                        "Playermax INTEGER NOT NULL, "
+                        "Botcount INTEGER NOT NULL, "
+
+                        "isPasswordprotected BOOLEAN NOT NULL, "
+                        "isDedicated BOOLEAN NOT NULL, "
+                        "isActive BOOLEAN NOT NULL, "
+                        "isSecure BOOLEAN NOT NULL );";
                 }
 
             } catch (...) {}
@@ -341,6 +397,9 @@ namespace Steam
                 LoadLibraryA((Encoding::toNarrow(*Global.Installpath) + Gameoverlay).c_str());
             }
             #endif
+
+            // Initialize subsystems.
+            Gameserver::Initialize();
 
             // Notify the game that it's properly connected.
             const auto RequestID = Tasks::Createrequest();
