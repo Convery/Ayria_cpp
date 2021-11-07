@@ -110,6 +110,7 @@ namespace Steam
         }
     };
     static Steamserver_t Localserver{};
+    static Hashmap<uint64_t, std::pair<uint32_t, Blob>> Tickets{};
 
     // Only handles the Steam part of the server.
     static Steamserver_t fromJSON(std::string_view JSONString)
@@ -259,7 +260,7 @@ namespace Steam
             UpdateDB(Localserver);
 
             const auto Message = JSON::Dump(toJSON(Localserver));
-            Ayria.publishMessage("Steam::Serverupdate", Message.c_str(), Message.size());
+            Ayria.publishMessage("Steam::Serverupdate", Message.c_str(), (uint32_t)Message.size());
 
             if (andAyria) [[unlikely]]
             {
@@ -374,11 +375,48 @@ namespace Steam
         {
             return k_EUserHasLicenseResultHasLicense;
         }
-        HAuthTicket GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket);
-        SteamAPICall_t AssociateWithClan(SteamID_t steamIDClan);
-        SteamAPICall_t ComputeNewPlayerCompatibility(SteamID_t steamIDNewPlayer);
-        SteamAPICall_t GetServerReputation();
-        SteamID_t CreateUnauthenticatedUserConnection();
+        HAuthTicket GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
+        {
+            return GetTickCount();
+        }
+        SteamAPICall_t AssociateWithClan(SteamID_t steamIDClan)
+        {
+            const auto Result = new Tasks::AssociateWithClanResult_t();
+            Result->m_eResult = EResult::k_EResultOK;
+
+            const auto TaskID = Tasks::Createrequest();
+            Tasks::Completerequest(TaskID, Tasks::ECallbackType::AssociateWithClanResult_t, Result);
+            return TaskID;
+        }
+        SteamAPICall_t ComputeNewPlayerCompatibility(SteamID_t steamIDNewPlayer)
+        {
+            const auto Result = new Tasks::ComputeNewPlayerCompatibilityResult_t();
+            Result->m_SteamIDCandidate = steamIDNewPlayer;
+            Result->m_eResult = EResult::k_EResultOK;
+
+            const auto TaskID = Tasks::Createrequest();
+            Tasks::Completerequest(TaskID, Tasks::ECallbackType::ComputeNewPlayerCompatibilityResult_t, Result);
+            return TaskID;
+        }
+        SteamAPICall_t GetServerReputation()
+        {
+            const auto Result = new Tasks::GSReputation_t();
+            Result->m_eResult = EResult::k_EResultOK;
+            Result->m_unReputationScore = 1;
+
+            const auto TaskID = Tasks::Createrequest();
+            Tasks::Completerequest(TaskID, Tasks::ECallbackType::GSReputation_t, Result);
+            return TaskID;
+        }
+        SteamID_t CreateUnauthenticatedUserConnection()
+        {
+            SteamID_t Tmp{};
+            Tmp.UserID = GetTickCount();
+            Tmp.Universe = SteamID_t::Universe_t::Public;
+            Tmp.Accounttype = SteamID_t::Accounttype_t::Anonymous;
+
+            return Tmp;
+        }
         SteamID_t GetSteamID()
         {
             return Global.XUID;
@@ -389,7 +427,32 @@ namespace Steam
             return Localserver.PublicIP;
         }
 
-        bool BGetUserAchievementStatus(SteamID_t steamID, const char *pchAchievementName);
+        bool BGetUserAchievementStatus(SteamID_t steamID, const char *pchAchievementName)
+        {
+            try
+            {
+                std::string Canonicalname{};
+                int32_t Clientprogress{};
+                int32_t Maxprogress{};
+
+                // Resolve the name (in-case the client asks by API_Name).
+                Database()
+                    << "SELECT Name, Maxprogress FROM Achievement WHERE (AppID = ? AND (API_Name = ? OR Name = ?));"
+                    << Global.AppID << std::string(pchAchievementName) << std::string(pchAchievementName)
+                    >> std::tie(Canonicalname, Maxprogress);
+
+                // Get the clients progress.
+                Database()
+                    << "SELECT Currentprogress FROM Achievementprogress WHERE (AppID = ? AND ClientID = ? AND Name = ?);"
+                    << Global.AppID << fromSteamID(steamID) << Canonicalname
+                    >> Clientprogress;
+
+                return Clientprogress == Maxprogress;
+
+            } catch (...) {}
+
+            return false;
+        }
         bool BLoggedOn()
         {
             return true;
@@ -428,7 +491,11 @@ namespace Steam
         {
             return SetUserData(steamIDUser, pchPlayerName, uScore);
         }
-        bool CreateUnauthenticatedUser(SteamID_t *pSteamID);
+        bool CreateUnauthenticatedUser(SteamID_t *pSteamID)
+        {
+            *pSteamID = CreateUnauthenticatedUserConnection();
+            return true;
+        }
         bool GSSetStatus(int32_t nAppIdServed, uint32_t unServerFlags, int cPlayers, int cPlayersMax, int cBotPlayers, int unGamePort, const char *pchServerName, const char *pchGameDir, const char *pchMapName, const char *pchVersion)
         {
             Localserver.Serverflags = unServerFlags;
@@ -443,7 +510,12 @@ namespace Steam
             Gameserver::doUpdate(true);
             return true;
         }
-        bool GetSteam2GetEncryptionKeyToSendToNewClient(void *pvEncryptionKey, uint32_t *pcbEncryptionKey, uint32_t cbMaxEncryptionKey);
+        bool GetSteam2GetEncryptionKeyToSendToNewClient(void *pvEncryptionKey, uint32_t *pcbEncryptionKey, uint32_t cbMaxEncryptionKey)
+        {
+            *(uint32_t *)pvEncryptionKey = Hash::WW32("Steam2");
+            *pcbEncryptionKey = 4;
+            return true;
+        }
         bool GetUserAchievementStatus(SteamID_t steamID, const char *pchAchievementName)
         {
             return BGetUserAchievementStatus(steamID, pchAchievementName);
@@ -455,17 +527,47 @@ namespace Steam
         }
         bool RemoveUserConnect(uint32_t unUserID) { return true; }
         bool RequestUserGroupStatus(SteamID_t steamIDUser, SteamID_t steamIDGroup) { return true; }
-        bool SendSteam2UserConnect(uint32_t unUserID, const void *pvRawKey, uint32_t unKeyLen, uint32_t unIPPublic, uint16_t usPort, const void *pvCookie, uint32_t cubCookie);
-        bool SendSteam3UserConnect(SteamID_t steamID, uint32_t unIPPublic, const void *pvCookie, uint32_t cubCookie);
-        bool SendUserConnect(uint32_t, uint32_t, uint16_t, const void *, uint32_t);
-        bool SendUserConnectAndAuthenticate0(SteamID_t steamIDUser, uint32_t, void *, uint32_t);
-        bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, SteamID_t *pSteamIDUser);
+        bool SendSteam2UserConnect(uint32_t unUserID, const void *pvRawKey, uint32_t unKeyLen, uint32_t unIPPublic, uint16_t usPort, const void *pvCookie, uint32_t cubCookie)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
+        bool SendSteam3UserConnect(SteamID_t steamID, uint32_t unIPPublic, const void *pvCookie, uint32_t cubCookie)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
+        bool SendUserConnect(uint32_t, uint32_t, uint16_t, const void *, uint32_t)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
+        bool SendUserConnectAndAuthenticate0(SteamID_t steamIDUser, uint32_t, void *, uint32_t)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
+        bool SendUserConnectAndAuthenticate1(uint32_t unIPClient, const void *pvAuthBlob, uint32_t cubAuthBlobSize, SteamID_t *pSteamIDUser)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
         bool SendUserDisconnect0(SteamID_t steamID, uint32_t unUserID)
         {
             SendUserDisconnect1(steamID);
             return true;
         }
-        bool SendUserStatusResponse(SteamID_t steamID, int nSecondsConnected, int nSecondsSinceLast);
+        bool SendUserStatusResponse(SteamID_t steamID, int nSecondsConnected, int nSecondsSinceLast)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+            return false;
+        }
         bool SetServerType0(int32_t nGameAppId, uint32_t unServerFlags, uint32_t unGameIP, uint32_t unGamePort, const char *pchGameDir, const char *pchVersion)
         {
             Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
@@ -545,7 +647,11 @@ namespace Steam
         void LogOn1(const char *pszAccountName, const char *pszPassword) {}
         void LogOn2(const char *pszToken) {}
         void LogOnAnonymous() {}
-        void SendUserDisconnect1(SteamID_t steamIDUser);
+        void SendUserDisconnect1(SteamID_t steamIDUser)
+        {
+            // TODO(tcn): Implement this.
+            assert(false);
+        }
         void SetBotPlayerCount(int cBotplayers)
         {
             Localserver.Botcount = cBotplayers;

@@ -135,7 +135,7 @@ namespace Steam
     };
 
     // Readble representation for debugging.
-    namespace { static std::string TMP; }
+    namespace INTERNAL { static std::string TMP; }
     constexpr const char *toString(EResult Code)
     {
         if constexpr (Build::isDebug)
@@ -265,7 +265,7 @@ namespace Steam
             }
         }
 
-        TMP = std::format("{}", (int32_t)Code);
-        return TMP.c_str();
+        INTERNAL::TMP = std::format("{}", (int32_t)Code);
+        return INTERNAL::TMP.c_str();
     }
 }

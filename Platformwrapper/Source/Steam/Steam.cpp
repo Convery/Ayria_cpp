@@ -22,6 +22,10 @@ namespace Steam
     }
     std::string fromSteamID(SteamID_t AccountID)
     {
+        // Generally used for bots and such temp accounts.
+        if (AccountID.Accounttype == SteamID_t::Accounttype_t::Anonymous)
+            return "";
+
         return fromSteamID(AccountID.UserID);
     }
     std::string fromSteamID(uint32_t AccountID)
@@ -187,10 +191,10 @@ namespace Steam
 
                     sqlite::database(Database) <<
                         "CREATE TABLE IF NOT EXISTS Achievementprogress ("
+                        "Name TEXT REFERENCES Achievement (Name) ON DELETE CASCADE, "
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "ClientID INTEGER NOT NULL, "
                         "Currentprogress INTEGER, "
-                        "Name TEXT NOT NULL, "
                         "Unlocktime INTEGER, "
                         "PRIMARY KEY (Name, ClientID, AppID) );";
                 }
