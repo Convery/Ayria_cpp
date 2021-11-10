@@ -92,5 +92,8 @@ namespace Logging { template <typename T> extern void Print(char Prefix, T Messa
 // Ignore warnings about casting float to int.
 #pragma warning(disable: 4244)
 
+// Conditional expression is constant (currently).
+#pragma warning(disable: 4127)
+
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)

@@ -11,7 +11,7 @@ namespace Services::Matchmaking
     // Layer 2 interaction.
     namespace Messagehandlers
     {
-        static bool __cdecl onUpdate(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
+        static bool __cdecl onUpdate(uint64_t, const char *LongID, const char *Message, unsigned int Length)
         {
             const auto Server = fromJSON(std::string_view(Message, Length));
             if (!Server || Server->GroupID != LongID) [[unlikely]] return false;
@@ -30,7 +30,7 @@ namespace Services::Matchmaking
 
             return true;
         }
-        static bool __cdecl onTerminate(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
+        static bool __cdecl onTerminate(uint64_t, const char *LongID, const char *, unsigned int)
         {
             try
             {

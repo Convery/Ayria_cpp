@@ -200,7 +200,7 @@ namespace Backend::Messagebus
         {
             const auto Size = Base85::Encodesize_padded(Payload.size());
             const auto Buffer = static_cast<char*>(alloca(Size));
-            Base85::Encode(Payload, Buffer);
+            Base85::Encode(Payload, std::span(Buffer, Size));
             Payload = { Buffer, Size };
         }
 

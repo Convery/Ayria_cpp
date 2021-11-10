@@ -9,10 +9,16 @@
 */
 
 #pragma once
+#include <span>
 #include <array>
+#include <string>
+#include <vector>
+#include <cassert>
 #include <cstdint>
 #include <concepts>
+#include <algorithm>
 #include <string_view>
+
 using Blob = std::basic_string<uint8_t>;
 using Blob_view = std::basic_string_view<uint8_t>;
 
@@ -28,7 +34,7 @@ namespace Base85
     template <size_t N> constexpr size_t Encodesize_padded() { return Encodesize<N>() + ((Encodesize<N>() % 5) ? (5 - (Encodesize<N>() % 5)) : 0); }
     template <size_t N> constexpr size_t Decodesize_padded() { return Decodesize<N>() + ((Decodesize<N>() & 3) ? (4 - (Decodesize<N>() & 3)) : 0); }
 
-    template <typename T> concept Range_t = requires (const T &t) { std::ranges::begin(t); std::ranges::end(t); };
+    template <typename T> concept Range_t = requires (const T &t) { std::ranges::begin(t); std::ranges::end(t); std::ranges::size(t); };
     template <typename T> concept Complexstring_t = Range_t<T> && !Byte_t<typename T::value_type>;
     template <typename T> concept Simplestring_t = Range_t<T> && Byte_t<typename T::value_type>;
 
@@ -36,29 +42,27 @@ namespace Base85
     template <Complexstring_t T> [[nodiscard]] constexpr Blob Flatten(const T &Input)
     {
         Blob Bytearray; Bytearray.reserve(Input.size() * sizeof(typename T::value_type));
-        static_assert(sizeof(typename T::value_type) <= 8, "Dude..");
 
         for (auto &&Item : Input)
         {
-            if constexpr (sizeof(typename T::value_type) > 7) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 6) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 5) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 4) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 3) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 2) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-            if constexpr (sizeof(typename T::value_type) > 1) { Bytearray.append(Item & 0xFF); Item >>= 8; }
+            for (size_t i = 0; i < (sizeof(typename T::value_type) - 1); ++i)
+            {
+                Bytearray.append(Item & 0xFF);
+                Item >>= 8;
+            }
 
             Bytearray.append(Item & 0xFF);
         }
 
         return Bytearray;
     }
-    template <size_t N> constexpr std::array<char, N - 1> to_array(const char(&Input)[N])
+
+    // Yes, all this to remove the null-byte from a string literal..
+    template <size_t N, Byte_t T> consteval std::array<T, N - 1> char_array(const T(&Input)[N])
     {
-        // Yes, all this to remove a single byte from a string literal..
-        return []<size_t Q, size_t ...Index>(const char(&Input)[Q], std::index_sequence<Index...>)
+        return []<size_t ...Index>(const T(&Input)[N], std::index_sequence<Index...>)
         {
-            return std::array<char, N - 1>{ {Input[Index]...} };
+            return std::array<T, N - 1>{ {Input[Index]...} };
         }(Input, std::make_index_sequence<N - 1>());
     }
 
@@ -131,6 +135,9 @@ namespace Base85
         constexpr uint32_t Div85(uint32_t Value) { constexpr uint64_t Magic = 3233857729ULL; return (uint32_t)((Magic * Value) >> 32) >> 6; }
         template <Byte_t T, Byte_t U> constexpr void Encode(std::span<const T> Input, std::span<U> Output)
         {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
+
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
                 uint32_t Accumulator, Rem;
@@ -146,6 +153,9 @@ namespace Base85
         }
         template <Byte_t T, Byte_t U> constexpr void Decode(std::span<const T> Input, std::span<U> Output)
         {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
+
             for (size_t i = 0; i < Input.size() / 5; ++i)
             {
                 const auto inTuple = Input.subspan(i * 5, 5);
@@ -161,92 +171,97 @@ namespace Base85
             }
         }
 
-        template <size_t N, Byte_t T = char, Byte_t U>
-        [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        // Overloads because basic_string_view is special and needs another constructor..
+        template <Byte_t T, Byte_t U> constexpr void Encode(std::basic_string_view<T> &Input, std::span<U> Output)
         {
-            // Input is not large enough,
-            if constexpr (N & 3)
+            return Encode(std::span{ Input }, Output);
+        }
+        template <Byte_t T, Byte_t U> constexpr void Decode(std::basic_string_view<T> &Input, std::span<U> Output)
+        {
+            return Decode(std::span{ Input }, Output);
+        }
+
+        // Covers most containers available, questionable compiler support for constexpr though.
+        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        {
+            const auto Size = std::ranges::size(Input);
+
+            // We may need to pad the input.
+            if (Size & 3)
             {
-                std::array<T, (N + 4 - (N & 3))> A(Input.begin(), Input.end());
-                return Encode(A);
+                // Prefer a uniform type with the padding being default initialized.
+                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
+                Vec.resize(Vec.size() + (4 - (Size & 3)));
+                return Encode<T>(Vec);
             }
 
+            std::basic_string<T> Result(Encodesize_padded(Size), '\0');
+            Encode<typename U::value_type, T>(Input, Result);
+            return Result;
+        }
+        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
+        {
+            const auto Size = std::ranges::size(Input);
+
+            // We may need to pad the input.
+            if (Size % 5)
+            {
+                // Prefer a uniform type with the padding being default initialized.
+                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
+                Vec.resize(Vec.size() + (5 - (Size % 5)));
+                return Decode<T>(Vec);
+            }
+
+            std::basic_string<T> Result(Decodesize_padded(Size), '\0');
+            Decode<typename U::value_type, T>(Input, Result);
+            return Result;
+        }
+        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        {
+            return Encode<T>(Flatten(Input));
+        }
+        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
+        {
+            return Decode<T>(Flatten(Input));
+        }
+
+        // For compiletime evaluation, an array is fine too.
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        {
             std::array<T, Encodesize_padded<N>()> Result{};
             Encode<U, T>(Input, Result);
             return Result;
         }
-        template <size_t N, Byte_t T = char, Byte_t U>
-        [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
         {
-            if constexpr (N % 5)
-            {
-                std::array<T, (N + 5 - (N % 5))> A(Input.begin(), Input.end());
-                return Decode(A);
-            }
-
             std::array<T, Decodesize_padded<N>()> Result{};
             Decode<U, T>(Input, Result);
             return Result;
         }
 
-        template <size_t N> [[nodiscard]] constexpr std::array<std::byte, Encodesize_padded<(N - 1)>()> Encode(const char(&Input)[N])
+        // String literals need a bit of extra wrangling.
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Encodesize_padded<N - 1>()> Encode(const U(&Input)[N])
         {
-            static_assert(!((N - 1) & 3), "Base85 with string literals need to be % 4.");
-
-            std::array<std::byte, Encodesize_padded<(N - 1)>()> Result{};
-            Encode<char, std::byte>(to_array(Input), Result);
+            std::array<T, Encodesize_padded<N - 1>()> Result{};
+            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
+                Encode<U, T>(std::to_array(Input), Result);
+            else Encode<U, T>(char_array(Input), Result);
             return Result;
         }
-        template <size_t N> [[nodiscard]] constexpr std::array<std::byte, Decodesize_padded<(N - 1)>()> Decode(const char(&Input)[N])
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Decodesize_padded<N - 1>()> Decode(const U(&Input)[N])
         {
-            static_assert(!((N - 1) % 5), "Base85 with string literals need to be % 5.");
-
-            std::array<std::byte, Decodesize_padded<(N - 1)>()> Result{};
-            Decode<char, std::byte>(to_array(Input), Result);
-            return Result;
-        }
-
-        template <typename C = char, Byte_t T> constexpr std::basic_string<C> Encode(std::span<const T> Input)
-        {
-            const auto N = std::ranges::size(Input);
-            if constexpr (N & 3)
-            {
-                std::array<T, (N + 4 - (N & 3))> A(Input.begin(), Input.end());
-                return Encode<C>(A);
-            }
-
-            std::basic_string<C> Result(Encodesize_padded(N), '\0');
-            Encode<T, C>(Input, Result);
-            return Result;
-        }
-        template <typename C = char, Byte_t T> constexpr std::basic_string<C> Decode(std::span<const T> Input)
-        {
-            const auto N = std::ranges::size(Input);
-            if constexpr (N % 5)
-            {
-                std::array<T, (N + 5 - (N % 5))> A(Input.begin(), Input.end());
-                return Decode<C>(A);
-            }
-
-            std::basic_string<C> Result(Decodesize_padded(N), '\0');
-            Decode<T, C>(Input, Result);
+            std::array<T, Decodesize_padded<N - 1>()> Result{};
+            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
+                Decode<U, T>(std::to_array(Input), Result);
+            else Decode<U, T>(char_array(Input), Result);
             return Result;
         }
 
-        // Should be constexpr in C++20, questionable compiler support though.
-        template <typename C = char, Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
+        // Only verifies the chars, padding will be added as needed in other functions.
+        template <Simplestring_t T> constexpr bool isValid(const T &Input)
         {
-            return Encode<C>(Flatten(Input));
-        }
-        template <typename C = std::byte, Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
-        {
-            return Decode<C>(Flatten(Input));
-        }
-
-        template <Byte_t T> constexpr bool isValid(std::span<const T> Input)
-        {
-            constexpr Blob_view Charset = Table;
-            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.end(); });
+            constexpr auto Charset = Blob_view(Table, 85);
+            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.npos; });
         }
     }
     namespace RFC1924
@@ -254,6 +269,9 @@ namespace Base85
         constexpr uint32_t Pow85[] = { 52200625UL, 614125UL, 7225UL, 85UL, 1UL };
         template <Byte_t T, Byte_t U> constexpr void Encode(std::span<const T> Input, std::span<U> Output)
         {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
+
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
                 const uint32_t inTuple = byteswap(toInt32(&Input[i * 4]));
@@ -268,6 +286,9 @@ namespace Base85
         }
         template <Byte_t T, Byte_t U> constexpr void Decode(std::span<const T> Input, std::span<U> Output)
         {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
+
             for (size_t i = 0; i < Input.size() / 5; ++i)
             {
                 const auto inTuple = Input.subspan(i * 5, 5);
@@ -283,92 +304,97 @@ namespace Base85
             }
         }
 
-        template <size_t N, Byte_t T = char, Byte_t U>
-        [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        // Overloads because basic_string_view is special and needs another constructor..
+        template <Byte_t T, Byte_t U> constexpr void Encode(std::basic_string_view<T> &Input, std::span<U> Output)
         {
-            // Input is not large enough,
-            if constexpr (N & 3)
+            return Encode(std::span{ Input }, Output);
+        }
+        template <Byte_t T, Byte_t U> constexpr void Decode(std::basic_string_view<T> &Input, std::span<U> Output)
+        {
+            return Decode(std::span{ Input }, Output);
+        }
+
+        // Covers most containers available, questionable compiler support for constexpr though.
+        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        {
+            const auto Size = std::ranges::size(Input);
+
+            // We may need to pad the input.
+            if (Size & 3)
             {
-                std::array<T, (N + 4 - (N & 3))> A(Input.begin(), Input.end());
-                return Encode(A);
+                // Prefer a uniform type with the padding being default initialized.
+                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
+                Vec.resize(Vec.size() + (4 - (Size & 3)));
+                return Encode<T>(Vec);
             }
 
+            std::basic_string<T> Result(Encodesize_padded(Size), '\0');
+            Encode<typename U::value_type, T>(Input, Result);
+            return Result;
+        }
+        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
+        {
+            const auto Size = std::ranges::size(Input);
+
+            // We may need to pad the input.
+            if (Size % 5)
+            {
+                // Prefer a uniform type with the padding being default initialized.
+                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
+                Vec.resize(Vec.size() + (5 - (Size % 5)));
+                return Decode<T>(Vec);
+            }
+
+            std::basic_string<T> Result(Decodesize_padded(Size), '\0');
+            Decode<typename U::value_type, T>(Input, Result);
+            return Result;
+        }
+        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        {
+            return Encode<T>(Flatten(Input));
+        }
+        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
+        {
+            return Decode<T>(Flatten(Input));
+        }
+
+        // For compiletime evaluation, an array is fine too.
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        {
             std::array<T, Encodesize_padded<N>()> Result{};
             Encode<U, T>(Input, Result);
             return Result;
         }
-        template <size_t N, Byte_t T = char, Byte_t U>
-        [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
         {
-            if constexpr (N % 5)
-            {
-                std::array<T, (N + 5 - (N % 5))> A(Input.begin(), Input.end());
-                return Decode(A);
-            }
-
             std::array<T, Decodesize_padded<N>()> Result{};
             Decode<U, T>(Input, Result);
             return Result;
         }
 
-        template <size_t N> [[nodiscard]] constexpr std::array<std::byte, Encodesize_padded<(N - 1)>()> Encode(const char(&Input)[N])
+        // String literals need a bit of extra wrangling.
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Encodesize_padded<N - 1>()> Encode(const U(&Input)[N])
         {
-            static_assert(!((N - 1) & 3), "Base85 with string literals need to be % 4.");
-
-            std::array<std::byte, Encodesize_padded<(N - 1)>()> Result{};
-            Encode<char, std::byte>(to_array(Input), Result);
+            std::array<T, Encodesize_padded<N - 1>()> Result{};
+            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
+                Encode<U, T>(std::to_array(Input), Result);
+            else Encode<U, T>(char_array(Input), Result);
             return Result;
         }
-        template <size_t N> [[nodiscard]] constexpr std::array<std::byte, Decodesize_padded<(N - 1)>()> Decode(const char(&Input)[N])
+        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Decodesize_padded<N - 1>()> Decode(const U(&Input)[N])
         {
-            static_assert(!((N - 1) % 5), "Base85 with string literals need to be % 5.");
-
-            std::array<std::byte, Decodesize_padded<(N - 1)>()> Result{};
-            Decode<char, std::byte>(to_array(Input), Result);
-            return Result;
-        }
-
-        template <typename C = char, Byte_t T> constexpr std::basic_string<C> Encode(std::span<const T> Input)
-        {
-            const auto N = std::ranges::size(Input);
-            if constexpr (N & 3)
-            {
-                std::array<T, (N + 4 - (N & 3))> A(Input.begin(), Input.end());
-                return Encode<C>(A);
-            }
-
-            std::basic_string<C> Result(Encodesize_padded(N), '\0');
-            Encode<T, C>(Input, Result);
-            return Result;
-        }
-        template <typename C = char, Byte_t T> constexpr std::basic_string<C> Decode(std::span<const T> Input)
-        {
-            const auto N = std::ranges::size(Input);
-            if constexpr (N % 5)
-            {
-                std::array<T, (N + 5 - (N % 5))> A(Input.begin(), Input.end());
-                return Decode<C>(A);
-            }
-
-            std::basic_string<C> Result(Decodesize_padded(N), '\0');
-            Decode<T, C>(Input, Result);
+            std::array<T, Decodesize_padded<N - 1>()> Result{};
+            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
+                Decode<U, T>(std::to_array(Input), Result);
+            else Decode<U, T>(char_array(Input), Result);
             return Result;
         }
 
-        // Should be constexpr in C++20, questionable compiler support though.
-        template <typename C = char, Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
+        // Only verifies the chars, padding will be added as needed in other functions.
+        template <Simplestring_t T> constexpr bool isValid(const T &Input)
         {
-            return Encode<C>(Flatten(Input));
-        }
-        template <typename C = std::byte, Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
-        {
-            return Decode<C>(Flatten(Input));
-        }
-
-        template <Byte_t T> constexpr bool isValid(std::span<const T> Input)
-        {
-            constexpr std::string_view Charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_\'{|}~";
-            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.end(); });
+            constexpr auto Charset = std::string_view("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_\'{|}~");
+            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.npos; });
         }
     }
 
@@ -376,5 +402,5 @@ namespace Base85
     using namespace RFC1924;
 
     // Sanity checking.
-    static_assert(Z85::Decode(Z85::Encode("1234")) == Decode(Encode("1234")), "Someone fucked with the Base85 encoding..");
+    static_assert(Z85::Decode(Z85::Encode("1234")) == RFC1924::Decode(RFC1924::Encode("1234")), "Someone fucked with the Base85 encoding..");
 }

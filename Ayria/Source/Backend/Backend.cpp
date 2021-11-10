@@ -280,7 +280,7 @@ inline std::pair<std::string, std::string> GenerateHWID()
         {
             const auto Type = Consume(uint8_t);
             const auto Length = Consume(uint8_t);
-            const auto Handle = Consume(uint16_t);
+            /*const auto Handle =*/ Consume(uint16_t);
 
             if (Type == 1)
             {

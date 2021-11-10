@@ -14,7 +14,7 @@ using Blob_view = std::basic_string_view<uint8_t>;
 
 namespace Base58
 {
-	constexpr size_t Decodesize(size_t N) { return (N * 733 / 1000.0f); }  // log(58) / log(256), rounded.
+    constexpr size_t Decodesize(size_t N) { return (N * 733 / 1000.0f); }  // log(58) / log(256), rounded.
     constexpr size_t Encodesize(size_t N) { return (N * 138 / 100.0f); }   // log(256) / log(58), rounded.
     template <typename T> concept Byte_t = sizeof(T) == 1;
 
