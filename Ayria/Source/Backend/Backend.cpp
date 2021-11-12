@@ -175,7 +175,7 @@ namespace Backend
                     "Signature TEXT NOT NULL, "
                     "Message TEXT NOT NULL, "
                     "isProcessed BOOLEAN, "
-                    "UNIQUE (Sender, Signature) );";
+                    "UNIQUE (Sender, Messagetype, Message) );";  // Only save the last message in case of duplicates.
             } catch (...) {}
 
             // Perform cleanup on exit.

@@ -147,6 +147,7 @@ namespace Graphics
 
         explicit Pen_t(HDC Devicecontext, int Linewidth, COLORREF Color) : DC(Devicecontext)
         {
+            Previouscolor = GetDCPenColor(DC);
             const auto TMP = CreatePen(PS_SOLID, Linewidth, Color);
             Previousobject = SelectObject(DC, TMP);
         }

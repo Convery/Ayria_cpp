@@ -6,57 +6,294 @@
 
 #include <Steam.hpp>
 
+// We use for loops for results that return 0 or 1 values, ignore warnings.
+#pragma warning(disable: 4702)
+
 namespace Steam
 {
     // Totally randomly selected constants..
-    constexpr uint32_t Syncaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
-    constexpr uint16_t Syncport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
+    constexpr uint32_t Discoveryaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
+    constexpr uint16_t Discoveryport = Hash::FNV1_32("Steam") & 0xFFFF;  // 51527
+    constexpr uint32_t Maxpacketsize = 4096;
 
-    static Hashmap<uint32_t, std::string> Incomingdata;
-    struct Endpoint_t { uint32_t vPort, Socket; mutable SteamID_t HostID; };
-    static Hashset<Endpoint_t, decltype(WW::Hash), decltype(WW::Equal)> Endpoints;
-
-    static bool __cdecl Networkhandler(uint64_t, const char *LongID, const char *Message, unsigned int Length)
+    struct Packet_t { uint32_t Size; std::string Data; };
+    struct Endpoint_t
     {
-        const auto Request = JSON::Parse(std::string_view(Message, Length));
-        const auto TargetID = Request.value<uint64_t>("TargetID");
-        const auto vPort = Request.value<uint32_t>("vPort");
+        size_t Comsocket, Listensocket;
+        sockaddr_in IPv4Address;
 
-        // Are we even interested in this?
-        if (TargetID != Global.XUID.FullID) return false;
+        SteamID_t SteamID;
+        std::deque<Packet_t> Outgoing, Incoming;
+    };
 
-        for (auto &Item : Endpoints)
+    static const sockaddr_in Multicast{ AF_INET, htons(Discoveryport), {{.S_addr = htonl(Discoveryaddress)}} };
+    static Hashmap<size_t, sockaddr_in> Pendingconnections{};
+    static Hashmap<uint64_t, sockaddr_in> Seenclients{};
+    static std::vector<Endpoint_t> Endpoints{};
+    static Hashmap<int32_t, size_t> Portmap{};
+    static Hashset<size_t> Listensockets{};
+    static size_t Discoverysocket{};
+
+    // Do any networking we need.
+    static void __cdecl Networktask()
+    {
+        // Check for incoming connections.
         {
-            if (!vPort || vPort == Item.vPort)
+            fd_set ListenFD{};
+            for (const auto &Socket : Listensockets)
+                FD_SET(Socket, &ListenFD);
+
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            const auto Count{ ListenFD.fd_count };
+            auto Timeout{ Defaulttimeout };
+
+            if (select(Count, &ListenFD, nullptr, nullptr, &Timeout)) [[unlikely]]
             {
-                Item.HostID = toSteamID(LongID);
-                Endpoints.rehash(Endpoints.size());
-                Incomingdata[Item.Socket].append(Base85::Decode(Request.value<std::string>("B85Message")));
-                break;
+                for (const auto &Socket : Listensockets)
+                {
+                    if (FD_ISSET(Socket, &ListenFD)) [[unlikely]]
+                    {
+                        sockaddr_in Clientinfo; int Size = sizeof(Clientinfo);
+                        const auto Newsock = accept(Socket, (sockaddr *)&Clientinfo, &Size);
+                        if (Newsock == INVALID_SOCKET) [[unlikely]] continue;
+
+                        if (std::ranges::none_of(Endpoints,
+                            [Client = Hash::WW32(Clientinfo)](const auto &Item)
+                            { return Hash::WW32(Item) == Client; },
+                            &Endpoint_t::IPv4Address))
+                        {
+                            Endpoints.emplace_back(Newsock, Socket, Clientinfo);
+
+                            const auto Result = new Tasks::SocketStatusCallback_t();
+                            Result->m_hListenSocket = Socket & 0xFFFFFFFF;
+                            Result->m_hSocket = Newsock & 0xFFFFFFFF;
+                            Result->m_eSNetSocketState = 1;
+
+                            const auto TaskID = Tasks::Createrequest();
+                            Tasks::Completerequest(TaskID, Tasks::ECallbackType::SocketStatusCallback_t, Result);
+                        }
+                    }
+                }
             }
         }
 
-        return true;
+        // Check pending connection-attempts.
+        {
+            fd_set ConnectFD{}, FailureFD;
+            for (const auto &Socket : Pendingconnections | std::views::keys)
+                FD_SET(Socket, &ConnectFD);
+            FailureFD = ConnectFD;
+
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            const auto Count{ ConnectFD.fd_count };
+            auto Timeout{ Defaulttimeout };
+
+            if (select(Count, nullptr, &ConnectFD, &FailureFD, &Timeout)) [[unlikely]]
+            {
+                for (const auto &[Socket, Clientinfo] : Pendingconnections)
+                {
+                    if (FD_ISSET(Socket, &FailureFD)) [[unlikely]]
+                    {
+                        const auto Result = new Tasks::SocketStatusCallback_t();
+                        Result->m_hSocket = Socket & 0xFFFFFFFF;
+                        Result->m_eSNetSocketState = 23;
+
+                        const auto TaskID = Tasks::Createrequest();
+                        Tasks::Completerequest(TaskID, Tasks::ECallbackType::SocketStatusCallback_t, Result);
+
+                        Pendingconnections.erase(Socket);
+                        break;
+                    }
+
+                    if (FD_ISSET(Socket, &ConnectFD))
+                    {
+                        Endpoints.push_back({ Socket, {}, Clientinfo });
+
+                        const auto Result = new Tasks::SocketStatusCallback_t();
+                        Result->m_hSocket = Socket & 0xFFFFFFFF;
+                        Result->m_eSNetSocketState = 1;
+
+                        const auto TaskID = Tasks::Createrequest();
+                        Tasks::Completerequest(TaskID, Tasks::ECallbackType::SocketStatusCallback_t, Result);
+
+                        Pendingconnections.erase(Socket);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Push and pull any available data.
+        {
+            fd_set ReadFD{}, WriteFD;
+            for (const auto &Item : Endpoints)
+                FD_SET(Item.Comsocket, &ReadFD);
+            WriteFD = ReadFD;
+
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            const auto Count{ WriteFD.fd_count };
+            auto Timeout{ Defaulttimeout };
+
+            if (select(Count, &ReadFD, &WriteFD, nullptr, &Timeout))
+            {
+                auto Buffer = (char *)alloca(Maxpacketsize);
+
+                for (auto &Item : Endpoints)
+                {
+                    if (FD_ISSET(Item.Comsocket, &ReadFD))
+                    {
+                        const auto Headersize = recv(Item.Comsocket, Buffer, 4, MSG_PEEK);
+                        if (Headersize < 4)
+                        {
+                            if (Headersize == 0)
+                            {
+                                const auto Result = new Tasks::SocketStatusCallback_t();
+                                Result->m_hSocket = Item.Comsocket & 0xFFFFFFFF;
+                                Result->m_steamIDRemote = Item.SteamID;
+                                Result->m_eSNetSocketState = 24;
+
+                                const auto TaskID = Tasks::Createrequest();
+                                Tasks::Completerequest(TaskID, Tasks::ECallbackType::SocketStatusCallback_t, Result);
+
+                                closesocket(Item.Comsocket);
+                                Item.Comsocket = 0;
+                            }
+
+                            continue;
+                        }
+
+                        std::unique_ptr<char[]> TMP;
+                        const int64_t Wanted = ((Packet_t *)Buffer)->Size + 4;
+
+                        // Above max-size, just abort.
+                        if (Wanted > Maxpacketsize)
+                        {
+                            closesocket(Item.Comsocket);
+                            Item.Comsocket = 0;
+                            continue;
+                        }
+
+                        const auto Read = recv(Item.Comsocket, Buffer, Wanted, MSG_PEEK);
+                        if (Read < Wanted) continue;
+
+                        recv(Item.Comsocket, Buffer, Wanted, NULL);
+
+                        Packet_t Incoming{ ((Packet_t *)Buffer)->Size };
+                        Incoming.Data = { Buffer + 4, ((Packet_t *)Buffer)->Size };
+                        Item.Incoming.push_back(Incoming);
+                    }
+
+                    if (FD_ISSET(Item.Comsocket, &WriteFD))
+                    {
+                        if (!Item.Outgoing.empty())
+                        {
+                            auto Packet = Item.Outgoing.front();
+                            Packet.Data.insert(0, (char *)&Packet.Size, 4);
+
+                            const auto Sent = send(Item.Comsocket, Packet.Data.data(), int(Packet.Data.size()), NULL);
+
+                            if (Sent <  int(Packet.Data.size())) Packet.Data.erase(0, 4);
+                            else Item.Outgoing.pop_front();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Lastly, discover local clients.
+        {
+            fd_set ReadFD{};
+            FD_SET(Discoverysocket, &ReadFD);
+
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            auto Timeout{ Defaulttimeout };
+            const auto Count{ 1 };
+
+            if (select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[unlikely]]
+            {
+                uint64_t SteamID{};
+                sockaddr_in Clientinfo; int Size = sizeof(Clientinfo);
+                recvfrom(Discoverysocket, (char *)SteamID, 8, NULL, (sockaddr *)&Clientinfo, &Size);
+
+                if (SteamID)
+                {
+                    SteamID = ntohll(SteamID);
+                    Seenclients[SteamID] = Clientinfo;
+                    std::ranges::for_each(Endpoints,[SteamID, Client = Hash::WW32(Clientinfo)](auto &Item)
+                    {
+                        if (Hash::WW32(Item.IPv4Address) == Client)
+                            Item.SteamID.FullID = SteamID;
+                    });
+                }
+            }
+        }
+
+        // And do some minor cleanup.
+        const auto Invalid = std::ranges::remove(Endpoints, 0, &Endpoint_t::Comsocket);
+        Endpoints.erase(Invalid.begin(), Invalid.end());
+
+        for (auto it = Portmap.begin(); it != Portmap.end();)
+        {
+            if (it->second == 0) Portmap.erase(it);
+            else it++;
+        }
     }
-    static void Transmitmessage(uint32_t vPort, uint64_t TargetID, std::string &&B85Message)
+    static void __cdecl doDiscovery()
     {
-        const auto Payload = JSON::Dump(JSON::Object_t({
-            { "B85Message", B85Message },
-            { "TargetID", TargetID },
-            { "vPort", vPort }
-        }));
-
-        Ayria.publishMessage("Steam_Networkpacket", Payload.c_str(), (uint32_t)Payload.size());
+        const uint64_t Buffer = htonll(Global.XUID.FullID);
+        sendto(Discoverysocket, (char *)&Buffer, 8, NULL, PSOCKADDR(&Multicast), sizeof(Multicast));
     }
-
-    static bool Initialized = false;
     static void Initialize()
     {
+        static bool Initialized = false;
         if (Initialized) return;
         Initialized = true;
 
-        if (const auto Callback = Ayria.subscribeMessage)
-            Callback("Steam_Networkpacket", Networkhandler);
+        const sockaddr_in Localhost{ AF_INET, htons(Discoveryport), {{.S_addr = htonl(INADDR_ANY)}} };
+        const ip_mreq Request{ {{.S_addr = htonl(Discoveryaddress)}} };
+        unsigned long Argument{ 1 };
+        unsigned long Error{ 0 };
+        WSADATA Unused;
+
+        // We only need WS 1.1, no need for more.
+        (void)WSAStartup(MAKEWORD(1, 1), &Unused);
+        Discoverysocket = socket(AF_INET, SOCK_DGRAM, 0);
+        Error |= ioctlsocket(Discoverysocket, FIONBIO, &Argument);
+
+        // TODO(tcn): Investigate if WS2's IP_ADD_MEMBERSHIP (12) gets mapped to the WS1's original (5) internally.
+        // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for developers).
+        Error |= setsockopt(Discoverysocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&Request, sizeof(Request));
+        Error |= setsockopt(Discoverysocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+        Error |= bind(Discoverysocket, (sockaddr *)&Localhost, sizeof(Localhost));
+
+        // TODO(tcn): Proper error handling.
+        if (Error) [[unlikely]]
+        {
+            closesocket(Discoverysocket);
+            assert(false);
+            return;
+        }
+
+        Ayria.createPeriodictask(100, Networktask);
+        Ayria.createPeriodictask(5000, doDiscovery);
+    }
+
+    // Helpers to filter endpoints.
+    static inline auto byCom(uint32_t Socket)
+    {
+        return Endpoints | std::views::filter([=](const auto &Item) { return Socket == (Item.Comsocket & 0xFFFFFFFF); });
+    }
+    static inline auto bySteamID(SteamID_t ID)
+    {
+        return Endpoints | std::views::filter([=](const auto &Item) { return ID.FullID == Item.SteamID.FullID; });
+    }
+    static inline auto bySocket(size_t Socket)
+    {
+        return Endpoints | std::views::filter([=](const auto &Item) { return Socket == Item.Comsocket; });
+    }
+    static inline auto byListen(uint32_t Socket)
+    {
+        return Endpoints | std::views::filter([=](const auto &Item) { return Socket == (Item.Listensocket & 0xFFFFFFFF); });
     }
 
     struct SteamNetworking
@@ -136,7 +373,29 @@ namespace Steam
         SNetListenSocket_t CreateListenSocket0(int32_t nVirtualP2PPort, uint32_t nIP, uint16_t nPort)
         {
             Initialize();
-            return GetTickCount() & 0xFFFFFFFF;
+
+            if (Portmap.contains(nVirtualP2PPort))
+                return Portmap[nVirtualP2PPort] & 0xFFFFFFFF;
+
+            DWORD Arg = 1;
+            const auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            ioctlsocket(Socket, FIONBIO, &Arg);
+
+            do
+            {
+                const sockaddr_in Hostname = { AF_INET, htons(nPort), {.S_un {.S_addr = htonl(nIP) } } };
+
+                if (bind(Socket, (const sockaddr *)&Hostname, sizeof(Hostname)) == SOCKET_ERROR) break;
+                if (listen(Socket, 10) == SOCKET_ERROR) break;
+
+                // TODO(tcn): Verify if windows x64 uses the higher bits.
+                Portmap[nVirtualP2PPort] = Socket;
+                Listensockets.insert(Socket);
+                return Socket & 0xFFFFFFFF;
+            } while (false);
+
+            closesocket(Socket);
+            return 0;
         }
         SNetListenSocket_t CreateListenSocket1(int32_t nVirtualP2PPort, uint32_t nIP, uint16_t nPort, bool bAllowUseOfPacketRelay)
         {
@@ -146,17 +405,35 @@ namespace Steam
         {
             Initialize();
 
-            const uint32_t Socket = GetTickCount();
-            Endpoints.insert({ nPort, Socket, 0 });
-            return Socket;
+            DWORD Arg = 1;
+            const auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            ioctlsocket(Socket, FIONBIO, &Arg);
+
+            const sockaddr_in Hostname = { AF_INET, htons(nPort), {.S_un {.S_addr = htonl(nIP) } } };
+            connect(Socket, (const sockaddr *)&Hostname, sizeof(Hostname));
+
+            Pendingconnections[Socket] = Hostname;
+            return Socket & 0xFFFFFFFF;
         }
         SNetSocket_t CreateP2PConnectionSocket0(SteamID_t steamIDTarget, int32_t nVirtualPort, int32_t nTimeoutSec)
         {
             Initialize();
 
-            const uint32_t Socket = GetTickCount();
-            Endpoints.insert({ (uint32_t)nVirtualPort, Socket, steamIDTarget.FullID });
-            return Socket;
+            // No idea how to connect to them..
+            if (!Seenclients.contains(steamIDTarget.FullID))
+                return 0;
+
+            DWORD Arg = 1;
+            const auto Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            ioctlsocket(Socket, FIONBIO, &Arg);
+
+            const sockaddr_in Hostname = Seenclients[steamIDTarget.FullID];
+            connect(Socket, (const sockaddr *)&Hostname, sizeof(Hostname));
+
+            if (0 == nVirtualPort) nVirtualPort = steamIDTarget.UserID;
+            Pendingconnections[Socket] = Hostname;
+            Portmap[nVirtualPort] = Socket;
+            return Socket & 0xFFFFFFFF;
         }
         SNetSocket_t CreateP2PConnectionSocket1(SteamID_t steamIDTarget, int32_t nVirtualPort, int32_t nTimeoutSec, bool bAllowUseOfPacketRelay)
         {
@@ -173,87 +450,137 @@ namespace Steam
         }
         bool CloseP2PSessionWithUser(SteamID_t steamIDRemote)
         {
+            for (auto &Item : bySteamID(steamIDRemote))
+            {
+                closesocket(Item.Comsocket);
+                Item.Comsocket = 0;
+            }
+
             return true;
         }
         bool CloseP2PChannelWithUser(SteamID_t steamIDRemote, int32_t iVirtualPort)
         {
+            if (0 == iVirtualPort) return CloseP2PSessionWithUser(steamIDRemote);
+            if (!Portmap.contains(iVirtualPort)) return false;
+            auto &Socket = Portmap[iVirtualPort];
+
+            for (auto &Item : bySteamID(steamIDRemote))
+            {
+                if (Socket == Item.Comsocket)
+                {
+                    closesocket(Item.Comsocket);
+                    Item.Comsocket = 0;
+                    Socket = 0;
+                    break;
+                }
+            }
+
             return true;
         }
         bool DestroyListenSocket(SNetListenSocket_t hSocket, bool bNotifyRemoteEnd)
         {
+            size_t Old = 0;
+
+            for (auto &Socket : Listensockets)
+            {
+                if (hSocket == (Socket & 0xFFFFFFFF))
+                {
+                    closesocket(Socket);
+                    Old = Socket;
+                    break;
+                }
+            }
+
+            Listensockets.erase(Old);
             return true;
         }
         bool DestroySocket(SNetSocket_t hSocket, bool bNotifyRemoteEnd)
         {
+            for (auto &Item : byCom(hSocket))
+            {
+                closesocket(Item.Comsocket);
+                Item.Comsocket = 0;
+            }
+
             return true;
         }
         bool GetListenSocketInfo(SNetListenSocket_t hListenSocket, uint32_t *pnIP, uint16_t *pnPort)
         {
-            *pnIP = Syncaddress;
-            *pnPort = Syncport;
-            return true;
-        }
-        bool GetP2PSessionState(SteamID_t steamIDRemote, P2PSessionState_t *pConnectionState)
-        {
-            for (const auto &Item : Endpoints)
-            {
-                if (Item.HostID.FullID == steamIDRemote.FullID)
-                {
-                    if (Incomingdata.contains(Item.Socket))
-                    {
-                        pConnectionState->m_nBytesQueuedForSend = (int32_t)Incomingdata[Item.Socket].size() / GetMaxPacketSize(0);
-                        pConnectionState->m_nPacketsQueuedForSend = (int32_t)Incomingdata[Item.Socket].size();
-                    }
+            sockaddr_in Clientinfo{ AF_INET }; int Size = sizeof(Clientinfo);
 
-                    break;
+            for (const auto &Socket : Listensockets)
+            {
+                if (hListenSocket == (Socket & 0xFFFFFFFF))
+                {
+                    if (0 == getsockname(Socket, (sockaddr *)&Clientinfo, &Size))
+                    {
+                        *pnIP = ntohl(Clientinfo.sin_addr.S_un.S_addr);
+                        *pnPort = ntohs(Clientinfo.sin_port);
+                        return true;
+                    }
                 }
             }
 
-            pConnectionState->m_nRemoteIP = Syncaddress;
-            pConnectionState->m_nRemotePort = Syncport;
-            pConnectionState->m_bConnectionActive = 1;
-            pConnectionState->m_eP2PSessionError = 0;
-            pConnectionState->m_bUsingRelay = false;
-            pConnectionState->m_bConnecting = 0;
+            return false;
+        }
+        bool GetP2PSessionState(SteamID_t steamIDRemote, P2PSessionState_t *pConnectionState)
+        {
+            for (const auto &Item : bySteamID(steamIDRemote))
+            {
+                int32_t Totalbytes = 0;
+                for (const auto &Packet : Item.Incoming)
+                    Totalbytes += Packet.Size;
+
+                pConnectionState->m_nRemoteIP = ntohl(Item.IPv4Address.sin_addr.S_un.S_addr);
+                pConnectionState->m_nPacketsQueuedForSend = (int32_t)Item.Outgoing.size();
+                pConnectionState->m_nRemotePort = ntohs(Item.IPv4Address.sin_port);
+                pConnectionState->m_nBytesQueuedForSend = Totalbytes;
+                pConnectionState->m_bConnectionActive = 1;
+                pConnectionState->m_eP2PSessionError = 0;
+                pConnectionState->m_bUsingRelay = false;
+                pConnectionState->m_bConnecting = 0;
+                return true;
+            }
+
+            *pConnectionState = {};
             return true;
         }
         bool GetSocketInfo(SNetSocket_t hSocket, SteamID_t *pSteamIDRemote, ESNetSocketState *peSocketStatus, uint32_t *punIPRemote, uint16_t *punPortRemote)
         {
-            for (const auto &Item : Endpoints)
+            for (const auto &Item : byCom(hSocket))
             {
-                if (Item.Socket == hSocket)
-                {
-                    *pSteamIDRemote = Item.HostID;
-                    break;
-                }
+                *punIPRemote = ntohl(Item.IPv4Address.sin_addr.S_un.S_addr);
+                *punPortRemote = ntohs(Item.IPv4Address.sin_port);
+                *peSocketStatus = k_ESNetSocketStateConnected;
+                *pSteamIDRemote = Item.SteamID;
+                return true;
             }
 
-            *peSocketStatus = k_ESNetSocketStateConnected;
-            *punIPRemote = Syncaddress;
-            *punPortRemote = Syncport;
             return false;
         }
         bool IsDataAvailable(SNetListenSocket_t hListenSocket, uint32_t *pcubMsgSize, SNetSocket_t *phSocket)
         {
-            for (const auto &[Socket, Data] : Incomingdata)
+            for (const auto &Item : byListen(hListenSocket))
             {
-                if (!Data.empty())
-                {
-                    *pcubMsgSize = (uint32_t)Data.size();
-                    *phSocket = Socket;
-                    return true;
-                }
+                if (Item.Incoming.empty()) continue;;
+                *pcubMsgSize = Item.Incoming.front().Size;
+                *phSocket = (Item.Comsocket & 0xFFFFFFFF);
+                return true;
             }
 
             return false;
         }
         bool IsDataAvailableOnSocket(SNetSocket_t hSocket, uint32_t *pcubMsgSize)
         {
-            if (!Incomingdata.contains(hSocket)) return false;
-            if (Incomingdata[hSocket].empty()) return false;
+            for (const auto &Item : bySocket(hSocket))
+            {
 
-            *pcubMsgSize = (uint32_t)Incomingdata[hSocket].size();
-            return true;
+                if (Item.Incoming.empty()) continue;
+                *pcubMsgSize = Item.Incoming.front().Size;
+                return true;
+            }
+
+            return false;
         }
         bool IsP2PPacketAvailable0(uint32_t *pcubMsgSize)
         {
@@ -261,50 +588,65 @@ namespace Steam
         }
         bool IsP2PPacketAvailable1(uint32_t *pcubMsgSize, int32_t iVirtualPort)
         {
-            uint32_t Unused;
-            return IsDataAvailable(0, pcubMsgSize, &Unused);
+            if (!Portmap.contains(iVirtualPort)) [[unlikely]] return false;
+            return IsDataAvailableOnSocket(Portmap[iVirtualPort] & 0xFFFFFFFF, pcubMsgSize);
         }
         bool ReadP2PPacket0(void *pubDest, uint32_t cubDest, uint32_t *pcubMsgSize, SteamID_t *psteamIDRemote)
         {
-            return ReadP2PPacket1(pubDest, cubDest, pcubMsgSize, psteamIDRemote, 0);
+            for (auto &Item : Endpoints)
+            {
+                if (Item.Incoming.empty()) continue;
+
+                const auto &Packet = Item.Incoming.front();
+                const auto Min = std::min(cubDest, Packet.Size);
+
+                std::memcpy(pubDest, Packet.Data.data(), Min);
+                *psteamIDRemote = Item.SteamID;
+                *pcubMsgSize = Min;
+
+                Item.Incoming.pop_front();
+                return true;
+            }
+
+            return false;
         }
         bool ReadP2PPacket1(void *pubDest, uint32_t cubDest, uint32_t *pcubMsgSize, SteamID_t *psteamIDRemote, int32_t iVirtualPort)
         {
-            for (const auto &Item : Endpoints)
+            if (0 == iVirtualPort) return ReadP2PPacket0(pubDest, cubDest, pcubMsgSize, psteamIDRemote);
+            if (!Portmap.contains(iVirtualPort)) [[unlikely]] return false;
+
+            for (auto &Item : bySocket(Portmap[iVirtualPort]))
             {
-                if (Incomingdata.contains(Item.Socket))
-                {
-                    auto Buffer = &Incomingdata[Item.Socket];
-                    if (!Buffer->empty())
-                    {
-                        const auto Min = std::min(cubDest, uint32_t(Buffer->size()));
-                        std::memcpy(pubDest, Buffer->data(), Min);
-                        *psteamIDRemote = Item.HostID;
-                        Buffer->erase(0, Min);
-                        *pcubMsgSize = Min;
-                        return true;
-                    }
-                }
+                if (Item.Incoming.empty()) continue;
+
+                const auto &Packet = Item.Incoming.front();
+                const auto Min = std::min(cubDest, Packet.Size);
+
+                std::memcpy(pubDest, Packet.Data.data(), Min);
+                *psteamIDRemote = Item.SteamID;
+                *pcubMsgSize = Min;
+
+                Item.Incoming.pop_front();
+                return true;
             }
 
             return false;
         }
         bool RetrieveData1(SNetListenSocket_t hListenSocket, void *pubDest, uint32_t cubDest, uint32_t *pcubMsgSize, SNetSocket_t *phSocket)
         {
-            for (const auto &Item : Endpoints)
+            for (auto &Item : byListen(hListenSocket))
             {
-                if (Incomingdata.contains(Item.Socket))
+                if (!Item.Incoming.empty())
                 {
-                    auto Buffer = &Incomingdata[Item.Socket];
-                    if (!Buffer->empty())
-                    {
-                        const auto Min = std::min(cubDest, uint32_t(Buffer->size()));
-                        std::memcpy(pubDest, Buffer->data(), Min);
-                        *phSocket = Item.Socket;
-                        Buffer->erase(0, Min);
-                        *pcubMsgSize = Min;
-                        return true;
-                    }
+                    const auto &Packet = Item.Incoming.front();
+                    const auto Min = std::min(cubDest, Packet.Size);
+
+                    std::memcpy(pubDest, Packet.Data.data(), Min);
+                    *phSocket = Item.Comsocket & 0xFFFFFFFF;
+                    *pcubMsgSize = Min;
+
+                    Item.Incoming.pop_front();
+                    return true;
                 }
             }
 
@@ -317,15 +659,17 @@ namespace Steam
         }
         bool RetrieveDataFromSocket(SNetSocket_t hSocket, void *pubDest, uint32_t cubDest, uint32_t *pcubMsgSize)
         {
-            if (Incomingdata.contains(hSocket))
+            for (auto &Item : byCom(hSocket))
             {
-                auto Buffer = &Incomingdata[hSocket];
-                if (!Buffer->empty())
+                if (!Item.Incoming.empty())
                 {
-                    const auto Min = std::min(cubDest, uint32_t(Buffer->size()));
-                    std::memcpy(pubDest, Buffer->data(), Min);
-                    Buffer->erase(0, Min);
+                    const auto &Packet = Item.Incoming.front();
+                    const auto Min = std::min(cubDest, Packet.Size);
+
+                    std::memcpy(pubDest, Packet.Data.data(), Min);
                     *pcubMsgSize = Min;
+
+                    Item.Incoming.pop_front();
                     return true;
                 }
             }
@@ -334,30 +678,41 @@ namespace Steam
         }
         bool SendDataOnSocket(SNetSocket_t hSocket, void *pubData, uint32_t cubData, bool bReliable)
         {
-            for (const auto &Item : Endpoints)
+            for (auto &Item : byCom(hSocket))
             {
-                if (Item.Socket == hSocket)
-                {
-                    Transmitmessage(Item.vPort, Item.HostID.FullID, Base85::Encode(std::string_view((char *)pubData, cubData)));
-                    return true;
-                }
+                Item.Outgoing.push_back({ cubData, { (char *)pubData, cubData } });
+                return true;
             }
 
             return false;
         }
         bool SendP2PPacket0(SteamID_t steamIDRemote, const void *pubData, uint32_t cubData, EP2PSend eP2PSendType)
         {
-            return SendP2PPacket1(steamIDRemote, pubData, cubData, eP2PSendType, 0);
+            for (auto &Item : bySteamID(steamIDRemote))
+            {
+                Item.Outgoing.push_back({ cubData, { (char *)pubData, cubData } });
+                return true;
+            }
+
+            return false;
         }
         bool SendP2PPacket1(SteamID_t steamIDRemote, const void *pubData, uint32_t cubData, EP2PSend eP2PSendType, int32_t iVirtualPort)
         {
-            Transmitmessage(iVirtualPort, steamIDRemote.FullID, Base85::Encode(std::string_view((char *)pubData, cubData)));
-            return true;
+            if (0 == iVirtualPort) return SendP2PPacket0(steamIDRemote, pubData, cubData, eP2PSendType);
+            if (!Portmap.contains(iVirtualPort)) return false;
+
+            for (auto &Item : byCom(Portmap[iVirtualPort] & 0xFFFFFFFF))
+            {
+                Item.Outgoing.push_back({ cubData, { (char *)pubData, cubData } });
+                return true;
+            }
+
+            return false;
         }
 
         int32_t GetMaxPacketSize(SNetSocket_t hSocket)
         {
-            return 4096;
+            return Maxpacketsize;
         }
     };
 
