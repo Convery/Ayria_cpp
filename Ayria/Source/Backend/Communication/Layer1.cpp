@@ -218,7 +218,7 @@ namespace Backend::Messagebus
         try
         {
             Backend::Database()
-                << "INSERT INTO Messagestream VALUES (?,?,?,?,?,?);"
+                << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
                 << Global.getLongID() << Hash::WW32(Identifier) << Packet->Payload.Timestamp
                 << Base85::Encode<char>(Packet->Signature)
                 << std::string(Payload) << false;
@@ -265,7 +265,7 @@ namespace Backend::Messagebus
         try
         {
             Backend::Database()
-                << "INSERT INTO Messagestream VALUES (?,?,?,?,?,?);"
+                << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
                 << PK << Header->Payload.Messagetype << Header->Payload.Timestamp
                 << Base85::Encode<char>(Header->Signature)
                 << std::string(Payload) << false;

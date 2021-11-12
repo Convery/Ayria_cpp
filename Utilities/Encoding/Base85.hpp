@@ -171,14 +171,22 @@ namespace Base85
             }
         }
 
-        // Overloads because basic_string_view is special and needs another constructor..
-        template <Byte_t T, Byte_t U> constexpr void Encode(std::basic_string_view<T> &Input, std::span<U> Output)
+        // Overloads because string-types are special and needs another constructor..
+        template <Simplestring_t T, Byte_t U> constexpr void Encode(const T &Input, std::span<U> Output)
         {
             return Encode(std::span{ Input }, Output);
         }
-        template <Byte_t T, Byte_t U> constexpr void Decode(std::basic_string_view<T> &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr void Decode(const T &Input, std::span<U> Output)
         {
             return Decode(std::span{ Input }, Output);
+        }
+        template <Simplestring_t T, Simplestring_t U> constexpr void Encode(const T &Input, U &Output)
+        {
+            return Encode(std::span{ Input }, std::span{ Output });
+        }
+        template <Simplestring_t T, Simplestring_t U> constexpr void Decode(const T &Input, U &Output)
+        {
+            return Decode(std::span{ Input }, std::span{ Output });
         }
 
         // Covers most containers available, questionable compiler support for constexpr though.
@@ -304,14 +312,22 @@ namespace Base85
             }
         }
 
-        // Overloads because basic_string_view is special and needs another constructor..
-        template <Byte_t T, Byte_t U> constexpr void Encode(std::basic_string_view<T> &Input, std::span<U> Output)
+        // Overloads because string-types are special and needs another constructor..
+        template <Simplestring_t T, Byte_t U> constexpr void Encode(const T &Input, std::span<U> Output)
         {
             return Encode(std::span{ Input }, Output);
         }
-        template <Byte_t T, Byte_t U> constexpr void Decode(std::basic_string_view<T> &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr void Decode(const T &Input, std::span<U> Output)
         {
             return Decode(std::span{ Input }, Output);
+        }
+        template <Simplestring_t T, Simplestring_t U> constexpr void Encode(const T &Input, U &Output)
+        {
+            return Encode(std::span{ Input }, std::span{ Output });
+        }
+        template <Simplestring_t T, Simplestring_t U> constexpr void Decode(const T &Input, U &Output)
+        {
+            return Decode(std::span{ Input }, std::span{ Output });
         }
 
         // Covers most containers available, questionable compiler support for constexpr though.

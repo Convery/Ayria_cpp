@@ -29,12 +29,13 @@ namespace Backend::Messageprocessing
                 << "SELECT (rowid, Messagetype, Timestamp, Message, Sender) FROM Messagestream WHERE (isProcessed = false) ORDER BY Timestamp LIMIT 10;"
                 >> [&](int64_t rowid, uint32_t Messagetype, uint64_t Timestamp, const std::string &Message, const std::string &Sender)
                 {
-                    const auto Decoded = Base85::Decode(Message);
+                    // Decode generates less data, so re-use the buffer (ignore our const promise as we are the only consumer)..
+                    Base85::Decode(Message, const_cast<std::string &>(Message));
                     Processed.insert(rowid);
 
                     std::ranges::for_each(Messagehandlers[Messagetype], [&](const auto &CB)
                     {
-                        if (!CB(Timestamp, Sender.c_str(), Decoded.data(), static_cast<uint32_t>(Decoded.size())))
+                        if (!CB(Timestamp, Sender.c_str(), Message.data(), static_cast<uint32_t>(Message.size())))
                             Invalid.insert(rowid);
                     });
                 };
