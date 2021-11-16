@@ -96,7 +96,7 @@ namespace AyriaAPI
     {
         // The database should be read-only for plugins.
         inline std::shared_ptr<sqlite3> Database;
-        inline sqlite::database OpenDB()
+        inline sqlite::Database_t OpenDB()
         {
             if (!Database) [[unlikely]]
             {
@@ -136,12 +136,12 @@ namespace AyriaAPI
                     sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
 
                     // Should probably fail.
-                    sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
-                    sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+                    sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
+                    sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
                 } catch (...) {}
             }
 
-            return sqlite::database(Database);
+            return sqlite::Database_t(Database);
         }
     }
 
@@ -159,7 +159,7 @@ namespace AyriaAPI
     using Result_t = JSON::Value_t;
 
     // Helpers to make everything more readable / save my hands.
-    #define Trycatch(...) try { __VA_ARGS__ } catch (const sqlite::sqlite_exception &e) { (void)e; Debugprint(va("SQL error: %s (%s)", e.what(), e.get_sql().c_str())); }
+    #define Trycatch(...) try { __VA_ARGS__ } catch (...) {  }
     #define Matchmakinglambda   [&](const Base58_t &GroupID, const ASCII_t &Hostaddress, const std::optional<ASCII_t> &Servername, const ASCII_t &Provider, uint32_t GameID, uint32_t ModID)
     #define Messaginglambda     [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t Received, uint64_t Sent, const Base85_t &Message)
     #define Presencelambda      [&](const Base58_t &OwnerID, const ASCII_t &Category, const ASCII_t &Key, const std::optional<ASCII_t> &Value)
@@ -189,7 +189,7 @@ namespace AyriaAPI
         }
         inline Result_t Find(const LongID_t &ClientID)
         {
-            Trycatch(
+            
                 JSON::Object_t Result{};
                 Prepare("SELECT * FROM Client WHERE ClientID = ?;", ClientID) >> Clientlambda
                 {
@@ -208,7 +208,7 @@ namespace AyriaAPI
                     });
                 };
                 if (!Result.empty()) return Result;
-            );
+            
 
             return {};
         }

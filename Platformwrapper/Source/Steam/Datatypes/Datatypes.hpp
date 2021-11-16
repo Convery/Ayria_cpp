@@ -28,7 +28,8 @@ namespace Steam
             Invalid = 0,
             Public = 1,
             Beta = 2,
-            Dev = 4
+            Internal = 3,
+            Developer = 4
         };
         union
         {
@@ -41,7 +42,7 @@ namespace Steam
                 uint64_t isClan : 1;
                 uint64_t isLobby : 1;
                 uint64_t isMMSLobby : 1;
-                uint64_t RESERVED : 4;
+                uint64_t RESERVED : 5;
                 uint64_t SessionID : 12;
 
                 uint64_t UserID : 32;
@@ -81,6 +82,11 @@ namespace Steam
             }
 
             return {};
+        }
+
+        operator uint64_t() const
+        {
+            return FullID;
         }
     };
 

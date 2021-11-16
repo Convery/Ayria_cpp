@@ -112,7 +112,7 @@ namespace Backend
     }
 
     // Interface with the client database, remember try-catch.
-    sqlite::database Database()
+    sqlite::Database_t Database()
     {
         static std::shared_ptr<sqlite3> Database{};
         if (!Database)
@@ -135,8 +135,8 @@ namespace Backend
             // Basic initialization.
             try
             {
-                sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
-                sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+                sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
+                sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
 
                 // Helper functions for inline hashing.
                 const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
@@ -163,11 +163,11 @@ namespace Backend
                 sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
                 sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
 
-                sqlite::database(Database) <<
+                sqlite::Database_t(Database) <<
                     "CREATE TABLE IF NOT EXISTS Account ("
                     "Publickey TEXT NOT NULL PRIMARY KEY );";
 
-                sqlite::database(Database) <<
+                sqlite::Database_t(Database) <<
                     "CREATE TABLE IF NOT EXISTS Messagestream ("
                     "Sender TEXT REFERENCES Account (Publickey) ON DELETE CASCADE, "
                     "Messagetype INTEGER NOT NULL, "
@@ -194,7 +194,7 @@ namespace Backend
                 } catch (...) {}
             });
         }
-        return sqlite::database(Database);
+        return sqlite::Database_t(Database);
     }
 
     // Save the configuration to disk.

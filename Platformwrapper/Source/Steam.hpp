@@ -68,7 +68,6 @@ namespace Steam
     // Steam uses 32-bit IDs for the account, so we need to do some conversions.
     SteamID_t toSteamID(const std::string &LongID);
     std::string fromSteamID(SteamID_t AccountID);
-    std::string fromSteamID(uint32_t AccountID);
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.
@@ -121,7 +120,7 @@ namespace Steam
     void Redirectmodulehandle();
 
     // Unified creation and initialization for the SteamDB.
-    sqlite::database Database();
+    sqlite::Database_t Database();
 
     // Asynchronous tasks.
     namespace Tasks

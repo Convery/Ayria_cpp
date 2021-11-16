@@ -97,6 +97,8 @@ using namespace std::literals;
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
 
+#include <Utilities/Containers/SQLitewrapper.hpp>
+
 #include <Utilities/Ayria/AyriaAPI.hpp>
 #include <Utilities/Ayria/Ayriamodule.h>
 #include <Utilities/Ayria/Localnetservers.h>

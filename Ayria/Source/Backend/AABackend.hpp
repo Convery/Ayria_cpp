@@ -14,7 +14,7 @@ namespace Backend
 
     // Interface with the client database, remember try-catch.
     Hashset<int64_t> getModified(const std::string &Tablename);
-    sqlite::database Database();
+    sqlite::Database_t Database();
 
     // Set the global cryptokey from various sources.
     void setCryptokey_CRED(std::string_view Cred1, std::string_view Cred2);

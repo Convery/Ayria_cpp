@@ -14,10 +14,6 @@
 #define LZ_STANDALONE
 #include <Lz/Lz.hpp>
 
-// C++ wrapper around Sqlite3, required.
-#pragma comment(lib, "sqlite3.lib")
-#include <sqlite_modern_cpp.h>
-
 // NLhohmann modern JSON parsing library.
 #if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>

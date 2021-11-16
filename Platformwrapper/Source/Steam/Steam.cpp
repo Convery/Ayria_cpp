@@ -12,13 +12,17 @@ namespace Steam
     Globalstate_t Global{};
 
     // Steam uses 32-bit IDs for the account, so we need to do some conversions.
-    static Hashmap<uint32_t, std::string> Accountmap;
+    static Hashmap<uint64_t, std::string> Accountmap;
     SteamID_t toSteamID(const std::string &LongID)
     {
-        const auto Hash = Hash::WW32(LongID);
-        if (!Accountmap.contains(Hash)) [[unlikely]]
-            Accountmap[Hash] = LongID;
-        return { 0x0110000100000000ULL | Hash };
+        const auto SessionID = Hash::WW64(LongID) & 0x0FFF;
+        const auto UserID = Hash::WW32(LongID);
+
+        const SteamID_t SteamID{ 0x0110000000000000ULL | UserID | SessionID << 32 };
+        if (!Accountmap.contains(SteamID)) [[unlikely]]
+            Accountmap[SteamID] = LongID;
+
+        return SteamID;
     }
     std::string fromSteamID(SteamID_t AccountID)
     {
@@ -26,22 +30,25 @@ namespace Steam
         if (AccountID.Accounttype == SteamID_t::Accounttype_t::Anonymous)
             return "";
 
-        return fromSteamID(AccountID.UserID);
-    }
-    std::string fromSteamID(uint32_t AccountID)
-    {
         // Really fun and expensive to search for..
         if (!Accountmap.contains(AccountID)) [[unlikely]]
         {
-            Hashset<std::string> Keys{};
-            AyriaAPI::Prepare("SELECT * FROM Account WHERE WW32(Publickey) = ?;", AccountID)
+            std::unordered_set<std::string> Keys{};
+            AyriaAPI::Prepare("SELECT * FROM Account WHERE WW32(Publickey) = ?;", uint32_t(AccountID.UserID))
                               >> [&](const std::string &LongID) { Keys.insert(LongID); };
 
-            // Simplest case.
-            if (Keys.empty()) [[unlikely]] return "";
-            if (Keys.size() == 1) [[likely]] return *Keys.begin();
+            // Filter by SessionID.
+            std::erase_if(Keys, [ID = AccountID.SessionID](const auto &LongID) { return ID != (Hash::WW64(LongID) & 0x0FFF); });
 
-            // With more than 1 result, try to find it in the friendslist.
+            // General case, less than 1 / E^9 risk to fail.
+            if (Keys.empty()) [[unlikely]] return "";
+            if (Keys.size() == 1) [[likely]]
+            {
+                Accountmap[AccountID] = *Keys.begin();
+                return *Keys.begin();
+            }
+
+            // Try to see if any is in the friendslist.
             const auto Friends = AyriaAPI::Relations::getFriends(Global.LongID->c_str());
             for (const auto &Item : Keys)
             {
@@ -83,7 +90,7 @@ namespace Steam
     }
 
     // Interface with the client database, remember try-catch.
-    sqlite::database Database()
+    sqlite::Database_t Database()
     {
         static std::shared_ptr<sqlite3> Database{};
         if (!Database)
@@ -105,8 +112,8 @@ namespace Steam
             // Basic initialization.
             try
             {
-                sqlite::database(Database) << "PRAGMA foreign_keys = ON;";
-                sqlite::database(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+                sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
+                sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
 
                 // Helper functions for inline hashing.
                 const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
@@ -135,17 +142,17 @@ namespace Steam
 
                 // Steamapps tables.
                 {
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Apps ("
                         "AppID INTEGER PRIMARY KEY, "
                         "Name TEXT NOT NULL );";
 
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Languagesupport ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "Language TEXT NOT NULL );";
 
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS DLCInfo ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "DLCID INTEGER NOT NULL, "
@@ -153,7 +160,7 @@ namespace Steam
                         "Name TEXT NOT NULL, "
                         "PRIMARY KEY (DLCID, AppID) );";
 
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS DLCData ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "Key TEXT NOT NULL, "
@@ -163,7 +170,7 @@ namespace Steam
 
                 // Steam remote-storage.
                 {
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Clientfiles ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "FileID INTEGER NOT NULL, "
@@ -179,7 +186,7 @@ namespace Steam
 
                 // Steam achievements and stats.
                 {
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Achievement ("
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
                         "Maxprogress INTEGER NOT NULL, "
@@ -189,7 +196,7 @@ namespace Steam
                         "Icon TEXT, "
                         "PRIMARY_KEY(API_Name, AppID) );";
 
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Achievementprogress ("
                         "Name TEXT REFERENCES Achievement (Name) ON DELETE CASCADE, "
                         "AppID INTEGER REFERENCES Apps (AppID) ON DELETE CASCADE, "
@@ -201,7 +208,7 @@ namespace Steam
 
                 // Steam gameserver.
                 {
-                    sqlite::database(Database) <<
+                    sqlite::Database_t(Database) <<
                         "CREATE TABLE IF NOT EXISTS Gameserver ("
 
                         // Required properties.
@@ -255,7 +262,7 @@ namespace Steam
                 } catch (...) {}
             });
         }
-        return sqlite::database(Database);
+        return sqlite::Database_t(Database);
     }
 
     // Exported Steam interface.

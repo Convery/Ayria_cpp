@@ -172,17 +172,17 @@ namespace Steam
         }
         EFriendRelationship GetFriendRelationship(SteamID_t steamIDFriend)
         {
-            const auto A = AyriaAPI::Relations::Get(Global.LongID->c_str(), fromSteamID(steamIDFriend.UserID));
-            const auto B = AyriaAPI::Relations::Get(fromSteamID(steamIDFriend.UserID), Global.LongID->c_str());
+            const auto A = AyriaAPI::Relations::Get(Global.LongID->c_str(), fromSteamID(steamIDFriend));
+            const auto B = AyriaAPI::Relations::Get(fromSteamID(steamIDFriend), Global.LongID->c_str());
             return Steamrelation(A, B);
         }
         EPersonaState GetFriendPersonaState(SteamID_t steamIDFriend)
         {
-            const auto Friend = AyriaAPI::Clientinfo::Find(fromSteamID(steamIDFriend.UserID));
+            const auto Friend = AyriaAPI::Clientinfo::Find(fromSteamID(steamIDFriend));
             if (Friend.value<bool>("isPrivate")) return k_EPersonaStateInvisible;
             if (Friend.value<bool>("isAway")) return k_EPersonaStateAway;
 
-            const auto Timesince = AyriaAPI::Clientinfo::Lastmessage(fromSteamID(steamIDFriend.UserID));
+            const auto Timesince = AyriaAPI::Clientinfo::Lastmessage(fromSteamID(steamIDFriend));
             if (Timesince > 300) return k_EPersonaStateOffline;
             else return k_EPersonaStateOnline;
         }
@@ -242,7 +242,7 @@ namespace Steam
         }
         SteamAPICall_t JoinClanChatRoom(SteamID_t groupID)
         {
-            const auto Result = Ayria.doRequest("Groups::Join", JSON::Object_t({ {"GroupID", fromSteamID(groupID.UserID)} }));
+            const auto Result = Ayria.doRequest("Groups::Join", JSON::Object_t({ {"GroupID", fromSteamID(groupID)} }));
             const auto RequestID = Tasks::Createrequest();
 
             // Group is probably not public.
@@ -687,7 +687,6 @@ namespace Steam
             const auto Message = AyriaAPI::Messaging::getMessage(Global.LongID->c_str(), fromSteamID(steamIDFriend), {}, iChatID);
             const auto Messagetype = Message.value<uint32_t>("Messagetype");
             const auto Data = Message.value<std::string>("Message");
-            const auto Timestamp = Message.value<uint64_t>("Sent");
             if (Data.empty()) [[unlikely]] return 0;
 
             const auto Clamped = std::min(cubData, int(Data.size() + 1));
@@ -711,7 +710,6 @@ namespace Steam
             const auto Message = AyriaAPI::Messaging::getGroupmessage(fromSteamID(groupID), {}, iMessage);
             const auto Messagetype = Message.value<uint32_t>("Messagetype");
             const auto Data = Message.value<std::string>("Message");
-            const auto Timestamp = Message.value<uint64_t>("Sent");
             const auto From = Message.value<std::string>("From");
             if (Data.empty()) [[unlikely]] return 0;
 
