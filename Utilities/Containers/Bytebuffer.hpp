@@ -42,38 +42,36 @@ enum Bytebuffertype : uint8_t
 namespace BBInternal
 {
     // Helpers for type deduction.
-    template <class T, template <class...> class Template>
-    struct isDerived : std::false_type {};
-    template <template <class...> class Template, class... Args>
-    struct isDerived<Template<Args...>, Template> : std::true_type {};
+    template <class, template <class...> class> inline constexpr bool isDerived = false;
+    template< template <class...> class T, class... Args> inline constexpr bool isDerived<T<Args...>, T> = true;
 
     // Get the ID from the type to simplify future operations.
     template <typename Type> constexpr uint8_t toID()
     {
         // If it's derived from vector, we need to get the internal type.
-        if constexpr (isDerived<Type, std::vector>{}) return BB_ARRAY + toID<typename Type::value_type>();
+        if constexpr (isDerived<Type, std::vector>) return BB_ARRAY + toID<typename Type::value_type>();
 
         // If it's an enumeration, get the base type.
-        if constexpr (std::is_enum<Type>::value) return toID<typename std::underlying_type<Type>::type>();
+        if constexpr (std::is_enum_v<Type>) return toID<std::underlying_type_t<Type>>();
 
         // Special containers.
-        if constexpr (std::is_same<Type, std::basic_string<uint8_t>>::value)    return BB_BLOB;
-        if constexpr (std::is_same<Type, std::basic_string<char>>::value)       return BB_ASCIISTRING;
-        if constexpr (std::is_same<Type, std::basic_string<wchar_t>>::value)    return BB_UNICODESTRING;
+        if constexpr (std::is_same_v<Type, std::basic_string<uint8_t>>)     return BB_BLOB;
+        if constexpr (std::is_same_v<Type, std::basic_string<char>>)        return BB_ASCIISTRING;
+        if constexpr (std::is_same_v<Type, std::basic_string<wchar_t>>)     return BB_UNICODESTRING;
 
         // POD.
-        if constexpr (std::is_same<typename std::decay<Type>::type, bool>::value)        return BB_BOOL;
-        if constexpr (std::is_same<typename std::decay<Type>::type, wchar_t>::value)     return BB_WCHAR;
-        if constexpr (std::is_same<typename std::decay<Type>::type, int8_t>::value)      return BB_SINT8;
-        if constexpr (std::is_same<typename std::decay<Type>::type, uint8_t>::value)     return BB_UINT8;
-        if constexpr (std::is_same<typename std::decay<Type>::type, int16_t>::value)     return BB_SINT16;
-        if constexpr (std::is_same<typename std::decay<Type>::type, uint16_t>::value)    return BB_UINT16;
-        if constexpr (std::is_same<typename std::decay<Type>::type, int32_t>::value)     return BB_SINT32;
-        if constexpr (std::is_same<typename std::decay<Type>::type, uint32_t>::value)    return BB_UINT32;
-        if constexpr (std::is_same<typename std::decay<Type>::type, int64_t>::value)     return BB_SINT64;
-        if constexpr (std::is_same<typename std::decay<Type>::type, uint64_t>::value)    return BB_UINT64;
-        if constexpr (std::is_same<typename std::decay<Type>::type, float>::value)       return BB_FLOAT32;
-        if constexpr (std::is_same<typename std::decay<Type>::type, double>::value)      return BB_FLOAT64;
+        if constexpr (std::is_same_v<std::decay_t<Type>, bool>)             return BB_BOOL;
+        if constexpr (std::is_same_v<std::decay_t<Type>, wchar_t>)          return BB_WCHAR;
+        if constexpr (std::is_same_v<std::decay_t<Type>, int8_t>)           return BB_SINT8;
+        if constexpr (std::is_same_v<std::decay_t<Type>, uint8_t>)          return BB_UINT8;
+        if constexpr (std::is_same_v<std::decay_t<Type>, int16_t>)          return BB_SINT16;
+        if constexpr (std::is_same_v<std::decay_t<Type>, uint16_t>)         return BB_UINT16;
+        if constexpr (std::is_same_v<std::decay_t<Type>, int32_t>)          return BB_SINT32;
+        if constexpr (std::is_same_v<std::decay_t<Type>, uint32_t>)         return BB_UINT32;
+        if constexpr (std::is_same_v<std::decay_t<Type>, int64_t>)          return BB_SINT64;
+        if constexpr (std::is_same_v<std::decay_t<Type>, uint64_t>)         return BB_UINT64;
+        if constexpr (std::is_same_v<std::decay_t<Type>, float>)            return BB_FLOAT32;
+        if constexpr (std::is_same_v<std::decay_t<Type>, double>)           return BB_FLOAT64;
 
         return BB_NONE;
     }
@@ -164,7 +162,7 @@ struct Bytebuffer
         constexpr auto TypeID = BBInternal::toID<Type>();
 
         // Special case of using a bytebuffer as blob.
-        if constexpr (std::is_same<Type, Bytebuffer>::value)
+        if constexpr (std::is_same_v<Type, Bytebuffer>)
         {
             Rawwrite(Value.Internalsize, Value.Internalbuffer.get());
             return;
@@ -175,7 +173,7 @@ struct Bytebuffer
             Rawwrite(sizeof(TypeID), &TypeID);
 
         // Serialize an array of values.
-        if constexpr (BBInternal::isDerived<Type, std::vector>::value)
+        if constexpr (BBInternal::isDerived<Type, std::vector>)
         {
             Write(uint32_t(sizeof(typename Type::value_type) * Value.size()));
             Write(uint32_t(Value.size()), false);
@@ -185,9 +183,9 @@ struct Bytebuffer
         }
 
         // Serialize as a blob of data.
-        if constexpr (BBInternal::isDerived<Type, std::basic_string>::value)
+        if constexpr (BBInternal::isDerived<Type, std::basic_string>)
         {
-            if constexpr (std::is_same<Type, Blob>::value)
+            if constexpr (std::is_same_v<Type, Blob>)
             {
                 Write(uint32_t(Value.size()), Typechecked);
                 Rawwrite(Value.size(), Value.data());
@@ -222,7 +220,7 @@ struct Bytebuffer
         }
 
         // Deserialize as an array.
-        if constexpr (BBInternal::isDerived<Type, std::vector>::value)
+        if constexpr (BBInternal::isDerived<Type, std::vector>)
         {
             // Total data-size.
             Buffer.reserve(Read<uint32_t>(true));
@@ -233,7 +231,7 @@ struct Bytebuffer
         }
 
         // Deserialize as a blob of data.
-        if constexpr (std::is_same<Type, Blob>::value)
+        if constexpr (std::is_same_v<Type, Blob>)
         {
             auto Bloblength = Read<uint32_t>(Typechecked);
             Buffer.resize(Bloblength);
@@ -297,11 +295,7 @@ struct Bytebuffer
     }
 
     // Utility functionality.
-    [[nodiscard]] Blob asBlob() const
-    {
-        return { Internalbuffer.get(), Internalsize };
-    }
-    [[nodiscard]] void Rewind()
+    void Rewind()
     {
         Internaliterator = 0;
     }
@@ -311,13 +305,17 @@ struct Bytebuffer
         if (Byte != BB_NONE) Internaliterator--;
         return Byte;
     }
-    [[nodiscard]] size_t Remaininglength() const
+    [[nodiscard]] Blob asBlob() const
     {
-        return Internalsize - Internaliterator;
+        return { Internalbuffer.get(), Internalsize };
     }
     [[nodiscard]] Blob_view asView() const
     {
         return { Internalbuffer.get(), Internalsize };
+    }
+    [[nodiscard]] size_t Remaininglength() const
+    {
+        return Internalsize - Internaliterator;
     }
 
     // Supported operators, acts on the internal state.
@@ -376,7 +374,7 @@ struct bbObject : ISerializable
 {
     std::vector<ISerializable *> Values;
 
-    ~bbObject() override { for (auto Item : Values) delete Item; }
+    ~bbObject() override { for (const auto Item : Values) delete Item; }
     explicit bbObject(std::vector<ISerializable *> Input) : Values(std::move(Input)) {}
 
     void Serialize(Bytebuffer &Buffer) override { for (const auto &Item : Values) Item->Serialize(Buffer); }
@@ -394,8 +392,8 @@ template<typename Type> struct bbValue : ISerializable
     void Deserialize(Bytebuffer &Buffer) override { Buffer.Read(Value, Checked); }
 
     bbValue() = default;
-    bbValue(Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
     bbValue(Type &&Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
+    bbValue(const Type &Input, bool Typechecked = true) : Value(Input), Checked(Typechecked) {}
 };
 
 // Helper to bypass formatting.

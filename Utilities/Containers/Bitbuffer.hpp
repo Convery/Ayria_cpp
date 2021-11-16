@@ -6,7 +6,6 @@
 
 #pragma once
 #pragma warning(push)
-#include <Stdinclude.hpp>
 #include "Bytebuffer.hpp"
 #pragma warning(disable: 4702)
 
@@ -126,16 +125,16 @@ struct Bitbuffer
             Rawwrite(5, &TypeID);
 
         // Special case of bool being 1 bit.
-        if constexpr (std::is_same<Type, bool>::value)
+        if constexpr (std::is_same_v<Type, bool>)
         {
             Rawwrite(1, &Value);
             return;
         }
 
         // Serialize as a blob of data.
-        if constexpr (BBInternal::isDerived<Type, std::basic_string>::value)
+        if constexpr (BBInternal::isDerived<Type, std::basic_string>)
         {
-            if constexpr (std::is_same<Type, Blob>::value)
+            if constexpr (std::is_same_v<Type, Blob>)
             {
                 Write(uint32_t(Value.size()), Typechecked);
                 Rawwrite(Value.size() * 8, Value.data());
@@ -173,13 +172,13 @@ struct Bitbuffer
         }
 
         // Special case of bool being 1 bit.
-        if constexpr (std::is_same<Type, bool>::value)
+        if constexpr (std::is_same_v<Type, bool>)
         {
             return Rawread(1, &Buffer);
         }
 
         // Deserialize as a blob of data.
-        if constexpr (std::is_same<Type, Blob>::value)
+        if constexpr (std::is_same_v<Type, Blob>)
         {
             auto Bloblength = Read<uint32_t>(Typechecked);
             Buffer.resize(Bloblength);
@@ -246,11 +245,7 @@ struct Bitbuffer
     }
 
     // Utility functionality.
-    [[nodiscard]] Blob asBlob() const
-    {
-        return { Internalbuffer.get(), Internalsize };
-    }
-    [[nodiscard]] void Rewind()
+    void Rewind()
     {
         Internaliterator = 0;
     }
@@ -259,6 +254,10 @@ struct Bitbuffer
         uint8_t Byte{ BB_NONE }; Rawread(5, &Byte);
         if (Byte != BB_NONE) Internaliterator -= 5;
         return Byte;
+    }
+    [[nodiscard]] Blob asBlob() const
+    {
+        return { Internalbuffer.get(), Internalsize };
     }
     [[nodiscard]] size_t Remaininglength() const
     {
