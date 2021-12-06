@@ -12,8 +12,7 @@ namespace Backend
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)());
 
-    // Interface with the client database, remember try-catch.
-    Hashset<int64_t> getModified(const std::string &Tablename);
+    // Interface with the client database.
     sqlite::Database_t Database();
 
     // Set the global cryptokey from various sources.
@@ -28,12 +27,17 @@ namespace Backend
 // Layer 1 - Networking between clients.
 namespace Backend::Messagebus
 {
-    // General N<->N networking, big endian.
-    void Connectuser(uint32_t IPv4, uint16_t Port);
+    // Share a message with the network.
     void Publish(std::string_view Identifier, std::string_view Payload);
+    void Publish(std::string_view Identifier, JSON::Object_t &&Payload);
+    void Publish(std::string_view Identifier, const JSON::Object_t &Payload);
 
-    // Set up the networking and connect to others.
-    void Initialize(bool doLANDiscovery = true);
+    // Client-selected (trust, but optionally verify) routing-servers.
+    void removeRouter(const sockaddr_in &Address);
+    void addRouter(const sockaddr_in &Address);
+
+    // Set up winsock.
+    void Initialize();
 }
 namespace Layer1 = Backend::Messagebus;
 
@@ -54,8 +58,8 @@ namespace Layer2 = Backend::Messageprocessing;
 // Layer 3 - User-triggered calls to Layer 1 & 2.
 namespace Backend::JSONAPI
 {
-    using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
     // static std::string __cdecl Callback(JSON::Value_t &&Request);
+    using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
 
     // Listen for requests to this functionname.
     void addEndpoint(std::string_view Functionname, Callback_t Callback);
@@ -65,19 +69,15 @@ namespace Layer3 = Backend::JSONAPI;
 // Layer 4 - Check database changes and notify the user.
 namespace Backend::Notifications
 {
-    // static void __cdecl Callback(const char *JSONString);
-    using Callback_t = void(__cdecl *)(const char *JSONString);
+    // static void __cdecl Callback(const char *Message, unsigned int Length);
+    using Callback_t = void(__cdecl *)(const char *Message, unsigned int Length);
+
     void Subscribe(std::string_view Identifier, Callback_t Handler);
-    void Publish(std::string_view Identifier, const char *JSONString);
     void Unsubscribe(std::string_view Identifier, Callback_t Handler);
 
-    // Internal.
-    // static void __cdecl Callback(int64_t RowID);
-    using Processor_t = void(__cdecl *)(int64_t RowID);
-    void addProcessor(std::string_view Tablename, Processor_t Callback);
-
-    // Set up the system.
-    void Initialize();
+    void Publish(std::string_view Identifier, std::string_view Payload);
+    void Publish(std::string_view Identifier, JSON::Object_t &&Payload);
+    void Publish(std::string_view Identifier, const JSON::Object_t &Payload);
 }
 namespace Layer4 = Backend::Notifications;
 
@@ -123,49 +123,3 @@ namespace Backend::HTTP
     std::future<Response_t> POST(std::string URL, std::string Data);
     std::future<Response_t> GET(std::string URL);
 }
-
-namespace Networking34
-{
-
-    /*
-        Layer1: Sync streamed table between users.
-        Layer2: Parse and insert into the DB.
-        Layer3: Parse updates and do notifications.
-
-        APILayer: Insert
-
-    */
-
-    /*
-
-        Basic idea:
-        LAN clients connect to eachother over TCP to minimize data-loss.
-
-        Server layer connects to eachother via DHT discovery.
-        Server layer share all events between them.
-
-        Clients can do DHT discovery to find a close server.
-        onStartup => Check last message time -> Divide missing time by servercount -> request messages for timeslot.
-
-        Server layer periodically prunes. e.g.
-        MSG1: Client A sets username to X
-        MSG2: Client A sets username to Y
-
-        MSG1 can be pruned after a set time ( 48H? ).
-        Should keep the dataset from growing too large.
-        for (MSG in Processed) if ( Process(MSG) == DB.getEntry(MSG) ) Erase(MSG);
-
-        Some tables can not be pruned, like messaging.
-        So we can let servers delete them after some time, but Ayrias servers should save all..
-
-        Servers can also prune banned accounts.
-
-        Client_packet = { Sig, Payload }
-        Server_packet = { PK, Sig, Payload }
-
-    */
-
-}
-
-
-

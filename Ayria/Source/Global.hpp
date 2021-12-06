@@ -22,9 +22,9 @@ class Globalstate_t
     uint32_t GameID{}, ModID{};             // Set through Platform-wrapper.
     // 16 bytes.
 
-    // 25519-curve cryptography, random or derived from authentication. Primary user identifier.
-    std::unique_ptr<std::array<uint8_t, 32>> Privatekey{ Allocate<std::array<uint8_t, 32>>() };
-    std::unique_ptr<std::array<uint8_t, 32>> Publickey{ Allocate<std::array<uint8_t, 32>>() };
+    // Cryptokeys are random or derived from authentication. Primary user identifier.
+    std::unique_ptr<qDSA::Key_t> Privatekey{ Allocate<qDSA::Key_t>() };
+    std::unique_ptr<qDSA::Key_t> Publickey{ Allocate<qDSA::Key_t>() };
     // 24 / 32 bytes.
 
     // Rarely used (for now), but good to have in the future.
@@ -65,16 +65,6 @@ class Globalstate_t
     // ************************************
 
     // Helpers for access to the members.
-    uint16_t getClientflags() const
-    {
-        uint16_t Flags{};
-        Flags |= Settings.isPrivate << 1;
-        Flags |= Settings.isAway    << 2;
-        Flags |= Settings.isHosting << 3;
-        Flags |= Settings.isIngame  << 4;
-
-        return Flags;
-    };
     uint64_t getShortID() const { return Hash::WW64(getLongID()); }
     const std::string &getLongID() const
     {

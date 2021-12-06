@@ -85,33 +85,7 @@ namespace Backend
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
     }
 
-    // Fetch information about updated tables.
-    static Hashmap<std::string, Hashset<int64_t>> Modifiedrows{};
-    Hashset<int64_t> getModified(const std::string &Tablename)
-    {
-        Hashset<int64_t> Temp{};
-
-        std::scoped_lock Lock(Databaselock);
-        Modifiedrows[Tablename].swap(Temp);
-        return Temp;
-    }
-    static void UpdateCB(void *, int Type, const char *, const char *Table, int64_t RowID)
-    {
-        // We don't care about deletions..
-        if (Type == SQLITE_INSERT || Type == SQLITE_UPDATE) [[likely]]
-        {
-            const auto lTable = std::string(Table);
-
-            // Nor do we care about internal tables..
-            if (lTable == "Messagestream" || lTable == "Account") [[likely]]
-                return;
-
-            std::scoped_lock Lock(Databaselock);
-            Modifiedrows[lTable].insert(RowID);
-        }
-    }
-
-    // Interface with the client database, remember try-catch.
+    // Interface with the client database.
     sqlite::Database_t Database()
     {
         static std::shared_ptr<sqlite3> Database{};
@@ -124,22 +98,19 @@ namespace Backend
             if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
             assert(Result == SQLITE_OK);
 
-            // Intercept updates from plugins writing to the DB.
+            // Log errors in debug-mode.
             if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.sqlite");
-            sqlite3_update_hook(Ptr, UpdateCB, nullptr);
-            sqlite3_extended_result_codes(Ptr, false);
 
             // Close the DB at exit to ensure everything's flushed.
             Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
 
             // Basic initialization.
-            try
-            {
-                sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
-                sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+            sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
+            sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
 
-                // Helper functions for inline hashing.
-                const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+            // Helper functions for inline hashing.
+            {
+                static const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -149,7 +120,7 @@ namespace Backend
                     const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
                     sqlite3_result_int(context, Hash);
                 };
-                const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                static const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -159,39 +130,36 @@ namespace Backend
                     const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
                     sqlite3_result_int64(context, Hash);
                 };
-
                 sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
                 sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
+            }
 
-                sqlite::Database_t(Database) <<
-                    "CREATE TABLE IF NOT EXISTS Account ("
-                    "Publickey TEXT NOT NULL PRIMARY KEY );";
+            sqlite::Database_t(Database) <<
+                "CREATE TABLE IF NOT EXISTS Account ("
+                "Publickey TEXT NOT NULL PRIMARY KEY, "
+                "Lastseen INTEGER DEFAULT 0 );";
 
-                sqlite::Database_t(Database) <<
-                    "CREATE TABLE IF NOT EXISTS Messagestream ("
-                    "Sender TEXT REFERENCES Account (Publickey) ON DELETE CASCADE, "
-                    "Messagetype INTEGER NOT NULL, "
-                    "Timestamp INTEGER NOT NULL, "
-                    "Signature TEXT NOT NULL, "
-                    "Message TEXT NOT NULL, "
-                    "isProcessed BOOLEAN, "
-                    "UNIQUE (Sender, Messagetype, Message) );";  // Only save the last message in case of duplicates.
-            } catch (...) {}
+            sqlite::Database_t(Database) <<
+                "CREATE TABLE IF NOT EXISTS Messagestream ("
+                "Sender TEXT REFERENCES Account (Publickey) ON DELETE CASCADE, "
+                "Messagetype INTEGER NOT NULL, "
+                "Timestamp INTEGER NOT NULL, "
+                "Signature TEXT NOT NULL, "
+                "Message TEXT NOT NULL, "
+                "isProcessed BOOLEAN, "
+                "UNIQUE (Sender, Messagetype, Message) );";  // Only save the last message in case of duplicates.
 
             // Perform cleanup on exit.
             std::atexit([]()
             {
-                if (!Global.Settings.pruneDB)
+                if (!!Global.Settings.pruneDB)
                 {
                     const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::hours(24)).time_since_epoch();
-                    try { Backend::Database() << "DELETE FROM Messagestream WHERE Timestamp < ?;" << Timestamp.count(); } catch (...) {}
+                    Backend::Database() << "DELETE FROM Messagestream WHERE Timestamp < ?;" << Timestamp.count();
                 }
 
-                try
-                {
-                    Backend::Database() << "PRAGMA optimize;";
-                    Backend::Database() << "PRAGMA incremental_vacuum;";
-                } catch (...) {}
+                Backend::Database() << "PRAGMA optimize;";
+                Backend::Database() << "PRAGMA incremental_vacuum;";
             });
         }
         return sqlite::Database_t(Database);
@@ -240,9 +208,8 @@ namespace Backend
         timeBeginPeriod(1);
 
         // Initialize subsystems that plugins may need.
-        Messagebus::Initialize();
         Messageprocessing::Initialize();
-        Notifications::Initialize();
+        Messagebus::Initialize();
         Services::Initialize();
         Console::Initialize();
         Plugins::Initialize();
