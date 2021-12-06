@@ -5,6 +5,14 @@
 
     quotient Digital Signature Algorithm
     arXiv:1709.03358
+
+    NOTICE:
+    This has not been extensively tested.
+    This implements some bad crypto practices, e.g. no constant-time operations.
+    This should not be used for more important authentication / signing situations.
+
+    If extending / improving this, keep in mind that modulus of negative numbers in C++
+    is defined as (-n) % k = -(n % k). i.e. -20 % 6 = -2 rather than 4 as you'd expect.
 */
 
 #pragma once
@@ -995,18 +1003,20 @@ namespace qDSA
         }
     }
 
-
-    template <typename T> concept Range_t = requires (const T && t) { t.data(); t.size(); sizeof(t[0]) == 1; };
+    //                                                                     Crashes MSVC: sizeof(typename T::value_type) == 1;
+    template <typename T> concept Range_t = requires (const T &&t) { t.data(); t.size(); sizeof(t[0]) == 1; };
+    using Signature_t = std::array<uint8_t, 64>;
+    using Key_t = std::array<uint8_t, 32>;
 
     template <Range_t A, Range_t B, Range_t C>
-    constexpr std::array<uint8_t, 64> Sign(A &&Publickey, B &&Privatekey, C &&Message)
+    constexpr Signature_t Sign(A &&Publickey, B &&Privatekey, C &&Message)
     {
         // First point.
         const auto Seed1 = [&]()
         {
             // Add a bit of 'randomness' to prevent attacks on multiple PKs at once.
             auto Buffer = std::make_unique<uint8_t[]>(64);
-            const auto PRND = Hash::SHA256(Privatekey);
+            const auto PRND = Hash::SHA512(Privatekey);
             const auto Context = EVP_MD_CTX_create();
 
             EVP_DigestInit(Context, EVP_sha512());
@@ -1080,7 +1090,7 @@ namespace qDSA
     }
 
     template <Range_t A, Range_t B>
-    constexpr std::array<uint8_t, 32> Generatesecret(A &&Publickey, B &&Privatekey)
+    constexpr Key_t Generatesecret(A &&Publickey, B &&Privatekey)
     {
         const auto Scalar = getScalar32(Privatekey.data());
         auto PK = Decompress(*(FE256_t *)Publickey.data());
@@ -1097,15 +1107,19 @@ namespace qDSA
     }
 
     template <Range_t A, typename = std::enable_if<sizeof(A) >= 32>>
-    constexpr std::tuple<std::array<uint8_t, 32>, std::array<uint8_t, 32>> Createkeypair(A &&Seed)
+    constexpr std::tuple<Key_t, Key_t> Createkeypair(A &&Seed)
     {
-        const auto [X, Y] = Compress(Ladder(getScalar32((const uint8_t *)Seed.data()), 250));
+        std::array<uint8_t, 32> Public, Private;
+        std::ranges::move(Hash::SHA256(Seed), Private.begin());
 
-        std::array<uint8_t, 32> Pub{}, Private{};
-        std::memcpy(Pub.data() + 0, X.Byte, 16);
-        std::memcpy(Pub.data() + 16, Y.Byte, 16);
-        std::memcpy(Private.data(), Seed.data(), 32);
+        // Make the private-key compatible with RFC 8032 incase someone want's to re-use it.
+        Private[0] &= 0xF8;
+        Private[31] &= 0x7F;
+        Private[31] |= 0x40;
 
-        return { Pub, Private };
+        const auto [X, Y] = Compress(Ladder(getScalar32(Private.data()), 250));
+        std::memcpy(Public.data() + 16, Y.Byte, 16);
+        std::memcpy(Public.data() + 0, X.Byte, 16);
+        return { Public, Private };
     }
 }
