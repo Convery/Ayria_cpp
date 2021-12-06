@@ -9,19 +9,11 @@
 #pragma once
 #include <Stdinclude.hpp>
 
-// C++ regression helpers.
-#pragma region C++
-
-// Helper to support designated initializers until c++ 20 is mainstream.
-#define instantiate(T, ...) ([&]{ T ${}; __VA_ARGS__; return $; }())
-
-#pragma endregion
-
 // Python-esque constructs for loops.
 #pragma region Python
 
 // for (const auto &[Index, Value] : Enumerate(std::vector({ 1, 2, 3, 4 }))) ...
-#if defined(__cpp_lib_coroutine) && __has_include(<experimental/generator>)
+#if defined (__cpp_lib_coroutine) && __has_include(<experimental/generator>)
 #include <experimental/generator>
 
 template <typename Type, typename Indextype = size_t>
@@ -69,7 +61,7 @@ struct Enumerate
 #endif
 
 // for (const auto &x : Range(1, 100, 2)) ...
-#if defined(__cpp_lib_coroutine) && __has_include(<experimental/generator>)
+#if defined (__cpp_lib_coroutine) && __has_include(<experimental/generator>)
 #include <experimental/generator>
 
 template <typename Valuetype, typename Steptype = int>
@@ -119,8 +111,8 @@ struct Range
 
 #pragma endregion
 
-// Helper for debug-builds, constexpr if is not valid on MSVC.
-#if defined (WIN32)
+// Helper for debug-builds.
+#if defined (_WIN32)
 inline void setThreadname(std::string_view Name)
 {
     if constexpr (Build::isDebug)
@@ -148,5 +140,68 @@ inline void setThreadname(std::string_view Name)
 #else
 inline void setThreadname(std::string_view Name)
 {
+}
+#endif
+
+// Will be added in MSVC 17.1, copied from MS-STL.
+#if !defined (__cpp_lib_byteswap)
+#define __cpp_lib_byteswap
+namespace std
+{
+    [[nodiscard]] constexpr uint32_t _Byteswap_ulong(const uint32_t _Val) noexcept
+    {
+        if (std::is_constant_evaluated())
+        {
+            return (_Val << 24) | ((_Val << 8) & 0x00FF'0000) | ((_Val >> 8) & 0x0000'FF00) | (_Val >> 24);
+        }
+        else
+        {
+            #if defined (_MSC_VER)
+            return _byteswap_ulong(_Val);
+            #else
+            return __builtin_bswap32(_Val);
+            #endif
+        }
+    }
+    [[nodiscard]] constexpr uint16_t _Byteswap_ushort(const uint16_t _Val) noexcept
+    {
+        if (std::is_constant_evaluated())
+        {
+            return static_cast<uint16_t>((_Val << 8) | (_Val >> 8));
+        }
+        else
+        {
+            #if defined (_MSC_VER)
+            return _byteswap_ushort(_Val);
+            #else
+            return __builtin_bswap16(_Val);
+            #endif
+        }
+    }
+    [[nodiscard]] constexpr uint64_t _Byteswap_uint64(const uint64_t _Val) noexcept
+    {
+        if (std::is_constant_evaluated())
+        {
+            return (_Val << 56) | ((_Val << 40) & 0x00FF'0000'0000'0000) | ((_Val << 24) & 0x0000'FF00'0000'0000)
+                | ((_Val << 8) & 0x0000'00FF'0000'0000) | ((_Val >> 8) & 0x0000'0000'FF00'0000)
+                | ((_Val >> 24) & 0x0000'0000'00FF'0000) | ((_Val >> 40) & 0x0000'0000'0000'FF00) | (_Val >> 56);
+        }
+        else
+        {
+            #if defined (_MSC_VER)
+            return _byteswap_uint64(_Val);
+            #else
+            return __builtin_bswap64(_Val);
+            #endif
+        }
+    }
+    template <std::integral _Ty> [[nodiscard]] constexpr _Ty byteswap(const _Ty _Val) noexcept
+    {
+        if constexpr (sizeof(_Ty) == 1) return _Val;
+        else if constexpr (sizeof(_Ty) == 2) return static_cast<_Ty>(_Byteswap_ushort(static_cast<uint16_t>(_Val)));
+        else if constexpr (sizeof(_Ty) == 4) return static_cast<_Ty>(_Byteswap_ulong(static_cast<uint32_t>(_Val)));
+        else if constexpr (sizeof(_Ty) == 8) return static_cast<_Ty>(_Byteswap_uint64(static_cast<uint64_t>(_Val)));
+        else static_assert(false, "Unexpected integer size");
+    }
 }
 #endif
