@@ -19,6 +19,11 @@
 #include <algorithm>
 #include <string_view>
 
+// std::byteswap if not available.
+#if !defined (__cpp_lib_byteswap)
+#include "../Internal/Misc.hpp"
+#endif
+
 using Blob = std::basic_string<uint8_t>;
 using Blob_view = std::basic_string_view<uint8_t>;
 
@@ -64,26 +69,6 @@ namespace Base85
         {
             return std::array<T, N - 1>{ {Input[Index]...} };
         }(Input, std::make_index_sequence<N - 1>());
-    }
-
-    // Constexpr compatible byteswap (will be added to STL in C++ 23).
-    constexpr uint32_t byteswap(uint32_t Value)
-    {
-        if (std::is_constant_evaluated())
-        {
-            return (Value & (0xFF << 0) << 24) |
-                   (Value & (0xFF << 8) << 8)  |
-                   (Value & (0xFF << 16) >> 8) |
-                   (Value & (0xFF << 24) >> 24);
-        }
-        else
-        {
-            #if defined (_MSC_VER)
-            return _byteswap_ulong(Value);
-            #else
-            return __builtin_bswap32(Value);
-            #endif
-        }
     }
 
     // Not allowed to cast a pointer to a value, because reasons..
@@ -133,7 +118,7 @@ namespace Base85
         };
 
         constexpr uint32_t Div85(uint32_t Value) { constexpr uint64_t Magic = 3233857729ULL; return (uint32_t)((Magic * Value) >> 32) >> 6; }
-        template <Byte_t T, Byte_t U> constexpr void Encode(std::span<const T> Input, std::span<U> Output)
+        template <Byte_t T, Byte_t U> constexpr std::span<U> Encode(std::span<const T> Input, std::span<U> Output)
         {
             if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
             if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
@@ -141,7 +126,7 @@ namespace Base85
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
                 uint32_t Accumulator, Rem;
-                Accumulator = byteswap(toInt32(&Input[i * 4]));
+                Accumulator = std::byteswap(toInt32(&Input[i * 4]));
                 const auto outTuple = Output.subspan(i * 5, 5);
 
                 Rem = Div85(Accumulator); outTuple[4] = U(Table[Accumulator - Rem * 85UL]); Accumulator = Rem;
@@ -150,8 +135,10 @@ namespace Base85
                 Rem = Div85(Accumulator); outTuple[1] = U(Table[Accumulator - Rem * 85UL]);
                 outTuple[0] = U(Table[Rem]);
             }
+
+            return Output.subspan(0, Encodesize_padded(Input.size()));
         }
-        template <Byte_t T, Byte_t U> constexpr void Decode(std::span<const T> Input, std::span<U> Output)
+        template <Byte_t T, Byte_t U> constexpr std::span<U> Decode(std::span<const T> Input, std::span<U> Output)
         {
             if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
             if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
@@ -169,22 +156,24 @@ namespace Base85
 
                 fromInt32(&Output[i * 4], Accumulator);
             }
+
+            return Output.subspan(0, Decodesize_padded(Input.size()));
         }
 
         // Overloads because string-types are special and needs another constructor..
-        template <Simplestring_t T, Byte_t U> constexpr void Encode(const T &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Encode(const T &Input, std::span<U> Output)
         {
             return Encode(std::span{ Input }, Output);
         }
-        template <Simplestring_t T, Byte_t U> constexpr void Decode(const T &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Decode(const T &Input, std::span<U> Output)
         {
             return Decode(std::span{ Input }, Output);
         }
-        template <Simplestring_t T, Simplestring_t U> constexpr void Encode(const T &Input, U &Output)
+        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Encode(const T &Input, U &Output)
         {
             return Encode(std::span{ Input }, std::span{ Output });
         }
-        template <Simplestring_t T, Simplestring_t U> constexpr void Decode(const T &Input, U &Output)
+        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Decode(const T &Input, U &Output)
         {
             return Decode(std::span{ Input }, std::span{ Output });
         }
@@ -275,14 +264,14 @@ namespace Base85
     namespace RFC1924
     {
         constexpr uint32_t Pow85[] = { 52200625UL, 614125UL, 7225UL, 85UL, 1UL };
-        template <Byte_t T, Byte_t U> constexpr void Encode(std::span<const T> Input, std::span<U> Output)
+        template <Byte_t T, Byte_t U> constexpr std::span<U> Encode(std::span<const T> Input, std::span<U> Output)
         {
             if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
             if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
 
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
-                const uint32_t inTuple = byteswap(toInt32(&Input[i * 4]));
+                const uint32_t inTuple = std::byteswap(toInt32(&Input[i * 4]));
                 const auto outTuple = Output.subspan(i * 5, 5);
 
                 outTuple[0] = U(((inTuple / Pow85[0]) % 85UL) + 33UL);
@@ -291,8 +280,10 @@ namespace Base85
                 outTuple[3] = U(((inTuple / Pow85[3]) % 85UL) + 33UL);
                 outTuple[4] = U(((inTuple / Pow85[4]) % 85UL) + 33UL);
             }
+
+            return Output.subspan(0, Encodesize_padded(Input.size()));
         }
-        template <Byte_t T, Byte_t U> constexpr void Decode(std::span<const T> Input, std::span<U> Output)
+        template <Byte_t T, Byte_t U> constexpr std::span<U> Decode(std::span<const T> Input, std::span<U> Output)
         {
             if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
             if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
@@ -308,24 +299,26 @@ namespace Base85
                 outTuple += (uint8_t(inTuple[3]) - 33UL) * Pow85[3];
                 outTuple += (uint8_t(inTuple[4]) - 33UL) * Pow85[4];
 
-                fromInt32(&Output[i * 4], byteswap(outTuple));
+                fromInt32(&Output[i * 4], outTuple);
             }
+
+            return Output.subspan(0, Decodesize_padded(Input.size()));
         }
 
         // Overloads because string-types are special and needs another constructor..
-        template <Simplestring_t T, Byte_t U> constexpr void Encode(const T &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Encode(const T &Input, std::span<U> Output)
         {
             return Encode(std::span{ Input }, Output);
         }
-        template <Simplestring_t T, Byte_t U> constexpr void Decode(const T &Input, std::span<U> Output)
+        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Decode(const T &Input, std::span<U> Output)
         {
             return Decode(std::span{ Input }, Output);
         }
-        template <Simplestring_t T, Simplestring_t U> constexpr void Encode(const T &Input, U &Output)
+        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Encode(const T &Input, U &Output)
         {
             return Encode(std::span{ Input }, std::span{ Output });
         }
-        template <Simplestring_t T, Simplestring_t U> constexpr void Decode(const T &Input, U &Output)
+        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Decode(const T &Input, U &Output)
         {
             return Decode(std::span{ Input }, std::span{ Output });
         }
