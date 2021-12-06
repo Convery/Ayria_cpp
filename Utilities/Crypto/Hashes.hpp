@@ -233,6 +233,18 @@ namespace Hash
 
             return std::string((char *)Buffer.get(), 32);
         }
+        template <Bytealigned_t T> [[nodiscard]] inline std::string SHA512(const T *Input, const size_t Size)
+        {
+            const auto Buffer = std::make_unique<uint8_t[]>(64);
+            const auto Context = EVP_MD_CTX_create();
+
+            EVP_DigestInit_ex(Context, EVP_sha512(), nullptr);
+            EVP_DigestUpdate(Context, Input, Size);
+            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
+            EVP_MD_CTX_destroy(Context);
+
+            return std::string((char *)Buffer.get(), 64);
+        }
         #endif
 
         // Compile-time hashing for simple fixed-length datablocks.
@@ -290,21 +302,29 @@ namespace Hash
     Impl(CRC32A); Impl(CRC32B); Impl(CRC32T);
 
     #if defined (HAS_OPENSSL)
-    Impl(MD5); Impl(SHA1); Impl(SHA256);
+    Impl(MD5); Impl(SHA1); Impl(SHA256); Impl(SHA512);
     inline std::string HMACSHA1(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
     {
-        unsigned char Buffer[256]{};
-        unsigned int Buffersize = 256;
+        unsigned int Buffersize = 20;
+        unsigned char Buffer[20]{};
 
         HMAC(EVP_sha1(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
         return std::string((char *)Buffer, Buffersize);
     }
     inline std::string HMACSHA256(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
     {
-        unsigned char Buffer[256]{};
-        unsigned int Buffersize = 256;
+        unsigned int Buffersize = 32;
+        unsigned char Buffer[32]{};
 
         HMAC(EVP_sha256(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        return std::string((char *)Buffer, Buffersize);
+    }
+    inline std::string HMACSHA512(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
+    {
+        unsigned int Buffersize = 64;
+        unsigned char Buffer[64]{};
+
+        HMAC(EVP_sha512(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
         return std::string((char *)Buffer, Buffersize);
     }
     #endif
