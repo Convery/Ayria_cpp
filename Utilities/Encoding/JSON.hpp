@@ -18,14 +18,9 @@
 #pragma warning(disable: 4702)
 namespace JSON
 {
-    namespace Internal
-    {
-        // Helpers for type deduction.
-        template <class T, template <class...> class Template>
-        struct isDerived : std::false_type {};
-        template <template <class...> class Template, class... Args>
-        struct isDerived<Template<Args...>, Template> : std::true_type {};
-    }
+    // Helpers for type deduction.
+    template <class, template <class...> class> inline constexpr bool isDerived = false;
+    template <template <class...> class T, class... Args> inline constexpr bool isDerived<T<Args...>, T> = true;
 
     enum class Type_t { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
     using Object_t = std::unordered_map<std::string, struct Value_t>;
@@ -34,15 +29,15 @@ namespace JSON
     // Helper for type deduction.
     template<typename T> constexpr Type_t toType()
     {
-        if constexpr (Internal::isDerived<T, std::basic_string_view>{}) return Type_t::String;
-        if constexpr (Internal::isDerived<T, std::basic_string>{}) return Type_t::String;
+        if constexpr (isDerived<T, std::basic_string_view>) return Type_t::String;
+        if constexpr (isDerived<T, std::basic_string>) return Type_t::String;
 
-        if constexpr (Internal::isDerived<T, std::unordered_set>{}) return Type_t::Array;
-        if constexpr (Internal::isDerived<T, std::vector>{}) return Type_t::Array;
-        if constexpr (Internal::isDerived<T, std::set>{}) return Type_t::Array;
+        if constexpr (isDerived<T, std::unordered_set>) return Type_t::Array;
+        if constexpr (isDerived<T, std::vector>) return Type_t::Array;
+        if constexpr (isDerived<T, std::set>) return Type_t::Array;
 
-        if constexpr (Internal::isDerived<T, std::unordered_map>{}) return Type_t::Object;
-        if constexpr (Internal::isDerived<T, std::map>{}) return Type_t::Object;
+        if constexpr (isDerived<T, std::unordered_map>) return Type_t::Object;
+        if constexpr (isDerived<T, std::map>) return Type_t::Object;
 
         if constexpr (std::is_floating_point_v<T>) return Type_t::Float;
         if constexpr (std::is_same_v<T, bool>) return Type_t::Bool;
@@ -203,7 +198,7 @@ namespace JSON
             return asPtr(Object_t)->at(Key.data());
         }
 
-        // NOTE(tcn): std::basic_string variants can't deduce T, use value().
+        // NOTE(tcn): The std::basic_string variants can't alwas be deduced and needs to be declared explicitly.
         template<typename T> operator T() const
         {
             switch (Type)
@@ -217,7 +212,7 @@ namespace JSON
 
                 case Type_t::String:
                 {
-                    if constexpr (Internal::isDerived<T, std::basic_string>{})
+                    if constexpr (isDerived<T, std::basic_string>)
                     {
                         if constexpr (std::is_same_v<typename T::value_type, wchar_t>)
                             return Encoding::toWide(*asPtr(std::u8string));
@@ -228,25 +223,31 @@ namespace JSON
                         if constexpr (std::is_same_v<typename T::value_type, char8_t>)
                             return *asPtr(std::u8string);
                     }
+                    else
+                    {
+                        // While possible in the case of std::u8string_view, better to discourage this.
+                        static_assert(!isDerived<T, std::basic_string_view>, "Don't try to cast to a *_view string.");
+                    }
                     break;
                 }
+
                 case Type_t::Array:
                 {
-                    if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{} ||
-                                  Internal::isDerived<T, std::vector>{})
+                    if constexpr (isDerived<T, std::set> || isDerived<T, std::unordered_set> || isDerived<T, std::vector>)
                     {
-                        if constexpr (std::is_same_v<T, Array_t>)
-                        return *asPtr(Array_t);
+                        if constexpr (std::is_same_v<T, Array_t>) return *asPtr(Array_t);
 
                         const auto Array = asPtr(Array_t);
                         T Result; Result.reserve(Array->size());
 
-                        if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{})
+                        if constexpr (isDerived<T, std::set> || isDerived<T, std::unordered_set>)
                             for (const auto &Item : *Array)
                                 Result.insert(Item);
 
-                        if constexpr (Internal::isDerived<T, std::vector>{})
+                        if constexpr (isDerived<T, std::vector>)
                             std::ranges::copy(*Array, Result.begin());
+
+                        return Result;
                     }
                     break;
                 }
@@ -258,42 +259,34 @@ namespace JSON
         }
         template<typename T> T get() const
         {
-            return *this;
-        }
-        template<typename T> std::remove_pointer_t<T> *get()
-        {
-            if (isNull()) return {};
-            return *asPtr(std::remove_pointer_t<T>);
+            return this->operator T();
         }
 
         //
-        template<size_t N> Value_t &operator[](const char(&Key)[N])
-        {
-            if (Type != Type_t::Object) return *this;
-            return asPtr(Object_t)->at({ Key, N });
-        }
         template<size_t N> Value_t operator[](const char(&Key)[N]) const
         {
-            if (Type != Type_t::Object) return *this;
-            return *asPtr(Object_t)->at({ Key, N });
+            if (Type != Type_t::Object) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
+            return asPtr(Object_t)->operator[]({ Key, N });
+        }
+        template<size_t N> Value_t &operator[](const char(&Key)[N])
+        {
+            if (Type != Type_t::Object) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
+            return asPtr(Object_t)->operator[]({ Key, N });
+        }
+        Value_t operator[](size_t N) const
+        {
+            if (Type != Type_t::Array) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
+            return asPtr(Array_t)->operator[](N);
+        }
+        Value_t &operator[](size_t N)
+        {
+            if (Type != Type_t::Array) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
+            return asPtr(Array_t)->operator[](N);
         }
 
         //
-        template<typename T, size_t N> Value_t(const std::array<T, N> &Input)
+        template<typename T> Value_t(const T &Input) requires(!std::is_pointer_v<T>)
         {
-            *this = std::basic_string<std::remove_const_t<T>>(Input.data(), N);
-            return;
-        }
-        template<typename T, size_t N> [[nodiscard]] Value_t(T(&Input)[N])
-        {
-            *this = std::basic_string<std::remove_const_t<T>>(Input, N);
-            return;
-        }
-        template<typename T> Value_t(const T &Input)
-        {
-            // Let's not bother with pointers.
-            static_assert(!std::is_pointer_v<T>);
-
             // Safety-check, we do not convert arrays to strings.
             static_assert(toType<T>() != Type_t::Null);
 
@@ -308,7 +301,7 @@ namespace JSON
                 if constexpr (toType<T>() == Type_t::Float) Value = std::make_shared<double>(Input);
                 if constexpr (toType<T>() == Type_t::Bool) Value = std::make_shared<bool>(Input);
 
-                if constexpr (Internal::isDerived<T, std::unordered_map>{} || Internal::isDerived<T, std::map>{})
+                if constexpr (isDerived<T, std::unordered_map> || isDerived<T, std::map>)
                 {
                     static_assert(std::is_convertible_v<typename T::key_type, std::string>);
 
@@ -319,8 +312,7 @@ namespace JSON
                     Type = Type_t::Object;
                     Value = std::make_shared<Object_t>(std::move(Object));
                 }
-                if constexpr (Internal::isDerived<T, std::set>{} || Internal::isDerived<T, std::unordered_set>{} ||
-                              Internal::isDerived<T, std::vector>{})
+                if constexpr (isDerived<T, std::set> || isDerived<T, std::unordered_set> || isDerived<T, std::vector>)
                 {
                     Array_t Array(Input.size());
                     for (auto Items = Enumerate(Input); const auto &[Index, _Value] : Items)
@@ -330,6 +322,21 @@ namespace JSON
                     Value = std::make_shared<Array_t>(std::move(Array));
                 }
             }
+        }
+        template<typename T, size_t N> Value_t(const std::array<T, N> &Input)
+        {
+            *this = std::basic_string<std::remove_const_t<T>>(Input.data(), N);
+            return;
+        }
+        template<typename T, size_t N> [[nodiscard]] Value_t(T(&Input)[N])
+        {
+            *this = std::basic_string<std::remove_const_t<T>>(Input, N);
+            return;
+        }
+        Value_t(const char *Input)
+        {
+            Type = Type_t::String;
+            Value = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
         }
         Value_t() = default;
     };
