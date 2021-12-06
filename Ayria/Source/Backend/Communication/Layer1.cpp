@@ -6,98 +6,46 @@
 
 #include <Global.hpp>
 
-// Big endian.
-static uint16_t Listenport;
-
-namespace LANDiscovery
-{
-    constexpr uint32_t Discoveryaddress = Hash::FNV1_32("Ayria") << 8;   // 228.58.137.0
-    constexpr uint16_t Discoveryport = Hash::FNV1_32("Ayria") & 0xFFFF;  // 14985
-
-    static const sockaddr_in Multicast{ AF_INET, htons(Discoveryport), {{.S_addr = htonl(Discoveryaddress)}} };
-    static size_t Discoverysocket{};
-    static uint32_t RandomID{};
-
-    static uint32_t Tickcount = 9;
-    static void __cdecl doNetworking()
-    {
-        // Only announce every 10 sec.
-        if (++Tickcount == 10)
-        {
-            char Buffer[6]{};
-            *(uint32_t *)&Buffer[0] = RandomID;
-            *(uint16_t *)&Buffer[4] = Listenport;
-
-            sendto(Discoverysocket, Buffer, 6, NULL, PSOCKADDR(&Multicast), sizeof(Multicast));
-            Tickcount = 0;
-        }
-
-        // Check for data on the socket.
-        FD_SET ReadFD{}; FD_SET(Discoverysocket, &ReadFD);
-        constexpr timeval Defaulttimeout{ NULL, 1 };
-        const auto Count{ ReadFD.fd_count };
-        auto Timeout{ Defaulttimeout };
-
-        if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
-            return;
-
-        while (true)
-        {
-            char Buffer[6]{};
-
-            sockaddr_in Clientinfo{}; int Len = sizeof(Clientinfo);
-            const auto Data = recvfrom(Discoverysocket, Buffer, 6, NULL, PSOCKADDR(&Clientinfo), &Len);
-            if (Data < 6) [[unlikely]] break;   // Also covers any errors.
-
-            // We also receive our own requests, but we can use it for IP discovery.
-            if (RandomID == *(uint32_t *)&Buffer[0]) [[likely]]
-            {
-                Global.InternalIP = Clientinfo.sin_addr.S_un.S_addr;
-                continue;
-            }
-
-            // Try to connect to this client if we haven't already.
-            Backend::Messagebus::Connectuser(ntohl(Clientinfo.sin_addr.S_un.S_addr), ntohs(*(uint16_t *)&Buffer[4]));
-        }
-    }
-
-    void Initialize()
-    {
-        const sockaddr_in Localhost{ AF_INET, htons(Discoveryport), {{.S_addr = htonl(INADDR_ANY)}} };
-        const ip_mreq Request{ {{.S_addr = htonl(Discoveryaddress)}} };
-        unsigned long Argument{ 1 };
-        unsigned long Error{ 0 };
-        WSADATA Unused;
-
-        // We only need WS 1.1, no need for more.
-        (void)WSAStartup(MAKEWORD(1, 1), &Unused);
-        Discoverysocket = socket(AF_INET, SOCK_DGRAM, 0);
-        Error |= ioctlsocket(Discoverysocket, FIONBIO, &Argument);
-
-        // TODO(tcn): Investigate if WS2's IP_ADD_MEMBERSHIP (12) gets mapped to the WS1's original (5) internally.
-        // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for developers).
-        Error |= setsockopt(Discoverysocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&Request, sizeof(Request));
-        Error |= setsockopt(Discoverysocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
-        Error |= bind(Discoverysocket, (sockaddr *)&Localhost, sizeof(Localhost));
-
-        // TODO(tcn): Proper error handling.
-        if (Error) [[unlikely]]
-        {
-            closesocket(Discoverysocket);
-            assert(false);
-            return;
-        }
-
-        // Make a unique identifier for our session.
-        RandomID = Hash::WW32(GetTickCount64() ^ Discoverysocket);
-
-        // It's unlikely that a new client joins.
-        Backend::Enqueuetask(1000, doNetworking);
-    }
-}
-
 namespace Backend::Messagebus
 {
+    // constexpr implementations of htonX / ntohX utilities.
+    template <typename T> constexpr T toNative(T Value)
+    {
+        if constexpr (std::endian::native == std::endian::little)
+            return std::byteswap(Value);
+        else
+            return Value;
+    }
+    template <typename T> constexpr T toNet(T Value)
+    {
+        if constexpr (std::endian::native == std::endian::little)
+            return std::byteswap(Value);
+        else
+            return Value;
+    }
+
+    // Totally randomly selected constants in a non-public range.
+    constexpr uint32_t Multicastaddress = toNet(Hash::FNV1_32("Ayria") << 8);                   // 228.58.137.0
+    constexpr uint16_t Multicastport = toNet<uint16_t>(Hash::FNV1_32("Ayria") & 0xFFFF);        // 14985
+    constexpr sockaddr_in Multicast{ AF_INET, Multicastport, {{.S_addr = Multicastaddress}} };  // IPv4 format.
+
+    // Non-blocking sockets, multicasts use a random ID to filter ourselves.
+    static size_t Multicastsocket{}, Routersocket{};
+    const uint32_t RandomID{ GetTickCount() };
+
+    // Buffer management.
+    constexpr auto Overhead = sizeof(RandomID);
+    constexpr auto Defaultbuffersize = 4096;
+
+    // TODO(tcn): Investigate what thread-safety guarantees Winsock can provide.
+    static Spinlock Threadguard{};
+
+    // Client-selected (trust, but optionally verify) routing-servers.
+    static Hashset<sockaddr_in, decltype(WW::Hash), decltype(WW::Equal)> Routers{};
+    void removeRouter(const sockaddr_in &Address) { Routers.erase(Address); }
+    void addRouter(const sockaddr_in &Address) { Routers.insert(Address); }
+
+    // On-wire structure using big endian for integers.
     #pragma pack(push, 1)
     struct Payload_t
     {
@@ -109,137 +57,87 @@ namespace Backend::Messagebus
     };
     struct Packet_t
     {
+        std::array<uint8_t, 32> Publickey;
         std::array<uint8_t, 64> Signature;
         Payload_t Payload;
     };
     #pragma pack(pop)
 
-    using Node_t = struct { uint32_t IPv4; uint16_t Port; size_t Socket; };
-    static Hashmap<std::string, Node_t> Connectednodes;
-    static Spinlock Threadsafe;
-    static size_t Listensocket;
-
-    static std::string doHandshake(size_t Socket)
-    {
-        struct { std::array<uint8_t, 64> Signature; std::array<uint8_t, 32> Publickey; } Ours{}, Theirs{};
-
-        const auto Sig = qDSA::Sign(*Global.Publickey, *Global.Privatekey, *Global.Publickey);
-        std::ranges::copy(*Global.Publickey, Ours.Publickey.begin());
-        std::ranges::move(Sig, Ours.Signature.begin());
-
-        do
-        {
-            if (static_cast<int>(sizeof(Ours)) != send(Socket, (char *)&Ours, sizeof(Ours), NULL)) [[unlikely]] break;
-            if (static_cast<int>(sizeof(Theirs)) != recv(Socket, (char *)&Theirs, sizeof(Theirs), NULL)) [[unlikely]] break;
-            if (!qDSA::Verify(Theirs.Publickey, Theirs.Signature, Theirs.Publickey)) [[unlikely]] break;
-
-            return Base58::Encode<char>(Theirs.Publickey);
-        } while (false);
-
-        return {};
-    }
-    void Connectuser(uint32_t IPv4, uint16_t Port)
-    {
-        std::thread([](uint32_t IPv4, uint16_t Port)
-        {
-            const sockaddr_in Hostinfo{ AF_INET, htons(Port), {{.S_addr = htonl(IPv4)}} };
-
-            // Check if we already have a connection to this client.
-            for (const auto &Node : Connectednodes | std::views::values)
-            {
-                if (Node.IPv4 == Hostinfo.sin_addr.S_un.S_addr && Node.Port == Hostinfo.sin_port)
-                    return;
-            }
-
-            const auto Socket = socket(AF_INET, SOCK_STREAM, 0);
-            if (Socket == INVALID_SOCKET) return;
-
-            do
-            {
-                if (0 != connect(Socket, PSOCKADDR(&Hostinfo), sizeof(Hostinfo))) [[unlikely]]
-                    break;
-
-                const auto PK = doHandshake(Socket);
-                if (PK.empty()) [[unlikely]] break;
-
-                std::scoped_lock Lock(Threadsafe);
-                if (Connectednodes.contains(PK)) closesocket(Connectednodes[PK].Socket);
-                Connectednodes[PK] = { Hostinfo.sin_addr.S_un.S_addr, Hostinfo.sin_port, Socket };
-                return;
-
-            } while (false);
-
-            closesocket(Socket);
-        }, IPv4, Port).detach();
-    }
-    static void Acceptconnection()
-    {
-        std::thread([]()
-        {
-            sockaddr_in Sockinfo{}; int Len = sizeof(Sockinfo);
-            const auto Socket = accept(Listensocket, PSOCKADDR(&Sockinfo), &Len);
-
-            const auto PK = doHandshake(Socket);
-            if (PK.empty()) [[unlikely]]
-            {
-                closesocket(Socket);
-                return;
-            }
-
-            std::scoped_lock Lock(Threadsafe);
-            if (Connectednodes.contains(PK)) closesocket(Connectednodes[PK].Socket);
-            Connectednodes[PK] = { Sockinfo.sin_addr.S_un.S_addr, Sockinfo.sin_port, Socket };
-        }).detach();
-    }
-
-    static Hashset<std::string> Cachedclients{};
+    // Share a message with the network.
     void Publish(std::string_view Identifier, std::string_view Payload)
     {
         // One can always dream..
         if (!Base85::isValid(Payload)) [[likely]]
         {
             const auto Size = Base85::Encodesize_padded(Payload.size());
-            const auto Buffer = static_cast<char*>(alloca(Size));
+            const auto Buffer = static_cast<char *>(alloca(Size));
             Base85::Encode(Payload, std::span(Buffer, Size));
             Payload = { Buffer, Size };
         }
 
         // Create the buffer with a bit of overhead in case the subsystem needs to modify it.
-        auto Buffer = std::make_unique<char []>(sizeof(Packet_t) + LZ4_COMPRESSBOUND(Payload.size()));
-        const auto Packet = reinterpret_cast<Packet_t*>(Buffer.get());
+        auto Buffer = std::make_unique<char[]>(Overhead + sizeof(Packet_t) + LZ4_COMPRESSBOUND(Payload.size()));
+        const auto Packet = reinterpret_cast<Packet_t *>(Buffer.get() + Overhead);
 
         // Build the packet..
+        Packet->Publickey = *Global.Publickey;
         std::ranges::copy(Payload, Packet->Payload.Message);
-        Packet->Payload.Messagetype = Hash::WW32(Identifier);
-        Packet->Payload.Timestamp = std::chrono::utc_clock::now().time_since_epoch().count();
+        Packet->Payload.Messagetype = toNet(Hash::WW32(Identifier));
+        Packet->Payload.Timestamp = toNet(std::chrono::utc_clock::now().time_since_epoch().count());
         Packet->Signature = qDSA::Sign(*Global.Publickey, *Global.Privatekey, std::span((uint8_t *)&Packet->Payload, sizeof(Payload_t) + Payload.size()));
 
-        // Save our own packets so we can have unified processing.
-        try
-        {
-            Backend::Database()
-                << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
-                << Global.getLongID() << Hash::WW32(Identifier) << Packet->Payload.Timestamp
-                << Base85::Encode<char>(Packet->Signature)
-                << std::string(Payload) << false;
-        } catch (...) {}
-
-        // Hard-lock: if networking is disabled, or the client is private, don't send anything.
-        if (Global.Settings.noNetworking || Global.Settings.isPrivate) [[unlikely]] return;
+        // Save our own packets incase someone requests them later.
+        Backend::Database()
+            << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
+            << Global.getLongID()
+            << Hash::WW32(Identifier)
+            << Packet->Payload.Timestamp
+            << Base85::Encode(Packet->Signature)
+            << Payload
+            << true;
 
         // The payload is Base85 so it should compress reasonably well.
         const auto Compressed = LZ4_compress_default(Payload.data(), Packet->Payload.Message, (int)Payload.size(), LZ4_COMPRESSBOUND((int)Payload.size()));
+
+        // Post the mssage in a different thread as multicast may block to throttle.
         std::thread([](std::unique_ptr<char[]> &&Buffer, int Payloadsize)
         {
-            for (const auto &Node : Connectednodes | std::views::values)
+            // Forward to the routers, best effort.
+            for (const auto &Address : Routers)
             {
-                send(Node.Socket, Buffer.get(), Payloadsize, NULL);
+                std::scoped_lock Lock(Threadguard);
+                sendto(Routersocket, Buffer.get() + Overhead, Payloadsize, NULL, (const sockaddr *)&Address, sizeof(Address));
+            }
+
+            // Insert our (somewhat) unique ID into the overhead segment.
+            *(uint32_t *)Buffer.get() = toNet(RandomID);
+
+            // And to local clients, may block in case if many routers.
+            while (true)
+            {
+                int Result;
+                {
+                    std::scoped_lock Lock(Threadguard);
+                    Result = sendto(Multicastsocket, Buffer.get(), Payloadsize + Overhead, NULL, (const sockaddr *)&Multicast, sizeof(Multicast));
+                }
+
+                if (SOCKET_ERROR != Result || WSAEWOULDBLOCK != WSAGetLastError())
+                    break;
             }
         }, std::move(Buffer), Compressed + sizeof(Packet_t)).detach();
     }
-    static void handleMessage(const std::string &PK, std::string_view Packet)
+    void Publish(std::string_view Identifier, JSON::Object_t &&Payload)
     {
-        std::array<uint8_t, 32> Publickey; Base58::Decode(PK, Publickey.data());
+        Publish(Identifier, JSON::Dump(Payload));
+    }
+    void Publish(std::string_view Identifier, const JSON::Object_t &Payload)
+    {
+        Publish(Identifier, JSON::Dump(Payload));
+    }
+
+    // Process the message and ensure validity.
+    static void handleMessage(std::string_view Packet)
+    {
         const auto Header = reinterpret_cast<const Packet_t*>(Packet.data());
         auto Payload = Packet.substr(sizeof(Packet_t));
 
@@ -249,127 +147,180 @@ namespace Backend::Messagebus
         Payload = { Buffer.get(), static_cast<size_t>(Size) };
 
         // Verify the packets signature (in-case someone forwarded it and it got corrupted).
-        if (!qDSA::Verify(Publickey, Header->Signature, Payload)) return;
+        if (!qDSA::Verify(Header->Publickey, Header->Signature, Payload)) return;
 
         // Check that the packet isn't from the future.
-        if (Header->Payload.Timestamp > (uint64_t)std::chrono::utc_clock::now().time_since_epoch().count()) [[unlikely]] return;
-
-        // Ensure that the PK exists in the DB.
-        if (!Cachedclients.contains(PK) && !AyriaAPI::Clientinfo::Find(PK)) [[unlikely]]
-        {
-            try { Backend::Database() << "INSERT INTO Account VALUES (?);" << PK; } catch (...) {}
-            Cachedclients.insert(PK);
-        }
-
-        // Save the packet for our internal synchronization.
-        try
-        {
-            Backend::Database()
-                << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
-                << PK << Header->Payload.Messagetype << Header->Payload.Timestamp
-                << Base85::Encode<char>(Header->Signature)
-                << std::string(Payload) << false;
-        } catch (...) {}
-    }
-
-    static void __cdecl doNetworking()
-    {
-        fd_set ReadFD{};
-        FD_SET(Listensocket, &ReadFD);
-        for (const auto &Node : Connectednodes)
-            FD_SET(Node.second.Socket, &ReadFD);
-
-        // Check for data on the sockets.
-        constexpr timeval Defaulttimeout{ NULL, 1 };
-        const auto Count{ ReadFD.fd_count };
-        auto Timeout{ Defaulttimeout };
-
-        if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
+        if (toNative(Header->Payload.Timestamp) > (uint64_t)std::chrono::utc_clock::now().time_since_epoch().count()) [[unlikely]]
             return;
 
-        if (FD_ISSET(Listensocket, &ReadFD))
-            Acceptconnection();
+        // Update the database's last-seen status for the client, without triggering the forgein-keys.
+        Backend::Database() << "INSERT INTO Account VALUES (?, ?) ON CONFLICT DO UPDATE SET Lastseen = ?;"
+                            << Base58::Encode(Header->Publickey)
+                            << toNative(Header->Payload.Timestamp)
+                            << toNative(Header->Payload.Timestamp);
 
-        for (const auto &[PK, Node] : Connectednodes)
+        // Save the packet for later processing.
+        Backend::Database()
+            << "INSERT OR REPLACE INTO Messagestream VALUES (?,?,?,?,?,?);"
+            << Base58::Encode(Header->Publickey)
+            << toNative(Header->Payload.Messagetype)
+            << toNative(Header->Payload.Timestamp)
+            << Base85::Encode(Header->Signature)
+            << Payload
+            << false;
+    }
+    static void __cdecl doMulticast()
+    {
+        // Quick-check for data on the sockets.
         {
-            if (!FD_ISSET(Node.Socket, &ReadFD)) [[likely]] continue;
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            fd_set ReadFD{ 1, {Multicastsocket} };
+            auto Timeout{ Defaulttimeout };
+            const auto Count{ 1 };
 
-            uint16_t Wanted{};
-            const auto Return = recv(Node.Socket, (char *)&Wanted, sizeof(Wanted), MSG_PEEK);
-            if (Return < static_cast<int>(sizeof(Wanted))) [[unlikely]]
-            {
-                if (Return == 0) // Connection closed.
-                {
-                    closesocket(Node.Socket);
-                    Connectednodes.erase(PK);
-                    break;
-                }
+            // Nothing to do, early exit.
+            if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
+                return;
+        }
+
+        // As we know that we have data available, allocate the default buffer.
+        const auto Defaultbuffer = static_cast<char*>(alloca(Defaultbuffersize));
+        std::unique_ptr<char[]> Backupbuffer;
+        auto Buffer = Defaultbuffer;
+
+        // As the backend is single-threaded, we should throttle fetching.
+        for (uint8_t Packetcount = 0; Packetcount < 5; ++Packetcount)
+        {
+            // Query the size of the packet.
+            auto Packetsize = recvfrom(Multicastsocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
+
+            // Early exit on error or invalid payload.
+            if (Packetsize == SOCKET_ERROR || Packetsize < (sizeof(Packet_t) + Overhead))
+                return;
+
+            // Going to need a bigger boat.
+            if (Packetsize >= Defaultbuffersize)
+                Buffer = (Backupbuffer = std::make_unique<char[]>(Packetsize + 1)).get();
+
+            // Get the actual packet.
+            sockaddr_in Clientinfo{}; int Len = sizeof(Clientinfo);
+            Packetsize = recvfrom(Multicastsocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len);
+
+            // Extract the senders ID.
+            const auto UniqueID = toNative(*(uint32_t *)Buffer);
+
+            // We can use our own packets to 'discover' our internal IP if it's not been initialized already.
+            if (!Global.InternalIP && UniqueID == RandomID) [[unlikely]]
+                Global.InternalIP = Clientinfo.sin_addr.S_un.S_addr;
+
+            // However, our own packets should still be discarded.
+            if (UniqueID == RandomID) [[likely]]
                 continue;
-            }
 
-            DWORD Available{};
-            if (SOCKET_ERROR == ioctlsocket(Node.Socket, FIONREAD, &Available)) [[unlikely]]
-                continue;
-
-            const int Total = ntohs(Wanted) + sizeof(Wanted);
-            if ((int)Available >= Total) [[likely]]
-            {
-                const auto Buffer = static_cast<char*>(alloca(Total));
-
-                if (Total > recv(Node.Socket, Buffer, Total, NULL)) [[unlikely]]
-                    break;
-
-                handleMessage(PK, { Buffer, Wanted });
-                break;
-            }
+            // Forward to the handler for processing.
+            handleMessage(std::string_view(Buffer).substr(Overhead));
         }
     }
-    void Initialize(bool doLANDiscovery)
+    static void __cdecl doRouting()
     {
-        do
+        // Common case.
+        if (Routers.empty()) [[likely]]
+            return;
+
+        // Quick-check for data on the sockets.
         {
-            WSADATA Unused;
-            (void)WSAStartup(MAKEWORD(1, 1), &Unused);
+            constexpr timeval Defaulttimeout{ NULL, 1 };
+            fd_set ReadFD{ 1, {Routersocket} };
+            auto Timeout{ Defaulttimeout };
+            const auto Count{ 1 };
 
-            Listensocket = socket(AF_INET, SOCK_STREAM, 0);
-            if (Listensocket == INVALID_SOCKET) break;
+            // Nothing to do, early exit.
+            if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
+                return;
+        }
 
-            BOOL Argument{ 0 }; // Enable Nagles algorithm.
-            if (SOCKET_ERROR == setsockopt(Listensocket, IPPROTO_TCP, TCP_NODELAY, (char *)&Argument, sizeof(Argument))) [[unlikely]]
-                break;
+        // As we know that we have data available, allocate the default buffer.
+        const auto Defaultbuffer = static_cast<char*>(alloca(Defaultbuffersize));
+        std::unique_ptr<char[]> Backupbuffer;
+        auto Buffer = Defaultbuffer;
 
-            Argument = 1; // Enable periodic pings.
-            if (SOCKET_ERROR == setsockopt(Listensocket, SOL_SOCKET, SO_KEEPALIVE, (char *)&Argument, sizeof(Argument))) [[unlikely]]
-                break;
+        // As the backend is single-threaded, we should throttle fetching.
+        for (uint8_t Packetcount = 0; Packetcount < 10; ++Packetcount)
+        {
+            // Query the size of the packet.
+            auto Packetsize = recvfrom(Routersocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
 
-            // Bind to a random port.
-            const sockaddr_in Localhost{ AF_INET, 0, {{.S_addr = htonl(INADDR_ANY)}} };
-            if (SOCKET_ERROR == bind(Listensocket, PSOCKADDR(&Localhost), sizeof(Localhost))) [[unlikely]]
-                break;
+            // Early exit on error or invalid payload.
+            if (Packetsize == SOCKET_ERROR || Packetsize < (sizeof(Packet_t)))
+                return;
 
-            // As a client, we shouldn't have too many incoming connections.
-            if (SOCKET_ERROR == listen(Listensocket, 5)) [[unlikely]]
-                break;
+            // Going to need a bigger boat.
+            if (Packetsize >= Defaultbuffersize)
+                Buffer = (Backupbuffer = std::make_unique<char[]>(Packetsize + 1)).get();
 
-            // Fetch the random port we are bound to.
-            sockaddr_in Sockinfo{}; int Len = sizeof(Sockinfo);
-            if (SOCKET_ERROR == getsockname(Listensocket, PSOCKADDR(&Sockinfo), &Len)) [[unlikely]]
-                break;
+            // Get the actual packet.
+            sockaddr_in Clientinfo{}; int Len = sizeof(Clientinfo);
+            Packetsize = recvfrom(Routersocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len);
 
-            // Should only need to check for packets 5 times a second.
-            Backend::Enqueuetask(200, doNetworking);
-            Global.Settings.noNetworking = false;
-            Listenport = Sockinfo.sin_port;
+            // Sanity checking.
+            if (!Routers.contains(Clientinfo)) [[unlikely]]
+                continue;
 
-            if (doLANDiscovery) LANDiscovery::Initialize();
-        } while (false);
-
-        Global.Settings.noNetworking = true;
-        closesocket(Listensocket);
-        Listenport = 0;
-        return;
+            // Forward to the handler for processing.
+            handleMessage(std::string_view(Buffer));
+        }
     }
 
+    // Set up winsock.
+    void Initialize()
+    {
+        constexpr sockaddr_in Localhost{ AF_INET, Multicastport, {{.S_addr = INADDR_ANY}} };
+        constexpr sockaddr_in Randomhost{ AF_INET, NULL, {{.S_addr = INADDR_ANY}} };
+        constexpr ip_mreq Request{ {{.S_addr = Multicastaddress}} };
+        unsigned long Argument{ 1 };
+        unsigned long Error{ 0 };
+        WSADATA Unused;
+
+        // Simple, non-blocking sockets.
+        (void)WSAStartup(MAKEWORD(2, 2), &Unused);
+        Routersocket = socket(AF_INET, SOCK_DGRAM, 0);
+        Multicastsocket = socket(AF_INET, SOCK_DGRAM, 0);
+        Error |= ioctlsocket(Routersocket, FIONBIO, &Argument);
+        Error |= ioctlsocket(Multicastsocket, FIONBIO, &Argument);
+
+        // Use a random (ephemeral) configuration for the routing socket.
+        Error |= bind(Routersocket, (const sockaddr *)&Randomhost, sizeof(Randomhost));
+
+        // Join the multicast group, reuse address if multiple clients are on the same PC (mainly for developers).
+        Error |= setsockopt(Multicastsocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&Request, sizeof(Request));
+        Error |= setsockopt(Multicastsocket, SOL_SOCKET, SO_REUSEADDR, (char *)&Argument, sizeof(Argument));
+        Error |= bind(Multicastsocket, (const sockaddr *)&Localhost, sizeof(Localhost));
+
+        // TODO(tcn): Proper error handling.
+        if (Error) [[unlikely]]
+        {
+            Global.Settings.noNetworking = true;
+            closesocket(Multicastsocket);
+            closesocket(Routersocket);
+            assert(false);
+            return;
+        }
+        else
+        {
+            Global.Settings.noNetworking = false;
+        }
+
+        // Ensure that this is only done once.
+        static bool doOnce = []()
+        {
+            // TODO(tcn): Tune the polling rate.
+            Backend::Enqueuetask(250, doMulticast);
+            Backend::Enqueuetask(200, doRouting);
+            return true;
+        }();
+    }
+
+    // Access from the plugins
     namespace Export
     {
         extern "C" EXPORT_ATTR void __cdecl publishMessage(const char *Identifier, const char *Message, unsigned int Length)
@@ -381,16 +332,6 @@ namespace Backend::Messagebus
             }
 
             Publish(Identifier, { Message, Length });
-        }
-        extern "C" EXPORT_ATTR void __cdecl connectUser(const char *IPv4, const char *Port)
-        {
-            if (!IPv4 || !Port) [[unlikely]]
-            {
-                assert(false);
-                return;
-            }
-
-            Connectuser(inet_addr(IPv4), htons(std::atoi(Port)));
         }
     }
 }

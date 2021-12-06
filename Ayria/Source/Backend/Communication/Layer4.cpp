@@ -8,53 +8,50 @@
 
 namespace Backend::Notifications
 {
-    static Hashmap<std::string, Hashset<Processor_t>> ProcessingCB;
     static Hashmap<uint32_t, Hashset<Callback_t>> NotificationCB;
 
-    void Unsubscribe(std::string_view Identifier, Callback_t Handler)
-    {
-        NotificationCB[Hash::WW32(Identifier)].erase(Handler);
-    }
-    void Publish(std::string_view Identifier, const char *JSONString)
-    {
-        const auto Hash = Hash::WW32(Identifier);
-        if (!NotificationCB.contains(Hash)) return;
-        for (const auto &CB : NotificationCB[Hash]) CB(JSONString);
-    }
     void Subscribe(std::string_view Identifier, Callback_t Handler)
     {
         if (Handler) [[likely]] NotificationCB[Hash::WW32(Identifier)].insert(Handler);
     }
-
-    // Internal.
-    void addProcessor(std::string_view Tablename, Processor_t Callback)
+    void Unsubscribe(std::string_view Identifier, Callback_t Handler)
     {
-        ProcessingCB[Tablename].insert(Callback);
+        NotificationCB[Hash::WW32(Identifier)].erase(Handler);
     }
 
-    // Get database changes and process.
-    static void __cdecl doProcess()
+    void Publish(std::string_view Identifier, std::string_view Payload)
     {
-        for (const auto &[Table, Set] : ProcessingCB)
+        const auto Hash = Hash::WW32(Identifier);
+        if (!Payload.ends_with('\0'))
         {
-            const auto Modified = Backend::getModified(Table);
-            if (Modified.empty()) [[likely]] continue;
-
-            for (const auto &CB : Set)
-                for (const auto &Row : Modified)
-                    CB(Row);
+            static std::string Heap;
+            Heap = Payload;
+            Payload = Heap.c_str();
         }
-    }
 
-    // Set up the system.
-    void Initialize()
+        if (!NotificationCB.contains(Hash)) [[likely]] return;
+        for (const auto &CB : NotificationCB[Hash]) CB(Payload.data(), (uint32_t)Payload.size());
+    }
+    void Publish(std::string_view Identifier, JSON::Object_t &&Payload)
     {
-        Backend::Enqueuetask(200, doProcess);
+        const auto Hash = Hash::WW32(Identifier);
+        const auto String = JSON::Dump(Payload);
+
+        if (!NotificationCB.contains(Hash)) [[likely]] return;
+        for (const auto &CB : NotificationCB[Hash]) CB(String.data(), (uint32_t)String.size());
+    }
+    void Publish(std::string_view Identifier, const JSON::Object_t &Payload)
+    {
+        const auto Hash = Hash::WW32(Identifier);
+        const auto String = JSON::Dump(Payload);
+
+        if (!NotificationCB.contains(Hash)) [[likely]] return;
+        for (const auto &CB : NotificationCB[Hash]) CB(String.data(), (uint32_t)String.size());
     }
 
     namespace Export
     {
-        extern "C" EXPORT_ATTR void __cdecl unsubscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
+        extern "C" EXPORT_ATTR void __cdecl unsubscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *Message, unsigned int Length))
         {
             if (!Identifier || !Callback) [[unlikely]]
             {
@@ -64,25 +61,25 @@ namespace Backend::Notifications
 
             Unsubscribe(Identifier, Callback);
         }
-        extern "C" EXPORT_ATTR void __cdecl subscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *JSONString))
+        extern "C" EXPORT_ATTR void __cdecl subscribeNotification(const char *Identifier, void(__cdecl *Callback)(const char *Message, unsigned int Length))
         {
             if (!Identifier || !Callback) [[unlikely]]
-            {
-                assert(false);
-            return;
-            }
-
-            Subscribe(Identifier, Callback);
-        }
-        extern "C" EXPORT_ATTR void __cdecl publishNotification(const char *Identifier, const char *JSONString)
-        {
-            if (!Identifier || !JSONString) [[unlikely]]
             {
                 assert(false);
                 return;
             }
 
-            Publish(Identifier, JSONString);
+            Subscribe(Identifier, Callback);
+        }
+        extern "C" EXPORT_ATTR void __cdecl publishNotification(const char *Identifier, const char *Message, unsigned int Length)
+        {
+            if (!Identifier || !Message) [[unlikely]]
+            {
+                assert(false);
+                return;
+            }
+
+            Publish(Identifier, std::string_view{ Message, Length });
         }
     }
 }
