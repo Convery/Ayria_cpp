@@ -9,6 +9,38 @@
 namespace Services::Groups
 {
     static Hashmap<std::string, std::shared_ptr<Group_t>> Groupcache{};
+    static Hashset<std::u8string> Groupnamecache{};
+    static Hashset<std::string> Publickeycache{};
+
+    // Format between C++ and JSON representations.
+    std::optional<Group_t> fromJSON(const JSON::Value_t &Object)
+    {
+        // The required fields, we wont do partial parsing.
+        if (!Object.contains_all("GroupID", "isPublic", "Maxmembers")) [[unlikely]] return {};
+
+        Group_t Group{};
+        Group.isPublic = Object.value<bool>("isPublic");
+        Group.Maxmembers = Object.value<uint32_t>("Maxmembers");
+        Group.Membercount = Object.value<uint32_t>("Membercount");
+        Group.GroupID = *Publickeycache.insert(Object.value<std::string>("GroupID")).first;
+        Group.Groupname = *Groupnamecache.insert(Object.value<std::u8string>("Groupname")).first;
+
+        return Group;
+    }
+    std::optional<Group_t> fromJSON(std::string_view JSON)
+    {
+        return fromJSON(JSON::Parse(JSON));
+    }
+    JSON::Object_t toJSON(const Group_t &Group)
+    {
+        return JSON::Object_t({
+            { "GroupID", Group.GroupID },
+            { "isPublic", Group.isPublic },
+            { "Groupname", Group.Groupname },
+            { "Maxmembers", Group.Maxmembers },
+            { "Membercount", Group.Membercount }
+        });
+    }
 
     // Fetch the group by ID, for use with services.
     std::shared_ptr<Group_t> getGroup(const std::string &LongID)
@@ -16,32 +48,37 @@ namespace Services::Groups
         // Simplest case, we already have the group cached.
         if (Groupcache.contains(LongID)) [[likely]] return Groupcache[LongID];
 
-        // Get the group from the database.
-        if (const auto JSON = AyriaAPI::Groups::Find(LongID))
+        // Check if it needs updating.
+        const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
+        if (Groupcache.contains(LongID) && Groupcache[LongID]->Lastupdated > Timestamp)
         {
-            const auto Group = fromJSON(JSON);
-            if (!Group) [[unlikely]] return {};
+            return Groupcache[LongID];
+        }
 
+        // Get the group from the database.
+        if (auto Group = fromJSON(AyriaAPI::Groups::Fetch(LongID)))
+        {
+            Group->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
             return Groupcache.emplace(LongID, std::make_shared<Group_t>(*Group)).first->second;
         }
 
         return {};
     }
 
-    // Helpers.
+    // Helpers, includes the groups owner even if not listed as a member (for some reason).
     static std::unordered_set<std::string> getModerators(const std::string &GroupID)
     {
-        std::unordered_set<std::string> Moderators;
-        for (const auto Tmp = AyriaAPI::Groups::getModerators(GroupID); const auto & Item : Tmp)
-            Moderators.insert(Item);
-        return Moderators;
+        auto Temp = AyriaAPI::Groups::getModerators(GroupID);
+        Temp.push_back(GroupID);
+
+        return { Temp.begin(), Temp.end() };
     }
     static std::unordered_set<std::string> getMembers(const std::string &GroupID)
     {
-        std::unordered_set<std::string> Members;
-        for (const auto Tmp = AyriaAPI::Groups::getMembers(GroupID); const auto & Item : Tmp)
-            Members.insert(Item);
-        return Members;
+        auto Temp = AyriaAPI::Groups::getMembers(GroupID);
+        Temp.push_back(GroupID);
+
+        return { Temp.begin(), Temp.end() };
     }
 
     // Internal.
@@ -52,7 +89,7 @@ namespace Services::Groups
 
         // Sanity checking.
         if (!Group) [[unlikely]] return;
-        if (Group->isFull) [[unlikely]] return;
+        if (Group->isFull()) [[unlikely]] return;
         if (!Moderators.contains(Global.getLongID())) [[unlikely]] return;
 
         const auto Request = JSON::Object_t({
@@ -75,7 +112,7 @@ namespace Services::Groups
 
             // Sanity checking.
             if (!Group) [[unlikely]] return false;
-            if (Group->isFull) [[unlikely]] return false;
+            if (Group->isFull()) [[unlikely]] return false;
 
             // getModerators also includes the owner.
             const auto Moderators = getModerators(GroupID);
@@ -88,14 +125,25 @@ namespace Services::Groups
             if (Moderators.contains(MemberID) && GroupID != LongID) [[unlikely]] return false;
 
             // Verify that the client wants to join this group.
-            if (MemberID != LongID && !AyriaAPI::Presence::Value(LongID, "Grouprequest_"s + GroupID, "AYRIA")) [[unlikely]] return false;
+            const auto Presence = AyriaAPI::Keyvalue::Get(MemberID, Hash::WW32("AYRIA"), u8"Grouprequest_" + Encoding::toUTF8(GroupID));
+            if (MemberID != LongID && !Presence) [[unlikely]] return false;
 
-            try
+            // Are we interested in this group?
+            if (getMembers(GroupID).contains(Global.getLongID()))
             {
-                Backend::Database()
-                    << "INSERT INTO Groupmember VALUES (?,?,?);"
-                    << MemberID << GroupID << isModerator;
-            } catch (...) {}
+                const auto Notification = JSON::Object_t({
+                    { "isModerator", isModerator },
+                    { "MemberID", MemberID },
+                    { "GroupID", GroupID }
+                });
+
+                Layer4::Publish("Group::onJoin", Notification);
+            }
+
+            // And store in the database.
+            Backend::Database()
+                << "INSERT INTO Groupmember VALUES (?,?,?);"
+                << GroupID << MemberID << isModerator;
 
             return true;
         }
@@ -112,12 +160,9 @@ namespace Services::Groups
             // No extra permission is needed to leave.
             if (MemberID == LongID)
             {
-                try
-                {
-                    Backend::Database()
-                        << "DELETE FROM Groupmember WHERE (GroupID = ? AND MemberID = ?);"
-                        << GroupID << MemberID;
-                } catch (...) {}
+                Backend::Database()
+                    << "DELETE FROM Groupmember WHERE (GroupID = ? AND MemberID = ?);"
+                    << GroupID << MemberID;
                 return true;
             }
 
@@ -128,64 +173,104 @@ namespace Services::Groups
             // And naturally only moderators can kick users.
             if (!Moderators.contains(LongID) && GroupID != LongID) return false;
 
-            try
+            // Are we interested in this group?
+            if (getMembers(GroupID).contains(Global.getLongID()))
             {
-                Backend::Database()
-                    << "DELETE FROM Groupmember WHERE (GroupID = ? AND MemberID = ?);"
-                    << GroupID << MemberID;
-            } catch (...) {}
+                const auto Notification = JSON::Object_t({
+                    { "MemberID", MemberID },
+                    { "GroupID", GroupID }
+                });
+
+                Layer4::Publish("Group::onLeave", Notification);
+            }
+
+            // And store in the database.
+            Backend::Database()
+                << "DELETE FROM Groupmember WHERE (GroupID = ? AND MemberID = ?);"
+                << GroupID << MemberID;
+
             return true;
         }
         static bool __cdecl onUpdate(uint64_t, const char *LongID, const char *Message, unsigned int Length)
         {
             const auto Request = JSON::Parse(std::string_view(Message, Length));
-            const auto Groupname = Request.value<std::string>("Groupname");
+            const auto Groupname = Request.value<std::u8string>("Groupname");
+            const auto Maxmembers = Request.value<uint32_t>("Maxmembers");
             const auto GroupID = Request.value<std::string>("GroupID");
             const auto isPublic = Request.value<bool>("isPublic");
-            const auto isFull = Request.value<bool>("isFull");
-            const auto Group = getGroup(GroupID);
 
             // Sanity checking.
-            if (!Group) [[unlikely]] return false;
+            const auto Group = getGroup(GroupID);
+            if (!Group && GroupID != LongID) [[unlikely]] return false;
 
-            // The name and visibility can only be changed by the admin.
-            if (Group->Groupname != Groupname && GroupID != LongID) return false;
-            if (Group->isPublic != isPublic && GroupID != LongID) return false;
-
-            // Moderators can set if the group is full though.
-            if (!getModerators(GroupID).contains(GroupID)) return false;
-
-            try
+            // Most properties can only be changed by the admin.
+            if (GroupID == LongID)
             {
-                const auto &Entry = Groupcache[GroupID];
-                Entry->Groupname = Groupname;
-                Entry->isPublic = isPublic;
-                Entry->isFull = isFull;
+                auto New = fromJSON(Request);
+                if (!New) [[unlikely]] return false;
 
-                Backend::Database()
-                    << "INSERT OR REPLACE INTO Group VALUES(?,?,?,?);"
-                    << GroupID << Groupname << isPublic << isFull;
+                New->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+                Groupcache[GroupID] = std::make_shared<Group_t>(*New);
 
-                if (isPublic)
+                // Are we interested in this group?
+                if (getMembers(GroupID).contains(Global.getLongID()))
                 {
-                    Backend::Database()
-                        << "DELETE FROM Groupkey WHERE GroupID = ?;"
-                        << GroupID;
+                    Layer4::Publish("Group::onUpdate", toJSON(*New));
                 }
-            } catch (...) {}
+
+                // And store in the database.
+                Backend::Database() <<
+                    "INSERT INTO Group VALUES (?, ?, ?, ?) ON CONFLICT DO "
+                    "UPDATE SET Groupname = ?, Maxmembers = ?, isPublic = ?;"
+                    << GroupID << Groupname << Maxmembers << isPublic
+                    << Groupname << Maxmembers << isPublic;
+
+                return true;
+            }
+
+            // Can't change anything..
+            if (!getModerators(GroupID).contains(LongID)) [[unlikely]] return false;
+
+            // Unmodifiable values.
+            if (Group->Groupname != Groupname) return false;
+            if (Group->isPublic != isPublic) return false;
+
+            auto New = fromJSON(Request);
+            if (!New) [[unlikely]] return false;
+
+            New->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+            Groupcache[GroupID] = std::make_shared<Group_t>(*New);
+
+            // Are we interested in this group?
+            if (getMembers(GroupID).contains(Global.getLongID()))
+            {
+                Layer4::Publish("Group::onUpdate", toJSON(*New));
+            }
+
+            // And store in the database.
+            Backend::Database() <<
+                "INSERT INTO Group VALUES (?, ?, ?, ?) ON CONFLICT DO "
+                "UPDATE SET Groupname = ?, Maxmembers = ?, isPublic = ?;"
+                << GroupID << Groupname << Maxmembers << isPublic
+                << Groupname << Maxmembers << isPublic;
+
             return true;
         }
         static bool __cdecl onDestroy(uint64_t, const char *LongID, const char *, unsigned int)
         {
-            // No need to save this message.
-            if (!getGroup(LongID)) [[unlikely]] return false;
+            const auto Group = getGroup(LongID);
 
-            try
+            // No need to save this message.
+            if (!Group) [[unlikely]] return false;
+
+            // Are we interested in this group?
+            if (getMembers(LongID).contains(Global.getLongID()))
             {
-                Backend::Database()
-                    << "DELETE FROM Group WHERE GroupID = ?;"
-                    << std::string(LongID);
-            } catch (...) {};
+                Layer4::Publish("Group::onDelete", toJSON(*Group));
+            }
+
+            // And update the database.
+            Backend::Database() << "DELETE FROM Group WHERE GroupID = ?;" << LongID;
             return true;
         }
     }
@@ -198,27 +283,33 @@ namespace Services::Groups
             const auto Challenge = Request.value<std::string>("Challenge");
             const auto MemberID = Request.value<std::string>("MemberID");
             const auto GroupID = Request.value<std::string>("GroupID");
+            const auto Moderators = getModerators(GroupID);
             const auto Group = getGroup(GroupID);
 
-
             // Sanity checking.
-            const auto Moderators = getModerators(GroupID);
             if (!Group) [[unlikely]] return R"({ "Error" : "Invalid group ID." })";
-            if (Group->isFull) [[unlikely]] return R"({ "Error" : "Group is full." })";
+            if (Group->isFull()) [[unlikely]] return R"({ "Error" : "Group is full." })";
+
+            // Permission check.
             if (!Group->isPublic && !Moderators.contains(Global.getLongID())) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
             if (Request.contains("isModerator") && GroupID != Global.getLongID()) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
 
-            // For a private group, we need to ask a moderator to add us.
+            // For a private group, a moderator needs to invite us.
             if (!Group->isPublic && MemberID != Global.getLongID())
             {
                 // Set presence so they know that we are interested.
-                Presence::setPresence("Grouprequest_"s + GroupID, "AYRIA", "");
+                Keyvalues::setPresence("Grouprequest_"s + GroupID, {});
 
                 // Challenge may be null, but is probably an agreed upon password. Implementation dependent.
                 const auto Object = JSON::Object_t({ { "GroupID", GroupID }, { "Challenge", Challenge } });
-                Messaging::sendMultiusermessage(Moderators, "Group::Joinrequest", JSON::Dump(Object));
+                Messaging::sendMulticlientmessage(Moderators, Hash::WW32("Group::Joinrequest"), JSON::Dump(Object));
                 return {};
             }
+
+            // And store in the database.
+            Backend::Database()
+                << "INSERT INTO Groupmember VALUES (?,?,?);"
+                << GroupID << MemberID << bool(Request["isModerator"]);
 
             // While for public ones, we can just add ourselves.
             Layer1::Publish("Group::Join", JSON::Dump(Request));
@@ -226,15 +317,21 @@ namespace Services::Groups
         }
         static std::string __cdecl onLeave(JSON::Value_t &&Request)
         {
-            const auto MemberID = Request.value<std::string>("MemberID");
+            const auto MemberID = Request.value("MemberID", Global.getLongID());
             const auto GroupID = Request.value<std::string>("GroupID");
             const auto Group = getGroup(GroupID);
 
             // Sanity checking.
             if (!Group) [[unlikely]] return R"({ "Error" : "Invalid group ID." })";
-            if (!getMembers(GroupID).contains(MemberID)) [[unlikely]] return R"({ "Error" : "Invalid member ID." })";
+            if (!getMembers(GroupID).contains(MemberID)) [[unlikely]] return R"({ "Error" : "Not a member of group." })";
 
-            Layer1::Publish("Group::Leave", JSON::Dump(Request));
+            // And store in the database.
+            Backend::Database()
+                << "DELETE FROM Groupmember WHERE (GroupID = ? AND MemberID = ?);"
+                << GroupID << MemberID;
+
+            // Could also check if the MemberID is that of a moderator, but meh..
+            Layer1::Publish("Group::Leave", JSON::Object_t({ {"MemberID", MemberID}, {"GroupID", GroupID} }));
             return {};
         }
         static std::string __cdecl onUpdate(JSON::Value_t &&Request)
@@ -242,129 +339,119 @@ namespace Services::Groups
             const auto Group = fromJSON(Request);
 
             // Sanity checking.
-            if (!Group) [[unlikely]] return R"({ "Required" : "["GroupID", "Groupname", "isPublic", "isFull"]" })";
-            if (Group->GroupID != Global.getLongID()) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
+            if (!Group) [[unlikely]] return R"({ "Required" : "["GroupID", "isPublic", "Maxmembers"]" })";
 
-            Backend::Messagebus::Publish("Group::Update", JSON::Dump(toJSON(*Group)));
+            // And store in the database.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Group VALUES (?, ?, ?, ?);"
+                << Group->GroupID << Group->Groupname << Group->Maxmembers << Group->isPublic;
+
+            Layer1::Publish("Group::Update", JSON::Dump(toJSON(*Group)));
             return {};
         }
-        static std::string __cdecl onDestroy(JSON::Value_t &&Request)
+        static std::string __cdecl onDestroy(JSON::Value_t &&)
+        {
+            // Sanity checking.
+            if (!getGroup(Global.getLongID())) [[unlikely]] return R"({ "Error" : "No active group for this client." })";
+
+            // And update the database.
+            Backend::Database() << "DELETE FROM Group WHERE GroupID = ?;" << Global.getLongID();
+
+            Layer1::Publish("Group::Destroy", "");
+            return {};
+        }
+
+        static std::string __cdecl reKeygroup(JSON::Value_t &&Request)
         {
             const auto GroupID = Request.value<std::string>("GroupID");
+            const auto Cryptobase = Request["Cryptobase"].Type == JSON::Type_t::Unsignedint ?
+                uint64_t(Request["Cryptobase"]) : Hash::WW64(Request["Cryptobase"].get<std::u8string>());
 
-            // Sanity checking.
-            if (!getGroup(GroupID)) [[unlikely]] return R"({ "Error" : "Invalid group ID." })";
-            if (Global.getLongID() != GroupID) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
+            // Basic sanity-checking.
+            if (!getModerators(GroupID).contains(Global.getLongID())) [[unlikely]]
+                return R"({ "Error" : "Invalid GroupID" })";
 
-            Layer1::Publish("Group::Destroy", JSON::Dump(Request));
+            const auto Object = JSON::Object_t({ {"Cryptobase", Cryptobase} });
+            Messaging::sendGroupmessage(GroupID, Hash::WW32("Ayria::reKey"), JSON::Dump(Object));
             return {};
         }
     }
 
-    // Layer 4 interaction.
+    // Layer 4 interactions.
     namespace Notifications
     {
-        static void __cdecl onGroupupdate(int64_t RowID)
+        static void __cdecl onKeychange(const char *Message, unsigned int Length)
         {
-            try
+            const auto Request = JSON::Parse(Message, Length);
+            const auto Messagetype = Request.value<uint32_t>("Messagetype");
+            const auto GroupID = Request.value<std::string>("GroupID");
+            const auto ClientID = Request.value<std::string>("From");
+
+            // Only interested in a single message.
+            if (Messagetype != Hash::WW32("Ayria::reKey")) [[likely]]
+                return;
+
+            // Sanity checking.
+            if (!getModerators(GroupID).contains(ClientID)) [[unlikely]]
+                return;
+
+            const auto Payload = JSON::Parse(Request.value<std::string>("Payload"));
+            const auto Cryptobase = Payload["Cryptobase"];
+
+            // Either the database is out of sync, or the client is malicious.
+            if (!Cryptobase || Cryptobase.Type != JSON::Type_t::Unsignedint) [[unlikely]]
             {
-                Backend::Database()
-                    << "SELECT * FROM Group WHERE rowid = ?;" << RowID
-                    >> [](const std::string &GroupID, const std::string &Groupname, bool isPublic, bool isFull, uint32_t Membercount)
-                    {
-                        if (!getMembers(GroupID).contains(Global.getLongID())) return;
+                // TODO(tcn): Maybe report this to some security service that tracks bad clients..
+                Warningprint(va("Client %s wants to re-key group %s, but they are not a moderator..", ClientID.c_str(), GroupID.c_str()));
+                return;
+            }
 
-                        const auto Notification = JSON::Object_t({
-                            { "Membercount", Membercount },
-                            { "Groupname", Groupname },
-                            { "isPublic", isPublic },
-                            { "GroupID", GroupID },
-                            { "isFull", isFull }
-                        });
-
-                        Backend::Notifications::Publish("Group::onUpdate", JSON::Dump(Notification).c_str());
-
-                    };
-            } catch (...) {}
-        }
-        static void __cdecl onMemberupdate(int64_t RowID)
-        {
-            try
-            {
-                Backend::Database()
-                    << "SELECT * FROM Groupmember WHERE rowid = ?;" << RowID
-                    >> [](const std::string &MemberID, const std::string &GroupID, bool isModerator)
-                    {
-                        if (!getMembers(GroupID).contains(Global.getLongID())) return;
-
-                        const auto Notification = JSON::Object_t({
-                            { "isModerator", isModerator },
-                            { "MemberID", MemberID },
-                            { "GroupID", GroupID }
-                        });
-
-                        Backend::Notifications::Publish("Group::onMember", JSON::Dump(Notification).c_str());
-
-                    };
-            } catch (...) {}
+            // Add the new value to the database.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Groupkey VALUES (?, ?);"
+                << GroupID << uint64_t(Cryptobase);
         }
     }
 
     // Add the handlers and tasks.
     void Initialize()
     {
-        try
-        {
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Group ("
-                "GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE, "
-                "Groupname TEXT NOT NULL, "
-                "isPublic BOOLEAN, "
-                "isFull BOOLEAN, "
-                "Membercount INTEGER DEFAULT 0 );";
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Group ("
+            "GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE, "
+            "Groupname TEXT "
+            "Maxmembers INTEGER NOT NULL, "
+            "isPublic BOOLEAN NOT NULL );";
 
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Groupmember ("
-                "MemberID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
-                "GroupID TEXT REFERENCES Group(GroupID) ON DELETE CASCADE, "
-                "isModerator BOOLEAN DEFAULT false, "
-                "UNIQUE (GroupID, MemberID) );";
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Groupmember ("
+            "GroupID TEXT REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "MemberID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
+            "isModerator BOOLEAN DEFAULT false, "
+            "UNIQUE (GroupID, MemberID) );";
 
-            Backend::Database() <<
-                "CREATE TRIGGER IF NOT EXISTS MemberINC "
-                "AFTER INSERT ON Groupmember "
-                "BEGIN "
-                "UPDATE Group SET Membercount = (Membercount + 1) "
-                "WHERE GroupID = new.GroupID; "
-                "END;";
-
-            Backend::Database() <<
-                "CREATE TRIGGER IF NOT EXISTS MemberDEC "
-                "AFTER DELETE ON Groupmember "
-                "BEGIN "
-                "UPDATE Group SET Membercount = (Membercount - 1) "
-                "WHERE GroupID = old.GroupID; "
-                "END;";
-
-        } catch (...) {}
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Groupkey ("
+            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "Cryptobase INTEGER DEFAULT 0 );";
 
         // Parse Layer 2 messages.
-        Backend::Messageprocessing::addMessagehandler("Group::Join", Messagehandlers::onJoin);
-        Backend::Messageprocessing::addMessagehandler("Group::Leave", Messagehandlers::onLeave);
-        Backend::Messageprocessing::addMessagehandler("Group::Update", Messagehandlers::onUpdate);
-        Backend::Messageprocessing::addMessagehandler("Group::Destroy", Messagehandlers::onDestroy);
+        Layer2::addMessagehandler("Group::Join", Messagehandlers::onJoin);
+        Layer2::addMessagehandler("Group::Leave", Messagehandlers::onLeave);
+        Layer2::addMessagehandler("Group::Update", Messagehandlers::onUpdate);
+        Layer2::addMessagehandler("Group::Destroy", Messagehandlers::onDestroy);
 
         // Accept Layer 3 calls.
-        Backend::JSONAPI::addEndpoint("Groups::Join", JSONAPI::onJoin);
-        Backend::JSONAPI::addEndpoint("Groups::Leave", JSONAPI::onLeave);
-        Backend::JSONAPI::addEndpoint("Groups::addMember", JSONAPI::onJoin);
-        Backend::JSONAPI::addEndpoint("Groups::kickMember", JSONAPI::onLeave);
-        Backend::JSONAPI::addEndpoint("Groups::Updategroup", JSONAPI::onUpdate);
-        Backend::JSONAPI::addEndpoint("Groups::Creategroup", JSONAPI::onUpdate);
-        Backend::JSONAPI::addEndpoint("Groups::Destroygroup", JSONAPI::onDestroy);
+        Layer3::addEndpoint("Groups::Join", JSONAPI::onJoin);
+        Layer3::addEndpoint("Groups::Leave", JSONAPI::onLeave);
+        Layer3::addEndpoint("Groups::reKey", JSONAPI::reKeygroup);
+        Layer3::addEndpoint("Groups::addMember", JSONAPI::onJoin);
+        Layer3::addEndpoint("Groups::kickMember", JSONAPI::onLeave);
+        Layer3::addEndpoint("Groups::Updategroup", JSONAPI::onUpdate);
+        Layer3::addEndpoint("Groups::Creategroup", JSONAPI::onUpdate);
+        Layer3::addEndpoint("Groups::Destroygroup", JSONAPI::onDestroy);
 
-        // Process Layer 4 notifications.
-        Backend::Notifications::addProcessor("Group", Notifications::onGroupupdate);
-        Backend::Notifications::addProcessor("Groupmember", Notifications::onMemberupdate);
+        // Process Layer 4 updates.
+        Layer4::Subscribe("Messaging::onGroupmessage", Notifications::onKeychange);
     }
 }

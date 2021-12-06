@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-10-09
+    Started: 2021-11-27
     License: MIT
 */
 
@@ -8,210 +8,164 @@
 
 namespace Services::Messaging
 {
-    // Helpers for getting / setting cryptokeys.
-    static void setCryptokey(const std::string &GroupID, const std::string &Key)
-    {
-        try
-        {
-            Backend::Database()
-                << "INSERT INTO Groupkey VALUES(?,?);"
-                << GroupID << Key;
-        } catch (...) {}
-    }
-    static std::optional<std::array<uint8_t, 32>> getCryptokey(const std::string &LongID)
-    {
-        std::string Key{};
-        try { Backend::Database() << "SELECT Encryptionkey FROM Groupkey WHERE GroupID = ?;" << LongID >> Key; } catch (...) {}
-        if (Key.empty()) return {};
-
-        std::array<uint8_t, 32> Result;
-        std::ranges::move(Base85::Decode<uint8_t>(Key), Result.begin());
-        return Result;
-    }
-
-    // Helpers.
-    static std::unordered_set<std::string> getModerators(const std::string &GroupID)
-    {
-        std::unordered_set<std::string> Moderators;
-        for (const auto Tmp = AyriaAPI::Groups::getModerators(GroupID); const auto & Item : Tmp)
-            Moderators.insert(Item);
-        return Moderators;
-    }
+    // Helpers, includes the groups owner even if not listed as a member (for some reason).
     static std::unordered_set<std::string> getMembers(const std::string &GroupID)
     {
-        std::unordered_set<std::string> Members;
-        for (const auto Tmp = AyriaAPI::Groups::getMembers(GroupID); const auto & Item : Tmp)
-            Members.insert(Item);
-        return Members;
+        auto Temp = AyriaAPI::Groups::getMembers(GroupID);
+        Temp.push_back(GroupID);
+
+        return { Temp.begin(), Temp.end() };
+    }
+
+    // Query the current crypto-base for the group, public groups may use a default key (SHA256(0)).
+    static std::string getCryptokey(const std::string &GroupID)
+    {
+        uint64_t Cryptobase{};
+        Backend::Database() << "SELECT Cryptobase FROM Groupkey WHERE GroupID = ?;" << GroupID >> Cryptobase;
+        return Hash::SHA256(Cryptobase);
     }
 
     // Internal access for the services.
-    void sendUsermessage(const std::string &UserID, std::string_view Messagetype, std::string_view Payload)
+    void sendGroupmessage(const std::string &GroupID, uint32_t Messagetype, std::string_view Message)
     {
-        // In some cases, of broadcasting, we include ourselves.
-        if (UserID == Global.getLongID()) [[unlikely]] return;
+        // Create a unique seed for the IV and generate the shared key to use.
+        const auto IVSeed = Hash::WW32(std::chrono::utc_clock::now().time_since_epoch().count());
+        const auto Checksum = Hash::WW32(Message);
+        const auto Key = getCryptokey(GroupID);
+        const auto IV = Hash::SHA256(IVSeed);
 
-        const auto Key = Hash::SHA256(qDSA::Generatesecret(Base58::Decode(UserID), *Global.Privatekey));
-        const auto Encrypted = Base85::Encode(AES::Encrypt_256(Key, Payload));
-        const auto Object = JSON::Object_t({
-            { "Messagetype", Hash::WW32(Messagetype) },
-            { "Checksum", Hash::WW32(Payload) },
-            { "Payload", Encrypted },
-            { "UserID", UserID }
-        });
+         // Save to the database for later lookups.
+         Backend::Database()
+             << "INSERT OR REPLACE INTO Groupmessage VALUES (?, ?, ?, ?, ?);"
+             << Global.getLongID() << GroupID << Messagetype
+             << std::chrono::utc_clock::now().time_since_epoch().count()
+             << Base85::Encode(Message);
 
-        Layer1::Publish("Usermessage", JSON::Dump(Object));
+         // Should be optimized to be in-place..
+         const auto Payload = Base85::Encode(AES::Encrypt_256<char>(Key, IV, Message));
+
+         // Put it in the system.
+         Layer1::Publish("Messaging::Groupmessage", JSON::Object_t({
+             { "Messagetype", Messagetype },
+             { "Checksum", Checksum },
+             { "Payload", Payload },
+             { "GroupID", GroupID },
+             { "IVSeed", IVSeed }
+         }));
     }
-    void sendGroupmessage(const std::string &GroupID, std::string_view Messagetype, std::string_view Payload)
+    void sendClientmessage(const std::string &ClientID, uint32_t Messagetype, std::string_view Message)
     {
-        const auto Cryptokey = getCryptokey(GroupID);
-        const auto Group = Groups::getGroup(GroupID);
+        // Create a unique seed for the IV and generate the shared key to use.
+        const auto IVSeed = Hash::WW32(std::chrono::utc_clock::now().time_since_epoch().count());
+        const auto Key = qDSA::Generatesecret(Base58::Decode(ClientID), *Global.Privatekey);
+        const auto Checksum = Hash::WW32(Message);
+        const auto IV = Hash::SHA256(IVSeed);
 
-        // Group needs encryption and we don't have a key.
-        if (!Cryptokey && (!Group || !Group->isPublic)) return;
+        // Save to the database for later lookups.
+        Backend::Database()
+            << "INSERT OR REPLACE INTO Clientmessage VALUES (?, ?, ?, ?, ?);"
+            << Global.getLongID() << ClientID << Messagetype
+            << std::chrono::utc_clock::now().time_since_epoch().count()
+            << Base85::Encode(Message);
 
-        const auto Message = Cryptokey ? Base85::Encode(AES::Encrypt_256(*Cryptokey, Payload)) : Base85::Encode(Payload);
-        const auto Object = JSON::Object_t({
-            { "Messagetype", Hash::WW32(Messagetype) },
-            { "Checksum", Hash::WW32(Payload) },
-            { "Payload", Message },
-            { "GroupID", GroupID }
-        });
+        // Should be optimized to be in-place..
+        const auto Payload = Base85::Encode(AES::Encrypt_256<char>(Key, IV, Message));
 
-        Layer1::Publish("Groupmessage", JSON::Dump(Object));
+        // Put it in the system.
+        Layer1::Publish("Messaging::Clientmessage", JSON::Object_t({
+            { "Messagetype", Messagetype },
+            { "Checksum", Checksum },
+            { "ClientID", ClientID },
+            { "Payload", Payload },
+            { "IVSeed", IVSeed }
+        }));
     }
-    void sendMultiusermessage(const std::unordered_set<std::string> &UserIDs, std::string_view Messagetype, std::string_view Payload)
+    void sendMulticlientmessage(const std::unordered_set<std::string> &ClientIDs, uint32_t Messagetype, std::string_view Message)
     {
-        for (const auto &ID : UserIDs) sendUsermessage(ID, Messagetype, Payload);
+        for (const auto &ID : ClientIDs)
+            sendClientmessage(ID, Messagetype, Message);
     }
 
     // Layer 2 interaction.
     namespace Messagehandlers
     {
-        static bool __cdecl onKeychange(uint64_t, const char *LongID, const char *Message, unsigned int Length)
-        {
-            const auto Request = JSON::Parse(Message, Length);
-            const auto Newkey = Request.value<std::string>("Newkey");
-            const auto Checksum = Request.value<uint32_t>("Checksum");
-            const auto GroupID = Request.value<std::string>("GroupID");
-
-            // Basic sanity checking.
-            if (Newkey.empty()) [[unlikely]] return false;
-            if (!Base85::isValid(Newkey)) [[unlikely]] return false;
-            if (!Groups::getGroup(GroupID)) [[unlikely]] return false;
-            if (!getModerators(GroupID).contains(LongID)) [[unlikely]] return false;
-
-            // We can only decrypt if we have the key.
-            if (const auto Cryptokey = getCryptokey(GroupID))
-            {
-                const auto Decrypted = AES::Decrypt_256<char>(*Cryptokey, Base85::Decode(Newkey));
-                if (Hash::WW32(Decrypted) != Checksum) [[unlikely]] return false;
-
-                setCryptokey(GroupID, Decrypted);
-            }
-
-            return true;
-        }
-        static bool __cdecl onUsermessage(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
-        {
-            const auto Request = JSON::Parse(Message, Length);
-            const auto UserID = Request.value<std::string>("UserID");
-            const auto Checksum = Request.value<uint32_t>("Checksum");
-            const auto Payload = Request.value<std::string>("Payload");
-            const auto Messagetype = Request.value<uint32_t>("Messagetype");
-            const auto Received = std::chrono::utc_clock::now().time_since_epoch().count();
-
-            // Basic sanity checking.
-            if (Payload.empty()) [[unlikely]] return false;
-            if (!Base85::isValid(Payload)) [[unlikely]] return false;
-            if (!Clientinfo::getClient(UserID)) [[unlikely]] return false;
-
-            if (UserID == Global.getLongID())
-            {
-                const auto Key = Hash::SHA256(qDSA::Generatesecret(Base58::Decode(std::string(LongID)), *Global.Privatekey));
-                const auto Decrypted = AES::Decrypt_256(Key, Base85::Decode(Payload));
-                if (Hash::WW32(Decrypted) != Checksum) [[unlikely]] return false;
-
-                try
-                {
-                    Backend::Database()
-                        << "INSERT INTO Usermessages VALUES (?,?,?,?,?,?,?);"
-                        << std::string(LongID)
-                        << UserID
-                        << Messagetype
-                        << Checksum
-                        << Received
-                        << Timestamp
-                        << Base85::Encode(Decrypted);
-                } catch (...) {};
-            }
-            else
-            {
-                try
-                {
-                    Backend::Database()
-                        << "INSERT INTO Usermessages VALUES (?,?,?,?,?,?,?);"
-                        << std::string(LongID)
-                        << UserID
-                        << Messagetype
-                        << Checksum
-                        << Received
-                        << Timestamp
-                        << Payload;
-                } catch (...) {};
-            }
-
-            return true;
-        }
         static bool __cdecl onGroupmessage(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
         {
             const auto Request = JSON::Parse(Message, Length);
-            const auto Checksum = Request.value<uint32_t>("Checksum");
             const auto GroupID = Request.value<std::string>("GroupID");
-            const auto Payload = Request.value<std::string>("Payload");
+
+            // Not intended for us, no need to parse further.
+            if (!getMembers(GroupID).contains(Global.getLongID())) return false;
+
             const auto Messagetype = Request.value<uint32_t>("Messagetype");
-            const auto Received = std::chrono::utc_clock::now().time_since_epoch().count();
+            const auto Checksum = Request.value<uint32_t>("Checksum");
+            const auto IVSeed = Request.value<uint32_t>("IVSeed");
+            auto Payload = Request.value<std::string>("Payload");
 
-            // Basic sanity checking.
-            if (Payload.empty()) [[unlikely]] return false;
-            if (!Base85::isValid(Payload)) [[unlikely]] return false;
-            if (!Groups::getGroup(GroupID)) [[unlikely]] return false;
-            if (!getMembers(GroupID).contains(LongID)) [[unlikely]] return false;
+            // Generate crypto properties.
+            const auto Key = getCryptokey(GroupID);
+            const auto IV = Hash::SHA256(IVSeed);
 
-            // We can only decrypt if we have the key.
-            if (const auto Cryptokey = getCryptokey(GroupID))
-            {
-                const auto Decrypted = AES::Decrypt_256(*Cryptokey, Base85::Decode(Payload));
-                if (Hash::WW32(Decrypted) != Checksum) [[unlikely]] return false;
+            // Should be optimized to be in-place..
+            Payload = AES::Decrypt_256<char>(Key, IV, Base85::Decode(Payload));
 
-                try
-                {
-                    Backend::Database()
-                        << "INSERT INTO Groupmessages VALUES (?,?,?,?,?,?);"
-                        << std::string(LongID)
-                        << GroupID
-                        << Messagetype
-                        << Checksum
-                        << Received
-                        << Timestamp
-                        << Base85::Encode(Decrypted);
-                } catch (...) {};
-            }
-            else
-            {
-                try
-                {
-                    Backend::Database()
-                        << "INSERT INTO Groupmessages VALUES (?,?,?,?,?,?);"
-                        << std::string(LongID)
-                        << GroupID
-                        << Messagetype
-                        << Checksum
-                        << Received
-                        << Timestamp
-                        << Payload;
-                } catch (...) {};
-            }
+            // Failed to decrypt properly, discard it.
+            if (Checksum != Hash::WW32(Payload)) [[unlikely]]
+                return false;
+
+            // Notify the plugins about receiving this message.
+            Layer4::Publish("Messaging::onGroupmessage", JSON::Object_t({
+                { "Messagetype", Messagetype },
+                { "Timestamp", Timestamp },
+                { "GroupID", GroupID },
+                { "Payload", Payload },
+                { "From", LongID }
+            }));
+
+            // And insert into the database for later lookups.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Groupmessage VALUES (?, ?, ?, ?, ?);"
+                << LongID << GroupID << Messagetype << Timestamp << Base85::Encode(Payload);
+
+            return true;
+
+        }
+        static bool __cdecl onClientmessage(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
+        {
+            const auto Request = JSON::Parse(Message, Length);
+            const auto ClientID = Request.value<std::string>("ClientID");
+
+            // Not intended for us, no need to parse further.
+            if (ClientID != Global.getLongID()) return false;
+
+            const auto Messagetype = Request.value<uint32_t>("Messagetype");
+            const auto Checksum = Request.value<uint32_t>("Checksum");
+            const auto IVSeed = Request.value<uint32_t>("IVSeed");
+            auto Payload = Request.value<std::string>("Payload");
+
+            // Generate crypto properties.
+            const auto Key = qDSA::Generatesecret(Base58::Decode(std::string_view(LongID)), *Global.Privatekey);
+            const auto IV = Hash::SHA256(IVSeed);
+
+            // Should be optimized to be in-place..
+            Payload = AES::Decrypt_256<char>(Key, IV, Base85::Decode(Payload));
+
+            // Failed to decrypt properly, discard it.
+            if (Checksum != Hash::WW32(Payload)) [[unlikely]]
+                return false;
+
+            // Notify the plugins about receiving this message.
+            Layer4::Publish("Messaging::onClientmessage", JSON::Object_t({
+                { "Messagetype", Messagetype },
+                { "Timestamp", Timestamp },
+                { "Payload", Payload },
+                { "From", LongID }
+            }));
+
+            // And insert into the database for later lookups.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Clientmessage VALUES (?, ?, ?, ?, ?);"
+                << LongID << ClientID << Messagetype << Timestamp << Base85::Encode(Payload);
 
             return true;
         }
@@ -220,213 +174,68 @@ namespace Services::Messaging
     // Layer 3 interaction.
     namespace JSONAPI
     {
-        static std::string __cdecl groupInvite(JSON::Value_t &&Request)
+        static std::string __cdecl sendClientmessage(JSON::Value_t &&Request)
         {
-            const auto MemberID = Request.value<std::string>("MemberID");
-            const auto GroupID = Request.value<std::string>("GroupID");
-            const auto Key = getCryptokey(GroupID);
+            if (!Request.contains_all("ClientID", "Messagetype", "Message"))
+                return R"({ "Error" : "Required arguments: ClientID, Messagetype, Message" })";
 
-            const auto Payload = JSON::Dump(JSON::Object_t({
-                { "Challenge", Key ? Base58::Encode(*Key) : ""s},
-                { "GroupID", GroupID }
-            }));
-
-            Messaging::sendUsermessage(MemberID, "Group::Invite", Payload);
-            return {};
-        }
-        static std::string __cdecl groupKeychange(JSON::Value_t &&Request)
-        {
-            const auto GroupID = Request.value<std::string>("GroupID");
-            const auto Group = Groups::getGroup(GroupID);
-            const auto Cryptokey = getCryptokey(GroupID);
-
-            // Basic sanity checking.
-            if (!Group) [[unlikely]] return R"({ "Error" : "Invalid / missing groupID" })";
-            if (Group->isPublic) [[unlikely]] return R"({ "Error" : "Group is public." })";
-            if (!Cryptokey && GroupID != Global.getLongID()) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
-            if (!getModerators(GroupID).contains(Global.getLongID())) [[unlikely]] return R"({ "Error" : "We don't have permission to do this." })";
-
-            // Generate a random-enough key.
-            const auto Newkey = Hash::SHA256(Hash::SHA256(*Global.Privatekey) + Hash::SHA1(GetTickCount64()) + (Cryptokey ? Hash::SHA1(*Cryptokey) : ""));
-
-            // If there's no existing key, we need to message the moderators.
-            if (!Cryptokey)
-            {
-                const auto Payload = JSON::Dump(JSON::Object_t({
-                    { "Newkey", Base85::Encode(Newkey) },
-                    { "GroupID", GroupID }
-                }));
-
-                sendMultiusermessage(getMembers(GroupID), "Group::reKey", Payload);
-            }
-            else
-            {
-                const auto Payload = JSON::Dump(JSON::Object_t({
-                    { "Newkey", Base85::Encode(Newkey) },
-                    { "Checksum", Hash::WW32(Newkey) },
-                    { "GroupID", GroupID }
-                }));
-
-                Layer1::Publish("Group::reKey", Payload);
-            }
-
-            setCryptokey(GroupID, Newkey);
-            return {};
-        }
-
-        static std::string __cdecl sendUsermessage(JSON::Value_t &&Request)
-        {
-            const auto Messagetype = Request.value<std::string>("Messagetype");
             const auto Message = Request.value<std::string>("Message");
-            const auto UserID = Request.value<std::string>("UserID");
+            const auto ClientID = Request.value<std::string>("ClientID");
+            const auto Messagetype = Request["Messagetype"].Type == JSON::Type_t::Unsignedint ?
+                uint32_t(Request["Messagetype"]) : Hash::WW32(Request["Messagetype"].get<std::u8string>());
 
-            Messaging::sendUsermessage(UserID, Messagetype, Message);
+            Messaging::sendClientmessage(ClientID, Messagetype, Message);
             return {};
         }
         static std::string __cdecl sendGroupmessage(JSON::Value_t &&Request)
         {
-            const auto Messagetype = Request.value<std::string>("Messagetype");
-            const auto GroupID = Request.value<std::string>("GroupID");
+            if (!Request.contains_all("GroupID", "Messagetype", "Message"))
+                return R"({ "Error" : "Required arguments: GroupID, Messagetype, Message" })";
+
             const auto Message = Request.value<std::string>("Message");
+            const auto GroupID = Request.value<std::string>("GroupID");
+            const auto Messagetype = Request["Messagetype"].Type == JSON::Type_t::Unsignedint ?
+                uint32_t(Request["Messagetype"]) : Hash::WW32(Request["Messagetype"].get<std::u8string>());
+
+            // Basic sanity-checking.
+            if (!getMembers(GroupID).contains(Global.getLongID())) [[unlikely]]
+                return R"({ "Error" : "Invalid GroupID" })";
 
             Messaging::sendGroupmessage(GroupID, Messagetype, Message);
             return {};
         }
     }
 
-    // Layer 4 interaction.
-    namespace Notifications
-    {
-        static void __cdecl onUsermessage(int64_t RowID)
-        {
-            try
-            {
-                Backend::Database()
-                    << "SELECT * FROM Usermessages WHERE rowid = ?;" << RowID
-                    >> [](const std::string &Source, const std::string &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t, uint64_t, const std::string &Message)
-                    {
-                        if (Target == Global.getLongID())
-                        {
-                            if (Checksum != Hash::WW32(Base85::Decode(Message))) [[unlikely]] return;
-
-                            const auto Notification = JSON::Object_t({
-                                { "Messagetype", Messagetype },
-                                { "Message", Message },
-                                { "Source", Source }
-                            });
-
-                            Backend::Notifications::Publish("onUsermessage", JSON::Dump(Notification).c_str());
-                        }
-                    };
-            } catch (...) {}
-        }
-        static void __cdecl onGroupmessage(int64_t RowID)
-        {
-            try
-            {
-                Backend::Database()
-                    << "SELECT * FROM Groupmessages WHERE rowid = ?;" << RowID
-                    >> [](const std::string &Source, const std::string &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t, uint64_t, const std::string &Message)
-                    {
-                        if (Checksum != Hash::WW32(Base85::Decode(Message))) [[unlikely]] return;
-
-                        if (getMembers(Target).contains(Global.getLongID()))
-                        {
-                            const auto Notification = JSON::Object_t({
-                                { "Messagetype", Messagetype },
-                                { "Message", Message },
-                                { "Source", Source }
-                            });
-
-                            Backend::Notifications::Publish("onGroupmessage", JSON::Dump(Notification).c_str());
-                        }
-                    };
-            } catch (...) {}
-        }
-    }
-
-    // Listen for special notifications.
-    namespace Subscriptions
-    {
-        static void __cdecl onKeychange(const char *JSONString)
-        {
-            const auto Notification = JSON::Parse(JSONString);
-            if (Hash::WW32("Group::reKey") != Notification.value<uint32_t>("Messagetype")) [[likely]] return;
-
-            const auto Payload = JSON::Parse(Base85::Decode(Notification.value<std::string>("Message")));
-            const auto Sender = Notification.value<std::string>("Source");
-            const auto GroupID = Payload.value<std::string>("GroupID");
-            const auto Newkey = Payload.value<std::string>("Newkey");
-
-            if (!getModerators(GroupID).contains(Sender)) [[unlikely]] return;
-            setCryptokey(GroupID, Newkey);
-        }
-        static void __cdecl onRequest(const char *JSONString)
-        {
-            const auto Notification = JSON::Parse(JSONString);
-            if (Hash::WW32("Group::Joinrequest") != Notification.value<uint32_t>("Messagetype")) [[likely]] return;
-
-            const auto Payload = JSON::Parse(Base85::Decode(Notification.value<std::string>("Message")));
-            const auto Challenge = Payload.value<std::string>("Challenge");
-            const auto Sender = Notification.value<std::string>("Source");
-            const auto GroupID = Payload.value<std::string>("GroupID");
-
-            if (const auto Key = getCryptokey(GroupID); Challenge == (Key ? Base58::Encode(*Key) : ""s))
-                Groups::addMember(GroupID, Sender);
-        }
-    }
-
     // Add the handlers and tasks.
     void Initialize()
     {
-        try
-        {
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Groupkey ("
-                "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
-                "Encryptionkey TEXT NOT NULL);";
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Groupkey ("
+            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "Cryptobase INTEGER DEFAULT 0 );";
 
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Usermessages ("
-                "Source TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
-                "Target TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
-                "Messagetype INTEGER, "
-                "Checksum INTEGER, "
-                "Received INTEGER, "
-                "Sent INTEGER, "
-                "Message TEXT, "
-                "UNIQUE (Source, Target, Sent, Messagetype) );";
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Clientmessage ("
+            "Source TEXT REFERENCES Account(Publickey), "
+            "Target TEXT REFERENCES Account(Publickey), "
+            "Messagetype INTEGER NOT NULL, "
+            "Timestamp INTEGER NOT NULL, "
+            "Message TEXT NOT NULL );";
 
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Groupmessages ("
-                "Source TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
-                "Target TEXT REFERENCES Group(GroupID) ON DELETE CASCADE, "
-                "Messagetype INTEGER, "
-                "Checksum INTEGER, "
-                "Received INTEGER, "
-                "Sent INTEGER, "
-                "Message TEXT, "
-                "UNIQUE (Source, Target, Sent, Messagetype) );";
-
-        } catch (...) {}
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Groupmessage ("
+            "Source TEXT REFERENCES Account(Publickey), "
+            "Target TEXT REFERENCES Group(GroupID), "
+            "Messagetype INTEGER NOT NULL, "
+            "Timestamp INTEGER NOT NULL, "
+            "Message TEXT NOT NULL );";
 
         // Parse Layer 2 messages.
-        Backend::Messageprocessing::addMessagehandler("Group::reKey", Messagehandlers::onKeychange);
-        Backend::Messageprocessing::addMessagehandler("Usermessage", Messagehandlers::onUsermessage);
-        Backend::Messageprocessing::addMessagehandler("Groupmessage", Messagehandlers::onGroupmessage);
+        Layer2::addMessagehandler("Messaging::Groupmessage", Messagehandlers::onGroupmessage);
+        Layer2::addMessagehandler("Messaging::Clientmessage", Messagehandlers::onClientmessage);
 
         // Accept Layer 3 calls.
-        Backend::JSONAPI::addEndpoint("Group::Invite", JSONAPI::groupInvite);
-        Backend::JSONAPI::addEndpoint("Group::reKey", JSONAPI::groupKeychange);
-        Backend::JSONAPI::addEndpoint("sendUsermessage", JSONAPI::sendUsermessage);
-        Backend::JSONAPI::addEndpoint("sendGroupmessage", JSONAPI::sendGroupmessage);
-
-        // Process Layer 4 notifications.
-        Backend::Notifications::addProcessor("Usermessages", Notifications::onUsermessage);
-        Backend::Notifications::addProcessor("Groupmessages", Notifications::onGroupmessage);
-
-        // Listen for special notifications.
-        Backend::Notifications::Subscribe("onUsermessage", Subscriptions::onRequest);
-        Backend::Notifications::Subscribe("onUsermessage", Subscriptions::onKeychange);
+        Layer3::addEndpoint("Messaging::sendGroupmessage", JSONAPI::sendGroupmessage);
+        Layer3::addEndpoint("Messaging::sendClientmessage", JSONAPI::sendClientmessage);
     }
 }

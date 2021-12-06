@@ -8,30 +8,81 @@
 
 namespace Services::Clientinfo
 {
-    // Cached clients are those we've seen / queried this session..
+    // Cache strings and clients we've seen so far.
     static Hashmap<std::string, std::shared_ptr<Client_t>> Clientcache{};
+    static Hashset<std::u8string> Usernamecache{};
+    static Hashset<std::string> Publickeycache{};
+
+    // Format between C++ and JSON representations.
+    std::optional<Client_t> fromJSON(const JSON::Value_t &Object)
+    {
+        // Can only parse if all the required data is available.
+        if (!Object.contains_all("ClientID", "GameID", "ModID", "isIngame", "isAway")) [[unlikely]] return {};
+
+        Client_t Client{};
+        Client.ModID = Object["ModID"];
+        Client.GameID = Object["GameID"];
+        Client.isAway = Object["isAway"];
+        Client.isIngame = Object["isIngame"];
+        Client.Lastseen = Object.value("Lastseen", int64_t{});
+        Client.ClientID = *Publickeycache.insert(Object.value<std::string>("ClientID")).first;
+        Client.Username = *Usernamecache.insert(Object.value<>("Username", std::u8string{})).first;
+
+        return Client;
+    }
+    std::optional<Client_t> fromJSON(std::string_view JSON)
+    {
+        return fromJSON(JSON::Parse(JSON));
+    }
+    JSON::Object_t toJSON(const Client_t &Client)
+    {
+        return JSON::Object_t({
+            { "Username", Client.Username },
+            { "Lastseen", Client.Lastseen },
+            { "ClientID", Client.ClientID },
+            { "isIngame", Client.isIngame },
+            { "GameID", Client.GameID },
+            { "isAway", Client.isAway },
+            { "ModID", Client.ModID }
+        });
+    }
+
+    // Format our own info as a client struct.
+    static const Client_t &getLocalclient()
+    {
+        static Client_t Local;
+        Local = {
+            *Usernamecache.insert(Global.Username->c_str()).first,
+            *Publickeycache.insert(Global.getLongID()).first,
+            Global.GameID,
+            Global.ModID,
+            !!Global.Settings.isIngame,
+            !!Global.Settings.isAway
+        };
+        return Local;
+    }
 
     // Fetch the client by ID, for use with services.
     std::shared_ptr<Client_t> getClient(const std::string &LongID)
     {
-        // Rare but possible.
+        // Special case for when this function is used to get ourselves.
         if (LongID == Global.getLongID()) [[unlikely]]
         {
-            Client_t Localclient{ Global.GameID, Global.ModID, Global.getClientflags(), Global.getLongID(), Encoding::toNarrow(*Global.Username) };
-            return Clientcache.emplace(Localclient.getLongID(), std::make_shared<Client_t>(Localclient)).first->second;
+            return Clientcache.emplace(LongID, std::make_shared<Client_t>(getLocalclient())).first->second;
         }
 
-        // Simplest case, we already have the client cached.
-        if (Clientcache.contains(LongID)) [[likely]]
-            return Clientcache[LongID];
-
-        // Get the client from the database.
-        if (const auto JSON = AyriaAPI::Clientinfo::Find(LongID))
+        // Check if it needs updating.
+        const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
+        if (Clientcache.contains(LongID) && Clientcache[LongID]->Lastupdated > Timestamp)
         {
-            const auto Client = fromJSON(JSON);
-            if (!Client) [[unlikely]] return {};
+            return Clientcache[LongID];
+        }
 
-            return Clientcache.emplace(Client->getLongID(), std::make_shared<Client_t>(*Client)).first->second;
+        // Else we query the database for more info.
+        if (auto Client = fromJSON(AyriaAPI::Clientinfo::Fetch(LongID)))
+        {
+            if (Client->Lastseen < Timestamp) Client->Lastupdated = 0xFFFFFFFF;
+            return Clientcache.emplace(LongID, std::make_shared<Client_t>(*Client)).first->second;
         }
 
         return {};
@@ -40,7 +91,7 @@ namespace Services::Clientinfo
     // Internal helper to trigger an update when the global state changes.
     void triggerUpdate()
     {
-        Backend::Messagebus::Publish("Client::Update", JSON::Dump(toJSON(*getClient(Global.getLongID()))));
+        Layer1::Publish("Client::Update", toJSON(getLocalclient()));
     }
 
     // Layer 2 interaction.
@@ -48,35 +99,59 @@ namespace Services::Clientinfo
     {
         static bool __cdecl onLeave(uint64_t, const char *LongID, const char *, unsigned int)
         {
-            Backend::Notifications::Publish("Client::onLeave", va(R"({ "ClientID" : "%s" })", LongID).c_str());
+            Layer4::Publish("Client::onLeave", JSON::Object_t({ {"ClientID", LongID } }));
             Clientcache.erase(LongID);
             return true;
         }
-        static bool __cdecl onUpdate(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length)
+        static bool __cdecl onUpdate(uint64_t, const char *LongID, const char *Message, unsigned int Length)
         {
             const auto Parsed = fromJSON(std::string_view(Message, Length));
-            const auto Client = Parsed.value_or(Client_t{});
+            auto Client = Parsed.value_or(Client_t{});
 
             // Sanity-checking.
             if (!Parsed) [[unlikely]] return false;
             if (Client.getLongID() != LongID) [[unlikely]] return false;
-            if (Clientcache.contains(LongID) && Clientcache[LongID]->Timestamp > Timestamp) [[unlikely]] return false;
 
-            // Only save for later lookups if the client is indeed active (i.e. we are not just processing the backlog).
-            if (Timestamp > uint64_t((std::chrono::utc_clock::now() - std::chrono::minutes(5)).time_since_epoch().count()))
-                Clientcache.emplace(LongID, std::make_shared<Client_t>(Client)).first->second->Timestamp = Timestamp;
-
-            // Insert into the database.
-            try
+            // Check how much we care for this user.
+            do
             {
-                Backend::Database()
-                    << "INSERT OR REPLACE INTO Clients VALUES (?,?,?,?,?);"
-                    << Client.Publickey
-                    << Client.GameID
-                    << Client.ModID
-                    << Client.Flags
-                    << Encoding::toNarrow(Client.Username);
-            } catch (...) {}
+                // Maybe some plugin is interested in this..
+                if (LongID == Global.getLongID())
+                {
+                    Layer4::Publish("Client::Selfupdate", toJSON(Client));
+                    break;
+                }
+
+                // Relationships.
+                const auto Relation = AyriaAPI::Clientrelations::Get(LongID, Global.getLongID());
+
+                // Ignore blocked clients.
+                if (Relation.second) break;
+
+                // A friend or someone we stalk.
+                if (Relation.second)
+                {
+                    Layer4::Publish("Client::Friendupdate", toJSON(Client));
+                    break;
+                }
+
+                // Just some random..
+                Layer4::Publish("Client::Clientupdate", toJSON(Client));
+
+            } while (false);
+
+            // Update the client in the datbase.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Clientsocial VALUES(?, ?, ?);"
+                << Client.ClientID << Client.Username << Client.isAway;
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Clientgaming VALUES(?, ?, ?, ?);"
+                << Client.ClientID << Client.GameID << Client.ModID << Client.isIngame;
+
+            // And our cache.
+            Client.Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+            Client.Lastseen = Client.Lastupdated;
+            Clientcache[Client.ClientID] = std::make_shared<Client_t>(Client);
 
             return true;
         }
@@ -127,62 +202,34 @@ namespace Services::Clientinfo
         }
     }
 
-    // Layer 4 interaction.
-    namespace Notifications
-    {
-        static void __cdecl onUpdate(int64_t RowID)
-        {
-            try
-            {
-                Backend::Database()
-                    << "SELECT * FROM Client WHERE rowid = ?;" << RowID
-                    >> [](const std::string &ClientID, uint32_t GameID, uint32_t ModID, uint32_t Flags, const std::string &Username)
-                    {
-                        const auto Client = getClient(ClientID);
-                        if (!Client) [[unlikely]] return; // WTF?
-
-                        JSON::Object_t Delta{ {"ClientID", ClientID} };
-                        if (Username != Client->Username) { Delta["Username"] = Username; Client->Username = Username; }
-                        if (GameID != Client->GameID) { Delta["GameID"] = GameID; Client->GameID = GameID; }
-                        if (ModID != Client->ModID) { Delta["ModID"] = ModID; Client->ModID = ModID; }
-                        if (Flags != Client->Flags) { Delta["Flags"] = Flags; Client->Flags = Flags; }
-
-                        Backend::Notifications::Publish("Client::onUpdate", JSON::Dump(Delta).c_str());
-                    };
-            } catch (...) {}
-        }
-    }
-
     // Add the handlers and tasks.
     void Initialize()
     {
-        // Create a persistent table for the clients.
-        try
-        {
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Client ("
-                "ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE,"
-                "GameID INTEGER NOT NULL,"
-                "ModID INTEGER NOT NULL,"
-                "Flags INTEGER NOT NULL,"
-                "Username TEXT NOT NULL );";
-        } catch (...) {}
+        // Create persistent tables for the users.
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Clientsocial ( "
+            "ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey), "
+            "Username TEXT, "
+            "isAway BOOLEAN );";
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Clientgaming ( "
+            "ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey), "
+            "GameID INTEGER, "
+            "ModID INTEGER, "
+            "isIngame BOOLEAN );";
 
         // Parse Layer 2 messages.
-        Backend::Messageprocessing::addMessagehandler("Client::Leave", Messagehandlers::onLeave);
-        Backend::Messageprocessing::addMessagehandler("Client::Update", Messagehandlers::onUpdate);
+        Layer2::addMessagehandler("Client::Leave", Messagehandlers::onLeave);
+        Layer2::addMessagehandler("Client::Update", Messagehandlers::onUpdate);
 
         // Accept Layer 3 calls.
-        Backend::JSONAPI::addEndpoint("Client::setGameinfo", JSONAPI::setGameinfo);
-        Backend::JSONAPI::addEndpoint("Client::setGamestate", JSONAPI::setGamestate);
-        Backend::JSONAPI::addEndpoint("Client::setSocialstate", JSONAPI::setSocialstate);
-        Backend::JSONAPI::addEndpoint("Client::getLocalclient", JSONAPI::getLocalclient);
-
-        // Process Layer 4 notifications.
-        Backend::Notifications::addProcessor("Client", Notifications::onUpdate);
+        Layer3::addEndpoint("Client::setGameinfo", JSONAPI::setGameinfo);
+        Layer3::addEndpoint("Client::setGamestate", JSONAPI::setGamestate);
+        Layer3::addEndpoint("Client::setSocialstate", JSONAPI::setSocialstate);
+        Layer3::addEndpoint("Client::getLocalclient", JSONAPI::getLocalclient);
 
         // Notify the other clients when we join and leave.
-        std::atexit([]() { Backend::Messagebus::Publish("Client::Leave", {}); });
-        Backend::Messagebus::Publish("Client::Update", JSON::Dump(toJSON(*getClient(Global.getLongID()))));
+        std::atexit([]() { Layer1::Publish("Client::Leave", "{}"); });
+        triggerUpdate();
     }
 }

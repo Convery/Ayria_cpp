@@ -1,6 +1,6 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-10-27
+    Started: 2021-12-05
     License: MIT
 */
 
@@ -8,44 +8,78 @@
 
 namespace Services::Matchmaking
 {
+    namespace Local
+    {
+        static std::unordered_set<uint32_t> Providers{};
+        static std::string Hostaddress{};
+        static uint64_t Lastupdate{};
+        static bool isActive{};
+
+        // Notify the network that we are still active.
+        static void Announce(bool Force = false)
+        {
+            // Nothing to do here.
+            if (!isActive) [[likely]] return;
+
+            const auto Currenttime = GetTickCount64();
+            if (Force || (Currenttime - Lastupdate > 15000)) [[unlikely]]
+            {
+                const auto Object = JSON::Object_t({
+                    { "Hostaddress", Hostaddress },
+                    { "GameID", Global.GameID },
+                    { "Providers", Providers }
+                });
+
+                Layer1::Publish("Matchmaking::onStartup", Object);
+                Lastupdate = Currenttime;
+
+                // Ensure that the database is synchronized.
+                Backend::Database()
+                    << "INSERT OR REPLACE INTO Matchmaking VALUES (?, ?, ?, ?);"
+                    << Global.getLongID()
+                    << Hostaddress
+                    << Providers
+                    << Global.GameID;
+            }
+        }
+    }
+
+    // Helpers for type-conversions.
+    static std::optional<uint32_t> toProvider(const JSON::Value_t &Provider)
+    {
+        if (Provider.Type == JSON::Type_t::String) return Hash::WW32(Provider.get<std::u8string>());
+        if (Provider.Type == JSON::Type_t::Unsignedint || Provider.Type == JSON::Type_t::Signedint)
+            return (uint32_t)Provider;
+        return {};
+    }
+
     // Layer 2 interaction.
     namespace Messagehandlers
     {
-        static bool __cdecl onUpdate(uint64_t, const char *LongID, const char *Message, unsigned int Length)
+        static bool __cdecl onStartup(uint64_t, const char *LongID, const char *Message, unsigned int Length)
         {
-            const auto Server = fromJSON(std::string_view(Message, Length));
-            if (!Server || Server->GroupID != LongID) [[unlikely]] return false;
+            const auto Request = JSON::Parse(Message, Length);
+            const auto GameID = Request.value<uint32_t>("GameID");
+            const auto Hostaddress = Request.value<std::string>("Hostaddress");
+            const auto Providers = Request.value<std::vector<uint32_t>>("Providers");
 
-            try
-            {
-                Backend::Database()
-                    << "INSERT OR REPLACE INTO Matchmaking VALUES (?,?,?,?,?,?,?);"
-                    << Server->GroupID
-                    << Server->Hostaddress
-                    << Server->Servername
-                    << Server->Provider
-                    << Server->GameID
-                    << Server->ModID;
-            } catch (...) {}
+            // Sanity checking, may tweek the providers in the future.
+            if (Providers.size() > 5) [[unlikely]] return false;
+            if (Hostaddress.empty()) [[unlikely]] return false;
+
+            // Save to the database.
+            Backend::Database()
+                << "INSERT OR REPLACE INTO Matchmaking VALUES (?, ?, ?, ?);"
+                << LongID
+                << Hostaddress
+                << Providers
+                << GameID;
 
             return true;
         }
-        static bool __cdecl onTerminate(uint64_t, const char *LongID, const char *, unsigned int)
+        static bool __cdecl onShutdown(uint64_t, const char *LongID, const char *, unsigned int)
         {
-            try
-            {
-                Backend::Database()
-                    << "DELETE FROM Matchmaking WHERE GroupID = ?;"
-                    << std::string(LongID);
-            } catch (...) {}
-
-            // The notification system does not poll deletions, so we need to do that here.
-            const auto Tmp = AyriaAPI::Groups::getMemberships(Global.getLongID());
-            if (Tmp.end() != std::ranges::find(Tmp, std::string(LongID)))
-            {
-                Backend::Notifications::Publish("Matchmaking::onTerminate", JSON::Dump(JSON::Value_t{ std::string(LongID) }).c_str());
-            }
-
+            Backend::Database() << "DELETE FROM Matchmaking WHERE GroupID = ?;" << LongID;
             return true;
         }
     }
@@ -53,80 +87,88 @@ namespace Services::Matchmaking
     // Layer 3 interaction.
     namespace JSONAPI
     {
-        static std::string __cdecl stopServer(JSON::Value_t &&)
+        static std::string __cdecl Startserver(JSON::Value_t &&Request)
         {
-            Layer1::Publish("Matchmaking::onTerminate", { "Shutdown" });
-            Global.Settings.isHosting = false;
-            Clientinfo::triggerUpdate();
-            return {};
-        }
-        static std::string __cdecl updateServer(JSON::Value_t &&Request)
-        {
-            const auto Server = fromJSON(Request);
-            if (!Server) return R"({ "Error" : "Missing arguments" })";
+            const auto Hostaddress = Request.value<std::string>("Hostaddress");
+            const auto Providers = Request.value<JSON::Array_t>("Providers");
+            const auto Group = Groups::getGroup(Global.getLongID());
 
-            Layer1::Publish("Matchmaking::onUpdate()", { "Shutdown" });
-            Global.Settings.isHosting = true;
-            Clientinfo::triggerUpdate();
-            return {};
-        }
-    }
+            // Sanity-checking, need to know the host, even if it's our own IP.
+            if (Local::isActive) [[unlikely]] return R"({ "Error" : "Server is already active. Shut down the server first." })";
+            if (Providers.empty()) [[unlikely]] return R"({ "Error" : "Need at least one provider." })";
+            if (!Group) [[unlikely]] return R"({ "Error" : "No active group for this server." })";
+            if (Hostaddress.empty() || !Hostaddress.contains(':')) [[unlikely]]
+                return R"({ "Error" : "Needs a Hostaddress string in the form of IP:Port" })";
 
-    // Layer 4 interaction.
-    namespace Notifications
-    {
-        static void __cdecl onUpdate(int64_t RowID)
-        {
-            try
+            // Parse both integers and strings.
+            for (const auto &Item : Providers)
             {
-                Serverinfo_t Server{};
+                const auto Provider = toProvider(Item);
+                if (Provider) [[likely]] Local::Providers.insert(*Provider);
+                else return R"({ "Error" : "Provider needs to be a string or integer" })";
+            }
 
-                Backend::Database()
-                    << "SELECT * FROM Matchmaking WHERE rowid = ?;" << RowID
-                    >> [&](const std::string &GroupID, const std::string &Hostaddress, const std::optional<std::string> &Servername, const std::string &Provider, uint32_t GameID, uint32_t ModID)
-                    {
-                        Server.ModID = ModID;
-                        Server.GameID = GameID;
-                        Server.GroupID = GroupID;
-                        Server.Provider = Provider;
-                        Server.Hostaddress = Hostaddress;
-                        if (Servername) Server.Servername = *Servername;
-                    };
+            // Announce to the network.
+            Local::Hostaddress = Hostaddress;
+            Local::isActive = true;
+            Local::Announce(true);
+            return {};
+        }
+        static std::string __cdecl addProvider(JSON::Value_t &&Request)
+        {
+            if (!Local::isActive) return R"({ "Error" : "No active server" })";
+            const auto Provider = toProvider(Request["Provider"]);
 
-                const auto Tmp = AyriaAPI::Groups::getMemberships(Global.getLongID());
-                if (Tmp.end() != std::ranges::find(Tmp, Server.getLongID())) [[unlikely]]
-                {
-                    Backend::Notifications::Publish("Matchmaking::onUpdate", JSON::Dump(toJSON(Server)).c_str());
-                }
-            } catch (...) {}
+            if (Provider) [[likely]] Local::Providers.insert(*Provider);
+            else return R"({ "Error" : "Provider needs to be a string or integer" })";
+
+            Local::Announce(true);
+            return {};
+        }
+        static std::string __cdecl removeProvider(JSON::Value_t &&Request)
+        {
+            if (!Local::isActive) return R"({ "Error" : "No active server" })";
+            const auto Provider = toProvider(Request["Provider"]);
+
+            if (Provider) [[likely]] Local::Providers.erase(*Provider);
+            else return R"({ "Error" : "Provider needs to be a string or integer" })";
+
+            Local::Announce(true);
+            return {};
+        }
+        static std::string __cdecl Shutdownserver(JSON::Value_t &&)
+        {
+            Backend::Database() << "DELETE FROM Matchmaking WHERE GroupID = ?;" << Global.getLongID();
+            Layer1::Publish("Matchmaking::onShutdown", "");
+            Local::Hostaddress.clear();
+            Local::Providers.clear();
+            Local::isActive = false;
+            return {};
         }
     }
 
     // Add the handlers and tasks.
     void Initialize()
     {
-        try
-        {
-            Backend::Database() <<
-                "CREATE TABLE IF NOT EXISTS Matchmaking ("
-                "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
-                "Hostaddress TEXT NOT NULL, "
-                "Servername TEXT, "
-                "Provider TEXT NOT NULL, "
-                "GameID INTEGER NOT NULL,"
-                "ModID INTEGER DEFAULT 0 );";
-        } catch (...) {}
+        // Keep a persitent table around for matchmaking.
+        Backend::Database() <<
+            "CREATE TABLE IF NOT EXISTS Matchmaking ("
+            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID), "
+            "Hostaddress TEXT UNIQUE, "
+            "Providers BLOB, "
+            "GameID INTEGER );";
 
         // Parse Layer 2 messages.
-        Backend::Messageprocessing::addMessagehandler("Matchmaking::Update", Messagehandlers::onUpdate);
-        Backend::Messageprocessing::addMessagehandler("Matchmaking::Stop", Messagehandlers::onTerminate);
+        Layer2::addMessagehandler("Matchmaking::onStartup", Messagehandlers::onStartup);
+        Layer2::addMessagehandler("Matchmaking::onShutdown", Messagehandlers::onShutdown);
 
         // Accept Layer 3 calls.
-        Backend::JSONAPI::addEndpoint("Matchmaking::updateServer", JSONAPI::updateServer);
-        Backend::JSONAPI::addEndpoint("Matchmaking::startServer", JSONAPI::updateServer);
-        Backend::JSONAPI::addEndpoint("Matchmaking::stopServer", JSONAPI::stopServer);
+        Layer3::addEndpoint("Matchmaking::Startserver", JSONAPI::Startserver);
+        Layer3::addEndpoint("Matchmaking::addProvider", JSONAPI::addProvider);
+        Layer3::addEndpoint("Matchmaking::removeProvider", JSONAPI::removeProvider);
+        Layer3::addEndpoint("Matchmaking::Shutdownserver", JSONAPI::Shutdownserver);
 
-        // Process Layer 4 notifications.
-        Backend::Notifications::addProcessor("Matchmaking", Notifications::onUpdate);
+        std::atexit([]() { Layer1::Publish("Matchmaking::onShutdown", ""); });
+        Backend::Enqueuetask(5000, []() { Local::Announce(); });
     }
 }

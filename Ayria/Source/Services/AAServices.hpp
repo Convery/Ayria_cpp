@@ -11,48 +11,25 @@ namespace Services
 {
     namespace Clientinfo
     {
+        // The strings are cached internally.
         struct Client_t
         {
-            uint32_t GameID, ModID, Flags;
-            std::string Publickey;
-            std::string Username;
+            std::u8string_view Username;
+            std::string_view ClientID;
+            uint32_t GameID, ModID;
+            bool isIngame, isAway;
+            int64_t Lastseen;
 
             // Internal.
-            uint64_t Timestamp;
-            std::string getLongID() const { return Publickey; }
-            uint64_t getShortID() const { return Hash::WW64(getLongID()); }
+            int64_t Lastupdated;
+            uint64_t getShortID() const { return Hash::WW64(ClientID); }
+            std::string getLongID() const { return std::string(ClientID); }
         };
 
-        // Format as JSON so that other tools can read it.
-        inline std::optional<Client_t> fromJSON(const JSON::Value_t &Object)
-        {
-            // The required fields, we wont do partial parsing.
-            if (!Object.contains_all("Publickey", "Username", "GameID", "ModID")) [[unlikely]] return {};
-
-            Client_t Client{};
-            Client.Flags = Object.value<uint32_t>("Flags");
-            Client.ModID = Object.value<uint32_t>("ModID");
-            Client.GameID = Object.value<uint32_t>("GameID");
-            Client.Username = Object.value<std::string>("Username");
-            Client.Publickey = Object.value<std::string>("Publickey");
-
-            return Client;
-        }
-        inline std::optional<Client_t> fromJSON(std::string_view JSON)
-        {
-            return fromJSON(JSON::Parse(JSON));
-        }
-        inline JSON::Object_t toJSON(const Client_t &Client)
-        {
-            return JSON::Object_t({
-                { "Flags", Client.Flags },
-                { "ModID", Client.ModID },
-                { "GameID", Client.GameID },
-                { "Username", Client.Username },
-                { "Timestamp", Client.Timestamp },
-                { "Publickey", Client.Publickey }
-            });
-        }
+        // Format between C++ and JSON representations.
+        std::optional<Client_t> fromJSON(const JSON::Value_t &Object);
+        std::optional<Client_t> fromJSON(std::string_view JSON);
+        JSON::Object_t toJSON(const Client_t &Client);
 
         // Fetch the client by ID, for use with services.
         std::shared_ptr<Client_t> getClient(const std::string &LongID);
@@ -64,17 +41,8 @@ namespace Services
         void Initialize();
     }
 
-    namespace Relations
+    namespace Clientrelations
     {
-        // Add the handlers and tasks.
-        void Initialize();
-    }
-
-    namespace Presence
-    {
-        // Helper for other services to set presence.
-        void setPresence(const std::string &Key, const std::string &Category, const std::optional<std::string> &Value);
-
         // Add the handlers and tasks.
         void Initialize();
     }
@@ -83,44 +51,25 @@ namespace Services
     {
         struct Group_t
         {
-            int32_t Membercount;
-            std::string GroupID;
-            std::string Groupname;
-            bool isPublic, isFull;
+            std::u8string_view Groupname;
+            std::string_view GroupID;
+            uint32_t Membercount;
+            uint32_t Maxmembers;
+            bool isPublic;
 
             // Internal.
-            uint64_t Timestamp;
+            int64_t Lastupdated;
+
+            inline bool isFull() const
+            {
+                return Membercount == Maxmembers;
+            }
         };
 
-        // Format as JSON so that other tools can read it.
-        inline std::optional<Group_t> fromJSON(const JSON::Value_t &Object)
-        {
-            // The required fields, we wont do partial parsing.
-            if (!Object.contains_all("GroupID", "Groupname", "isPublic", "isFull")) [[unlikely]] return {};
-
-            Group_t Group{};
-            Group.isFull = Object.value<bool>("isFull");
-            Group.isPublic = Object.value<bool>("isPublic");
-            Group.GroupID = Object.value<std::string>("GroupID");
-            Group.Groupname = Object.value<std::string>("Groupname");
-            Group.Membercount = Object.value<uint32_t>("Membercount");
-
-            return Group;
-        }
-        inline std::optional<Group_t> fromJSON(std::string_view JSON)
-        {
-            return fromJSON(JSON::Parse(JSON));
-        }
-        inline JSON::Object_t toJSON(const Group_t &Group)
-        {
-            return JSON::Object_t({
-                { "isFull", Group.isFull },
-                { "GroupID", Group.GroupID },
-                { "isPublic", Group.isPublic },
-                { "Groupname", Group.Groupname },
-                { "Membercount", Group.Membercount }
-            });
-        }
+        // Format between C++ and JSON representations.
+        std::optional<Group_t> fromJSON(const JSON::Value_t &Object);
+        std::optional<Group_t> fromJSON(std::string_view JSON);
+        JSON::Object_t toJSON(const Group_t &Group);
 
         // Fetch the group by ID, for use with services.
         std::shared_ptr<Group_t> getGroup(const std::string &LongID);
@@ -132,12 +81,21 @@ namespace Services
         void Initialize();
     }
 
+    namespace Keyvalues
+    {
+        // Helper for other services to set presence.
+        void setPresence(const std::string &Key, const std::optional<std::string> &Value);
+
+        // Add the handlers and tasks.
+        void Initialize();
+    }
+
     namespace Messaging
     {
         // Internal access for the services.
-        void sendUsermessage(const std::string &UserID, std::string_view Messagetype, std::string_view Payload);
-        void sendGroupmessage(const std::string &GroupID, std::string_view Messagetype, std::string_view Payload);
-        void sendMultiusermessage(const std::unordered_set<std::string> &UserIDs, std::string_view Messagetype, std::string_view Payload);
+        void sendGroupmessage(const std::string &GroupID, uint32_t Messagetype, std::string_view Message);
+        void sendClientmessage(const std::string &ClientID, uint32_t Messagetype, std::string_view Message);
+        void sendMulticlientmessage(const std::unordered_set<std::string> &ClientIDs, uint32_t Messagetype, std::string_view Message);
 
         // Add the handlers and tasks.
         void Initialize();
@@ -145,51 +103,6 @@ namespace Services
 
     namespace Matchmaking
     {
-        struct Serverinfo_t
-        {
-            std::string GroupID, Hostaddress, Servername, Provider;
-            uint32_t  GameID, ModID;
-
-            // Internal.
-            uint64_t Timestamp;
-            std::string getLongID() const { return GroupID; }
-            uint64_t getShortID() const { return Hash::WW64(getLongID()); }
-        };
-
-        // Format as JSON so that other tools can read it.
-        inline std::optional<Serverinfo_t> fromJSON(const JSON::Value_t &Object)
-        {
-            // The required fields, we wont do partial parsing.
-            if (!Object.contains_all("GroupID", "Hostaddress", "GameID", "ModID")) [[unlikely]] return {};
-
-            Serverinfo_t Server{};
-            Server.ModID = Object.value<uint32_t>("ModID");
-            Server.GameID = Object.value<uint32_t>("GameID");
-            Server.GroupID = Object.value<std::string>("GroupID");
-            Server.Timestamp = Object.value<uint64_t>("Timestamp");
-            Server.Provider = Object.value<std::string>("Provider");
-            Server.Servername = Object.value<std::string>("Servername");
-            Server.Hostaddress = Object.value<std::string>("Hostaddress");
-
-            return Server;
-        }
-        inline std::optional<Serverinfo_t> fromJSON(std::string_view JSON)
-        {
-            return fromJSON(JSON::Parse(JSON));
-        }
-        inline JSON::Object_t toJSON(const Serverinfo_t &Server)
-        {
-            return JSON::Object_t({
-                { "ModID", Server.ModID },
-                { "GameID", Server.GameID },
-                { "GroupID", Server.GroupID },
-                { "Provider", Server.Provider },
-                { "Timestamp", Server.Timestamp },
-                { "Servername", Server.Servername },
-                { "Hostaddress", Server.Hostaddress }
-            });
-        }
-
         // Add the handlers and tasks.
         void Initialize();
     }
@@ -197,12 +110,11 @@ namespace Services
     // Set up all our services.
     inline void Initialize()
     {
-        Clientinfo::Initialize();
-        Messaging::Initialize();
-        Relations::Initialize();
-        Presence::Initialize();
         Groups::Initialize();
-
+        Messaging::Initialize();
+        Keyvalues::Initialize();
+        Clientinfo::Initialize();
         Matchmaking::Initialize();
+        Clientrelations::Initialize();
     }
 }
