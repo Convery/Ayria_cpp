@@ -16,7 +16,7 @@ License: MIT
 #include <openssl/ssl.h>
 #include <string>
 
-
+// CBC mode, don't re-use IVs.
 namespace AES
 {
     template <typename T> concept Range_t = requires (const T && t) { t.data(); t.size(); sizeof(t[0]) == 1; };
@@ -118,14 +118,6 @@ namespace AES
 
         return std::basic_string<A>((A *)Buffer.get(), Decryptionlength);
     }
-
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Encrypt_128(B &&Cryptokey, C &&Plaintext) { return Encrypt_128(Cryptokey, Cryptokey, Plaintext); }
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Encrypt_192(B &&Cryptokey, C &&Plaintext) { return Encrypt_192(Cryptokey, Cryptokey, Plaintext); }
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Encrypt_256(B &&Cryptokey, C &&Plaintext) { return Encrypt_256(Cryptokey, Cryptokey, Plaintext); }
-
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Decrypt_128(B &&Cryptokey, C &&Ciphertext) { return Decrypt_128(Cryptokey, Cryptokey, Ciphertext); }
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Decrypt_192(B &&Cryptokey, C &&Ciphertext) { return Decrypt_192(Cryptokey, Cryptokey, Ciphertext); }
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Decrypt_256(B &&Cryptokey, C &&Ciphertext) { return Decrypt_256<A>(Cryptokey, Cryptokey, Ciphertext); }
 }
 
 namespace DES3
@@ -164,9 +156,6 @@ namespace DES3
 
         return std::basic_string<A>((A *)Buffer.get(), Decryptionlength);
     }
-
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Encrypt(B &&Cryptokey, C &&Plaintext) { return Encrypt(Cryptokey, Cryptokey, Plaintext); }
-    template <typename A = uint8_t, Range_t B, Range_t C> std::basic_string<A> Decrypt(B &&Cryptokey, C &&Ciphertext) { return Decrypt(Cryptokey, Cryptokey, Ciphertext); }
 }
 
 #endif
