@@ -26,10 +26,29 @@ namespace Encoding
                 if (Intptr[i] & 0x80808080)
                     return false;
 
-            // Don't care about over-reads, little-endian assumed.
-            if (Remaining == 3) return !(Intptr[Count32] & 0x00808080);
-            if (Remaining == 2) return !(Intptr[Count32] & 0x00008080);
-            if (Remaining == 1) return !(Intptr[Count32] & 0x00000080);
+            // Don't care about over-reads in runtime code.
+            if (!std::is_constant_evaluated())
+            {
+                if constexpr (std::endian::native == std::endian::little)
+                {
+                    if (Remaining == 3) return !(Intptr[Count32] & 0x00808080);
+                    if (Remaining == 2) return !(Intptr[Count32] & 0x00008080);
+                    if (Remaining == 1) return !(Intptr[Count32] & 0x00000080);
+                }
+                else
+                {
+                    if (Remaining == 3) return !(Intptr[Count32] & 0x80808000);
+                    if (Remaining == 2) return !(Intptr[Count32] & 0x80800000);
+                    if (Remaining == 1) return !(Intptr[Count32] & 0x80000000);
+                }
+            }
+            else
+            {
+                for (size_t i = Input.size() - (Input.size() & 3); i < Input.size(); ++i)
+                    if (Input[i] & 0x80)
+                        return false;
+            }
+
             return true;
         }
         constexpr size_t Codepointsize(Controlcode_t Code)
@@ -43,7 +62,7 @@ namespace Encoding
             return 1;   // Fallback.
         }
 
-        inline std::u8string toUTF8Chars(Codepoint_t Codepoint)
+        constexpr std::u8string toUTF8Chars(Codepoint_t Codepoint)
         {
             std::u8string Result{};
             Result.reserve(6);  // Worst case.
@@ -112,7 +131,7 @@ namespace Encoding
             return Result;
         }
 
-        inline size_t Strlen(std::u8string_view Input)
+        constexpr size_t Strlen(std::u8string_view Input)
         {
             if (isASCII(Input)) [[likely]]
                 return Input.size();
@@ -123,7 +142,7 @@ namespace Encoding
 
             return Size;
         }
-        inline size_t Offset(std::u8string_view Input, size_t Index)
+        constexpr size_t Offset(std::u8string_view Input, size_t Index)
         {
             for (auto it = Input.begin(); it != Input.end();)
             {
@@ -134,7 +153,7 @@ namespace Encoding
             return Input.size();
         }
 
-        inline std::u8string::iterator at(std::u8string &Input, size_t Index)
+        constexpr std::u8string::iterator at(std::u8string &Input, size_t Index)
         {
             for (auto it = Input.begin(); it != Input.end();)
             {
@@ -144,7 +163,7 @@ namespace Encoding
 
             return Input.end();
         }
-        inline std::u8string_view::iterator at(std::u8string_view Input, size_t Index)
+        constexpr std::u8string_view::iterator at(std::u8string_view Input, size_t Index)
         {
             for (auto it = Input.begin(); it != Input.end();)
             {
@@ -154,7 +173,7 @@ namespace Encoding
 
             return Input.end();
         }
-        inline std::u8string_view Substr(std::u8string_view Input, size_t Start, size_t Stop)
+        constexpr std::u8string_view Substr(std::u8string_view Input, size_t Start, size_t Stop)
         {
             const auto pStop = Offset(Input, Stop);
             const auto pStart = Offset(Input, Start);
@@ -164,10 +183,10 @@ namespace Encoding
         }
     }
 
-    [[nodiscard]] inline std::u8string toUTF8(std::string_view Input)
+    [[nodiscard]] constexpr std::u8string toUTF8(std::string_view Input)
     {
         // Do we even have any code-points to process?
-        if (Input.find("\\u") == static_cast<size_t>(-1)) [[likely]]
+        if (Input.find("\\u") == Input.npos) [[likely]]
             return std::u8string((char8_t *)Input.data(), Input.size());
 
         // Common case is ASCII with the code-points being smaller than text.
@@ -177,7 +196,7 @@ namespace Encoding
         while (true)
         {
             const auto Point = Input.find("\\u");
-            if (Point == static_cast<size_t>(-1)) break;
+            if (Point == Input.npos) break;
 
             // ASCII part.
             Result.append((char8_t *)Input.data(), Point);
@@ -196,7 +215,9 @@ namespace Encoding
             else
             {
                 if (!Extendedpoint) [[likely]]
+                {
                     Result.append(UTF8::toUTF8Chars(Codepoint));
+                }
                 else
                 {
                     Extendedpoint += Codepoint;
@@ -207,10 +228,13 @@ namespace Encoding
             }
         }
 
+        // Malformed control sequence, characters have been dropped.
+        assert(Extendedpoint == 0);
+
         Result.append((char8_t *)Input.data(), Input.size());
         return Result;
     }
-    [[nodiscard]] inline std::u8string toUTF8(std::wstring_view Input)
+    [[nodiscard]] constexpr std::u8string toUTF8(std::wstring_view Input)
     {
         // Common case is ASCII, so we pre-allocate for it, next realloc should be enough for 11-bit UTF.
         std::u8string Result{}; Result.reserve(Input.size());
@@ -220,13 +244,13 @@ namespace Encoding
 
         return Result;
     }
-    [[nodiscard]] inline std::u8string toUTF8(std::u8string_view Input)
+    [[nodiscard]] constexpr std::u8string toUTF8(std::u8string_view Input)
     {
         return std::u8string(Input.data(), Input.size());
     }
 
     // Depending on size of wchar_t, char32_t characters will be replaced with '?'
-    [[nodiscard]] inline std::wstring toWide(std::u8string_view Input)
+    [[nodiscard]] constexpr std::wstring toWide(std::u8string_view Input)
     {
         std::wstring Result{}; Result.reserve(Input.size());
 
@@ -312,13 +336,13 @@ namespace Encoding
 
         return Result;
     }
-    [[nodiscard]] inline std::wstring toWide(std::string_view Input)
+    [[nodiscard]] constexpr std::wstring toWide(std::string_view Input)
     {
         return toWide(toUTF8(Input));
     }
 
     // Non-ASCII characters will be converted to their \uXXXX sequence.
-    [[nodiscard]] inline std::string toNarrow(std::u8string_view Input)
+    [[nodiscard]] constexpr std::string toNarrow(std::u8string_view Input)
     {
         if (UTF8::isASCII(Input)) [[likely]]
             return std::string(Input.begin(), Input.end());
@@ -341,14 +365,14 @@ namespace Encoding
 
         return Result;
     }
-    [[nodiscard]] inline std::string toNarrow(std::wstring_view Input)
+    [[nodiscard]] constexpr std::string toNarrow(std::wstring_view Input)
     {
         return toNarrow(toUTF8(Input));
     }
 
-    // Complements for for easier template coding.
-    [[nodiscard]] inline std::wstring toWide(std::wstring_view Input) { return { Input.data(), Input.size() }; }
-    [[nodiscard]] inline std::string toNarrow(std::string_view Input) { return { Input.data(), Input.size() }; }
+    // Complements for for easier template coding, should be optimized to a no-op.
+    [[nodiscard]] constexpr std::wstring toWide(std::wstring_view Input) { return { Input.data(), Input.size() }; }
+    [[nodiscard]] constexpr std::string toNarrow(std::string_view Input) { return { Input.data(), Input.size() }; }
 }
 
 #if defined (HAS_ABSEIL)
@@ -361,37 +385,49 @@ namespace Encoding
     return absl::StrSplit(String, absl::ByChar(Needle), absl::SkipEmpty());
 }
 #else
-[[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
-{
-    const std::regex rxFields("([^" + std::string(Needle) + "]*)", std::regex_constants::optimize);
-    auto It = std::sregex_iterator(String.cbegin(), String.cend(), rxFields);
-    const auto Size = std::distance(It, std::sregex_iterator());
-    std::vector<std::string> Results;
-    Results.reserve(Size);
-
-    for (ptrdiff_t i = 0; i < Size; ++i)
+#if defined (HAS_LZ)
+    [[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
     {
-        const auto Match = (It++)->str();
-        if (!Match.empty()) Results.emplace_back(std::move(Match));
+        return lz::split<std::string>(String, std::string(Needle)).toVector();
     }
-
-    return Results;
-}
-[[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
-{
-    std::vector<std::string> Results;
-    Results.reserve(8);
-
-    while (!String.empty())
+    [[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
     {
-        const auto Offset = String.find_first_of(Needle);
-        Results.emplace_back(String.substr(0, Offset));
-        String.remove_prefix(Offset);
+        return lz::split<std::string>(String, Needle).toVector();
     }
+#else
+    [[nodiscard]] inline std::vector<std::string> Tokenizestring(const std::string &String, std::string_view Needle)
+    {
+        const std::regex rxFields("([^"s + std::string(Needle) + "]*)", std::regex_constants::optimize);
+        auto It = std::sregex_iterator(String.cbegin(), String.cend(), rxFields);
+        const auto Size = std::distance(It, std::sregex_iterator());
+        std::vector<std::string> Results;
+        Results.reserve(Size);
 
-    return Results;
-}
+        for (ptrdiff_t i = 0; i < Size; ++i)
+        {
+            const auto Match = (It++)->str();
+            if (!Match.empty()) Results.emplace_back(std::move(Match));
+        }
+
+        return Results;
+    }
+    [[nodiscard]] inline std::vector<std::string> Tokenizestring(std::string_view String, char Needle)
+    {
+        std::vector<std::string> Results;
+        Results.reserve(8);
+
+        while (!String.empty())
+        {
+            const auto Offset = String.find_first_of(Needle);
+            Results.emplace_back(String.substr(0, Offset));
+            String.remove_prefix(Offset);
+        }
+
+        return Results;
+    }
 #endif
+#endif
+
 [[nodiscard]] inline std::vector<std::wstring> Tokenizestring(const std::wstring &String, std::wstring_view Needle)
 {
     const auto Tokens = Tokenizestring(Encoding::toNarrow(String), Encoding::toNarrow(Needle));
