@@ -30,12 +30,11 @@ struct Ayriamodule_t
     // Communication with the network, use with extreme care.
     void(__cdecl *subscribeMessage)(const char *Identifier, bool (__cdecl * Callback)(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length));
     void(__cdecl *publishMessage)(const char *Identifier, const char *Message, unsigned int Length);
-    void(__cdecl *connectUser)(const char *IPv4, const char *Port);
 
     // Listen and publish notifications to other plugins, e.g. new chat-message.
-    void(__cdecl *unsubscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *JSONString));
-    void(__cdecl *subscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *JSONString));
-    void(__cdecl *publishNotification)(const char *Identifier, const char *JSONString);
+    void(__cdecl *unsubscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *Message, unsigned int Length));
+    void(__cdecl *subscribeNotification)(const char *Identifier, void(__cdecl *Callback)(const char *Message, unsigned int Length));
+    void(__cdecl *publishNotification)(const char *Identifier, const char *Message, unsigned int Length);
 
     // Internal, notify other plugins the application is fully initialized.
     void(__cdecl *onInitialized)(bool);
@@ -78,7 +77,6 @@ struct Ayriamodule_t
 
             Import(subscribeMessage);
             Import(publishMessage);
-            Import(connectUser);
 
             Import(createPeriodictask);
             Import(onInitialized);
@@ -101,7 +99,6 @@ struct Ayriamodule_t
 
             subscribeMessage = decltype(subscribeMessage)(AYA_Nullsub2);
             publishMessage = decltype(publishMessage)(AYA_Nullsub2);
-            connectUser = decltype(connectUser)(AYA_Nullsub2);
 
             createPeriodictask = decltype(createPeriodictask)(AYA_Nullsub2);
             onInitialized = decltype(onInitialized)(AYA_Nullsub2);

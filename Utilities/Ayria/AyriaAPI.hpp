@@ -3,8 +3,11 @@
     Started: 2021-04-19
     License: MIT
 
-    Helpers for common database operations.
-    Errors return default constructed results, see Ayria.log for more info.
+    The database utility will transform string in/output to the requested type (string, wstring, u8string).
+    The JSON utilities will do the same, to give the developer more freedom.
+
+    The Query macro can catch some common errors at compiletime, Queryunsafe can be used for synamic strings.
+    The database utility makes use of C-asserts to indicate errors, but will also log to Ayria.log.
 */
 
 #if defined (__cplusplus)
@@ -16,78 +19,121 @@ namespace AyriaAPI
 {
     #pragma region DOC
     /*
-    These tables are the clients view of the global system, not the system itself.
-    Some data may be encrypted for others (e.g. Messaging::Message)
-    Some data is dependent on the clients view (e.g. ::Timestamp)
 
-    Base58 is used for data that should be readable.
+    These tables are the clients view of the system, not the system itself.
+    So some data (e.g. messages) may be encrypted for others.
+
+    Base58 is used for IDs that can be used for input (e.g. ClientIDs).
+    Base85 (RFC1924) is used for storing binary data.
     Timestamps are nanoseconds since UTC 1970.
-    Base85 is used for stored binary data.
-    UTF8 strings are escaped to ASCII.
+    UTF8 strings are used for plaintext data.
 
-    // Separated to allow for easy (cascading) pruning.
+    ===========================================================================
+
+    // Accounts are separate to allow for cascading deletions.
     Account (
-    Publickey TEXT PRIMARY KEY )    // Base58(qDSA::Publickey)
-    [&](const Base58_t &Publickey)
+        Publickey TEXT PRIMARY KEY,     // Base58(qDSA::Publickey);
+        Lastseen INTEGER DEFAULT 0 )
+    > [&](const Base58_t &Publickey, uint64_t Lastseen)
 
-    Client (
-    ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE,
-    GameID INTEGER,        // Set by Platformwrapper or equivalent.
-    ModID INTEGER,         // Variation of the GameID, generally 0.
-    Flags INTEGER,         // Clients public settings.
-    Username TEXT )        // UTF8 escaped (\uXXXX) ASCII.
-    [&](const Base58_t &ClientID, uint32_t GameID, uint32_t ModID, uint32_t Flags, const ASCII_t &Username)
+    ===========================================================================
 
-    Relation (
-    Source TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,    // Initiator.
-    Target TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,    // Recipient.
-    isFriend BOOLEAN,                                               // Source considers Target X
-    isBlocked BOOLEAN,                                              // Source considers Target X
-    UNIQUE (Source, Target) )
-    [&](const Base58_t &Source, const Base58_t &Target, bool isFriend, bool isBlocked)
+    // Display information about a client.
+    Clientsocial (
+        ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey),
+        Username TEXT,      // Optional.
+        isAway BOOLEAN )
+    > [&](const Base58_t &ClientID, const std::optional<UTF8_t> &Username, bool isAway)
 
-    Usermessages / Groupmessages (
-    Source TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,    // Initiator.
-    Target TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,    // Recipient, user or group.
-    Messagetype INTEGER,                                            // Hash::WW32("Plaintext message type")
-    Checksum INTEGER,                                               // Hash::WW32("Plaintext message")
-    Received INTEGER,                                               // Time received / processed.
-    Sent INTEGER,                                                   // Time sent.
-    Message TEXT,                                                   // Base85 of the plaintext.
-    UNIQUE (Source, Target, Sent, Messagetype) )                    // Ignore duplicates.
-    [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t Received, uint64_t Sent, const Base85_t &Message)
+    // Game-state for applications where it's relevant.
+    Clientgaming (
+        ClientID TEXT PRIMARY KEY REFERENCES Account(Publickey),
+        GameID INTEGER,
+        ModID INTEGER,
+        isIngame BOOLEAN )
+    > [&](const Base58_t &ClientID, uint32_t GameID, uint32_t ModID, bool isIngame)
 
+    // What a client considers another, mutual relationships result in two rows.
+    Clientrelation (
+        Source TEXT REFERENCES Account(Publickey),
+        Target TEXT REFERENCES Account(Publickey),
+        isBlocked BOOLEAN,
+        isFriend BOOLEAN,
+        UNIQUE (Source, Target) )
+    > [&](const Base58_t &Source, const Base58_t &Target, bool isBlocked, bool isFriend)
+
+    ===========================================================================
+
+    // General key-value store, but most often used for social presence.
+    Keyvalues (
+        ClientID TEXT REFERENCES Account(Publickey),
+        Category INTEGER,   // Hash::WW32("Some string");
+        Key TEXT,
+        Value TEXT,        // Optional.
+        UNIQUE (ClientID, Category, Key) )
+    > [&](const Base58_t &ClientID, uint32_t Category, const UTF8_t &Key, const std::optional<UTF8_t> &Value)
+
+    ===========================================================================
+
+    // A groups ID is the same as the owner / creator of it.
     Group (
-    GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE,   // Owners ID
-    Groupname TEXT,         // UTF8 escaped (\uXXXX) ASCII.
-    isPublic BOOLEAN,       // Can join without an invite, unencrypted chats.
-    isFull BOOLEAN,         // Moderator decided they have enough members.
-    Membercount INTEGER)    // Automatically generated from Groupmember
-    [&](const Base58_t &GroupID, const ASCII_t &Groupname, bool isPublic, bool isFull, uint32_t Membercount)
+        GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey),
+        Groupname TEXT,     // Optional.
+        Maxmembers INTEGER,
+        isPublic BOOLEAN )
+    > [&](const Base58_t &GroupID, const std::optional<UTF8_t> &Groupname, uint32_t Maxmembers, bool isPublic)
 
+    // Members are added by moderators, moderators are added by the group's creator.
     Groupmember (
-    MemberID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,
-    GroupID TEXT REFERENCES Group(GroupID) ON DELETE CASCADE,
-    isModerator BOOLEAN DEFAULT false,
-    UNIQUE (GroupID, MemberID) )
-    [&](const Base58_t &GroupID, const Base58_t &MemberID, bool isModerator)
+        GroupID TEXT REFERENCES Group(GroupID),
+        MemberID TEXT REFERENCES Account(Publickey),
+        isModerator BOOLEAN,
+        UNIQUE (GroupID, MemberID) )
+    > [&](const Base58_t &GroupID, const Base58_t &MemberID, bool isModerator)
 
-    Presence (
-    OwnerID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE,
-    Category TEXT,	    // Often provider of sorts, e.g. "Steam" or "myPlugin"
-    Key TEXT,           // Required.
-    Value TEXT,         // Optional.
-    UNIQUE (OwnerID, Category, Key) )
-    [&](const Base58_t &OwnerID, const ASCII_t &Category, const ASCII_t &Key, const std::optional<ASCII_t> &Value)
+    ===========================================================================
 
+    // Encrypted messages by the clients PK, only ones we have decrypted gets saved.
+    Clientmessage (
+        Source TEXT REFERENCES Account(Publickey),
+        Target TEXT REFERENCES Account(Publickey),
+        Messagetype INTEGER,    // Hash::WW32("Some string");
+        Timestamp INTEGER,      // Time sent.
+        Message TEXT )          // Base85 (RFC1924 is JSON compatible).
+    > [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint64_t Timestamp, const Base85_t &Message)
+
+    // Encrypted messages by the groups choosen key, only ones we have decrypted gets saved.
+    Groupmessage (
+        Source TEXT REFERENCES Account(Publickey),
+        Target TEXT REFERENCES Group(GroupID),
+        Messagetype INTEGER,    // Hash::WW32("Some string");
+        Timestamp INTEGER,      // Time sent.
+        Message TEXT )          // Base85 (RFC1924 is JSON compatible).
+    > [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint64_t Timestamp, const Base85_t &Message)
+
+    ===========================================================================
+
+    //
     Matchmaking (
-    GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE,
-    Hostaddress TEXT,   // IPAddress:Port
-    Servername TEXT,    // Optional.
-    Provider TEXT,      // Where to look for more info.
-    GameID INTEGER,     // Required.
-    ModID INTEGER DEFAULT 0 )
-    [&](const Base58_t &GroupID, const ASCII_t &Hostaddress, const std::optional<ASCII_t> &Servername, const ASCII_t &Provider, uint32_t GameID, uint32_t ModID)
+        GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID),
+        Hostaddress TEXT UNIQUE,    // IPv4:Port format.
+        Providers BLOB,             // Where to look for more information, e.g. std::vector<WW32("Steam")>.
+        GameID INTEGER )            // Should match Clientgaming::GameID
+    > [&](const Base58_t &GroupID, const UTF8_t &Hostaddress, const std::vector<uint32_t> &Providers, uint32_t GameID)
+
+    ===========================================================================
+
+    Thread (
+        ClientID TEXT REFERENCES Account(Publickey),
+        ThreadID INTEGER,
+        Title TEXT,
+        bool isPublic )
+    Post (
+        ThreadID INTEGER REFERENCES Thread(ThreadID),
+        ClientID TEXT REFERENCES Account(Publickey),
+        Timestamp INTEGER,
+        Message TEXT )
+
     */
     #pragma endregion
 
@@ -100,7 +146,7 @@ namespace AyriaAPI
         {
             if (!Database) [[unlikely]]
             {
-                sqlite3 * Ptr{};
+                sqlite3 *Ptr{};
 
                 // :memory: should never fail unless the client has more serious problems..
                 const auto Result = sqlite3_open_v2("./Ayria/Client.sqlite", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
@@ -108,10 +154,12 @@ namespace AyriaAPI
                 Database = std::shared_ptr<sqlite3>(Ptr, sqlite3_close_v2);
 
                 // This should already have been called from Ayria.dll, but just in case.
-                try
+                sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
+                sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
+
+                // Helper functions for inline hashing, should fail, but just in case..
                 {
-                    // Helper functions for inline hashing.
-                    const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    static const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                     {
                         if (argc == 0) return;
                         if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -121,7 +169,7 @@ namespace AyriaAPI
                         const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
                         sqlite3_result_int(context, Hash);
                     };
-                    const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    static const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                     {
                         if (argc == 0) return;
                         if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -131,489 +179,533 @@ namespace AyriaAPI
                         const auto Hash = Hash::WW64(sqlite3_value_text(argv[0]), Length);
                         sqlite3_result_int64(context, Hash);
                     };
-
                     sqlite3_create_function(Database.get(), "WW32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda32, nullptr, nullptr);
                     sqlite3_create_function(Database.get(), "WW64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, nullptr, Lambda64, nullptr, nullptr);
-
-                    // Should probably fail.
-                    sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
-                    sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
-                } catch (...) {}
+                }
             }
 
             return sqlite::Database_t(Database);
         }
-    }
 
-    // Evaluation of the prepared statement (>> operator) may throw, creation should not.
-    template <typename ...Args> [[nodiscard]] auto Prepare(const std::string &SQL, Args&&... va)
+        constexpr size_t Semicolons(std::string_view SQL) { return std::ranges::count(SQL, ';'); }
+        constexpr size_t Bindings(std::string_view SQL) { return std::ranges::count(SQL, '?'); }
+
+        // Creation of a prepared statement, evaluates with the '>>' operator or when it goes out of scope.
+        template <bool Single, size_t Bindings, typename ...Args> requires(Bindings >= sizeof...(Args) && Single)
+        [[nodiscard]] inline auto Querychecked(std::string_view SQL, Args&&... va) noexcept
+        {
+            auto PS = Internal::OpenDB() << SQL;
+            if constexpr (sizeof...(Args) > 0)
+            {
+                ((PS << va), ...);
+            }
+            return PS;
+        }
+    }
+    #define Query(x, ...) Internal::Querychecked<Internal::Semicolons(x) == 1, Internal::Bindings(x)>(x, __VA_ARGS__)
+
+    // Creation of a prepared statement, evaluates with the '>>' operator or when it goes out of scope.
+    template <typename ...Args> [[nodiscard]] inline auto Queryunsafe(std::string_view SQL, Args&&... va) noexcept
     {
-        auto PS = Internal::OpenDB() << SQL; if constexpr (sizeof...(va) > 0) { ((PS << va), ...); } return PS;
+        assert(Internal::Bindings(SQL) >= sizeof...(Args));
+        assert(Internal::Semicolons(SQL) == 1);
+
+        auto PS = Internal::OpenDB() << SQL;
+        if constexpr (sizeof...(Args) > 0)
+        {
+            ((PS << va), ...);
+        }
+        return PS;
     }
 
     // The database generally keys on the long ID, short ID is more for reference where accuracy is not needed.
-    using Base58_t = std::string; using Base85_t = std::string; using ASCII_t = std::string;
-    using ShortID_t = uint64_t; using LongID_t = Base58_t;
+    using Base58_t = std::string; using Base85_t = std::string; using UTF8_t = std::u8string;
+    using ShortID_t = uint64_t; using LongID_t = std::string;
 
     // Value_t default-constructs to NULL and returns (Type != NULL) for operator bool().
     using Result_t = JSON::Value_t;
 
     // Helpers to make everything more readable / save my hands.
-    #define Trycatch(...) try { __VA_ARGS__ } catch (...) {  }
-    #define Matchmakinglambda   [&](const Base58_t &GroupID, const ASCII_t &Hostaddress, const std::optional<ASCII_t> &Servername, const ASCII_t &Provider, uint32_t GameID, uint32_t ModID)
-    #define Messaginglambda     [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint32_t Checksum, uint64_t Received, uint64_t Sent, const Base85_t &Message)
-    #define Presencelambda      [&](const Base58_t &OwnerID, const ASCII_t &Category, const ASCII_t &Key, const std::optional<ASCII_t> &Value)
-    #define Grouplambda         [&](const Base58_t &GroupID, const ASCII_t &Groupname, bool isPublic, bool isFull, uint32_t Membercount)
-    #define Clientlambda        [&](const Base58_t &ClientID, uint32_t GameID, uint32_t ModID, uint32_t Flags, const ASCII_t &Username)
-    #define Relationlambda      [&](const Base58_t &Source, const Base58_t &Target, bool isFriend, bool isBlocked)
-    #define Groupmemberlambda   [&](const Base58_t &GroupID, const Base58_t &MemberID, bool isModerator)
-    #define Groupinterestlambda [&](const Base58_t &MemberID, const Base58_t &GroupID)
-    #define Accountlambda       [&](const Base58_t &Publickey)
+    #define Accountlambda           [&](const Base58_t &Publickey, uint64_t Lastseen)
+    #define Clientsociallambda      [&](const Base58_t &ClientID, const std::optional<UTF8_t> &Username, bool isAway)
+    #define Clientgaminglambda      [&](const Base58_t &ClientID, uint32_t GameID, uint32_t ModID, bool isIngame)
+    #define Clientrelationlambda    [&](const Base58_t &Source, const Base58_t &Target, bool isBlocked, bool isFriend)
+    #define Keyvaluelambda          [&](const Base58_t &ClientID, uint32_t Category, const UTF8_t &Key, const std::optional<UTF8_t> &Value)
+    #define Grouplambda             [&](const Base58_t &GroupID, const std::optional<UTF8_t> &Groupname, uint32_t Maxmembers, bool isPublic)
+    #define Groupmemberlambda       [&](const Base58_t &GroupID, const Base58_t &MemberID, bool isModerator)
+    #define Clientmessagelambda     [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint64_t Timestamp, const Base85_t &Message)
+    #define Groupmessagelambda      [&](const Base58_t &Source, const Base58_t &Target, uint32_t Messagetype, uint64_t Timestamp, const Base85_t &Message)
+    #define Matchmakinglambda       [&](const Base58_t &GroupID, const UTF8_t &Hostaddress, const std::vector<uint32_t> &Providers, uint32_t GameID)
     #pragma endregion
 
     // Disable warnings about unused parameters in the lambdas.
     #pragma warning(disable: 4100)
 
-    // General information about the network.
+    // General information about the clients.
     namespace Clientinfo
     {
-        inline Result_t Count()
+        // Active clients only (last seen > 60 seconds ago).
+        inline uint32_t Count(bool IncludeAFK = false)
         {
-            Trycatch(
-                uint64_t Result{};
-                Prepare("SELECT COUNT(*) FROM Client;") >> Result;
-                if (Result) return Result;
-            );
+            const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(60)).time_since_epoch().count();
+            uint32_t Count{};
 
-            return {};
-        }
-        inline Result_t Find(const LongID_t &ClientID)
-        {
-            
-                JSON::Object_t Result{};
-                Prepare("SELECT * FROM Client WHERE ClientID = ?;", ClientID) >> Clientlambda
+            if (IncludeAFK)
+            {
+                Query("SELECT COUNT(*) FROM Acccount WHERE Lastseen >= ?;", Timestamp) >> Count;
+            }
+            else
+            {
+                Hashset<LongID_t> Accounts{};
+                Query("SELECT Publickey FROM Acccount WHERE Lastseen >= ?;", Timestamp)
+                    >> [&](const Base58_t &Publickey) { Accounts.insert(Publickey); };
+
+                for (const auto &Item : Accounts)
                 {
-                    Result = JSON::Object_t({
-                        { "ClientID", ClientID },
-                        { "Username", Username },
-                        { "GameID", GameID },
-                        { "ModID", ModID },
-                        { "Flags", Flags },
+                    Query("SELECT isAway FROM Clientsocial WHERE ClientID = ?;", Item)
+                        >> [&](bool isAway) { Count += !isAway; };
+                }
+            }
 
-                        // NOTE(tcn): May change before v1.0
-                        { "isPrivate",  Flags & (1 << 1) },
-                        { "isAway",     Flags & (1 << 2) },
-                        { "isHosting",  Flags & (1 << 3) },
-                        { "isIngame",   Flags & (1 << 4) }
-                    });
-                };
-                if (!Result.empty()) return Result;
-            
-
-            return {};
+            return Count;
         }
-        inline Result_t Enumerate(const ASCII_t &Username)
+
+        // Collect relevant information about the client.
+        inline Result_t Fetch(const LongID_t &ClientID)
         {
-            Trycatch(
-                Hashset<LongID_t> Clients{};
+            JSON::Object_t Result{};
 
-                Prepare("SELECT ClientID FROM Client WHERE Username = ?;", Username) >> [&](const Base58_t &ClientID)
-                {
-                    Clients.insert(ClientID);
-                };
+            Query("SELECT * FROM Account WHERE Publickey = ?;", ClientID) >> Accountlambda
+            {
+                Result["Publickey"] = Publickey;
+                Result["Lastseen"] = Lastseen;
+            };
 
-                JSON::Array_t Result{};
-                Result.reserve(Clients.size());
+            Query("SELECT * FROM Clientsocial WHERE ClientID = ?;", ClientID) >> Clientsociallambda
+            {
+                // If the client has no username, give it one.
+                Result["Username"] = Username ? *Username : Encoding::toUTF8(ClientID);
+                Result["isAway"] = isAway;
+            };
 
-                for (const auto &Item : Clients)
-                    if (const auto TMP = Find(Item))
-                        Result.emplace_back(TMP);
+            Query("SELECT * FROM Clientgaming WHERE ClientID = ?;", ClientID) >> Clientgaminglambda
+            {
+                Result["isIngame"] = isIngame;
+                Result["GameID"] = GameID;
+                Result["ModID"] = ModID;
+            };
 
-                if (!Result.empty()) return Result;
-            );
+            uint64_t Timestamp{};
+            Query("SELECT Lastseen FROM Account WHERE Publickey = ?;", ClientID) >> Timestamp;
+            Result["Lastseen"] = Timestamp;
 
-            return {};
+            if (Result.empty()) return {};
+            else return Result;
         }
-        inline Result_t Enumerate(std::optional<uint32_t> byGameID, std::optional<uint32_t> byModID)
+
+        // Find clients by criteria.
+        inline std::unordered_set<LongID_t> Find(const UTF8_t &Username)
+        {
+            std::unordered_set<LongID_t> Result{};
+
+            Query("SELECT ClientID FROM Clientsocial WHERE Username = ?;", Username)
+                >> [&](const LongID_t &ClientID) { Result.insert(ClientID); };
+
+            return Result;
+        }
+        inline std::unordered_set<LongID_t> Find(std::optional<uint32_t> byGameID, std::optional<uint32_t> byModID)
         {
             // We don't do full listings here.
             if (!byGameID && !byModID) [[unlikely]] return {};
 
-            auto PS = [&]()
+            std::unordered_set<LongID_t> Result{};
+            [&]()
             {
-                if (byGameID && byModID) return Prepare("SELECT ClientID FROM Client WHERE (GameID = ? AND ModID = ?);", byGameID.value(), byModID.value());
-                if (byGameID) return Prepare("SELECT ClientID FROM Client WHERE GameID = ?;", byGameID.value());
-                if (byModID) return Prepare("SELECT ClientID FROM Client WHERE ModID = ?;", byModID.value());
-                return Prepare(";");
-            }();
+                if (byGameID && byModID) return Query("SELECT ClientID FROM Clientgaming WHERE (GameID = ? AND ModID = ?);", byGameID.value(), byModID.value());
+                if (byGameID) return Query("SELECT ClientID FROM Clientgaming WHERE GameID = ?;", byGameID.value());
+                else return Query("SELECT ClientID FROM Clientgaming WHERE ModID = ?;", byModID.value());
+            }() >> [&](const Base58_t &ClientID) { Result.insert(ClientID); };
 
-            Trycatch(
-                Hashset<LongID_t> Clients{};
-                PS >> [&](const Base58_t &ClientID) { Clients.insert(ClientID); };
-
-                JSON::Array_t Result{};
-                Result.reserve(Clients.size());
-
-                for (const auto &Item : Clients)
-                    if (const auto TMP = Find(Item))
-                        Result.emplace_back(TMP);
-
-                if (!Result.empty()) return Result;
-            );
-
-            return {};
-        }
-
-        // Internal table, do not expect Hyrums law to be respected.
-        inline uint32_t Lastmessage(const LongID_t &ClientID)
-        {
-            uint64_t Timestamp{};
-            auto PS = Prepare("SELECT Timestamp FROM Messagestream WHERE Sender = ? LIMIT 1 ORDER BY Timestamp;", ClientID);
-            Trycatch(PS >> Timestamp; );
-
-            if (0 == Timestamp) [[unlikely]] return 0x7FFFFFFF;
-
-            const auto Duration = std::chrono::utc_clock::now().time_since_epoch() - std::chrono::utc_clock::duration(Timestamp);
-            return std::chrono::duration_cast<std::chrono::seconds>(Duration).count();
+            return Result;
         }
     }
 
-    // Client-client relationships.
-    namespace Relations
+    // Client <-> client relationships.
+    namespace Clientrelations
     {
         using isFriend = bool; using isBlocked = bool;
         using Relation = std::pair<isFriend, isBlocked>;
 
+        // Get the status of one user.
         inline Relation Get(const LongID_t &Source, const LongID_t &Target)
         {
             Relation Result{};
-
-            auto PS = Prepare("SELECT isFriend, isBlocked FROM Relation WHERE (Source = ? AND Target = ?);", Source, Target);
-            Trycatch(PS >> std::tie(Result.first, Result.second););
+            Query("SELECT isFriend, isBlocked FROM Clientrelation WHERE (Source = ? AND Target = ?);", Source, Target)
+                >> std::tie(Result.first, Result.second);
             return Result;
         }
-        inline bool areFriends(const LongID_t &ClientA, const LongID_t &ClientB)
+
+        // Get a list of users by criteria.
+        inline std::unordered_set<LongID_t> getFriends(const LongID_t &ClientID)
         {
-            const auto A = Get(ClientA, ClientB);
-            const auto B = Get(ClientB, ClientA);
+            std::unordered_set<LongID_t> Candidates{}, Results{};
+
+            Query("SELECT Target FROM Clientrelation WHERE (Source = ? AND isFriend = true);", ClientID)
+                >> [&](const Base58_t &Target) { Candidates.insert(Target); };
+
+            for (const auto &Item : Candidates)
+            {
+                Query("SELECT Source FROM Clientrelation WHERE (Source = ? AND Target = ? AND isFriend = true);", Item, ClientID)
+                    >> [&](const Base58_t &Source) { Results.insert(Source); };
+            }
+
+            return Results;
+        }
+        inline std::unordered_set<LongID_t> getBlocked(const LongID_t &ClientID)
+        {
+            std::unordered_set<LongID_t> Candidates{}, Results{};
+
+            Query("SELECT Target FROM Clientrelation WHERE (Source = ? AND isBlocked = true);", ClientID)
+                >> [&](const Base58_t &Target) { Candidates.insert(Target); };
+
+            for (const auto &Item : Candidates)
+            {
+                Query("SELECT Source FROM Clientrelation WHERE (Source = ? AND Target = ? AND isBlocked = true);", Item, ClientID)
+                    >> [&](const Base58_t &Source) { Results.insert(Source); };
+            }
+
+            return Results;
+        }
+
+        // One-sided relations =(
+        inline std::unordered_set<LongID_t> getFriendproposals(const LongID_t &ClientID)
+        {
+            std::unordered_set<LongID_t> Results{};
+
+            Query("SELECT Target FROM Clientrelation WHERE (Source = ? AND isFriend = true);", ClientID)
+                >> [&](const Base58_t &Target) { Results.insert(Target); };
+
+            for (const auto &Item : Results)
+            {
+                Query("SELECT Source FROM Clientrelation WHERE (Source = ? AND Target = ? AND isFriend = true);", Item, ClientID)
+                    >> [&](const Base58_t &Source) { Results.erase(Source); };
+            }
+
+            return Results;
+        }
+        inline std::unordered_set<LongID_t> getFriendrequests(const LongID_t &ClientID)
+        {
+            std::unordered_set<LongID_t> Results{};
+
+            Query("SELECT Target FROM Clientrelation WHERE (Target = ? AND isFriend = true);", ClientID)
+                >> [&](const Base58_t &Target) { Results.insert(Target); };
+
+            for (const auto &Item : Results)
+            {
+                Query("SELECT Source FROM Clientrelation WHERE (Source = ? AND Target = ? AND isFriend = true);", Item, ClientID)
+                    >> [&](const Base58_t &Source) { Results.erase(Source); };
+            }
+
+            return Results;
+        }
+
+        // Simplified check.
+        inline bool areFriends(const LongID_t &Source, const LongID_t &Target)
+        {
+            const auto A = Get(Source, Target);
+            const auto B = Get(Target, Source);
             return A.first && B.first;
         }
-        inline bool areBlocked(const LongID_t &ClientA, const LongID_t &ClientB)
+    }
+
+    // Client's key-value (usually presence) storage.
+    namespace Keyvalue
+    {
+        using Key_t = UTF8_t;
+        using Category_t = uint32_t;
+        using Value_t = std::optional<UTF8_t>;
+        using Entry_t = std::tuple<Category_t, Key_t, Value_t>;
+
+        // Find clients by criteria.
+        inline std::unordered_set<LongID_t> Find(Category_t Category, const Key_t &Key, Value_t Value = {})
         {
-            const auto A = Get(ClientA, ClientB);
-            const auto B = Get(ClientB, ClientA);
-            return A.second || B.second;
+            std::unordered_set<LongID_t> Results{};
+
+            if (Value)
+            {
+                Query("SELECT ClientID FROM Keyvalues WHERE (Category = ? AND Key = ? AND Value = ?);", Category, Key, *Value)
+                    >> [&](const Base58_t &ClientID) { Results.insert(ClientID); };
+            }
+            else
+            {
+                Query("SELECT ClientID FROM Keyvalues WHERE (Category = ? AND Key = ?);", Category, Key)
+                    >> [&](const Base58_t &ClientID) { Results.insert(ClientID); };
+            }
+
+            return Results;
         }
-        inline std::unordered_set<LongID_t> getBlocked(const LongID_t &Source)
-        {
-            std::unordered_set<LongID_t> Result{};
 
-            auto PS = Prepare("SELECT Target FROM Relation WHERE (Source = ? AND isBlocked = true);", Source);
-            Trycatch(PS >> [&](LongID_t ID) { Result.insert(ID); };);
-            return Result;
+        // Dump all entries for a given user.
+        inline std::vector<Entry_t> Dump(const LongID_t &ClientID, std::optional<Category_t> Category = {})
+        {
+            std::vector<Entry_t> Results{};
+
+            if (Category)
+            {
+                Query("SELECT * FROM Keyvalues WHERE (ClientID = ? AND Category = ?);", ClientID, *Category) >> Keyvaluelambda
+                {
+                    Results.emplace_back(Category, Key, Value);
+                };
+            }
+            else
+            {
+                Query("SELECT * FROM Keyvalues WHERE ClientID = ?;", ClientID) >> Keyvaluelambda
+                {
+                    Results.emplace_back(Category, Key, Value);
+                };
+            }
+
+            return Results;
         }
-        inline std::unordered_set<LongID_t> getFriends(const LongID_t &Source)
+
+        // Simple lookup of a given key-value.
+        inline Value_t Get(const LongID_t &ClientID, Category_t Category, const Key_t &Key)
         {
-            std::unordered_set<LongID_t> Temp{}, Result{};
+            Value_t Result{};
 
-            auto PS = Prepare("SELECT Target FROM Relation WHERE (Source = ? AND isFriend = true);", Source);
-            Trycatch(PS >> [&](LongID_t ID) { Temp.insert(ID); };);
+            Query("SELECT Value FROM Keyvalues WHERE (ClientID = ? AND Category = ? AND Key = ?);", ClientID, Category, Key)
+                >> Result;
 
-            for (const auto &Item : Temp)
-                if (Get(Item, Source).first)
-                    Result.insert(Item);
-
-            return Result;
-        }
-        inline std::unordered_set<LongID_t> getFriendrequests(const LongID_t &Target)
-        {
-            std::unordered_set<LongID_t> Result{};
-
-            auto PS = Prepare("SELECT Source FROM Relation WHERE (Target = ? AND isFriend = true);", Target);
-            Trycatch(PS >> [&](LongID_t ID) { Result.insert(ID); };);
-            return Result;
-        }
-        inline std::unordered_set<LongID_t> getFriendproposals(const LongID_t &Source)
-        {
-            std::unordered_set<LongID_t> Result{};
-
-            auto PS = Prepare("SELECT Target FROM Relation WHERE (Source = ? AND isFriend = true);", Source);
-            Trycatch(PS >> [&](LongID_t ID) { Result.insert(ID); };);
             return Result;
         }
     }
 
-    // User-managed groups, one per account ID.
+    // User-managed groups, one per client.
     namespace Groups
     {
-        inline Result_t Find(const LongID_t &GroupID)
+        // The groups a user is a member of.
+        inline std::vector<LongID_t> getMemberships(const LongID_t &ClientID)
         {
-            Trycatch(
-                JSON::Object_t Result{};
-                Prepare("SELECT * FROM Groups WHERE GroupID = ?;", GroupID) >> Grouplambda
-                {
-                    Result = JSON::Object_t({
-                        { "Membercount", Membercount },
-                        { "Groupname", Groupname },
-                        { "isPublic", isPublic },
-                        { "GroupID", GroupID },
-                        { "isFull", isFull }
-                    });
-                };
-                if (!Result.empty()) return Result;
-            );
+            std::vector<LongID_t> Result{};
 
-            return {};
+            Query("SELECT GroupID FROM Groupmember WHERE ClientID = ?;", ClientID)
+                >> [&](const LongID_t &GroupID) { Result.emplace_back(GroupID); };
+
+            return Result;
         }
-        inline Result_t Enumerate(const ASCII_t &Groupname)
-        {
-            Trycatch(
-                Hashset<LongID_t> Groups{};
 
-                Prepare("SELECT GroupID FROM Client WHERE Groupname = ?;", Groupname) >> [&](const Base58_t &GroupID)
-                {
-                    Groups.insert(GroupID);
-                };
-
-                JSON::Array_t Result{};
-                Result.reserve(Groups.size());
-
-                for (const auto &Item : Groups)
-                    if (const auto TMP = Find(Item))
-                        Result.emplace_back(TMP);
-
-                if (!Result.empty()) return Result;
-            );
-
-            return {};
-        }
+        // Vector is used as some consumers want process by offset.
         inline std::vector<LongID_t> getMembers(const LongID_t &GroupID)
         {
-            std::set<LongID_t> Result{ GroupID };
+            std::vector<LongID_t> Result{};
 
-            Trycatch(
-                Prepare("SELECT MemberID FROM Groupmember WHERE GroupID = ?;", GroupID) >> [&](const Base58_t &MemberID)
-                {
-                    Result.insert(MemberID);
-                };
-            );
+            Query("SELECT MemberID FROM Groupmember WHERE GroupID = ?;", GroupID)
+                >> [&](const LongID_t &MemberID) { Result.emplace_back(MemberID); };
 
-            return { Result.begin(), Result.end() };
+            return Result;
         }
         inline std::vector<LongID_t> getModerators(const LongID_t &GroupID)
         {
-            std::set<LongID_t> Result{ GroupID };
+            std::vector<LongID_t> Result{};
 
-            Trycatch(
-                Prepare("SELECT MemberID FROM Groupmember WHERE (isModerator = true AND GroupID = ?);", GroupID) >> [&](const Base58_t &MemberID)
-                {
-                    Result.insert(MemberID);
-                };
-            );
+            Query("SELECT MemberID FROM Groupmember WHERE (GroupID = ? AND isModerator = true);", GroupID)
+                >> [&](const LongID_t &MemberID) { Result.emplace_back(MemberID); };
 
-            return { Result.begin(), Result.end() };
+            return Result;
         }
-        inline std::vector<LongID_t> getMemberships(const LongID_t &UserID)
+
+        // Fetch the relevant information about the group.
+        inline Result_t Fetch(const LongID_t &GroupID)
         {
-            std::set<LongID_t> Result{};
+            JSON::Object_t Result{};
 
-            Trycatch(
-                Prepare("SELECT GroupID FROM Groupmember WHERE MemberID = ?;", UserID) >> [&](const Base58_t &GroupID)
-                {
-                    Result.insert(GroupID);
-                };
-            );
-
-            return { Result.begin(), Result.end() };
-        }
-        inline std::vector<LongID_t> Enumerate(std::optional<bool> isPublic, std::optional<bool> isFull)
-        {
-            // Not going to list all groups in one call.
-            if (!isPublic && !isFull) [[unlikely]] return {};
-
-            auto PS = [&]()
+            Query("SELECT * FROM Group WHERE GroupID = ?;", GroupID) >> Grouplambda
             {
-                if (isPublic && isFull) return Prepare("SELECT GroupID FROM Group WHERE (isPublic = ? AND isFull = ?);", isPublic.value(), isFull.value());
-                if (isPublic) return Prepare("SELECT GroupID FROM Group WHERE isPublic = ?;", isPublic.value());
-                if (isFull) return Prepare("SELECT GroupID FROM Group WHERE isFull = ?;", isFull.value());
-                return Prepare(";");
-            }();
+                Result["GroupID"] = GroupID;
+                Result["isPublic"] = isPublic;
+                Result["Maxmembers"] = Maxmembers;
+                if (Groupname) Result["Groupname"] = *Groupname;
+            };
 
-            std::set<LongID_t> Result{};
-            Trycatch(PS >> [&](const Base58_t &GroupID) { Result.insert(GroupID); }; );
-
-            return { Result.begin(), Result.end() };
-        }
-    }
-
-    // Key-value store for the client, usually for social presence.
-    namespace Presence
-    {
-        using Category_t = ASCII_t;
-        using Keyvalue_t = std::pair<ASCII_t, ASCII_t>;
-
-        inline std::optional<std::map<ASCII_t, ASCII_t>> Dump(const LongID_t &ClientID, const ASCII_t &Category)
-        {
-            Trycatch(
-                std::map<ASCII_t, ASCII_t> Result{};
-                Prepare("SELECT * FROM Presence WHERE (OwnerID = ? AND Category = ?);", ClientID, Category) >> Presencelambda
-                {
-                    Result.emplace(Key, Value.value_or(""));
-                };
-                if (!Result.empty()) return Result;
-            );
-
-            return {};
-
-        }
-        inline std::optional<std::unordered_map<Category_t, Keyvalue_t>> Dump(const LongID_t &ClientID)
-        {
-            Trycatch(
-                std::unordered_map<Category_t, Keyvalue_t> Result{};
-                Prepare("SELECT * FROM Presence WHERE OwnerID = ?;", ClientID) >> Presencelambda
-                {
-                    Result[Category] = { Key, Value.value_or("") };
-                };
-                if (!Result.empty()) return Result;
-            );
-
-            return {};
+            Result["Membercount"] = getMembers(GroupID).size();
+            return Result;
         }
 
-        inline Result_t Value(const LongID_t &ClientID, const ASCII_t &Key, std::optional<ASCII_t> Category = {})
+        // Find groups by criteria.
+        inline std::vector<LongID_t> Find(bool isPublic)
         {
-            auto PS = Category
-                ? Prepare("SELECT Value FROM Presence WHERE (OwnerID = ? AND Key = ? AND Category = ?) LIMIT 1;", ClientID, Key, Category.value())
-                : Prepare("SELECT Value FROM Presence WHERE (OwnerID = ? AND Key = ?) LIMIT 1;", ClientID, Key);
+            std::vector<LongID_t> Result{};
 
-            Trycatch(
-                std::optional<ASCII_t> Result{};
-                PS >> [&](std::optional<ASCII_t> TMP) { Result = TMP; };
-                if (Result) return Result.value();
-            );
+            Query("SELECT GroupID FROM Group WHERE isPublic = ?;", isPublic)
+                >> [&](const LongID_t &GroupID) { Result.emplace_back(GroupID); };
 
-            return {};
+            return Result;
         }
-        inline std::unordered_set<LongID_t> Enumerate(const ASCII_t &Key, std::optional<ASCII_t> Category = {}, std::optional<ASCII_t> Value = {})
+        inline std::vector<LongID_t> Find(const UTF8_t &Groupname)
         {
-            std::unordered_set<LongID_t> Result{};
-            auto PS = [&]()
-            {
-                if (Category && Value) return Prepare("SELECT OwnerID FROM Presence WHERE (Key = ? AND Value = ? AND Category = ?);", Key, Value.value(), Category.value());
-                if (Category) return Prepare("SELECT OwnerID FROM Presence WHERE (Key = ? AND Category = ?);", Key, Category.value());
-                if (Value) return Prepare("SELECT OwnerID FROM Presence WHERE (Key = ? AND Value = ?);", Key, Category.value());
-                return Prepare("SELECT OwnerID FROM Presence WHERE Key = ?;", Key);
-            }();
+            std::vector<LongID_t> Result{};
 
-            Trycatch(
-                PS >> [&](const Base58_t &OwnerID) { Result.insert(OwnerID); };
-                if (!Result.empty()) return Result;
-            );
+            Query("SELECT GroupID FROM Group WHERE Groupname = ?;", Groupname)
+                >> [&](const LongID_t &GroupID) { Result.emplace_back(GroupID); };
 
             return Result;
         }
     }
 
-    // The messages have already been decrypted, but remains Base85.
+    // The messages have already been decrypted.
     namespace Messaging
     {
-        inline Result_t groupCount(const LongID_t &GroupID, std::optional<uint32_t> Messagetype)
+        // Get a count to check if there's new messages / chunk processing.
+        inline uint32_t groupCount(const LongID_t &GroupID, std::optional<uint32_t> Messagetype)
         {
-            auto PS = Messagetype
-                ? Prepare("SELECT COUNT(*) FROM Groupmessages WHERE (Target = ? AND Messagetype = ?);", GroupID, Messagetype.value())
-                : Prepare("SELECT COUNT(*) FROM Groupmessages WHERE Target = ?;", GroupID);
+            uint32_t Result{};
 
-            Trycatch(
-                uint64_t Result{};
-                PS >> Result;
-                if (Result) return Result;
-            );
+            if (Messagetype)
+            {
+                Query("SELECT COUNT (*) FROM Groupmessage WHERE (Target = ? AND Messagetype = ?);", GroupID, *Messagetype)
+                    >> Result;
+            }
+            else
+            {
+                Query("SELECT COUNT (*) FROM Groupmessage WHERE (Target = ?);", GroupID)
+                    >> Result;
+            }
 
-            return {};
+            return Result;
         }
-        inline Result_t userCount(const LongID_t &ClientID, std::optional<uint32_t> Messagetype)
+        inline uint32_t clientCount(const LongID_t &ClientID, std::optional<uint32_t> Messagetype)
         {
-            auto PS = Messagetype
-                ? Prepare("SELECT COUNT(*) FROM Usermessages WHERE (Target = ? AND Messagetype = ?);", ClientID, Messagetype.value())
-                : Prepare("SELECT COUNT(*) FROM Usermessages WHERE Target = ?;", ClientID);
+            uint32_t Result{};
 
-            Trycatch(
-                uint64_t Result{};
-                PS >> Result;
-                if (Result) return Result;
-            );
+            if (Messagetype)
+            {
+                Query("SELECT COUNT (*) FROM Clientmessage WHERE (Target = ? AND Messagetype = ?);", ClientID, *Messagetype)
+                    >> Result;
+            }
+            else
+            {
+                Query("SELECT COUNT (*) FROM Clientmessage WHERE (Target = ?);", ClientID)
+                    >> Result;
+            }
 
-            return {};
+            return Result;
         }
 
-        inline Result_t getGroupmessage(const LongID_t &GroupID, std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
+        // Fetch a single message by criteria and offset.
+        inline Result_t getClientmessage(const std::optional<LongID_t> &To, const std::optional<LongID_t> &From,
+            std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
         {
-            std::string SQL = "SELECT * FROM Groupmessages WHERE (Target = ?";
-            if (Messagetype) SQL += " AND Messagetype = ?";
-            if (Offset) SQL += ") OFFSET ?";
-            else SQL += ")";
-            SQL += " SORT BY Sent LIMIT 1;";
+            JSON::Object_t Result{};
 
-            auto PS = Prepare(SQL, GroupID);
-            if (Messagetype) PS << Messagetype.value();
-            if (Offset) PS << Offset.value();
+            std::string SQL = "SELECT * FROM Clientmessage WHERE ( ";
+            if (Messagetype) SQL += "Messagetype = ? AND ";
+            if (From) SQL += "Source = ? AND ";
+            if (To) SQL += "Target = ? AND ";
+            SQL += "true ) ";
 
-            Trycatch(
-                JSON::Object_t Result{};
-                PS >> Messaginglambda
-                {
-                    Result = JSON::Object_t({
-                        { "Messagetype", Messagetype },
-                        { "Received", Received },
-                        { "Message", Message },
-                        { "GroupID", Target },
-                        { "From", Source },
-                        { "Sent", Sent }
-                    });
-                };
-                if (!Result.empty()) return Result;
-            );
+            if (Offset) SQL += "OFFSET ? LIMIT 1;";
+            else SQL += "LIMIT 1;";
 
-            return {};
+            auto PS = Queryunsafe(SQL);
+            if (Messagetype) PS << *Messagetype;
+            if (From) PS << *From;
+            if (To) PS << *To;
+            if (Offset) PS << *Offset;
+
+            PS >> Clientmessagelambda
+            {
+                Result = JSON::Object_t({
+                    { "To", Target },
+                    { "From", Source },
+                    { "Message", Message },
+                    { "Messagetype", Messagetype }
+                });
+            };
+
+            return Result;
         }
-        inline Result_t getMessage(const LongID_t &To, std::optional<LongID_t> From, std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
+        inline Result_t getGroupmessage(const std::optional<LongID_t> &GroupID, const std::optional<LongID_t> &From,
+            std::optional<uint32_t> Messagetype, std::optional<uint32_t> Offset = {})
         {
-            std::string SQL = "SELECT * FROM Usermessages WHERE (Target = ?";
-            if (Messagetype) SQL += " AND Messagetype = ?";
-            if (From) SQL += " AND Source = ?";
-            if (Offset) SQL += ") OFFSET ?";
-            else SQL += ")";
-            SQL += " SORT BY Sent LIMIT 1;";
+            JSON::Object_t Result{};
 
-            auto PS = Prepare(SQL, To);
-            if (Messagetype) PS << Messagetype.value();
-            if (From) PS << From.value();
-            if (Offset) PS << Offset.value();
+            std::string SQL = "SELECT * FROM Clientmessage WHERE ( ";
+            if (Messagetype) SQL += "Messagetype = ? AND ";
+            if (GroupID) SQL += "Target = ? AND ";
+            if (From) SQL += "Source = ? AND ";
+            SQL += "true ) ";
 
-            Trycatch(
-                JSON::Object_t Result{};
-                PS >> Messaginglambda
-                {
-                    Result = JSON::Object_t({
-                        { "Messagetype", Messagetype },
-                        { "Received", Received },
-                        { "Message", Message },
-                        { "From", Source },
-                        { "To", Target },
-                        { "Sent", Sent }
-                    });
-                };
-                if (!Result.empty()) return Result;
-            );
+            if (Offset) SQL += "OFFSET ? LIMIT 1;";
+            else SQL += "LIMIT 1;";
 
-            return {};
+            auto PS = Queryunsafe(SQL);
+            if (Messagetype) PS << *Messagetype;
+            if (GroupID) PS << *GroupID;
+            if (From) PS << *From;
+            if (Offset) PS << *Offset;
+
+            PS >> Groupmessagelambda
+            {
+                Result = JSON::Object_t({
+                    { "From", Source },
+                    { "GroupID", Target },
+                    { "Message", Message },
+                    { "Messagetype", Messagetype }
+                });
+            };
+
+            return Result;
         }
     }
 
     // Let users know which groups are actively hosting.
     namespace Matchmaking
     {
+        // Collect information about a host.
+        inline Result_t Fetch(const Base58_t &GroupID)
+        {
+            JSON::Object_t Result{};
 
+            // Fetch the base info.
+            Query("SELECT * FROM Matchmaking WHERE GroupID = ?;", GroupID) >> Matchmakinglambda
+            {
+                Result["Hostaddress"] = Hostaddress;
+                Result["Providers"] = Providers;
+                Result["GroupID"] = GroupID;
+                Result["GameID"] = GameID;
+            };
+
+            // Nothing found in the DB.
+            if (Result.empty()) [[unlikely]]
+                return {};
+
+            // Combine with group info, can't really fail.
+            JSON::Object_t Group = Groups::Fetch(GroupID);
+            Result.merge(Group);
+
+            return Result;
+        }
+        inline Result_t Fetch(const UTF8_t &Hostaddress)
+        {
+            LongID_t GroupID{};
+            Query("SELECT GroupID FROM Matchmaking WHERE Hostaddress = ?;", Hostaddress)
+                >> GroupID;
+
+            // Nothing found in the DB.
+            if (GroupID.empty()) [[unlikely]]
+                return {};
+
+            return Fetch(GroupID);
+        }
+
+        // Find hosts by criteria.
+        inline std::vector<LongID_t> Find(uint32_t GameID)
+        {
+            std::vector<LongID_t> Result{};
+            Query("SELECT GroupID FROM Matchmaking WHERE GameID = ?;", GameID)
+                >> [&](const LongID_t &ID) { Result.emplace_back(ID); };
+            return Result;
+        }
     }
 
     #pragma region Cleanup
@@ -621,16 +713,16 @@ namespace AyriaAPI
     #pragma warning(default: 4100)
 
     // Avoid leakage.
-    #undef Trycatch
-    #undef Grouplambda
-    #undef Clientlambda
     #undef Accountlambda
-    #undef Relationlambda
-    #undef Presencelambda
-    #undef Messaginglambda
-    #undef Matchmakinglambda
+    #undef Clientsociallambda
+    #undef Clientgaminglambda
+    #undef Clientrelationlambda
+    #undef Keyvaluelambda
+    #undef Grouplambda
     #undef Groupmemberlambda
-    #undef Groupinterestlambda
+    #undef Clientmessagelambda
+    #undef Groupmessagelambda
+    #undef Matchmakinglambda
     #pragma endregion
 }
 #endif
