@@ -12,6 +12,7 @@
 
 // Lazy iterators, required.
 #define LZ_STANDALONE
+#define HAS_LZ
 #include <Lz/Lz.hpp>
 
 // NLhohmann modern JSON parsing library.

@@ -10,18 +10,16 @@
 namespace Logging
 {
     // UTF8 escaped ASCII strings.
-    void toConsole(const std::string &Message);
-    void toLogfile(const std::string &Message);
-    void toDebugstream(const std::string &Message);
+    inline void toConsole(const std::string &Message);
+    inline void toLogfile(const std::string &Message);
+    inline void toDebugstream(const std::string &Message);
 
     // Let std::fmt deal with type specializations.
-    template <typename T> void Print(char Prefix, T Message)
+    template <typename T> void Print(char Prefix, const T &Message)
     {
-        char Buffer[16]{};
-        const auto Now{ std::time(nullptr) };
-        std::strftime(Buffer, 16, "%H:%M:%S", std::localtime(&Now));
+        const auto Time = std::chrono::zoned_time{ std::chrono::current_zone(), std::chrono::system_clock::now() };
+        const auto Formatted = std::format("[{}][{%T}] {}\n", Prefix, Time, Encoding::toNarrow(Message));
 
-        const auto Formatted = std::format("[{}][{}] {}\n", Prefix, Buffer, Encoding::toNarrow(Message));
         toDebugstream(Formatted);
         toConsole(Formatted);
         toLogfile(Formatted);

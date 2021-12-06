@@ -14,6 +14,10 @@ namespace Logging
         #pragma message("Warning: No module name specified for the logging.")
     #endif
 
+    // Logging to disk is slow as fuck, let's batch it.
+    std::string Pendingwrite{};
+    uint8_t Pendingcount{};
+
     // Compile-time evaluated path.
     constexpr auto Logfile = LOG_PATH "/" MODULENAME ".log";
 
@@ -21,7 +25,7 @@ namespace Logging
     Defaultmutex Threadguard;
 
     // UTF8 escaped ASCII strings.
-    void toConsole(const std::string &Message)
+    inline void toConsole(const std::string &Message)
     {
         static const FARPROC Console = []() -> FARPROC
         {
@@ -32,32 +36,44 @@ namespace Logging
             return GetProcAddress(Handle, "addConsolemessage");
         }();
 
+        // Console does thread-safety.
         if (Console) [[likely]]
         {
             reinterpret_cast<void(__cdecl *)(const char *, unsigned int, unsigned int)>(Console)(Message.data(), (uint32_t)Message.size(), 0);
         }
     }
-    void toLogfile(const std::string &Message)
+    inline void toLogfile(const std::string &Message)
     {
         std::scoped_lock _(Threadguard);
+        Pendingwrite += Message;
+        Pendingcount++;
 
-        // Open the logfile on disk and push to it.
-        if (const auto Filehandle = std::fopen(Logfile, "ab"))
+        if (Pendingcount >= 5)
         {
-            std::fwrite(Message.data(), Message.size(), 1, Filehandle);
-            std::fclose(Filehandle);
+            // Open the logfile on disk and push to it.
+            if (const auto Filehandle = std::fopen(Logfile, "ab"))
+            {
+                #if defined (_WIN32)
+                _fwrite_nolock(Pendingwrite.data(), Pendingwrite.size(), 1, Filehandle);
+                _fclose_nolock(Filehandle);
+                #else
+                std::fwrite(Pendingwrite.data(), Pendingwrite.size(), 1, Filehandle);
+                std::fclose(Filehandle);
+                #endif
+            }
+
+            Pendingwrite.clear();
+            Pendingcount = 0;
         }
     }
-    void toDebugstream(const std::string &Message)
+    inline void toDebugstream(const std::string &Message)
     {
-        std::scoped_lock _(Threadguard);
-
         // Standard error, should do for most consoles.
         std::fwrite(Message.data(), Message.size(), 1, stderr);
         std::fflush(stderr);
 
         // Duplicate to NT.
-        #if defined(_WIN32)
+        #if defined (_WIN32)
         OutputDebugStringA(Message.c_str());
         #endif
     }
@@ -66,5 +82,10 @@ namespace Logging
     void Clearlog()
     {
         std::remove(Logfile);
+        std::atexit([]()
+        {
+            Pendingcount = 99;
+            toLogfile("");
+        });
     }
 }

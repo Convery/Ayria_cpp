@@ -62,7 +62,7 @@ namespace Build
 }
 
 // Information logging.
-namespace Logging { template <typename T> extern void Print(char Prefix, T Message); }
+namespace Logging { template <typename T> extern void Print(char Prefix, const T &Message); }
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)

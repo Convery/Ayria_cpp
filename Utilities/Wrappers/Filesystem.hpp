@@ -23,85 +23,110 @@ inline Blob S2B(std::string &&Input) { return Blob(Input.begin(), Input.end()); 
 
 namespace FS
 {
-    class MMappedfile_t
+    template <typename T> concept Byte_t = sizeof(T) == 1;
+    template <typename T> concept Range_t = requires (const T &t) { std::ranges::begin(t); std::ranges::end(t); std::ranges::size(t); };
+    template <typename T> concept Complexstring_t = Range_t<T> && !Byte_t<typename T::value_type>;
+    template <typename T> concept Simplestring_t = Range_t<T> && Byte_t<typename T::value_type>;
+
+    // Convert the range to a flat type (as you can't cast pointers in constexpr).
+    template <Complexstring_t T> [[nodiscard]] constexpr Blob Flatten(const T &Input)
     {
-        // Internal.
-        void *Nativehandle{};
-        int NativeFD{};
+        Blob Bytearray; Bytearray.reserve(Input.size() * sizeof(typename T::value_type));
 
-        public:
-        size_t Size{};
-        void *Data{};
-
-        explicit MMappedfile_t(const std::string &Path)
+        for (auto &&Item : Input)
         {
-            #if defined(_WIN32)
-            NativeFD = _open(Path.c_str(), 0x800, 0);
-            if (NativeFD == -1) return;
+            for (size_t i = 0; i < (sizeof(typename T::value_type) - 1); ++i)
+            {
+                Bytearray.append(Item & 0xFF);
+                Item >>= 8;
+            }
 
-            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            Bytearray.append(Item & 0xFF);
+        }
+
+        return Bytearray;
+    }
+
+    // Holds a memory view of a file.
+    class MMap_t
+    {
+        #if defined (_WIN32)
+        HANDLE Nativehandle{};
+        #endif
+
+    public:
+        std::span<uint8_t> Data;
+        void *Ptr{};
+        int FD{};
+
+        // STD accessors.
+        auto begin() const { return std::cbegin(Data); };
+        auto end() const { return std::cend(Data); };
+        auto begin() { return std::begin(Data); };
+        auto end() { return std::end(Data); };
+
+        #if defined (_WIN32)
+        explicit MMap_t(const std::string &Path) : Data{}
+        {
+            FD = _open(Path.c_str(), 0x800, 0);
+            if (FD == -1) return;
+
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
             if (!Nativehandle) return;
 
-            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
-            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+            Ptr = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Ptr) { CloseHandle(Nativehandle); _close(FD); return; }
 
             MEMORY_BASIC_INFORMATION Info{};
-            VirtualQuery(Data, &Info, sizeof(Info));
+            VirtualQuery(Ptr, &Info, sizeof(Info));
 
-            Size = Info.RegionSize;
-
-            #else
-
-            NativeFD = open(Path.c_str(), 0, 0);
-            if (NativeFD == -1) return {};
-
-            Size = lseek(NativeFD, 0, SEEK_END);
-            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
-
-            #endif
+            Data = { (uint8_t *)Ptr, Info.RegionSize };
         }
-        explicit MMappedfile_t(const std::wstring &Path)
+        explicit MMap_t(const std::wstring &Path) : Data{}
         {
-            #if defined(_WIN32)
-            NativeFD = _wopen(Path.c_str(), 0x800, 0);
-            if (NativeFD == -1) return;
+            FD = _wopen(Path.c_str(), 0x800, 0);
+            if (FD == -1) return;
 
-            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(NativeFD)), NULL, PAGE_READONLY, 0, 0, NULL);
+            Nativehandle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
             if (!Nativehandle) return;
 
-            Data = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
-            if (!Data) { CloseHandle(Nativehandle); _close(NativeFD); return; }
+            Ptr = MapViewOfFile(Nativehandle, FILE_MAP_READ, 0, 0, 0);
+            if (!Ptr) { CloseHandle(Nativehandle); _close(FD); return; }
 
             MEMORY_BASIC_INFORMATION Info{};
-            VirtualQuery(Data, &Info, sizeof(Info));
+            VirtualQuery(Ptr, &Info, sizeof(Info));
 
-            Size = Info.RegionSize;
-
-            #else
-
-            NativeFD = open(Encoding::toNarrow(Path).c_str(), 0, 0);
-            if (NativeFD == -1) return {};
-
-            Size = lseek(NativeFD, 0, SEEK_END);
-            Data = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, NativeFD, 0);
-
-            #endif
+            Data = { (uint8_t *)Ptr, Info.RegionSize };
         }
-        ~MMappedfile_t()
+        ~MMap_t()
         {
-            #if defined(_WIN32)
-            UnmapViewOfFile(Data);
+            UnmapViewOfFile(Ptr);
             CloseHandle(Nativehandle);
-            _close(NativeFD);
-
-            #else
-
-            munmap((void *)Data, Size);
-            close(NativeFD);
-            #endif
+            _close(FD);
         }
+
+        #else
+        explicit MMap_t(const std::string &Path) : Data{}
+        {
+            FD = open(Path.c_str(), 0, 0);
+            if (FD == -1) return {};
+
+            const auto Filesize = lseek(FD, 0, SEEK_END);
+            lseek(FD, 0, SEEK_SET);
+
+            Ptr = (uint8_t *)mmap(NULL, Filesize, PROT_READ, MAP_PRIVATE, FD, 0);
+            Data = { (uint8_t *)Ptr, Info.RegionSize };
+        }
+        explicit MMap_t(const std::wstring &Path) : MMap_t(Encoding::toNarrow(Path)) {}
+        ~MMap_t()
+        {
+            munmap((void *)Ptr, Data.size());
+            close(FD);
+        }
+        #endif
     };
 
+    // Make use of the new STL rather than fopen.
     [[nodiscard]] inline bool Fileexists(std::string_view Path)
     {
         return std::filesystem::exists(Path);
@@ -110,160 +135,94 @@ namespace FS
     {
         return std::filesystem::exists(Path);
     }
-
     [[nodiscard]] inline uintmax_t Filesize(std::string_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);
-        return Code.value() ? 0 : Size;
+        return Code ? 0 : Size;
     }
     [[nodiscard]] inline uintmax_t Filesize(std::wstring_view Path)
     {
         std::error_code Code;
         const auto Size = std::filesystem::file_size(Path, Code);
-        return Code.value() ? 0 : Size;
+        return Code ? 0 : Size;
     }
 
-    namespace Internal
+    // Read a full file into memory.
+    template <Byte_t T = uint8_t> [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
     {
-        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-        [[nodiscard]] inline std::basic_string<T> Readfile_large(std::string_view Path, size_t Size)
-        {
-            #if defined(_WIN32)
-                const auto FD = _open(Path.data(), 0x800, 0);
-                if (FD == -1) return {};
-
-                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
-                if (!Handle) return {};
-
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
-                if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
-
-                std::basic_string<T> Filebuffer(Size, 0);
-                std::memcpy(Filebuffer.data(), Mapped, Size);
-
-                UnmapViewOfFile(Mapped);
-                CloseHandle(Handle);
-                _close(FD);
-            #else
-
-                const auto FD = open(Path.data(), 0, 0);
-                if (FD == -1) return {};
-
-                const auto Mapped = (uint8_t *)mmap(NULL, Size, PROT_READ, MAP_PRIVATE, FD, 0);
-
-                std::basic_string<T> Filebuffer(Size, 0);
-                std::memcpy(Filebuffer.data(), Mapped, Size);
-
-                munmap((void *)Mapped, Size);
-                close(FD);
-            #endif
-
-            return Filebuffer;
-        }
-        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-        [[nodiscard]] inline std::basic_string<T> Readfile_large(std::wstring_view Path, size_t Size)
-        {
-            #if !defined(_WIN32)
-                return Readfile_large(Encoding::toNarrow(Path), Size);
-            #else
-                const auto FD = _wopen(Path.data(), 0x800, 0);
-                if (FD == -1) return {};
-
-                const auto Handle = CreateFileMappingA(HANDLE(_get_osfhandle(FD)), NULL, PAGE_READONLY, 0, 0, NULL);
-                if (!Handle) return {};
-
-                const auto Mapped = MapViewOfFile(Handle, FILE_MAP_READ, 0, 0, Size);
-                if (!Mapped) { CloseHandle(Handle); _close(FD); return {}; }
-
-                std::basic_string<T> Filebuffer(Size, 0);
-                std::memcpy(Filebuffer.data(), Mapped, Size);
-
-                UnmapViewOfFile(Mapped);
-                CloseHandle(Handle);
-                _close(FD);
-
-                return Filebuffer;
-            #endif
-        }
-
-        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-        [[nodiscard]] inline std::basic_string<T> Readfile_small(std::string_view Path, size_t Size)
-        {
-            std::FILE *Filehandle = std::fopen(Path.data(), "rb");
-            if (!Filehandle) return {};
-
-            const auto Buffer = std::make_unique<T[]>(Size);
-            std::fread(Buffer.get(), Size, 1, Filehandle);
-            std::fclose(Filehandle);
-
-            return std::basic_string<T>(Buffer.get(), Size);
-        }
-        template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-        [[nodiscard]] inline std::basic_string<T> Readfile_small(std::wstring_view Path, size_t Size)
-        {
-            #if defined(_WIN32)
-            std::FILE *Filehandle = _wfopen(Path.data(), L"rb");
-            #else
-            std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "rb");
-            #endif
-            if (!Filehandle) return {};
-
-            const auto Buffer = std::make_unique<T[]>(Size);
-            std::fread(Buffer.get(), Size, 1, Filehandle);
-            std::fclose(Filehandle);
-
-            return std::basic_string<T>(Buffer.get(), Size);
-        }
+        const auto Filemapping = MMap_t(std::string(Path));
+        return { Filemapping.begin(), Filemapping.end() };
+    }
+    template <Byte_t T = uint8_t> [[nodiscard]] inline std::basic_string<T> Readfile(std::wstring_view Path)
+    {
+        const auto Filemapping = MMap_t(std::wstring(Path));
+        return { Filemapping.begin(), Filemapping.end() };
     }
 
-    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Readfile(std::string_view Path)
+    // Overwrite a file.
+    template <Simplestring_t T> inline bool Writefile(const std::string &Path, const T &Buffer)
     {
-        const auto Size = Filesize(Path);
-
-        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
-        else return Internal::Readfile_small<T>(Path, Size);
-    }
-    template <typename T = uint8_t, typename = std::enable_if<sizeof(T) == 1>>
-    [[nodiscard]] inline std::basic_string<T> Readfile(std::wstring_view Path)
-    {
-        const auto Size = Filesize(Path);
-        if (Size > 4096) return Internal::Readfile_large<T>(Path, Size);
-        else return Internal::Readfile_small<T>(Path, Size);
-    }
-
-    template<typename T>
-    inline bool Writefile(std::string_view Path, std::basic_string_view<T> Buffer)
-    {
-        std::FILE *Filehandle = std::fopen(Path.data(), "wb");
+        std::FILE *Filehandle = std::fopen(Path.c_str(), "wb");
         if (!Filehandle) return false;
 
-        std::fwrite(Buffer.data(), Buffer.size() * sizeof(T), 1, Filehandle);
+        const auto Result = std::fwrite(Buffer.data(), Buffer.size() * sizeof(typename T::value_type), 1, Filehandle);
         std::fclose(Filehandle);
-        return true;
+        return Result == 1;
     }
-    template<typename T>
-    inline bool Writefile(std::string_view Path, const std::basic_string<T> &Buffer)
-    { return Writefile(Path, std::basic_string_view<T>(Buffer)); }
-
-    template<typename T>
-    inline bool Writefile(std::wstring_view Path, std::basic_string_view<T> Buffer)
+    template <Simplestring_t T> inline bool Writefile(const std::wstring &Path, const T &Buffer)
     {
         #if defined(_WIN32)
-        std::FILE *Filehandle = _wfopen(Path.data(), L"wb");
+        std::FILE *Filehandle = _wfopen(Path.c_str(), L"wb");
         #else
         std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "wb");
         #endif
         if (!Filehandle) return false;
 
-        std::fwrite(Buffer.data(), Buffer.size() * sizeof(T), 1, Filehandle);
+        const auto Result = std::fwrite(Buffer.data(), Buffer.size() * sizeof(typename T::value_type), 1, Filehandle);
         std::fclose(Filehandle);
-        return true;
+        return Result == 1;
     }
-    template<typename T>
-    inline bool Writefile(std::wstring_view Path, const std::basic_string<T> &Buffer)
-    { return Writefile(Path, std::basic_string_view<T>(Buffer)); }
+    template <Complexstring_t T> inline bool Writefile(const std::string &Path, const T &Buffer)
+    {
+        return Writefile(Path, Flatten(Buffer));
+    }
+    template <Complexstring_t T> inline bool Writefile(const std::wstring &Path, const T &Buffer)
+    {
+        return Writefile(Path, Flatten(Buffer));
+    }
+
+    // Append to a file.
+    template <Simplestring_t T> inline bool Appendfile(const std::string &Path, const T &Buffer)
+    {
+        std::FILE *Filehandle = std::fopen(Path.c_str(), "ab");
+        if (!Filehandle) return false;
+
+        const auto Result = std::fwrite(Buffer.data(), Buffer.size() * sizeof(typename T::value_type), 1, Filehandle);
+        std::fclose(Filehandle);
+        return Result == 1;
+    }
+    template <Simplestring_t T> inline bool Appendfile(const std::wstring &Path, const T &Buffer)
+    {
+        #if defined(_WIN32)
+        std::FILE *Filehandle = _wfopen(Path.c_str(), L"ab");
+        #else
+        std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "ab");
+        #endif
+        if (!Filehandle) return false;
+
+        const auto Result = std::fwrite(Buffer.data(), Buffer.size() * sizeof(typename T::value_type), 1, Filehandle);
+        std::fclose(Filehandle);
+        return Result == 1;
+    }
+    template <Complexstring_t T> inline bool Appendfile(const std::string &Path, const T &Buffer)
+    {
+        return Appendfile(Path, Flatten(Buffer));
+    }
+    template <Complexstring_t T> inline bool Appendfile(const std::wstring &Path, const T &Buffer)
+    {
+        return Appendfile(Path, Flatten(Buffer));
+    }
 
     // Directory iteration, filename if not recursive; else full path.
     [[nodiscard]] inline std::vector<std::string> Findfiles(std::string Directorypath, std::string_view Criteria, bool Recursive = false)
@@ -329,17 +288,17 @@ namespace FS
     #include <sys/types.h>
     #include <sys/stat.h>
     using Stat_t = struct { uint32_t Created, Modified, Accessed; };
-    [[nodiscard]] inline Stat_t Filestats(std::string_view Path)
+    [[nodiscard]] inline Stat_t Filestats(const std::string &Path)
     {
         struct stat Buffer;
-        if (stat(Path.data(), &Buffer) == -1) return {};
+        if (stat(Path.c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
     }
-    [[nodiscard]] inline Stat_t Filestats(std::wstring_view Path)
+    [[nodiscard]] inline Stat_t Filestats(const std::wstring &Path)
     {
         #if defined(_WIN32)
         struct _stat Buffer;
-        if (_wstat(Path.data(), &Buffer) == -1) return {};
+        if (_wstat(Path.c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #else
         struct stat Buffer;
