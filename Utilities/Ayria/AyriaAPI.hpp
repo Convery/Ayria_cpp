@@ -159,7 +159,7 @@ namespace AyriaAPI
 
                 // Helper functions for inline hashing, should fail, but just in case..
                 {
-                    static const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    static constexpr auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                     {
                         if (argc == 0) return;
                         if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -169,7 +169,7 @@ namespace AyriaAPI
                         const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
                         sqlite3_result_int(context, Hash);
                     };
-                    static const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                    static constexpr auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                     {
                         if (argc == 0) return;
                         if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -238,9 +238,6 @@ namespace AyriaAPI
     #define Matchmakinglambda       [&](const Base58_t &GroupID, const UTF8_t &Hostaddress, const std::vector<uint32_t> &Providers, uint32_t GameID)
     #pragma endregion
 
-    // Disable warnings about unused parameters in the lambdas.
-    #pragma warning(disable: 4100)
-
     // General information about the clients.
     namespace Clientinfo
     {
@@ -294,10 +291,6 @@ namespace AyriaAPI
                 Result["GameID"] = GameID;
                 Result["ModID"] = ModID;
             };
-
-            uint64_t Timestamp{};
-            Query("SELECT Lastseen FROM Account WHERE Publickey = ?;", ClientID) >> Timestamp;
-            Result["Lastseen"] = Timestamp;
 
             if (Result.empty()) return {};
             else return Result;

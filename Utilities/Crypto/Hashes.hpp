@@ -43,7 +43,7 @@ namespace Hash
             if constexpr (N >= 32) Result |= (uint64_t(*p++) << (N - 32));
             if constexpr (N >= 24) Result |= (uint64_t(*p++) << (N - 24));
             if constexpr (N >= 16) Result |= (uint64_t(*p++) << (N - 16));
-            if constexpr (N >= 8)  Result |= (uint64_t(*p++) << (N - 8));
+            if constexpr (N >= 8)  Result |= (uint64_t(*p  ) << (N - 8));
             return Result;
         }
         constexpr uint64_t WWProcess(uint64_t A, uint64_t B)
@@ -308,7 +308,7 @@ namespace Hash
         unsigned int Buffersize = 20;
         unsigned char Buffer[20]{};
 
-        HMAC(EVP_sha1(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        HMAC(EVP_sha1(), Key, Keysize, (uint8_t *)Input, Size, Buffer, &Buffersize);
         return std::string((char *)Buffer, Buffersize);
     }
     inline std::string HMACSHA256(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
@@ -316,7 +316,7 @@ namespace Hash
         unsigned int Buffersize = 32;
         unsigned char Buffer[32]{};
 
-        HMAC(EVP_sha256(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        HMAC(EVP_sha256(), Key, Keysize, (uint8_t *)Input, Size, Buffer, &Buffersize);
         return std::string((char *)Buffer, Buffersize);
     }
     inline std::string HMACSHA512(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
@@ -324,7 +324,7 @@ namespace Hash
         unsigned int Buffersize = 64;
         unsigned char Buffer[64]{};
 
-        HMAC(EVP_sha512(), Key, uint32_t(Keysize), (uint8_t *)Input, Size, Buffer, &Buffersize);
+        HMAC(EVP_sha512(), Key, Keysize, (uint8_t *)Input, Size, Buffer, &Buffersize);
         return std::string((char *)Buffer, Buffersize);
     }
     #endif

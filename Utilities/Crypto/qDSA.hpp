@@ -20,7 +20,7 @@
 
 namespace qDSA
 {
-    namespace
+    namespace Internal
     {
         // 128-bit point element.
         struct FE128_t final
@@ -28,7 +28,7 @@ namespace qDSA
             union
             {
                 __m128 V; // Compiler hint.
-                uint8_t Byte[128 / 8]{};
+                uint8_t Byte[128 / 8];
             };
 
             constexpr FE128_t() : Byte{} {}
@@ -706,7 +706,6 @@ namespace qDSA
         }
         constexpr std::tuple<FE128_t, FE128_t> getK4(const FE128_t &L1, const FE128_t &L2, bool Tau)
         {
-            FE256_t Result{};
             FE128_t A, B;
 
             if (Tau)
@@ -1011,6 +1010,8 @@ namespace qDSA
     template <Range_t A, Range_t B, Range_t C>
     constexpr Signature_t Sign(A &&Publickey, B &&Privatekey, C &&Message)
     {
+        using namespace Internal;
+
         // First point.
         const auto Seed1 = [&]()
         {
@@ -1060,6 +1061,7 @@ namespace qDSA
     template <Range_t A, Range_t B, Range_t C>
     constexpr bool Verify(A &&Publickey, B &&Signature, C &&Message)
     {
+        using namespace Internal;
         const auto KP = *(FE512_t *)Signature.data();
 
         // Validate compression.
@@ -1092,6 +1094,8 @@ namespace qDSA
     template <Range_t A, Range_t B>
     constexpr Key_t Generatesecret(A &&Publickey, B &&Privatekey)
     {
+        using namespace Internal;
+
         const auto Scalar = getScalar32(Privatekey.data());
         auto PK = Decompress(*(FE256_t *)Publickey.data());
         const auto PKW = Wrap(PK);
@@ -1109,6 +1113,7 @@ namespace qDSA
     template <Range_t A, typename = std::enable_if<sizeof(A) >= 32>>
     constexpr std::tuple<Key_t, Key_t> Createkeypair(A &&Seed)
     {
+        using namespace Internal;
         std::array<uint8_t, 32> Public, Private;
         std::ranges::move(Hash::SHA256(Seed), Private.begin());
 

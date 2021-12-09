@@ -55,7 +55,7 @@ class Ringbuffer_t
 
     [[nodiscard]] bool empty() const noexcept { return Size == 0; }
     [[nodiscard]] bool full() const noexcept { return Size == N; }
-    [[nodiscard]] size_t capacity() const noexcept { return N; }
+    [[nodiscard]] static size_t capacity() noexcept { return N; }
     [[nodiscard]] bool contains(T Item) const noexcept
     {
         for (size_t i = 0; i < Size; ++i)
@@ -129,25 +129,25 @@ class Ringbuffer_t
         return *Result;
     }
 
-    [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, 0UL, N - 1)]); }
+    [[nodiscard]] T &back() noexcept { return reinterpret_cast<T &>(Storage[std::clamp(Head, size_t(0), N - 1)]); }
     [[nodiscard]] T &front() noexcept { return reinterpret_cast<T &>(Storage[Tail]); }
 
     [[nodiscard]] T &operator[](size_t Index) noexcept { return reinterpret_cast<T &>(Storage[Index]); }
     [[nodiscard]] const T &operator[](size_t Index) const noexcept { return const_cast<Ringbuffer_t<T, N> *>(this)->operator[](Index); }
 
-    template<typename T, size_t N, bool C>
+    template<typename U, size_t X, bool C>
     struct Iterator
     {
-        using Buffer_t = std::conditional_t<!C, Ringbuffer_t<T, N> *, Ringbuffer_t<T, N> const *>;
+        using Buffer_t = std::conditional_t<!C, Ringbuffer_t<U, X> *, Ringbuffer_t<U, X> const *>;
         using iterator_category = std::bidirectional_iterator_tag;
-        using self_type = Iterator<T, N, C>;
+        using self_type = Iterator<U, X, C>;
         using difference_type = ptrdiff_t;
-        using const_reference = T const &;
-        using const_pointer = T const *;
+        using const_reference = U const &;
+        using const_pointer = U const *;
         using size_type = size_t;
-        using value_type = T;
-        using reference = T &;
-        using pointer = T *;
+        using value_type = U;
+        using reference = U &;
+        using pointer = U *;
 
         Buffer_t Storage{};
         size_t Index{}, Count{};
@@ -158,21 +158,21 @@ class Ringbuffer_t
         Iterator &operator=(Iterator const &) noexcept = default;
         Iterator(Buffer_t source, size_t index, size_t count) noexcept : Storage{ source }, Index{ index }, Count{ count } { }
 
-        template<typename = std::enable_if<!C>> [[nodiscard]] T &operator*() noexcept { return (*Storage)[Index]; }
-        template<typename = std::enable_if<!C>> [[nodiscard]] T *operator->() noexcept { return &(*Storage)[Index]; }
-        template<typename = std::enable_if<C>> [[nodiscard]] const T &operator*() const noexcept { return (*Storage)[Index]; }
-        template<typename = std::enable_if<C>> [[nodiscard]] const T *operator->() const noexcept { return &(*Storage)[Index]; }
+        template<typename = std::enable_if<!C>> [[nodiscard]] U &operator*() noexcept { return (*Storage)[Index]; }
+        template<typename = std::enable_if<!C>> [[nodiscard]] U *operator->() noexcept { return &(*Storage)[Index]; }
+        template<typename = std::enable_if<C>> [[nodiscard]] const U &operator*() const noexcept { return (*Storage)[Index]; }
+        template<typename = std::enable_if<C>> [[nodiscard]] const U *operator->() const noexcept { return &(*Storage)[Index]; }
 
         bool operator!=(const Iterator &Right) const { return Index != Right.Index; }
-        Iterator<T, N, C> &operator++() noexcept
+        Iterator<U, X, C> &operator++() noexcept
         {
-            Index = (Index + 1) % N;
+            Index = (Index + 1) % X;
             ++Count;
             return *this;
         }
-        Iterator<T, N, C> &operator--() noexcept
+        Iterator<U, X, C> &operator--() noexcept
         {
-            Index = (Index + N - 1) % N;
+            Index = (Index + X - 1) % X;
             --Count;
             return *this;
         }

@@ -33,7 +33,7 @@ struct Asynctaskqueue
                 {
                     if (!Taskqueue.empty())
                     {
-                        std::scoped_lock _(Threadguard);
+                        std::scoped_lock Lock(Threadguard);
                         for (auto &Item : Taskqueue)
                         {
                             if (Item.valid())

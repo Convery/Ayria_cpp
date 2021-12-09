@@ -563,7 +563,7 @@ namespace Hash
             *rc = c;
         }
 
-        inline void tiger_pass(uint64_t *ra, uint64_t *rb, uint64_t *rc, uint64_t *x, int mul)
+        inline void tiger_pass(uint64_t *ra, uint64_t *rb, uint64_t *rc, const uint64_t *x, int mul)
         {
             uint64_t a = *ra;
             uint64_t b = *rb;

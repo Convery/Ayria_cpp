@@ -55,7 +55,7 @@ namespace FS
         #endif
 
     public:
-        std::span<uint8_t> Data;
+        std::span<uint8_t> Data{};
         void *Ptr{};
         int FD{};
 
@@ -66,7 +66,7 @@ namespace FS
         auto end() { return std::end(Data); };
 
         #if defined (_WIN32)
-        explicit MMap_t(const std::string &Path) : Data{}
+        explicit MMap_t(const std::string &Path)
         {
             FD = _open(Path.c_str(), 0x800, 0);
             if (FD == -1) return;
@@ -82,7 +82,7 @@ namespace FS
 
             Data = { (uint8_t *)Ptr, Info.RegionSize };
         }
-        explicit MMap_t(const std::wstring &Path) : Data{}
+        explicit MMap_t(const std::wstring &Path)
         {
             FD = _wopen(Path.c_str(), 0x800, 0);
             if (FD == -1) return;

@@ -74,14 +74,14 @@ namespace Base85
     // Not allowed to cast a pointer to a value, because reasons..
     template <Byte_t T> constexpr uint32_t toInt32(const T *Ptr)
     {
-        return uint8_t(*Ptr++) << 24 | uint8_t(*Ptr++) << 16 | uint8_t(*Ptr++) << 8 | uint8_t(*Ptr++);
+        return uint8_t(*Ptr++) << 24 | uint8_t(*Ptr++) << 16 | uint8_t(*Ptr++) << 8 | uint8_t(*Ptr);
     }
     template <Byte_t T> constexpr void fromInt32(T *Ptr, uint32_t Value)
     {
         (*Ptr++) = T((Value >> 24) & 0xFF);
         (*Ptr++) = T((Value >> 16) & 0xFF);
         (*Ptr++) = T((Value >> 8) & 0xFF);
-        (*Ptr++) = T((Value >> 0) & 0xFF);
+        (*Ptr  ) = T((Value >> 0) & 0xFF);
     }
 
     // TODO(tcn): Benchmark the two implementation-styles and converge on the best one.

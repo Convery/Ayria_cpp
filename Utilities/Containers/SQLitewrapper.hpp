@@ -63,7 +63,7 @@ namespace sqlite
         using type = std::function<R>(Args...);
         using return_type = R;
 
-        template <size_t N> using arg = typename std::tuple_element_t<N, std::tuple<Args...>>;
+        template <size_t N> using arg = std::tuple_element_t<N, std::tuple<Args...>>;
     };
 
     // Convert between SQL and C++.
@@ -111,7 +111,7 @@ namespace sqlite
                 break;
         }
 
-        // No acceptible conversion possible.
+        // No acceptable conversion possible.
         assert(false);
         return {};
     }
@@ -153,6 +153,9 @@ namespace sqlite
                 else bindValue(Statement, Index, nullptr);
                 return SQLITE_OK;
             }
+
+            // Should never happen.
+            return SQLITE_ERROR;
         }();
 
         assert(SQLITE_OK == Result);
@@ -178,7 +181,7 @@ namespace sqlite
         template <typename Function, typename ...Values, size_t Boundry = Count>
         static R<Function> Run(sqlite3_stmt *Statement, Function &&Func, Values&& ...va) requires(sizeof...(Values) < Boundry)
         {
-            typename std::remove_cv_t<typename std::remove_reference_t<Argtype<Function, sizeof...(Values)>>> value{};
+            std::remove_cv_t<std::remove_reference_t<Argtype<Function, sizeof...(Values)>>> value{};
 
             getResult(Statement, sizeof...(Values), value);
 

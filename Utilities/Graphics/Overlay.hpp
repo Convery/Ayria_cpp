@@ -27,7 +27,7 @@ namespace Graphics
     };
 
     // For easier signaling.
-    using Eventflags_t = union
+    union Eventflags_t
     {
         uint8_t Raw;
         uint8_t Any;
@@ -528,8 +528,8 @@ namespace Graphics
             RegisterClassExW(&Windowclass);
 
             // Generic overlay style.
-            const DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
-            const DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
+            constexpr DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
+            constexpr DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
 
             // Topmost, transparent, no icon on the taskbar, zero size so it's not shown.
             Windowhandle = CreateWindowExW(StyleEx, Windowclass.lpszClassName, NULL, Style, 0, 0, 0, 0, NULL, NULL, NULL, this);

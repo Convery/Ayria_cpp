@@ -149,7 +149,7 @@ namespace Graphics
                     Points.emplace_back(Vertex.x, Vertex.y);
 
                     // Compare the color part.
-                    if (0 != std::memcmp(&Vertex.Red, &Lastvertex.Red, sizeof(COLOR16) * 4))
+                    if (*(uint64_t *)&Vertex.Red != *(uint64_t *)&Lastvertex.Red)
                     {
                         const Color_t Color(Lastvertex.Red, Lastvertex.Green, Lastvertex.Blue, Lastvertex.Alpha);
                         const Pen_t FG(Devicecontext, Width, Color);

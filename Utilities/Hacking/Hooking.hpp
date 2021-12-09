@@ -270,15 +270,13 @@ namespace Hooking
     {
         #if defined(HAS_MINHOOK)
         {
-            const auto Result = Minhook::Stomphook(Target, Replacement);
-            if (Result) return Result;
+            if (const auto Result = Minhook::Stomphook(Target, Replacement)) return Result;
         }
         #endif
 
         #if defined(HAS_POLYHOOK) && defined(HAS_CAPSTONE)
         {
-            const auto Result = Polyhook::Stomphook(Target, Replacement);
-            if (Result) return Result;
+            if (const auto Result = Polyhook::Stomphook(Target, Replacement)) return Result;
         }
         #endif
 

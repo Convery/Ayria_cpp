@@ -42,15 +42,15 @@ struct Color_t : rgb_t
     }
     static constexpr Color_t Blend(rgb_t Source, Color_t Overlay)
     {
-        return Blend(Source, Overlay, Overlay.a);
+        return Blend(Source, static_cast<rgb_t>(Overlay), Overlay.a);
     }
     void Blend(rgb_t Overlay, uint8_t Opacity)
     {
-        *this = Blend(*this, Overlay, Opacity);
+        *this = Blend(static_cast<rgb_t>(*this), Overlay, Opacity);
     }
     void Blend(Color_t Overlay)
     {
-        *this = Blend(*this, Overlay);
+        *this = Blend(static_cast<rgb_t>(*this), Overlay);
     }
 
     constexpr operator rgb_t() const { return { r, g, b }; }
@@ -73,7 +73,7 @@ namespace Graphics
     inline HFONT Createfont(const std::wstring &Name, int8_t Fontsize, Blob_view Data)
     {
         DWORD Fontcount{};
-        AddFontMemResourceEx((void *)Data.data(), (DWORD)Data.size(), NULL, &Fontcount);
+        (void)AddFontMemResourceEx((void *)Data.data(), (DWORD)Data.size(), NULL, &Fontcount);
         return Createfont(Name, Fontsize);
     }
     inline HFONT getDefaultfont(int8_t Fontsize)
