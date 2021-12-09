@@ -299,15 +299,16 @@ struct IHTTPSServer : IHTTPServer
         }
 
         // Work in smaller batches.
-        uint8_t Buffer[2048]; int Readcount{};
-        do
+        while(true)
         {
-            Readcount = SSL_read(State, Buffer, 2048);
+            uint8_t Buffer[2048];
+            const auto Readcount = SSL_read(State, Buffer, 2048);
 
             // Check errors.
             if (Readcount <= 0)
             {
                 const size_t Error = SSL_get_error(State, 0);
+
                 if (Error == SSL_ERROR_ZERO_RETURN)
                 {
                     // Remake the SSL state.
@@ -326,20 +327,23 @@ struct IHTTPSServer : IHTTPServer
                         SSL_set_bio(State, Read_BIO, Write_BIO);
                         SSL_set_accept_state(State);
                     }
-
+                    return false;
                 }
 
-                return false;
+                if (Error == SSL_ERROR_WANT_READ || Error == SSL_ERROR_WANT_WRITE)
+                {
+                    return true;
+                }
             }
 
             // Let the base parse this data.
             IHTTPServer::onStreamwrite(Buffer, Readcount);
             if (!StreamOUT.empty()) SSL_write(State, StreamOUT.data(), int(StreamOUT.size()));
             StreamOUT.clear();
-        }
-        while (Readcount);
 
-        return true;
+            if (Readcount < 2048)
+                return true;
+        }
     }
     bool onStreamread(void *Databuffer, uint32_t *Datasize) override
     {
@@ -419,10 +423,9 @@ struct IHTTPSServer : IHTTPServer
             SSL_CTX_set_verify(Context, SSL_VERIFY_NONE, nullptr);
 
             SSL_CTX_set_options(Context, SSL_OP_SINGLE_DH_USE);
-            SSL_CTX_set_ecdh_auto(Context, 1);
 
-            uint8_t ssl_context_id[16]{ 2, 3, 4, 5, 6 };
-            SSL_CTX_set_session_id_context(Context, (const unsigned char *)&ssl_context_id, sizeof(ssl_context_id));
+            constexpr uint8_t ssl_context_id[16]{ 2, 3, 4, 5, 6 };
+            SSL_CTX_set_session_id_context(Context, reinterpret_cast<const unsigned char*>(&ssl_context_id), sizeof(ssl_context_id));
         }
 
         // Load the certificate and key for this server.
