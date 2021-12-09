@@ -6,6 +6,9 @@
 
 #pragma once
 #include <cstdint>
+#include <numeric>
+#include <cmath>
+#include <bit>
 
 //
 #pragma pack(push, 1)
@@ -14,45 +17,138 @@
 struct bfloat16_t
 {
     uint16_t Value{};
-    using FP = union { uint32_t I; float F; };
 
-    static constexpr bfloat16_t Round(float Input)
+    // Currently prefers rounding to truncating, may change in the future.
+    static constexpr uint16_t Truncate(const float Input)
     {
-        const FP Value{ .F = Input };
+        // Quiet NaN
+        if (Input != Input)
+            return 0x7FC0;
 
-        // Special cases, min-max.
-        if ((Value.I & 0xFF800000) == 0) return static_cast<uint16_t>(0);
-        if ((Value.I & 0xFF800000) == 0x80000000) return static_cast<uint16_t>(0x8000);
+        // Flush denormals to +0 or -0.
+        if ((Input < 0 ? -Input : Input) < std::numeric_limits<float>::min())
+            return (Input < 0) ? 0x8000U : 0;
 
-        const auto LSB = (Value.I >> 16) & 1;
-        return static_cast<uint16_t>((Value.I + 0x7FFF + LSB) >> 16);
+        constexpr auto Offset = std::endian::native == std::endian::little;
+        const auto Word = std::bit_cast<std::array<uint16_t, 2>>(Input);
+        return Word[Offset];
+    }
+    static constexpr uint16_t Round(const float Input)
+    {
+        const auto Integer = std::bit_cast<uint32_t>(Input);
+
+        // Compiletime path.
+        if (std::is_constant_evaluated())
+        {
+            // Quiet NaN
+            if (Input != Input)
+                return 0x7FC0;
+
+            // Flush denormals to +0 or -0.
+            if ((Input < 0 ? -Input : Input) < std::numeric_limits<float>::min())
+                return (Input < 0) ? 0x8000U : 0;
+
+            // Constexpr does not like unions / normal casts.
+            return static_cast<uint16_t>(uint32_t(Integer + 0x00007FFFUL + ((Integer >> 16) & 1)) >> 16);
+        }
+
+        // Runtime path.
+        else
+        {
+            switch (std::fpclassify(Input))
+            {
+                // Quiet NaN
+                case FP_NAN:
+                   return (Integer >> 16) | (1 << 6);
+
+                // Flush denormals to +0 or -0.
+                case FP_SUBNORMAL:
+                case FP_ZERO:
+                    return (Integer >> 16) & 0x8000;
+
+                case FP_INFINITE:
+                    return (Integer >> 16);
+
+                case FP_NORMAL:
+                    return static_cast<uint16_t>(uint32_t(Integer + 0x00007FFFUL + ((Integer >> 16) & 1)) >> 16);
+
+                // Should never happen, return NaN.
+                default: return 0x7FC0;
+            }
+        }
     }
 
     constexpr bfloat16_t() = default;
-    template<typename T> constexpr operator T() const { return T((FP{ .I = static_cast<uint32_t>(Value << 16) }).F); }
-    template<typename T, typename = std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T>, T>>
-    constexpr bfloat16_t(T Input)
+    constexpr bfloat16_t(const uint16_t Input) : Value(Input) {};
+    constexpr bfloat16_t(const bfloat16_t &Input) : Value(Input.Value) {};
+    template <std::floating_point T> constexpr bfloat16_t(const T Input) : Value(Round(static_cast<float>(Input))) {}
+    template <std::signed_integral T> constexpr bfloat16_t(const T Input) : Value(Round(static_cast<float>(Input))) {}
+
+    // Fast conversion to IEEE 754
+    constexpr float toFloat() const
     {
-        if constexpr (std::is_same_v<T, uint16_t>) Value = Input;
-        else *this = Round(static_cast<float>(Input));
+        constexpr auto Offset = std::endian::native == std::endian::little;
+        std::array<uint16_t, 2> Word{};
+        Word[Offset] = Value;
+
+        return std::bit_cast<float>(Word);
+    }
+    static constexpr float toFloat(const bfloat16_t &Input)
+    {
+        return Input.toFloat();
     }
 
+    // Provides higher presicion for some common constants.
+    template <std::floating_point T> constexpr operator T() const
+    {
+        if (Value == 0x4049U) [[unlikely]] return T(std::numbers::pi);
+        if (Value == 0x3EABU) [[unlikely]] return T(1.0 / 3.0);
+
+        return toFloat();
+    }
+    template <std::signed_integral T> constexpr operator T() const
+    {
+        return T(float(*this));
+    }
+
+    // Negate and check against null.
+    constexpr bfloat16_t operator-(const bfloat16_t &Input) const
+    {
+        return bfloat16_t(uint16_t(Input.Value ^ 0x8000));
+    }
+    constexpr operator bool() const
+    {
+        return !!(Value & 0x7FFF);
+    }
+
+    constexpr bool operator<(const bfloat16_t &Right)  const { return toFloat(Value) <  toFloat(Right); }
+    constexpr bool operator>(const bfloat16_t &Right)  const { return toFloat(Value) >  toFloat(Right); }
+    constexpr bool operator<=(const bfloat16_t &Right) const { return toFloat(Value) <= toFloat(Right); }
+    constexpr bool operator>=(const bfloat16_t &Right) const { return toFloat(Value) >= toFloat(Right); }
     constexpr bool operator!=(const bfloat16_t &Right) const { return !operator==(Right); }
-    constexpr bool operator<(const bfloat16_t &Right)  const { return Value < Right.Value; }
-    constexpr bool operator>(const bfloat16_t &Right)  const { return Value > Right.Value; }
-    constexpr bool operator<=(const bfloat16_t &Right) const { return Value <= Right.Value; }
-    constexpr bool operator>=(const bfloat16_t &Right) const { return Value >= Right.Value; }
-    constexpr bool operator==(const bfloat16_t &Right) const { return Value == Right.Value; }
+    constexpr bool operator==(const bfloat16_t &Right) const
+    {
+        if (Value == Right.Value) return true;
 
-    constexpr friend bfloat16_t operator+(bfloat16_t Left, const bfloat16_t &Right) { Left += Right; return Left; }
-    constexpr friend bfloat16_t operator-(bfloat16_t Left, const bfloat16_t &Right) { Left -= Right; return Left; }
-    constexpr friend bfloat16_t operator*(bfloat16_t Left, const bfloat16_t &Right) { Left *= Right; return Left; }
-    constexpr friend bfloat16_t operator/(bfloat16_t Left, const bfloat16_t &Right) { Left /= Right; return Left; }
+        constexpr float Epsilon = 0.00781250f;
+        if (std::is_constant_evaluated())
+        {
+            const auto Temp = toFloat(Value) - toFloat(Right);
+            return ((Temp >= 0) ? Temp : -Temp) < Epsilon;
+        }
+        else
+            return std::fabs(toFloat(Value) - toFloat(Right)) < Epsilon;
+    }
 
-    constexpr bfloat16_t &operator+=(const bfloat16_t &Right) { *this = (float(*this) + float(Right)); return *this; }
-    constexpr bfloat16_t &operator-=(const bfloat16_t &Right) { *this = (float(*this) - float(Right)); return *this; }
-    constexpr bfloat16_t &operator*=(const bfloat16_t &Right) { *this = (float(*this) * float(Right)); return *this; }
-    constexpr bfloat16_t &operator/=(const bfloat16_t &Right) { *this = (float(*this) / float(Right)); return *this; }
+    constexpr bfloat16_t &operator+=(const bfloat16_t &Right) { *this = (toFloat(*this) + toFloat(Right)); return *this; }
+    constexpr bfloat16_t &operator-=(const bfloat16_t &Right) { *this = (toFloat(*this) - toFloat(Right)); return *this; }
+    constexpr bfloat16_t &operator*=(const bfloat16_t &Right) { *this = (toFloat(*this) * toFloat(Right)); return *this; }
+    constexpr bfloat16_t &operator/=(const bfloat16_t &Right) { *this = (toFloat(*this) / toFloat(Right)); return *this; }
+
+    friend constexpr bfloat16_t operator+(const bfloat16_t &Left, const bfloat16_t &Right) { return toFloat(Left) + toFloat(Right); }
+    friend constexpr bfloat16_t operator-(const bfloat16_t &Left, const bfloat16_t &Right) { return toFloat(Left) - toFloat(Right); }
+    friend constexpr bfloat16_t operator*(const bfloat16_t &Left, const bfloat16_t &Right) { return toFloat(Left) * toFloat(Right); }
+    friend constexpr bfloat16_t operator/(const bfloat16_t &Left, const bfloat16_t &Right) { return toFloat(Left) / toFloat(Right); }
 };
 
 template <typename T>

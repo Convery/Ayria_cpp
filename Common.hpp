@@ -95,5 +95,8 @@ namespace Logging { template <typename T> extern void Print(char Prefix, const T
 // Conditional expression is constant (currently).
 #pragma warning(disable: 4127)
 
+// Disable warnings about unused parameters (as we often interface with other APIs).
+#pragma warning(disable: 4100)
+
 // Elevate [[nodiscard]] to an error.
 #pragma warning(error: 4834)
