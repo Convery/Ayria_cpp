@@ -19,7 +19,6 @@ namespace Backend
     using Task_t = struct { uint64_t Last, Period; void(__cdecl *Callback)(); };
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
     static Defaultmutex Threadsafe{};
-    static Spinlock Databaselock{};
 
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
@@ -27,7 +26,7 @@ namespace Backend
         std::scoped_lock _(Threadsafe);
         Backgroundtasks.push_back({ 0, PeriodMS, Callback });
     }
-    [[noreturn]] static DWORD __stdcall Backgroundthread(void *)
+    [[noreturn]] static unsigned __stdcall Backgroundthread(void *)
     {
         // Name this thread for easier debugging.
         setThreadname("Ayria_Background");
@@ -102,7 +101,7 @@ namespace Backend
             if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.sqlite");
 
             // Close the DB at exit to ensure everything's flushed.
-            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+            Database = std::shared_ptr<sqlite3>(Ptr, [](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
 
             // Basic initialization.
             sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
@@ -110,7 +109,7 @@ namespace Backend
 
             // Helper functions for inline hashing.
             {
-                static const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                static constexpr auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -120,7 +119,7 @@ namespace Backend
                     const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
                     sqlite3_result_int(context, Hash);
                 };
-                static const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                static constexpr auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -215,7 +214,7 @@ namespace Backend
         Plugins::Initialize();
 
         // Create a worker-thread in the background.
-        CreateThread(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        _beginthreadex(NULL, NULL, Backgroundthread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     }
 
     // Export functionality to the plugins.
