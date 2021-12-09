@@ -103,8 +103,7 @@ namespace Services::Matchmaking
             // Parse both integers and strings.
             for (const auto &Item : Providers)
             {
-                const auto Provider = toProvider(Item);
-                if (Provider) [[likely]] Local::Providers.insert(*Provider);
+                if (const auto Provider = toProvider(Item)) [[likely]] Local::Providers.insert(*Provider);
                 else return R"({ "Error" : "Provider needs to be a string or integer" })";
             }
 
@@ -117,9 +116,8 @@ namespace Services::Matchmaking
         static std::string __cdecl addProvider(JSON::Value_t &&Request)
         {
             if (!Local::isActive) return R"({ "Error" : "No active server" })";
-            const auto Provider = toProvider(Request["Provider"]);
 
-            if (Provider) [[likely]] Local::Providers.insert(*Provider);
+            if (const auto Provider = toProvider(Request["Provider"])) [[likely]] Local::Providers.insert(*Provider);
             else return R"({ "Error" : "Provider needs to be a string or integer" })";
 
             Local::Announce(true);
@@ -128,9 +126,8 @@ namespace Services::Matchmaking
         static std::string __cdecl removeProvider(JSON::Value_t &&Request)
         {
             if (!Local::isActive) return R"({ "Error" : "No active server" })";
-            const auto Provider = toProvider(Request["Provider"]);
 
-            if (Provider) [[likely]] Local::Providers.erase(*Provider);
+            if (const auto Provider = toProvider(Request["Provider"])) [[likely]] Local::Providers.erase(*Provider);
             else return R"({ "Error" : "Provider needs to be a string or integer" })";
 
             Local::Announce(true);

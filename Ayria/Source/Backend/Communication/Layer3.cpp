@@ -53,7 +53,7 @@ namespace Backend::JSONAPI
     // Access from the plugins.
     extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
     {
-        std::string_view Functionname = Function ? Function : "";
+        const std::string_view Functionname = Function ? Function : "";
         return callEndpoint(Functionname, JSON::Parse(JSONString));
     }
 }

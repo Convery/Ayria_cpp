@@ -201,7 +201,7 @@ namespace Services::Groups
 
             // Sanity checking.
             const auto Group = getGroup(GroupID);
-            if (!Group && GroupID != LongID) [[unlikely]] return false;
+            if (!Group || GroupID != LongID) [[unlikely]] return false;
 
             // Most properties can only be changed by the admin.
             if (GroupID == LongID)

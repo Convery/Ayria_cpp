@@ -8,6 +8,13 @@
 
 namespace Backend::Messagebus
 {
+    // Winsock and Posix have different ideas about const.
+    #if defined (_WIN32)
+    #define __CONST constexpr
+    #else
+    #define __CONST
+    #endif
+
     // constexpr implementations of htonX / ntohX utilities.
     template <typename T> constexpr T toNative(T Value)
     {
@@ -173,10 +180,10 @@ namespace Backend::Messagebus
     {
         // Quick-check for data on the sockets.
         {
-            constexpr timeval Defaulttimeout{ NULL, 1 };
+            constexpr auto Count{ 1 };
+            constexpr timeval Defaulttimeout{};
             fd_set ReadFD{ 1, {Multicastsocket} };
-            auto Timeout{ Defaulttimeout };
-            const auto Count{ 1 };
+            __CONST auto Timeout{ Defaulttimeout };
 
             // Nothing to do, early exit.
             if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
@@ -192,19 +199,20 @@ namespace Backend::Messagebus
         for (uint8_t Packetcount = 0; Packetcount < 5; ++Packetcount)
         {
             // Query the size of the packet.
-            auto Packetsize = recvfrom(Multicastsocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
+            const auto Packetsize = recvfrom(Multicastsocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
 
             // Early exit on error or invalid payload.
             if (Packetsize == SOCKET_ERROR || Packetsize < (sizeof(Packet_t) + Overhead))
                 return;
 
             // Going to need a bigger boat.
-            if (Packetsize >= Defaultbuffersize)
+            if (Packetsize >= Defaultbuffersize) [[unlikely]]
                 Buffer = (Backupbuffer = std::make_unique<char[]>(Packetsize + 1)).get();
 
             // Get the actual packet.
             sockaddr_in Clientinfo{}; int Len = sizeof(Clientinfo);
-            Packetsize = recvfrom(Multicastsocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len);
+            if (SOCKET_ERROR == recvfrom(Multicastsocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len)) [[unlikely]]
+                continue;
 
             // Extract the senders ID.
             const auto UniqueID = toNative(*(uint32_t *)Buffer);
@@ -229,10 +237,10 @@ namespace Backend::Messagebus
 
         // Quick-check for data on the sockets.
         {
-            constexpr timeval Defaulttimeout{ NULL, 1 };
+            constexpr auto Count{ 1 };
+            constexpr timeval Defaulttimeout{};
             fd_set ReadFD{ 1, {Routersocket} };
-            auto Timeout{ Defaulttimeout };
-            const auto Count{ 1 };
+            __CONST auto Timeout{ Defaulttimeout };
 
             // Nothing to do, early exit.
             if (!select(Count, &ReadFD, nullptr, nullptr, &Timeout)) [[likely]]
@@ -248,7 +256,7 @@ namespace Backend::Messagebus
         for (uint8_t Packetcount = 0; Packetcount < 10; ++Packetcount)
         {
             // Query the size of the packet.
-            auto Packetsize = recvfrom(Routersocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
+            const auto Packetsize = recvfrom(Routersocket, Buffer, Defaultbuffersize, MSG_PEEK, NULL, NULL);
 
             // Early exit on error or invalid payload.
             if (Packetsize == SOCKET_ERROR || Packetsize < (sizeof(Packet_t)))
@@ -260,7 +268,8 @@ namespace Backend::Messagebus
 
             // Get the actual packet.
             sockaddr_in Clientinfo{}; int Len = sizeof(Clientinfo);
-            Packetsize = recvfrom(Routersocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len);
+            if (SOCKET_ERROR == recvfrom(Routersocket, Buffer, Packetsize, NULL, PSOCKADDR(&Clientinfo), &Len)) [[unlikely]]
+                continue;
 
             // Sanity checking.
             if (!Routers.contains(Clientinfo)) [[unlikely]]
@@ -311,7 +320,7 @@ namespace Backend::Messagebus
         }
 
         // Ensure that this is only done once.
-        static bool doOnce = []()
+        [[maybe_unused]] static bool doOnce = []() -> bool
         {
             // TODO(tcn): Tune the polling rate.
             Backend::Enqueuetask(250, doMulticast);
@@ -334,4 +343,6 @@ namespace Backend::Messagebus
             Publish(Identifier, { Message, Length });
         }
     }
+
+    #undef __CONST
 }

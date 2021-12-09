@@ -86,11 +86,15 @@ namespace Services::Keyvalues
             {
                 for (const auto &Item : Request.get<JSON::Array_t>())
                 {
-                    std::optional<std::u8string> Value{};
                     const auto Category = toCategory(Item["Category"]);
-
-                    if (Item.contains("Value")) Value = Item.value<std::u8string>("Value");
                     if (!Category) [[unlikely]] return R"({ "Error" : "Category needs to be a string or integer" })";
+
+                    std::optional<std::u8string> Value{};
+                    if (Item.contains("Value"))
+                    {
+                        Value = Item.value<std::u8string>("Value");
+                        if (Value->empty()) Value = {};
+                    }
 
                     Backend::Database()
                         << "INSERT OR REPLACE INTO Keyvalues VALUES (?, ?, ?, ?);"
@@ -104,11 +108,15 @@ namespace Services::Keyvalues
             // Single keyvalue.
             if (Request.Type == JSON::Type_t::Object)
             {
-                std::optional<std::u8string> Value{};
                 const auto Category = toCategory(Request["Category"]);
-
-                if (Request.contains("Value")) Value = Request.value<std::u8string>("Value");
                 if (!Category) [[unlikely]] return R"({ "Error" : "Category needs to be a string or integer" })";
+
+                std::optional<std::u8string> Value{};
+                if (Request.contains("Value"))
+                {
+                    Value = Request.value<std::u8string>("Value");
+                    if (Value->empty()) Value = {};
+                }
 
                 Backend::Database()
                     << "INSERT OR REPLACE INTO Keyvalues VALUES (?, ?, ?, ?);"

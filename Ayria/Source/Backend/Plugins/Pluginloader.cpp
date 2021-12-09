@@ -197,7 +197,7 @@ namespace Plugins
         // Notify the plugins about startup.
         for (auto &Item : Additions)
         {
-            const auto Lambda = [](const auto Handle)
+            constexpr auto Lambda = [](const auto Handle)
             {
                 if (const auto Callback = GetProcAddress(Handle, "onStartup"))
                 {
@@ -208,7 +208,7 @@ namespace Plugins
         }
 
         // Ensure that a "onInitialized" is sent 'soon'.
-        static auto doOnce{ []()-> bool
+        [[maybe_unused]] static auto doOnce{ []() -> bool
         {
             std::thread([]()
             {

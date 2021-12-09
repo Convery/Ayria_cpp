@@ -211,14 +211,14 @@ namespace Console
         if (Initialized) return;
         Initialized = true;
 
-        static const auto Quit = [](int, const char **)
+        static constexpr auto Quit = [](int, const char **)
         {
             std::exit(0);
         };
         addCommand("Quit"sv, Quit);
         addCommand("Exit"sv, Quit);
 
-        static const auto List = [](int, const char **)
+        static constexpr auto List = [](int, const char **)
         {
             std::string Output; Output.reserve(20 * Commands.size());
             for (const auto &[Index, Tuple] : lz::enumerate(Commands, 1))
