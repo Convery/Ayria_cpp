@@ -314,9 +314,9 @@ namespace AyriaAPI
             std::unordered_set<LongID_t> Result{};
             [&]()
             {
-                if (byGameID && byModID) return Query("SELECT ClientID FROM Clientgaming WHERE (GameID = ? AND ModID = ?);", byGameID.value(), byModID.value());
-                if (byGameID) return Query("SELECT ClientID FROM Clientgaming WHERE GameID = ?;", byGameID.value());
-                else return Query("SELECT ClientID FROM Clientgaming WHERE ModID = ?;", byModID.value());
+                if (byGameID && byModID) return Query("SELECT ClientID FROM Clientgaming WHERE (GameID = ? AND ModID = ?);", *byGameID, *byModID);
+                if (byGameID) return Query("SELECT ClientID FROM Clientgaming WHERE GameID = ?;", *byGameID);
+                else return Query("SELECT ClientID FROM Clientgaming WHERE ModID = ?;", *byModID);
             }() >> [&](const Base58_t &ClientID) { Result.insert(ClientID); };
 
             return Result;

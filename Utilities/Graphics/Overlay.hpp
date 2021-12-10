@@ -225,7 +225,7 @@ namespace Graphics
 
             dirtyBuffer.test_and_set();
         }
-        void Invalidatescreen(vec2i Dirtypos, vec2u Dirtysize)
+        void Invalidatescreen(vec2i Dirtypos, const vec2u &Dirtysize)
         {
             return Invalidatescreen(vec4i{ Dirtypos.x, Dirtypos.y, Dirtypos.x + Dirtysize.x, Dirtypos.y + Dirtysize.y });
         }

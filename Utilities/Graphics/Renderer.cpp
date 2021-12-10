@@ -214,19 +214,15 @@ namespace Graphics
         vec4f Dimensions{};
         std::pmr::wstring Text{ &Pool };
 
-        Text_t(HDC Context, vec2i Position, const std::wstring &String, HFONT Font) : Renderobject_t(Context)
+        Text_t(HDC Context, vec2i Position, const std::wstring &String, HFONT Font) : Renderobject_t(Context), Text(String), Dimensions{ Position, {} }
         {
-            Dimensions = { Position, {} };
             isCentered = false;
             Fonthandle = Font;
-            Text = String;
         }
-        Text_t(HDC Context, vec4f Boundingbox, const std::wstring &String, HFONT Font) : Renderobject_t(Context)
+        Text_t(HDC Context, vec4f Boundingbox, const std::wstring &String, HFONT Font) : Renderobject_t(Context), Text(String), Dimensions(Boundingbox)
         {
-            Dimensions = Boundingbox;
             Fonthandle = Font;
             isCentered = true;
-            Text = String;
         }
 
         void Render(std::optional<Color_t> Outline, std::optional<Color_t> Background) override

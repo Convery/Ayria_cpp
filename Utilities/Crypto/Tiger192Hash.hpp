@@ -9,6 +9,11 @@
 #pragma once
 #include <Stdinclude.hpp>
 
+// std::byteswap if not available.
+#if !defined (__cpp_lib_byteswap)
+#include "../Internal/Misc.hpp"
+#endif
+
 #pragma warning(push, 0)
 namespace Hash
 {
@@ -583,7 +588,8 @@ namespace Hash
             *rc = c;
         }
 
-        inline void tiger_key_schedule(uint64_t *x) {
+        inline void tiger_key_schedule(uint64_t *x)
+        {
             x[0] -= x[7] ^ 0xa5a5a5a5a5a5a5a5LL;
             x[1] ^= x[0];
             x[2] += x[1];
@@ -602,7 +608,8 @@ namespace Hash
             x[7] -= x[6] ^ 0x0123456789abcdefLL;
         }
 
-        inline void tiger_transform(const uint8_t *data, tiger_state &State) {
+        inline void tiger_transform(const uint8_t *data, tiger_state &State)
+        {
             uint64_t a, b, c, aa, bb, cc;
             uint64_t x[8];
             #ifdef BIG_ENDIAN_HOST
@@ -758,9 +765,9 @@ namespace Hash
 
         // Reverse the blocks because libtom likes them that way..
         auto *Blocks = reinterpret_cast<uint64_t *>(Resultbuffer);
-        Blocks[0] = _byteswap_uint64(Blocks[0]);
-        Blocks[1] = _byteswap_uint64(Blocks[1]);
-        Blocks[2] = _byteswap_uint64(Blocks[2]);
+        Blocks[0] = std::byteswap(Blocks[0]);
+        Blocks[1] = std::byteswap(Blocks[1]);
+        Blocks[2] = std::byteswap(Blocks[2]);
 
         Resultstring.append((const char *)Resultbuffer, 24);
         return Resultstring;

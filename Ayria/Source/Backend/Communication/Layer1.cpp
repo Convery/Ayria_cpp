@@ -15,7 +15,7 @@ namespace Backend::Messagebus
     #define __CONST
     #endif
 
-    // constexpr implementations of htonX / ntohX utilities.
+    // constexpr implementations of htonX / ntohX utilities (yes, identical bodies).
     template <typename T> constexpr T toNative(T Value)
     {
         if constexpr (std::endian::native == std::endian::little)
