@@ -26,10 +26,9 @@ namespace Steam
         uint32_t AppID{}, ModID{};
 
         std::unique_ptr<std::pmr::u8string> Installpath{ Allocate<std::pmr::u8string>(&Internal) };
-        std::unique_ptr<std::pmr::string> Username{ Allocate<std::pmr::string>(&Internal) };
+        std::unique_ptr<std::pmr::u8string> Username{ Allocate<std::pmr::u8string>(&Internal) };
         std::unique_ptr<std::pmr::string> Locale{ Allocate<std::pmr::string>(&Internal) };
         std::unique_ptr<std::pmr::string> LongID{ Allocate<std::pmr::string>(&Internal) };
-        std::unique_ptr<std::pmr::string> Clan{ Allocate<std::pmr::string>(&Internal) };
 
         // Just copy Ayrias settings, might be useful later.
         union
@@ -58,6 +57,12 @@ namespace Steam
                     PLACEHOLDER : 6;
             };
         } Settings{};
+
+        // Simplify access.
+        std::string getLongID() const
+        {
+            return LongID->c_str();
+        }
     };
     #pragma pack(pop)
 
@@ -67,6 +72,7 @@ namespace Steam
 
     // Steam uses 32-bit IDs for the account, so we need to do some conversions.
     SteamID_t toSteamID(const std::string &LongID);
+    bool compareSteamID(SteamID_t A, SteamID_t B);
     std::string fromSteamID(SteamID_t AccountID);
 
     // A Steam interface is a class that proxies calls to their backend.

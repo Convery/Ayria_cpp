@@ -24,6 +24,10 @@ namespace Steam
 
         return SteamID;
     }
+    bool compareSteamID(SteamID_t A, SteamID_t B)
+    {
+        return A.UserID == B.UserID && A.SessionID == B.SessionID;
+    }
     std::string fromSteamID(SteamID_t AccountID)
     {
         // Generally used for bots and such temp accounts.
@@ -34,8 +38,8 @@ namespace Steam
         if (!Accountmap.contains(AccountID)) [[unlikely]]
         {
             std::unordered_set<std::string> Keys{};
-            AyriaAPI::Prepare("SELECT * FROM Account WHERE WW32(Publickey) = ?;", uint32_t(AccountID.UserID))
-                              >> [&](const std::string &LongID) { Keys.insert(LongID); };
+            AyriaAPI::Queryunsafe("SELECT * FROM Account WHERE WW32(Publickey) = ?;", uint32_t(AccountID.UserID))
+                                  >> [&](const std::string &LongID) { Keys.insert(LongID); };
 
             // Filter by SessionID.
             std::erase_if(Keys, [ID = AccountID.SessionID](const auto &LongID) { return ID != (Hash::WW64(LongID) & 0x0FFF); });
@@ -44,17 +48,23 @@ namespace Steam
             if (Keys.empty()) [[unlikely]] return "";
             if (Keys.size() == 1) [[likely]]
             {
-                Accountmap[AccountID] = *Keys.begin();
+                Accountmap[AccountID.toServerID()] = *Keys.begin();
+                Accountmap[AccountID.toChatID()] = *Keys.begin();
+                Accountmap[AccountID.toClanID()] = *Keys.begin();
+                Accountmap[AccountID.toUserID()] = *Keys.begin();
                 return *Keys.begin();
             }
 
             // Try to see if any is in the friendslist.
-            const auto Friends = AyriaAPI::Relations::getFriends(Global.LongID->c_str());
+            const auto Friends = AyriaAPI::Clientrelations::getFriends(Global.getLongID());
             for (const auto &Item : Keys)
             {
                 if (Friends.contains(Item))
                 {
-                    Accountmap[AccountID] = Item;
+                    Accountmap[AccountID.toServerID()] = Item;
+                    Accountmap[AccountID.toUserID()] = Item;
+                    Accountmap[AccountID.toChatID()] = Item;
+                    Accountmap[AccountID.toClanID()] = Item;
                     return Item;
                 }
             }
@@ -68,14 +78,20 @@ namespace Steam
                 {
                     if (Keys.contains(ID))
                     {
-                        Accountmap[AccountID] = ID;
+                        Accountmap[AccountID.toServerID()] = ID;
+                        Accountmap[AccountID.toUserID()] = ID;
+                        Accountmap[AccountID.toChatID()] = ID;
+                        Accountmap[AccountID.toClanID()] = ID;
                         return ID;
                     }
                 }
             }
 
             // There's no other logic here, just use the first ID and pray.
-            Accountmap[AccountID] = *Keys.begin();
+            Accountmap[AccountID.toServerID()] = *Keys.begin();
+            Accountmap[AccountID.toUserID()] = *Keys.begin();
+            Accountmap[AccountID.toChatID()] = *Keys.begin();
+            Accountmap[AccountID.toClanID()] = *Keys.begin();
             return *Keys.begin();
         }
 
@@ -337,8 +353,34 @@ namespace Steam
             // Ask Ayria nicely for data on the client.
             {
                 const auto Object = Ayria.doRequest("Client::getLocalclient", {});
-                Global.XUID = toSteamID(Object.value<std::string>("LongID", "G06He"));
-                *Global.Username = Object.value("Username", "Steam_user"s);
+
+                // Running the wrapper without the main module. Strange, but set some defaults.
+                if (!Object) [[unlikely]]
+                {
+                    Global.XUID = 0x01100001DEADC0DEULL;
+                    *Global.Username = u8"Steam_user";
+                }
+                else
+                {
+                    Global.XUID = toSteamID(Object.value<std::string>("LongID", "G06He"));
+                    *Global.Username = Object.value("Username", u8"Steam_user"s);
+                    *Global.LongID = Object.value<std::string>("LongID");
+
+                    Global.Settings.enableExternalconsole = Object.value<bool>("enableExternalconsole");
+                    Global.Settings.enableIATHooking = Object.value<bool>("enableIATHooking");
+                    Global.Settings.enableFileshare = Object.value<bool>("enableFileshare");
+                    Global.Settings.noNetworking = Object.value<bool>("noNetworking");
+                    Global.Settings.pruneDB = Object.value<bool>("pruneDB");
+
+                    Global.Settings.isPrivate = Object.value<bool>("isPrivate");
+                    Global.Settings.isHosting = Object.value<bool>("isHosting");
+                    Global.Settings.isIngame = Object.value<bool>("isIngame");
+                    Global.Settings.isAway = Object.value<bool>("isAway");
+                }
+            }
+
+            // Ensure that locale and paths exist (even if not in the registry).
+            {
                 if (Global.Locale->empty()) *Global.Locale = "english";
 
                 // Ensure that we have a path available.
@@ -349,6 +391,7 @@ namespace Steam
                     *Global.Installpath = Encoding::toUTF8(std::wstring(Buffer, Size));
                 }
             }
+
 
             // Notify Ayria about our game-info.
             Ayria.doRequest("Client::setGameinfo", JSON::Object_t({ {"GameID", Global.AppID} }));
@@ -550,8 +593,7 @@ namespace Steam
         // Proxy Steams exports with our own information.
         const auto Lambda = [&](const char *Name, void *Target) -> uint32_t
         {
-            const auto Address = GetProcAddress(GetModuleHandleA(Build::is64bit ? "steam_api64.dll" : "steam_api.dll"), Name);
-            if (Address)
+            if (const auto Address = GetProcAddress(GetModuleHandleA(Build::is64bit ? "steam_api64.dll" : "steam_api.dll"), Name))
             {
                 // If a developer has loaded the plugin as a DLL, ignore it.
                 if (Address == Target) return 0;

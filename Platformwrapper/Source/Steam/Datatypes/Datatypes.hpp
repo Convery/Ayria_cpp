@@ -51,38 +51,75 @@ namespace Steam
 
         SteamID_t toChatID() const
         {
-            if (Accounttype == Accounttype_t::Clanaccount)
-            {
-                return SteamID_t
-                {
-                    .Universe = Universe, .Accounttype = Accounttype_t::Chataccount, .isClan = true,
-                    .SessionID = SessionID, .UserID = UserID
-                };
-            }
             if (Accounttype == Accounttype_t::Chataccount)
             {
                 return *this;
             }
-
-            return {};
+            else
+            {
+                SteamID_t Temp{};
+                Temp.Accounttype = Accounttype_t::Chataccount;
+                Temp.SessionID = SessionID;
+                Temp.Universe = Universe;
+                Temp.UserID = UserID;
+                Temp.isClan = true;
+                return Temp;
+            }
         }
         SteamID_t toClanID() const
         {
-            if (Accounttype == Accounttype_t::Chataccount && isClan)
-            {
-                return SteamID_t
-                {
-                    .Universe = Universe, .Accounttype = Accounttype_t::Clanaccount,
-                    .SessionID = SessionID, .UserID = UserID
-                };
-            }
-            if(Accounttype == Accounttype_t::Clanaccount)
+            if (Accounttype == Accounttype_t::Clanaccount)
             {
                 return *this;
             }
-
-            return {};
+            else
+            {
+                SteamID_t Temp{};
+                Temp.Accounttype = Accounttype_t::Clanaccount;
+                Temp.SessionID = SessionID;
+                Temp.Universe = Universe;
+                Temp.UserID = UserID;
+                Temp.isClan = isClan;
+                return Temp;
+            }
         }
+        SteamID_t toUserID() const
+        {
+            if (Accounttype == Accounttype_t::Individual)
+            {
+                return *this;
+            }
+            else
+            {
+                SteamID_t Temp{};
+                Temp.Accounttype = Accounttype_t::Individual;
+                Temp.SessionID = SessionID;
+                Temp.Universe = Universe;
+                Temp.UserID = UserID;
+                return Temp;
+            }
+        }
+        SteamID_t toServerID() const
+        {
+            if (Accounttype == Accounttype_t::Gameserver)
+            {
+                return *this;
+            }
+            else
+            {
+                SteamID_t Temp{};
+                Temp.Accounttype = Accounttype_t::Gameserver;
+                Temp.SessionID = SessionID;
+                Temp.Universe = Universe;
+                Temp.UserID = UserID;
+                Temp.isMMSLobby = true;
+                Temp.isLobby = true;
+                return Temp;
+            }
+        }
+
+        SteamID_t() = default;
+        SteamID_t(uint64_t ID) : FullID(ID) {}
 
         operator uint64_t() const
         {
