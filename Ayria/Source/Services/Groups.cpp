@@ -22,8 +22,8 @@ namespace Services::Groups
         Group.isPublic = Object.value<bool>("isPublic");
         Group.Maxmembers = Object.value<uint32_t>("Maxmembers");
         Group.Membercount = Object.value<uint32_t>("Membercount");
-        Group.GroupID = *Publickeycache.insert(Object.value<std::string>("GroupID")).first;
         Group.Groupname = *Groupnamecache.insert(Object.value<std::u8string>("Groupname")).first;
+        Group.GroupID = *Publickeycache.insert(Object.value("GroupID", Global.getLongID())).first;
 
         return Group;
     }
@@ -339,7 +339,7 @@ namespace Services::Groups
             const auto Group = fromJSON(Request);
 
             // Sanity checking.
-            if (!Group) [[unlikely]] return R"({ "Required" : "["GroupID", "isPublic", "Maxmembers"]" })";
+            if (!Group) [[unlikely]] return R"({ "Error" : "Required: ["GroupID", "isPublic", "Maxmembers"]" })";
 
             // And store in the database.
             Backend::Database()
@@ -419,7 +419,7 @@ namespace Services::Groups
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Group ("
             "GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE, "
-            "Groupname TEXT "
+            "Groupname TEXT, "
             "Maxmembers INTEGER NOT NULL, "
             "isPublic BOOLEAN NOT NULL );";
 

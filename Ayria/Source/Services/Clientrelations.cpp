@@ -157,8 +157,8 @@ namespace Services::Clientrelations
         Layer2::addMessagehandler("Clientrelations::Erase", Messagehandlers::onErase);
 
         // Accept Layer 3 calls.
-        Layer3::addEndpoint("Relation::Clear", JSONAPI::Clear);
-        Layer3::addEndpoint("Relation::Block", JSONAPI::Block);
-        Layer3::addEndpoint("Relation::Befriend", JSONAPI::Befriend);
+        Layer3::addEndpoint("Clientrelations::Clear", JSONAPI::Clear);
+        Layer3::addEndpoint("Clientrelations::Block", JSONAPI::Block);
+        Layer3::addEndpoint("Clientrelations::Befriend", JSONAPI::Befriend);
     }
 }

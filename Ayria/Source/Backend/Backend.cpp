@@ -171,6 +171,7 @@ namespace Backend
         Object["enableExternalconsole"] = Global.Settings.enableExternalconsole;
         Object["enableIATHooking"] = Global.Settings.enableIATHooking;
         Object["enableFileshare"] = Global.Settings.enableFileshare;
+        Object["pruneDB"] = Global.Settings.pruneDB;
         Object["Username"] = *Global.Username;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Object));
@@ -184,6 +185,7 @@ namespace Backend
         Global.Settings.enableExternalconsole = Config.value<bool>("enableExternalconsole");
         Global.Settings.enableIATHooking = Config.value<bool>("enableIATHooking");
         Global.Settings.enableFileshare = Config.value<bool>("enableFileshare");
+        Global.Settings.pruneDB = Config.value<bool>("pruneDB");
         *Global.Username = Config.value("Username", u8"AYRIA"s);
 
         // Select a source for crypto, credentials are used from the GUI.
@@ -192,9 +194,9 @@ namespace Backend
 
         // Notify the user about the current settings.
         Infoprint("Loaded account:");
-        Infoprint(va("ShortID: 0x08X", Global.getShortID()));
+        Infoprint(va("ShortID: 0x%08X", Global.getShortID()));
         Infoprint(va("LongID: %s", Global.getLongID().c_str()));
-        Infoprint(va("Username: %*s", Global.Username->size(), Global.Username->data()));
+        Infoprint(va("Username: %s", *Global.Username));
 
         // If there was no config, force-save one for the user instantly.
         std::atexit([]() { if (Global.Settings.modifiedConfig) Saveconfig(); });

@@ -191,6 +191,7 @@ namespace Services::Clientinfo
                 { "isPrivate", Global.Settings.isPrivate },
                 { "isHosting", Global.Settings.isHosting },
                 { "isIngame", Global.Settings.isIngame },
+                { "pruneDB", Global.Settings.pruneDB },
                 { "isAway", Global.Settings.isAway },
                 { "InternalIP", Global.InternalIP },
                 { "ExternalIP", Global.ExternalIP },
