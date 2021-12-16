@@ -30,6 +30,8 @@ namespace Steam
         std::unique_ptr<std::pmr::string> Locale{ Allocate<std::pmr::string>(&Internal) };
         std::unique_ptr<std::pmr::string> LongID{ Allocate<std::pmr::string>(&Internal) };
 
+        uint64_t Startuptime;
+
         // Just copy Ayrias settings, might be useful later.
         union
         {

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.11)
 project(AYRIA)
 
 # Use the latest standard at this time.
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 enable_language(ASM_MASM)
 
 # Export to the a gitignored directory.

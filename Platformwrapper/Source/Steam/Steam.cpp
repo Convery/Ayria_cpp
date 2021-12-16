@@ -292,6 +292,9 @@ namespace Steam
             if (Initialized) return true;
             Initialized = true;
 
+            // Track active time.
+            Global.Startuptime = GetTickCount64();
+
             // Legacy compatibility.
             Redirectmodulehandle();
 
@@ -324,7 +327,7 @@ namespace Steam
                     Errorprint("This may cause errors, contact the developer if you experience issues.");
                     Errorprint("Alternatively provide a \"steam_appid.txt\" or \"ayria_appid.txt\" with the ID");
 
-                    Global.AppID = Hash::FNV1a_32("Ayria");
+                    Global.AppID = Hash::FNV1a_32("Ayria") & 0xFFFF;
                 }
             }
 
