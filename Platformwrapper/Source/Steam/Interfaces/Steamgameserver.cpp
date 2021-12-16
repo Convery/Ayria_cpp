@@ -255,23 +255,22 @@ namespace Steam
             return true;
         }
 
-        static void doUpdate(bool andAyria = false)
+        static void doUpdate(bool andGroup = false)
         {
             UpdateDB(Localserver);
 
             const auto Message = JSON::Dump(toJSON(Localserver));
             Ayria.publishMessage("Steam::Serverupdate", Message.c_str(), (uint32_t)Message.size());
 
-            if (andAyria) [[unlikely]]
+            if (andGroup)
             {
-                const auto Request = JSON::Object_t({
-                    { "Hostaddress", va("%s:%u", Localserver.PublicIP.toString(), Localserver.Gameport) },
-                    { "Servername", Localserver.Servername },
-                    { "Hostport", Localserver.Gameport },
-                    { "GameID", Global.AppID },
-                    { "Provider", "Steam"s }
+                const auto Groupinfo = JSON::Object_t({
+                    { "isPublic", !Localserver.isPasswordprotected },
+                    { "Membercount", Localserver.Playercount },
+                    { "Maxmembers", Localserver.Playermax },
+                    { "Groupname", Localserver.Servername }
                 });
-                Ayria.doRequest("Matchmaking::updateServer", Request);
+                Ayria.doRequest("Groups::Updategroup", Groupinfo);
             }
         }
         void Initialize()
@@ -283,6 +282,31 @@ namespace Steam
             Ayria.subscribeMessage("Steam::Serverupdate", onUpdate);
         }
 
+        void Ayriastart()
+        {
+            // Ayria wants us to create a group first.
+            const auto Groupinfo = JSON::Object_t({
+                { "isPublic", !Localserver.isPasswordprotected },
+                { "Membercount", Localserver.Playercount },
+                { "Maxmembers", Localserver.Playermax },
+                { "Groupname", Localserver.Servername }
+            });
+            Ayria.doRequest("Groups::Creategroup", Groupinfo);
+
+            // If no other plugin have created a matchmaking server yet.
+            const auto Trymatchmake = JSON::Object_t({
+                { "Hostaddress", va("%s:%u", Localserver.PublicIP.toString().c_str(), Localserver.Gameport)},
+                { "Providers", JSON::Array_t{"Steam"} },
+                { "GameID", Global.AppID }
+            });
+            const auto Response = Ayria.doRequest("Matchmaking::Startserver", Trymatchmake);
+
+            // Already created, insert our provider.
+            if (Response.contains("Error") && Response.contains("already"))
+            {
+                Ayria.doRequest("Matchmaking::addProvider", JSON::Object_t({ { "Provider", "Steam"} }));
+            }
+        }
         bool Start(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usSpectatorPort, uint16_t usQueryPort, uint32_t unServerFlags, const char *pchGameDir, const char *pchVersion)
         {
             Localserver.PublicIP.m_eType = k_ESteamIPTypeIPv4;
@@ -298,17 +322,11 @@ namespace Steam
             Localserver.ServerID = Global.XUID.UserID;
             Localserver.AppID = Global.AppID;
             Localserver.isActive = true;
+
+            Ayriastart();
             doUpdate();
 
-            const auto Request = JSON::Object_t({
-                { "Hostaddress", va("%s:%u", Localserver.PublicIP.toString(), Localserver.Gameport) },
-                { "Servername", Localserver.Servername },
-                { "Hostport", Localserver.Gameport },
-                { "GameID", Global.AppID },
-                { "Provider", "Steam"s }
-            });
-            const auto Result = Ayria.doRequest("Matchmaking::startServer", Request);
-            return !Result.contains("Error");
+            return true;
         }
         bool Start(uint32_t unGameIP, uint16_t usSteamPort, uint16_t unGamePort, uint16_t usQueryPort, uint32_t unServerFlags, AppID_t nAppID, const char *pchVersion)
         {
@@ -323,22 +341,15 @@ namespace Steam
             Localserver.ServerID = Global.XUID.UserID;
             Localserver.AppID = Global.AppID;
             Localserver.isActive = true;
+
+            Ayriastart();
             doUpdate();
 
-            const auto Request = JSON::Object_t({
-                { "Hostaddress", va("%s:%u", Localserver.PublicIP.toString(), Localserver.Gameport) },
-                { "Servername", Localserver.Servername },
-                { "Hostport", Localserver.Gameport },
-                { "GameID", Global.AppID },
-                { "Provider", "Steam"s }
-            });
-
-            const auto Result = Ayria.doRequest("Matchmaking::startServer", Request);
-            return !Result.contains("Error");
+            return true;
         }
         bool Terminate()
         {
-            Ayria.doRequest("Matchmaking::stopServer", {});
+            Ayria.doRequest("Matchmaking::Shutdownserver", {});
             Localserver.isActive = false;
             doUpdate();
             return true;
@@ -605,7 +616,7 @@ namespace Steam
             Localserver.Playercount = cPlayers;
             Localserver.Botcount = cBotPlayers;
             Localserver.Mapname = pchMapName;
-            Gameserver::doUpdate();
+            Gameserver::doUpdate(true);
             return true;
         }
         bool UpdateStatus1(int cPlayers, int cPlayersMax, int cBotPlayers, const char *pchServerName, const char *pchMapName)
@@ -696,7 +707,7 @@ namespace Steam
         void SetMaxPlayerCount(int cPlayersMax)
         {
             Localserver.Playermax = cPlayersMax;
-            Gameserver::doUpdate();
+            Gameserver::doUpdate(true);
         }
         void SetModDir(const char *pchModDir)
         {

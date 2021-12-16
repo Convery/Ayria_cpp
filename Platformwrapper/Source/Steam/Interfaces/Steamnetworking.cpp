@@ -235,7 +235,7 @@ namespace Steam
         for (auto it = Portmap.begin(); it != Portmap.end();)
         {
             if (it->second == 0) Portmap.erase(it);
-            else it++;
+            else ++it;
         }
     }
     static void __cdecl doDiscovery()
