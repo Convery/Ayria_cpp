@@ -350,6 +350,13 @@ namespace JSON
     {
         Value_t Result{};
 
+        // Malformed statement check.
+        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}'))
+        {
+            Errorprint("Trying to parse invalid JSON string.");
+            return Result;
+        }
+
         // Implementation dependent.
         if (!JSONString.empty())
         {

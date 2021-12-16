@@ -100,9 +100,9 @@ namespace FS
         }
         ~MMap_t()
         {
-            UnmapViewOfFile(Ptr);
-            CloseHandle(Nativehandle);
-            _close(FD);
+            if (Ptr) UnmapViewOfFile(Ptr);
+            if (Nativehandle) CloseHandle(Nativehandle);
+            if (FD > 0)_close(FD);
         }
 
         #else
@@ -120,8 +120,8 @@ namespace FS
         explicit MMap_t(const std::wstring &Path) : MMap_t(Encoding::toNarrow(Path)) {}
         ~MMap_t()
         {
-            munmap((void *)Ptr, Data.size());
-            close(FD);
+            if (Ptr) munmap((void *)Ptr, Data.size());
+            if (FD > 0) close(FD);
         }
         #endif
     };
