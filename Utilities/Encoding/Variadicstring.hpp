@@ -19,11 +19,15 @@ template<typename ... Args> [[nodiscard]] std::string va(const char *Format, con
 }
 #endif
 
+// Helpers for type deduction.
+template <class, template <class...> class> inline constexpr bool isDerived = false;
+template <template <class...> class T, class... Args> inline constexpr bool isDerived<T<Args...>, T> = true;
+
 // Helpers to deal with std::basic_string.
-template <typename T> decltype(auto) Forward(T &&Arg) { return Arg; }
-template <typename T> decltype(auto) Forward(const T &Arg) { return Arg; }
 template <typename T> concept String_t = requires (const T &Arg) { Arg.c_str(); };
 template <String_t T> decltype(auto) Forward(const T &Arg) { return Arg.c_str(); }
+template <typename T> decltype(auto) Forward(T &&Arg) { static_assert(!isDerived<T, std::basic_string_view>); return Arg; }
+template <typename T> decltype(auto) Forward(const T &Arg) { static_assert(!isDerived<T, std::basic_string_view>); return Arg; }
 
 template <typename ... Args> [[nodiscard]] std::string va_impl(const char *Format, const Args& ...args)
 {

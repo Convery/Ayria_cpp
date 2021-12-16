@@ -27,7 +27,7 @@ namespace Steam::Tasks
     static std::atomic<CallID_t> Callbackcount{ 42 };
 
     // Forward declaration, will be optimized out in release.
-    std::string Taskname(int32_t Callbacktype);
+    constexpr std::string Taskname(int32_t Callbacktype);
 
     // Async requests to the backend.
     void Completerequest(CallID_t RequestID, ECallbackType Callbacktype, std::shared_ptr<void> Databuffer)
@@ -91,7 +91,7 @@ namespace Steam::Tasks
     }
 
     // Will be removed by the linker in release mode.
-    std::string Taskname(int32_t Callbacktype)
+    constexpr std::string Taskname(int32_t Callbacktype)
     {
         // Named lookup, added as we go.
         #define Case(x, y) case x: return y;
@@ -421,6 +421,6 @@ namespace Steam::Tasks
         #undef Case
 
         // Just in case.
-        return va("%d", Callbacktype);
+        return std::format("{}", Callbacktype);
     }
 }
