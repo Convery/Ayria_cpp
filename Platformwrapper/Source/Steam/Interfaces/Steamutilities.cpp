@@ -87,7 +87,7 @@ namespace Steam
         SteamAPICall_t CheckFileSignature(const char *szFileName)
         {
             const auto RequestID = Tasks::Createrequest();
-            const auto Request = new Tasks::CheckFileSignature_t();
+            const auto Request = std::shared_ptr<Tasks::CheckFileSignature_t>();
             Request->m_eCheckFileSignature = k_ECheckFileSignatureValidSignature;
 
             Tasks::Completerequest(RequestID, Tasks::ECallbackType::CheckFileSignature_t, Request);

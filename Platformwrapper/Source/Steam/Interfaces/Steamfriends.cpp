@@ -150,11 +150,10 @@ namespace Steam
                 const auto SteamID = toSteamID(GroupID);
                 if (Pendingjoins.contains(SteamID))
                 {
-                    const auto RequestID = Pendingjoins[SteamID];
-
-                    const auto Response = new Tasks::JoinClanChatRoomCompletionResult_t();
+                    const auto Response = std::shared_ptr<Tasks::JoinClanChatRoomCompletionResult_t>();
                     Response->m_eChatRoomEnterResponse = k_EChatRoomEnterResponseSuccess;
                     Response->m_steamIDClanChat = SteamID.toChatID();
+                    const auto RequestID = Pendingjoins[SteamID];
 
                     Tasks::Completerequest(RequestID, Tasks::ECallbackType::JoinClanChatRoomCompletionResult_t, Response);
                     Pendingjoins.erase(RequestID);
@@ -247,7 +246,7 @@ namespace Steam
             // Group is probably not public.
             if (Result.contains("Error"))
             {
-                const auto Response = new Tasks::JoinClanChatRoomCompletionResult_t();
+                const auto Response = std::shared_ptr<Tasks::JoinClanChatRoomCompletionResult_t>();
                 const auto Error = Result.value<std::string>("Error");
                 Errorprint(va("%s: %s", __FUNCTION__, Error.c_str()));
 
@@ -271,7 +270,7 @@ namespace Steam
             const auto Moderators = AyriaAPI::Groups::getModerators(fromSteamID(steamIDClan));
             const auto RequestID = Tasks::Createrequest();
 
-            const auto Response = new Tasks::ClanOfficerListResponse_t();
+            const auto Response = std::shared_ptr<Tasks::ClanOfficerListResponse_t>();
             Response->m_cOfficers = int(Moderators.size());
             Response->m_steamIDClan = steamIDClan;
             Response->m_bSuccess = true;
@@ -283,7 +282,7 @@ namespace Steam
         {
             SetPersonaName0(pchPersonaName);
 
-            const auto Response = new Tasks::SetPersonaNameResponse_t();
+            const auto Response = std::shared_ptr<Tasks::SetPersonaNameResponse_t>();
             const auto RequestID = Tasks::Createrequest();
             Response->m_result = EResult::k_EResultOK;
             Response->m_bSuccess = true;
@@ -390,7 +389,7 @@ namespace Steam
             const auto Result = Ayria.doRequest("Clientrelations::Befriend", JSON::Object_t{ { "ClientID", fromSteamID(steamIDFriend) } });
             if (Result.contains("Error")) return false;
 
-            const auto Notification = new Tasks::FriendAdded_t();
+            const auto Notification = std::shared_ptr<Tasks::FriendAdded_t>();
             Notification->m_eResult = EResult::k_EResultOK;
             Notification->m_ulSteamID = steamIDFriend;
 
@@ -935,7 +934,7 @@ namespace Steam
             *Global.Username = Encoding::toUTF8(pchPersonaName);
 
             // Notify the game that the players state changed.
-            const auto Notification = new Tasks::PersonaStateChange_t();
+            const auto Notification = std::shared_ptr<Tasks::PersonaStateChange_t>();
             Notification->m_ulSteamID = Global.XUID.FullID;
             Notification->m_nChangeFlags = 1;
 

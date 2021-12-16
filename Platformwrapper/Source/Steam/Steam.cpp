@@ -401,7 +401,7 @@ namespace Steam
 
             // Some legacy applications query the application info from the environment.
             SetEnvironmentVariableW(L"SteamAppId", va(L"%u", Global.AppID).c_str());
-            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Global.AppID & 0xFFFFFF).c_str());
+            SetEnvironmentVariableW(L"SteamGameId", va(L"%lu", Global.AppID & 0xFFFF).c_str());
             #if defined(_WIN32)
             {
                 {
@@ -428,12 +428,12 @@ namespace Steam
                 }
                 {
                     HKEY Registrykey;
-                    auto Steamregistry = Build::is64bit ?
+                    const auto Steamregistry = Build::is64bit ?
                         L"Software\\Wow6432Node\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.AppID) :
                         L"Software\\Valve\\Steam\\Apps\\"s + va(L"%u", Global.AppID);
                     if (ERROR_SUCCESS == RegCreateKeyW(HKEY_CURRENT_USER, Steamregistry.c_str(), &Registrykey))
                     {
-                        DWORD Running = TRUE;
+                        constexpr DWORD Running = TRUE;
 
                         RegSetValueW(Registrykey, L"Installed", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
                         RegSetValueW(Registrykey, L"Running", REG_DWORD, (LPCWSTR)&Running, sizeof(DWORD));
@@ -474,13 +474,19 @@ namespace Steam
         EXPORT_ATTR bool SteamAPI_RestartAppIfNecessary(uint32_t unOwnAppID) { Global.AppID = unOwnAppID; return false; }
 
         // Callback management.
-        EXPORT_ATTR void SteamAPI_UnregisterCallback(void *, int) { }
-        EXPORT_ATTR void SteamAPI_RunCallbacks() { Tasks::Runcallbacks(); }
-        EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *, uint64_t) { }
-        EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t)
+        EXPORT_ATTR void SteamAPI_UnregisterCallback(void *pCallback, int iCallback)
         {
-            // One-off callback (though we cheat and implement it as a normal one).
-            Tasks::Registercallback(pCallback, -1);
+            Tasks::Unregistercallback(pCallback, iCallback);
+        }
+        EXPORT_ATTR void SteamAPI_RunCallbacks() { Tasks::Runcallbacks(); }
+        EXPORT_ATTR void SteamAPI_UnregisterCallResult(void *, uint64_t hAPICall)
+        {
+            Tasks::Unregistercallback(hAPICall);
+        }
+        EXPORT_ATTR void SteamAPI_RegisterCallResult(void *pCallback, uint64_t hAPICall)
+        {
+            // Single-use callback.
+            Tasks::Registercallback(pCallback, hAPICall);
         }
         EXPORT_ATTR void SteamAPI_RegisterCallback(void *pCallback, int iCallback)
         {

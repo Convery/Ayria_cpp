@@ -93,7 +93,7 @@ namespace Steam
         EBeginAuthSessionResult BeginAuthSession(const void *pAuthTicket, int cbAuthTicket, SteamID_t steamID)
         {
             Debugprint(va("%s for 0x%llx", __func__, steamID.FullID));
-            const auto Request = new Tasks::ValidateAuthTicketResponse_t();
+            const auto Request = std::shared_ptr<Tasks::ValidateAuthTicketResponse_t>();
             Request->m_eAuthSessionResponse = 0; // k_EBeginAuthSessionResultOK
             Request->m_OwnerSteamID = steamID;
             Request->m_SteamID = steamID;
@@ -103,7 +103,7 @@ namespace Steam
         }
         HAuthTicket GetAuthSessionTicket(void *pTicket, int cbMaxTicket, uint32_t *pcbTicket)
         {
-            const auto Request = new Tasks::GetAuthSessionTicketResponse_t();
+            const auto Request = std::shared_ptr<Tasks::GetAuthSessionTicketResponse_t>();
             Request->m_eResult = EResult::k_EResultOK;
             Request->m_hAuthTicket = 1337;
             *pcbTicket = cbMaxTicket;
@@ -126,7 +126,7 @@ namespace Steam
             Infoprint(va("Creating an \"encrypted\" ticket with %d bytes of game-data.", cbDataToInclude));
 
             // Notify the game that we are ready.
-            const auto Request = new Tasks::EncryptedAppTicketResponse_t();
+            const auto Request = std::shared_ptr<Tasks::EncryptedAppTicketResponse_t>();
             const auto RequestID = Tasks::Createrequest();
             Request->m_eResult = EResult::k_EResultOK;
 
@@ -180,7 +180,7 @@ namespace Steam
         }
         SteamAPICall_t RequestStoreAuthURL(const char *pchRedirectURL)
         {
-            const auto Request = new Tasks::StoreAuthURLResponse_t();
+            const auto Request = std::shared_ptr<Tasks::StoreAuthURLResponse_t>();
             const auto RequestID = Tasks::Createrequest();
 
             Infoprint(va("%s: %s", __FUNCTION__, pchRedirectURL));
@@ -191,7 +191,7 @@ namespace Steam
         }
         SteamAPICall_t GetMarketEligibility()
         {
-            const auto Request = new Tasks::MarketEligibilityResponse_t();
+            const auto Request = std::shared_ptr<Tasks::MarketEligibilityResponse_t>();
             const auto RequestID = Tasks::Createrequest();
             Request->m_bAllowed = true;
 
@@ -220,7 +220,7 @@ namespace Steam
         SteamAPICall_t GetDurationControl()
         {
             // Parental control system, not needed.
-            const auto Request = new Tasks::DurationControl_t();
+            const auto Request = std::shared_ptr<Tasks::DurationControl_t>();
             const auto RequestID = Tasks::Createrequest();
             Request->m_eResult = EResult::k_EResultOK;
             Request->m_appid = Global.AppID;

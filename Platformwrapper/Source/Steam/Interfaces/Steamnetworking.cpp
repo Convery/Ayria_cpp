@@ -64,7 +64,7 @@ namespace Steam
                         {
                             Endpoints.emplace_back(Newsock, Socket, Clientinfo);
 
-                            const auto Result = new Tasks::SocketStatusCallback_t();
+                            const auto Result = std::shared_ptr<Tasks::SocketStatusCallback_t>();
                             Result->m_hListenSocket = Socket & 0xFFFFFFFF;
                             Result->m_hSocket = Newsock & 0xFFFFFFFF;
                             Result->m_eSNetSocketState = 1;
@@ -94,7 +94,7 @@ namespace Steam
                 {
                     if (FD_ISSET(Socket, &FailureFD)) [[unlikely]]
                     {
-                        const auto Result = new Tasks::SocketStatusCallback_t();
+                        const auto Result = std::shared_ptr<Tasks::SocketStatusCallback_t>();
                         Result->m_hSocket = Socket & 0xFFFFFFFF;
                         Result->m_eSNetSocketState = 23;
 
@@ -109,7 +109,7 @@ namespace Steam
                     {
                         Endpoints.push_back({ Socket, {}, Clientinfo });
 
-                        const auto Result = new Tasks::SocketStatusCallback_t();
+                        const auto Result = std::shared_ptr<Tasks::SocketStatusCallback_t>();
                         Result->m_hSocket = Socket & 0xFFFFFFFF;
                         Result->m_eSNetSocketState = 1;
 
@@ -147,7 +147,7 @@ namespace Steam
                         {
                             if (Headersize == 0)
                             {
-                                const auto Result = new Tasks::SocketStatusCallback_t();
+                                const auto Result = std::shared_ptr<Tasks::SocketStatusCallback_t>();
                                 Result->m_hSocket = Item.Comsocket & 0xFFFFFFFF;
                                 Result->m_steamIDRemote = Item.SteamID;
                                 Result->m_eSNetSocketState = 24;

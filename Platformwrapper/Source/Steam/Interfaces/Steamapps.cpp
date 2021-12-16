@@ -49,7 +49,7 @@ namespace Steam
             const auto Filebuffer = FS::Readfile(pszFileName);
             const auto SHA = Hash::SHA1(Filebuffer.data(), Filebuffer.size());
 
-            const auto Request = new Tasks::FileDetailsResult_t();
+            const auto Request = std::shared_ptr<Tasks::FileDetailsResult_t>();
             Request->m_eResult = Filebuffer.empty() ? EResult::k_EResultFileNotFound : EResult::k_EResultOK;
             std::memcpy(Request->m_FileSHA, SHA.data(), std::min(size_t(20), SHA.size()));
             Request->m_ulFileSize = Filebuffer.size();
@@ -247,7 +247,7 @@ namespace Steam
             // Activation seems to only be relevant on consoles.
             Debugprint(va("%s: %s", __FUNCTION__, pchActivationCode));
 
-            const auto Request = new Tasks::RegisterActivationCodeResponse_t();
+            const auto Request = std::shared_ptr<Tasks::RegisterActivationCodeResponse_t>();
             Request->m_eResult = k_ERegisterActivationCodeResultOK;
 
             const auto RequestID = Tasks::Createrequest();
@@ -263,7 +263,7 @@ namespace Steam
         {
             Warningprint("The game wants a proof of purchase token, inform the developer.");
 
-            const auto Request = new Tasks::AppProofOfPurchaseKeyResponse_t();
+            const auto Request = std::shared_ptr<Tasks::AppProofOfPurchaseKeyResponse_t>();
             Request->m_eResult = EResult::k_EResultOK;
             Request->m_cchKeyLength = 0;
             Request->m_nAppID = nAppID;

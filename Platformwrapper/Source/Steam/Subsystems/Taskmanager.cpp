@@ -9,7 +9,7 @@
 namespace Steam::Tasks
 {
     using CallID_t = uint64_t;
-    using Result_t = struct { CallID_t RequestID; void *Databuffer; };
+    using Result_t = struct { CallID_t RequestID; std::shared_ptr<void> Databuffer; };
     struct Callback_t
     {
         virtual void Execute(void *Databuffer) = 0;
@@ -21,51 +21,73 @@ namespace Steam::Tasks
         int32_t Type;
     };
 
-    static std::queue<std::pair<int32_t, Result_t>> Results;
+    static Hashmap<int32_t, Hashset<Callback_t *>> Broadcastcallbacks;
+    static Hashmap<uint64_t, Callback_t *> Singleusecallbacks;
+    static std::vector<std::pair<int32_t, Result_t>> Results;
     static std::atomic<CallID_t> Callbackcount{ 42 };
-    static Hashmap<int32_t, Callback_t *> Callbacks;
 
     // Forward declaration, will be optimized out in release.
     std::string Taskname(int32_t Callbacktype);
 
     // Async requests to the backend.
-    void Completerequest(CallID_t RequestID, ECallbackType Callbacktype, void *Databuffer)
+    void Completerequest(CallID_t RequestID, ECallbackType Callbacktype, std::shared_ptr<void> Databuffer)
     {
-        Results.push({ int32_t(Callbacktype), { RequestID, Databuffer } });
+        Results.push_back({ int32_t(Callbacktype), { RequestID, Databuffer } });
     }
-    void Completerequest(CallID_t RequestID, int32_t Callbacktype, void *Databuffer)
+    void Completerequest(CallID_t RequestID, int32_t Callbacktype, std::shared_ptr<void> Databuffer)
     {
-        Results.push({ Callbacktype, { RequestID, Databuffer } });
+        Results.push_back({ Callbacktype, { RequestID, Databuffer } });
     }
     void Registercallback(void *Callback, int32_t Callbacktype)
     {
-        // Special case, callback provides the type.
-        if (Callbacktype == -1) Callbacktype = ((Callback_t *)Callback)->Type;
-
-        // Register the callback handler for later use.
-        auto &Entry = Callbacks[Callbacktype];
-        Entry = (Callback_t *)Callback;
-        Entry->Type = Callbacktype;
-
+        Broadcastcallbacks[Callbacktype].insert((Callback_t *)Callback);
         Debugprint(va("Registering callback \"%s\"", Taskname(Callbacktype).c_str()));
     }
+    void Registercallback(void *Callback, CallID_t RequestID)
+    {
+        Singleusecallbacks[RequestID] = (Callback_t *)Callback;
+        Debugprint(va("Registering callback \"%s\"", Taskname(((Callback_t *)Callback)->Type).c_str()));
+    }
+
+    void Unregistercallback(void *Callback, int32_t Callbacktype)
+    {
+        if (Broadcastcallbacks.contains(Callbacktype)) [[likely]]
+            Broadcastcallbacks[Callbacktype].erase((Callback_t *)Callback);
+    }
+    void Unregistercallback(uint64_t RequestID)
+    {
+        Singleusecallbacks.erase(RequestID);
+    }
+
     CallID_t Createrequest()
     {
         return Callbackcount++;
     }
     void Runcallbacks()
     {
-        while (!Results.empty())
+        std::erase_if(Results, [](const auto &Tuple) -> bool
         {
-            const auto Entry = Results.front(); Results.pop();
-            auto Callback = Callbacks.find(Entry.first);
+            bool Delete = false;
+            const auto &[Type, Result] = Tuple;
+            const auto &[RequestID, Databuffer] = Result;
 
-            // Prefer the longer method as most implementations just discard the extra data.
-            if(Callback != Callbacks.end()) Callback->second->Execute(Entry.second.Databuffer, false, Entry.second.RequestID);
+            // Single use takes priority over broadcasting.
+            if (Singleusecallbacks.contains(RequestID)) [[unlikely]]
+            {
+                Singleusecallbacks[RequestID]->Execute(Databuffer.get(), false, RequestID);
+                Singleusecallbacks.erase(RequestID);
+                Delete = true;
+            }
 
-            // Let's not leak (although technically UB).
-            delete Entry.second.Databuffer;
-        }
+            // Broadcast to all listeners (generally only one).
+            for (const auto &Callback : Broadcastcallbacks[Type])
+            {
+                Callback->Execute(Databuffer.get(), false, RequestID);
+                Delete = true;
+            }
+
+            return Delete;
+        });
     }
 
     // Will be removed by the linker in release mode.

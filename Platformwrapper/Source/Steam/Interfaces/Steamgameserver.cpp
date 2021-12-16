@@ -392,7 +392,7 @@ namespace Steam
         }
         SteamAPICall_t AssociateWithClan(SteamID_t steamIDClan)
         {
-            const auto Result = new Tasks::AssociateWithClanResult_t();
+            const auto Result = std::shared_ptr<Tasks::AssociateWithClanResult_t>();
             Result->m_eResult = EResult::k_EResultOK;
 
             const auto TaskID = Tasks::Createrequest();
@@ -401,7 +401,7 @@ namespace Steam
         }
         SteamAPICall_t ComputeNewPlayerCompatibility(SteamID_t steamIDNewPlayer)
         {
-            const auto Result = new Tasks::ComputeNewPlayerCompatibilityResult_t();
+            const auto Result = std::shared_ptr<Tasks::ComputeNewPlayerCompatibilityResult_t>();
             Result->m_SteamIDCandidate = steamIDNewPlayer;
             Result->m_eResult = EResult::k_EResultOK;
 
@@ -411,7 +411,7 @@ namespace Steam
         }
         SteamAPICall_t GetServerReputation()
         {
-            const auto Result = new Tasks::GSReputation_t();
+            const auto Result = std::shared_ptr<Tasks::GSReputation_t>();
             Result->m_eResult = EResult::k_EResultOK;
             Result->m_unReputationScore = 1;
 

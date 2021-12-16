@@ -133,9 +133,12 @@ namespace Steam
     // Asynchronous tasks.
     namespace Tasks
     {
-        void Completerequest(uint64_t RequestID, ECallbackType Callbacktype, void *Databuffer);
-        void Completerequest(uint64_t RequestID, int32_t Callbacktype, void *Databuffer);
+        void Completerequest(uint64_t RequestID, ECallbackType Callbacktype, std::shared_ptr<void> Databuffer);
+        void Completerequest(uint64_t RequestID, int32_t Callbacktype, std::shared_ptr<void> Databuffer);
         void Registercallback(void *Callback, int32_t Callbacktype);
+        void Registercallback(void *Callback, uint64_t RequestID);
+        void Unregistercallback(void *Callback, int32_t Callbacktype);
+        void Unregistercallback(uint64_t RequestID);
         uint64_t Createrequest();
         void Runcallbacks();
     }
