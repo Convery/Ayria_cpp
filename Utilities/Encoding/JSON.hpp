@@ -350,10 +350,10 @@ namespace JSON
     {
         Value_t Result{};
 
-        // Malformed statement check.
-        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}'))
+        // Malformed statement check. Missing brackets, null-chars messing up C-string parsing.
+        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}') || std::ranges::count(JSONString, '\0') > 1)
         {
-            Errorprint("Trying to parse invalid JSON string.");
+            Errorprint(va("Trying to parse invalid JSON string, first chars: %*s", std::min(size_t(20), JSONString.size()), JSONString.data()));
             return Result;
         }
 
