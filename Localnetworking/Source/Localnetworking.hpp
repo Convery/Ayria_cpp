@@ -18,7 +18,7 @@ namespace Localnetworking
 
     // Resolve the hostname and return a unique address if proxied.
     Proxyserver_t *getProxyserver(std::string_view Hostname);
-    Proxyserver_t *getProxyserver(sockaddr_in *Hostname);
+    Proxyserver_t *getProxyserver(const sockaddr_in *Hostname);
 
     // Associate a socket with a server.
     void Connectserver(size_t Clientsocket, IServer *Serverinstance);

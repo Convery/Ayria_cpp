@@ -24,10 +24,10 @@ namespace JSON
 
     enum class Type_t { Null, Bool, Float, Signedint, Unsignedint, String, Object, Array };
     using Object_t = std::unordered_map<std::string, struct Value_t>;
-    using Array_t = std::vector<struct Value_t>;
+    using Array_t = std::vector<Value_t>;
 
     // Helper for type deduction.
-    template<typename T> constexpr Type_t toType()
+    template <typename T> constexpr Type_t toType()
     {
         if constexpr (isDerived<T, std::basic_string_view>) return Type_t::String;
         if constexpr (isDerived<T, std::basic_string>) return Type_t::String;
@@ -155,7 +155,7 @@ namespace JSON
             if (Type != Type_t::Object) return false;
             return (contains(va) || ...);
         }
-        [[nodiscard]] bool contains(std::string_view Key) const
+        [[nodiscard]] bool contains(const std::string_view Key) const
         {
             if (Type != Type_t::Object) return false;
             return asPtr(Object_t)->contains(Key.data());
@@ -173,15 +173,15 @@ namespace JSON
         }
 
         //
-        template<typename T, size_t N> auto value(std::string_view Key, const std::array<T, N> &Defaultvalue)
+        template <typename T, size_t N> auto value(std::string_view Key, const std::array<T, N> &Defaultvalue)
         {
             return value(Key, std::basic_string<std::remove_const_t<T>>(Defaultvalue, N));
         }
-        template<typename T, size_t N> auto value(std::string_view Key, T(&Defaultvalue)[N])
+        template <typename T, size_t N> auto value(std::string_view Key, T(&Defaultvalue)[N])
         {
             return value(Key, std::basic_string<std::remove_const_t<T>>(Defaultvalue, N));
         }
-        template<typename T> T value(std::string_view Key, T Defaultvalue) const
+        template <typename T> T value(const std::string_view Key, T Defaultvalue) const
         {
             if constexpr (!std::is_convertible_v<Value_t, T>) return Defaultvalue;
             if (Type != Type_t::Object) return Defaultvalue;
@@ -189,7 +189,7 @@ namespace JSON
             if (!asPtr(Object_t)->contains(Key.data())) return Defaultvalue;
             return asPtr(Object_t)->at(Key.data());
         }
-        template<typename T = Value_t> T value(std::string_view Key) const
+        template <typename T = Value_t> T value(const std::string_view Key) const
         {
             if constexpr (!std::is_convertible_v<Value_t, T>) return {};
             if (Type != Type_t::Object) return {};
@@ -199,7 +199,7 @@ namespace JSON
         }
 
         // NOTE(tcn): The std::basic_string variants can't alwas be deduced and needs to be declared explicitly.
-        template<typename T> operator T() const
+        template <typename T> operator T() const
         {
             switch (Type)
             {
@@ -257,37 +257,37 @@ namespace JSON
             if constexpr (std::is_same_v<T, bool>) return !isNull();
             else return {};
         }
-        template<typename T> T get() const
+        template <typename T> T get() const
         {
             return this->operator T();
         }
 
         //
-        template<size_t N> Value_t operator[](const char(&Key)[N]) const
+        template <size_t N> Value_t operator[](const char(&Key)[N]) const
         {
             if (Type != Type_t::Object) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
             return asPtr(Object_t)->operator[]({ Key, N });
         }
-        template<size_t N> Value_t &operator[](const char(&Key)[N])
+        template <size_t N> Value_t &operator[](const char(&Key)[N])
         {
             if (Type != Type_t::Object) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
             return asPtr(Object_t)->operator[]({ Key, N });
         }
-        Value_t operator[](size_t N) const
+        Value_t operator[](const size_t N) const
         {
             if (Type != Type_t::Array) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
             return asPtr(Array_t)->operator[](N);
         }
-        Value_t &operator[](size_t N)
+        Value_t &operator[](const size_t N)
         {
             if (Type != Type_t::Array) { static Value_t Dummyvalue; Dummyvalue = {}; return Dummyvalue; }
             return asPtr(Array_t)->operator[](N);
         }
 
         //
-        template<typename T> Value_t(const T &Input) requires(!std::is_pointer_v<T>)
+        template <typename T> Value_t(const T &Input) requires(!std::is_pointer_v<T>)
         {
-            // Safety-check, we do not convert arrays to strings.
+            // Safety-check..
             static_assert(toType<T>() != Type_t::Null);
 
             if constexpr (std::is_same_v<T, Value_t>) *this = Input;
@@ -323,12 +323,12 @@ namespace JSON
                 }
             }
         }
-        template<typename T, size_t N> Value_t(const std::array<T, N> &Input)
+        template <typename T, size_t N> Value_t(const std::array<T, N> &Input)
         {
             *this = std::basic_string<std::remove_const_t<T>>(Input.data(), N);
             return;
         }
-        template<typename T, size_t N> [[nodiscard]] Value_t(T(&Input)[N])
+        template <typename T, size_t N> [[nodiscard]] Value_t(T(&Input)[N])
         {
             *this = std::basic_string<std::remove_const_t<T>>(Input, N);
             return;
@@ -350,10 +350,12 @@ namespace JSON
     {
         Value_t Result{};
 
-        // Malformed statement check.
-        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}'))
+        // Malformed statement check. Missing brackets, null-chars messing up C-string parsing.
+        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}') ||
+            std::ranges::count(JSONString, '[') != std::ranges::count(JSONString, ']') ||
+            std::ranges::count(JSONString, '\0') > 1)
         {
-            Errorprint("Trying to parse invalid JSON string.");
+            Errorprint(va("Trying to parse invalid JSON string, first chars: %*s", std::min(size_t(20), JSONString.size()), JSONString.data()));
             return Result;
         }
 
@@ -364,85 +366,79 @@ namespace JSON
             static simdjson::dom::parser Parser;
             const std::function<Value_t(const simdjson::dom::element &)>
                 Parse = [&Parse](const simdjson::dom::element &Item) -> Value_t
-            {
-                switch (Item.type())
                 {
-                    case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string().value());
-                    case simdjson::dom::element_type::DOUBLE: return Item.get_double().value();
-                    case simdjson::dom::element_type::UINT64: return Item.get_uint64().value();
-                    case simdjson::dom::element_type::INT64: return Item.get_int64().value();
-                    case simdjson::dom::element_type::BOOL: return Item.get_bool().value();
-
-                    case simdjson::dom::element_type::OBJECT:
+                    switch (Item.type())
                     {
-                        Object_t Object; Object.reserve(Item.get_object().value().size());
-                        for (const auto Items = Item.get_object(); const auto &[Key, Value] : Items)
+                        case simdjson::dom::element_type::STRING: return Encoding::toUTF8(Item.get_string().value());
+                        case simdjson::dom::element_type::DOUBLE: return Item.get_double().value();
+                        case simdjson::dom::element_type::UINT64: return Item.get_uint64().value();
+                        case simdjson::dom::element_type::INT64: return Item.get_int64().value();
+                        case simdjson::dom::element_type::BOOL: return Item.get_bool().value();
+
+                        case simdjson::dom::element_type::OBJECT:
                         {
-                            Object.emplace(Key, Parse(Value));
+                            Object_t Object; Object.reserve(Item.get_object().value().size());
+                            for (const auto Items = Item.get_object(); const auto &[Key, Value] : Items)
+                            {
+                                Object.emplace(Key, Parse(Value));
+                            }
+                            return Object;
                         }
-                        return Object;
-                    }
-                    case simdjson::dom::element_type::ARRAY:
-                    {
-                        Array_t Array; Array.reserve(Item.get_array().value().size());
-                        for (const auto Items = Item.get_array(); const auto &Subitem : Items)
+                        case simdjson::dom::element_type::ARRAY:
                         {
-                            Array.push_back(Parse(Subitem));
+                            Array_t Array; Array.reserve(Item.get_array().value().size());
+                            for (const auto Items = Item.get_array(); const auto &Subitem : Items)
+                            {
+                                Array.push_back(Parse(Subitem));
+                            }
+                            return Array;
                         }
-                        return Array;
+
+                        case simdjson::dom::element_type::NULL_VALUE: return {};
                     }
 
-                    case simdjson::dom::element_type::NULL_VALUE: return {};
-                }
-
-                // WTF??
-                assert(false);
-                return {};
-            };
+                    // WTF??
+                    assert(false);
+                    return {};
+                };
 
             Result = Parse(Parser.parse(JSONString));
 
             #elif defined(HAS_NLOHMANN)
             const std::function<Value_t(const nlohmann::json &)>
                 Parse = [&Parse](const nlohmann::json &Item) -> Value_t
-            {
-                if (Item.is_string()) return Encoding::toUTF8(Item.get<std::string>());
-                if (Item.is_number_float()) return Item.get<double>();
-                if (Item.is_number_unsigned()) return Item.get<uint64_t>();
-                if (Item.is_number_integer()) return Item.get<int64_t>();
-                if (Item.is_boolean()) return Item.get<bool>();
-                if (Item.is_object())
                 {
-                    Object_t Object; Object.reserve(Item.size());
-                    for (auto Items = Item.items(); const auto &[Key, Value] : Items)
+                    if (Item.is_string()) return Encoding::toUTF8(Item.get<std::string>());
+                    if (Item.is_number_float()) return Item.get<double>();
+                    if (Item.is_number_unsigned()) return Item.get<uint64_t>();
+                    if (Item.is_number_integer()) return Item.get<int64_t>();
+                    if (Item.is_boolean()) return Item.get<bool>();
+                    if (Item.is_object())
                     {
-                        Object.emplace(Key, Parse(Value));
+                        Object_t Object; Object.reserve(Item.size());
+                        for (auto Items = Item.items(); const auto &[Key, Value] : Items)
+                        {
+                            Object.emplace(Key, Parse(Value));
+                        }
+                        return Object;
                     }
-                    return Object;
-                }
-                if (Item.is_array())
-                {
-                    Array_t Array; Array.reserve(Item.size());
-                    for (const auto &Subitem : Item)
+                    if (Item.is_array())
                     {
-                        Array.push_back(Parse(Subitem));
+                        Array_t Array; Array.reserve(Item.size());
+                        for (const auto &Subitem : Item)
+                        {
+                            Array.push_back(Parse(Subitem));
+                        }
+                        return Array;
                     }
-                    return Array;
-                }
 
-                // WTF??
-                assert(false);
-                return {};
-            };
+                    // WTF??
+                    assert(false);
+                    return {};
+                };
 
-            try
-            {
-                Result = Parse(nlohmann::json::parse(JSONString.data(), nullptr, true, true));
-            }
-            catch (const std::exception &e)
-            {
-                (void)e; Debugprint(e.what());
-            };
+            try { Result = Parse(nlohmann::json::parse(JSONString.data(), nullptr, true, true)); }
+            catch (const std::exception &e) { (void)e; Debugprint(e.what()); };
             #else
             static_assert(false, "No JSON parser available.");
             #endif
@@ -455,11 +451,11 @@ namespace JSON
         if (JSONString.empty()) return {};
         return Parse(std::string_view(JSONString));
     }
-    inline Value_t Parse(const char *JSONString, size_t Length = 0)
+    inline Value_t Parse(const char *JSONString, const size_t Length = 0)
     {
         if (!JSONString) return {};
         if (Length == 0) return Parse(std::string(JSONString));
-        else return Parse(std::string_view(JSONString, Length));
+        return Parse(std::string_view(JSONString, Length));
     }
 }
 #pragma warning(pop)

@@ -72,7 +72,7 @@ namespace Localnetworking
             {
                 if (const auto Server = (reinterpret_cast<IServer * (__cdecl *)(const char *)>(Callback))(Hostname.data()))
                 {
-                    auto Entry = &Proxyservers[Hostname.data()];
+                    const auto Entry = &Proxyservers[Hostname.data()];
                     static uint16_t Proxycount{ 1 };
 
                     Entry->Address.sin_addr.s_addr = htonl(0xF0000000 | ++Proxycount);
@@ -87,15 +87,15 @@ namespace Localnetworking
         Hostblacklist.emplace_back(Hostname.data());
         return nullptr;
     }
-    Proxyserver_t *getProxyserver(sockaddr_in *Hostname)
+    Proxyserver_t *getProxyserver(const sockaddr_in *Hostname)
     {
         std::scoped_lock _(Bottleneck);
 
-        for (auto &Item : Proxyservers)
+        for (auto &Item : Proxyservers | std::views::values)
         {
-            if (FNV::Equal(Item.second.Address.sin_addr, Hostname->sin_addr))
+            if (FNV::Equal(Item.Address.sin_addr, Hostname->sin_addr))
             {
-                return &Item.second;
+                return &Item;
             }
         }
 
@@ -109,18 +109,18 @@ namespace Localnetworking
 
         // Accept while the client connects.
         std::future<size_t> Serverfuture = std::async(std::launch::async, []()
+        {
+            size_t Serversocket = INVALID_SOCKET;
+            do
             {
-                size_t Serversocket = INVALID_SOCKET;
-                do
-                {
-                    Serversocket = accept(Listensocket, NULL, NULL);
-                    if (WSAGetLastError() != WSAEWOULDBLOCK)
-                        break;
+                Serversocket = accept(Listensocket, NULL, NULL);
+                if (WSAGetLastError() != WSAEWOULDBLOCK)
+                    break;
+            }
+            while (Serversocket == INVALID_SOCKET);
 
-                } while (Serversocket == INVALID_SOCKET);
-
-                return Serversocket;
-            });
+            return Serversocket;
+        });
 
         SOCKADDR_IN Server{ AF_INET, Backendport, {{.S_addr = htonl(INADDR_LOOPBACK)}} };
         while (SOCKET_ERROR == connect(Clientsocket, (SOCKADDR *)&Server, sizeof(SOCKADDR_IN)))
@@ -248,7 +248,7 @@ namespace Localnetworking
 
         FD_SET ReadFD{ Activesockets }, WriteFD{ Activesockets };
         const auto Count{ Activesockets.fd_count + 1 };
-        auto Timeout{ Defaulttimeout };
+        const auto Timeout{ Defaulttimeout };
 
         // Now POSIX compatible.
         if (!select(Count, &ReadFD, &WriteFD, NULL, &Timeout)) return;
@@ -294,11 +294,11 @@ namespace Localnetworking
             // We assume that the client properly inherits properly.
             if (!Server->onStreamwrite(Buffer, Size))
             {
-                for (const auto &Item : Proxyservers)
+                for (const auto &Item : Proxyservers | std::views::values)
                 {
-                    if (Item.second.Instance == Server)
+                    if (Item.Instance == Server)
                     {
-                        Address_t Universalformat{ ntohl(Item.second.Address.sin_addr.s_addr), ntohs(Item.second.Address.sin_port) };
+                        Address_t Universalformat{ ntohl(Item.Address.sin_addr.s_addr), ntohs(Item.Address.sin_port) };
                         Server->onPacketwrite(Buffer, Size, &Universalformat);
                     }
                 }
@@ -310,7 +310,7 @@ namespace Localnetworking
     void Createbackend(uint16_t Serverport)
     {
         WSADATA wsaData;
-        WSAStartup(MAKEWORD(1, 1), &wsaData);
+        (void)WSAStartup(MAKEWORD(1, 1), &wsaData);
         Listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
         // Find an available port to listen on, if we fail after 64 tries we have other issues.
@@ -332,7 +332,7 @@ namespace Localnetworking
 
         // Notify the developer and spawn the server.
         Infoprint(va("Spawning localnet backend on port %u", ntohs(Backendport)));
-        if (Ayria.Createperiodictask) [[likely]] Ayria.Createperiodictask(50, Ayriapoll);
+        if (Ayria.createPeriodictask) [[likely]] Ayria.createPeriodictask(50, Ayriapoll);
         else CreateThread(NULL, NULL, Pollsockets, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
 
         // Load all plugins from disk.
