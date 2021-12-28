@@ -73,9 +73,9 @@ namespace Steam
     extern Globalstate_t Global;
 
     // Steam uses 32-bit IDs for the account, so we need to do some conversions.
+    bool compareSteamID(const SteamID_t &A, const SteamID_t &B);
+    std::string fromSteamID(const SteamID_t &AccountID);
     SteamID_t toSteamID(const std::string &LongID);
-    bool compareSteamID(SteamID_t A, SteamID_t B);
-    std::string fromSteamID(SteamID_t AccountID);
 
     // A Steam interface is a class that proxies calls to their backend.
     // As such we can create a generic interface with just callbacks.

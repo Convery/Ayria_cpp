@@ -24,11 +24,7 @@ namespace Steam
 
         return SteamID;
     }
-    bool compareSteamID(SteamID_t A, SteamID_t B)
-    {
-        return A.UserID == B.UserID && A.SessionID == B.SessionID;
-    }
-    std::string fromSteamID(SteamID_t AccountID)
+    std::string fromSteamID(const SteamID_t &AccountID)
     {
         // Generally used for bots and such temp accounts.
         if (AccountID.Accounttype == SteamID_t::Accounttype_t::Anonymous)
@@ -97,15 +93,19 @@ namespace Steam
 
         return Accountmap[AccountID];
     }
+    bool compareSteamID(const SteamID_t &A, const SteamID_t &B)
+    {
+        return A.UserID == B.UserID && A.SessionID == B.SessionID;
+    }
 
     // For debugging, not static because MSVC < 17.0 does not like it.
-    [[maybe_unused]] void SQLErrorlog(void *DBName, int Errorcode, const char *Errorstring)
+    [[maybe_unused]] void SQLErrorlog(const void *DBName, const int Errorcode, const char *Errorstring)
     {
         (void)DBName; (void)Errorcode; (void)Errorstring;
         Debugprint(va("SQL error %i in %s: %s", DBName, Errorcode, Errorstring));
     }
 
-    // Interface with the client database, remember try-catch.
+    // Interface with the client database.
     sqlite::Database_t Database()
     {
         static std::shared_ptr<sqlite3> Database{};
@@ -123,16 +123,15 @@ namespace Steam
             sqlite3_extended_result_codes(Ptr, false);
 
             // Close the DB at exit to ensure everything's flushed.
-            Database = std::shared_ptr<sqlite3>(Ptr, [=](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+            Database = std::shared_ptr<sqlite3>(Ptr, [](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
 
             // Basic initialization.
-            try
             {
                 sqlite::Database_t(Database) << "PRAGMA foreign_keys = ON;";
                 sqlite::Database_t(Database) << "PRAGMA auto_vacuum = INCREMENTAL;";
 
                 // Helper functions for inline hashing.
-                const auto Lambda32 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                constexpr auto Lambda32 = [](sqlite3_context *context, const int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -142,7 +141,7 @@ namespace Steam
                     const auto Hash = Hash::WW32(sqlite3_value_text(argv[0]), Length);
                     sqlite3_result_int(context, Hash);
                 };
-                const auto Lambda64 = [](sqlite3_context *context, int argc, sqlite3_value **argv) -> void
+                constexpr auto Lambda64 = [](sqlite3_context *context, const int argc, sqlite3_value **argv) -> void
                 {
                     if (argc == 0) return;
                     if (SQLITE3_TEXT != sqlite3_value_type(argv[0])) { sqlite3_result_null(context); return; }
@@ -265,11 +264,10 @@ namespace Steam
                         "isActive BOOLEAN NOT NULL, "
                         "isSecure BOOLEAN NOT NULL );";
                 }
-
-            } catch (...) {}
+            }
 
             // Perform cleanup on exit.
-            std::atexit([]()
+            std::atexit([]() -> void
             {
                 try
                 {
@@ -415,7 +413,7 @@ namespace Steam
                         // Legacy games wants the dlls loaded.
                         const auto Clientpath64 = Encoding::toWide(std::u8string(*Global.Installpath) + u8"\\steamclient64.dll"s);
                         const auto Clientpath32 = Encoding::toWide(std::u8string(*Global.Installpath) + u8"\\steamclient.dll"s);
-                        if (Build::is64bit) LoadLibraryW(Clientpath64.c_str());
+                        if constexpr (Build::is64bit) LoadLibraryW(Clientpath64.c_str());
                         else LoadLibraryW(Clientpath32.c_str());
 
                         RegSetValueW(Registrykey, L"SteamClientDll64", REG_SZ, Clientpath64.c_str(), (DWORD)Clientpath64.length() + 1);
@@ -556,8 +554,8 @@ namespace Steam
         }
 
         // For debugging interface access.
-        #if 0
-        #define Printcaller() { Debugprint(va("%s from 0x%X", __func__, (size_t)_ReturnAddress())); }
+        #if 1
+        #define Printcaller() { Debugprint(va("%s from 0x%zX", __func__, (size_t)_ReturnAddress())); }
         #else
         #define Printcaller()
         #endif
