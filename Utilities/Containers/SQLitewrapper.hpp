@@ -159,6 +159,7 @@ namespace sqlite
         }();
 
         assert(SQLITE_OK == Result);
+        (void)Result;
     }
 
     // Helper to iterate over tuple members.
@@ -314,6 +315,7 @@ namespace sqlite
             // Prepare the statement.
             const auto Result = sqlite3_prepare_v2(Connection.get(), SQL.data(), (int)SQL.size(), &Temp, &Remaining);
             assert(SQLITE_OK == Result);
+            (void)Result;
 
             // Save the statement and finalize when we go out of scope.
             Statement = { Temp, sqlite3_finalize };
