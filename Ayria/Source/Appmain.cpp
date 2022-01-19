@@ -40,9 +40,8 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     // On startup.
     if (nReason == DLL_PROCESS_ATTACH)
     {
-        // TODO(tcn): For 1.0, check profiler if _MM_HINT_T0 is the better choice (fill all cache-levels rather than 1-way tagging).
         // Although it should already be touched by the ctors, ensure it's propagated and prioritized.
-        _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_NTA);
+        _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_T0);
 
         // Ensure that Ayrias default directories exist.
         std::filesystem::create_directories("./Ayria/Logs");
@@ -79,4 +78,31 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     }
 
     return TRUE;
+}
+
+int main()
+{
+    _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_T0);
+
+    // Ensure that Ayrias default directories exist.
+    std::filesystem::create_directories("./Ayria/Logs");
+    std::filesystem::create_directories("./Ayria/Storage");
+    std::filesystem::create_directories("./Ayria/Plugins");
+
+    // Only keep a log for this session.
+    Logging::Clearlog();
+
+    // Catch any unwanted exceptions.
+    SetUnhandledExceptionFilter(onUnhandledexception);
+
+    // Initialize the backend and console; in-case plugins need access.
+    Backend::Initialize();
+    Console::Initialize();
+
+    // If injected, we can't hook. So just load all plugins directly.
+    Plugins::Initialize();
+
+
+    while (true) Sleep(10);
+
 }

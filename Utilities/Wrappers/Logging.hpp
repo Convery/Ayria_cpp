@@ -17,8 +17,12 @@ namespace Logging
     // Let std::fmt deal with type specializations.
     template <typename T> void Print(char Prefix, const T &Message)
     {
-        const auto Time = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::current_zone()->to_local(std::chrono::system_clock::now()));
-        const auto Formatted = std::format("[{}][{:%T}] {}\n", Prefix, Time, Encoding::toNarrow(Message));
+        const auto Now{ std::time(nullptr) };
+        const auto Local = localtime(&Now);
+
+        const auto Formatted = std::format("[{}][{:02}:{:02}:{:02}] {}\n", Prefix,
+            Local->tm_hour, Local->tm_min, Local->tm_sec,
+            Encoding::toNarrow(Message));
 
         toDebugstream(Formatted);
         toConsole(Formatted);

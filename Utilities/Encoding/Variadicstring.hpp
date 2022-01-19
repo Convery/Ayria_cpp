@@ -34,7 +34,7 @@ template <typename ... Args> [[nodiscard]] std::string va_impl(const char *Forma
     const auto Size = std::snprintf(nullptr, 0, Format, args...);
     std::string Buffer(Size, '\0');
 
-    std::snprintf(Buffer.data(), Size, Format, args...);
+    std::snprintf(Buffer.data(), Size + 1, Format, args...);
     return Buffer;
 }
 template <typename ... Args> [[nodiscard]] std::string va(const std::string &Format, const Args& ...args)

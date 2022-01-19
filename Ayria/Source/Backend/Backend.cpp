@@ -167,10 +167,12 @@ namespace Backend
     static void Saveconfig()
     {
         JSON::Object_t Object{};
-        Object["enableExternalconsole"] = Global.Settings.enableExternalconsole;
-        Object["enableIATHooking"] = Global.Settings.enableIATHooking;
-        Object["enableFileshare"] = Global.Settings.enableFileshare;
-        Object["pruneDB"] = Global.Settings.pruneDB;
+
+        // Need to cast the bits to bool as otherwise they'd be uint16.
+        Object["enableExternalconsole"] = (bool)Global.Settings.enableExternalconsole;
+        Object["enableIATHooking"] = (bool)Global.Settings.enableIATHooking;
+        Object["enableFileshare"] = (bool)Global.Settings.enableFileshare;
+        Object["pruneDB"] = (bool)Global.Settings.pruneDB;
         Object["Username"] = *Global.Username;
 
         FS::Writefile(L"./Ayria/Settings.json", JSON::Dump(Object));
@@ -247,7 +249,7 @@ inline std::pair<std::string, std::string> GenerateHWID()
         {
             const auto Type = Consume(uint8_t);
             const auto Length = Consume(uint8_t);
-            /*const auto Handle =*/ Consume(uint16_t);
+            /*const auto Handle =*/ (void)Consume(uint16_t);
 
             if (Type == 1)
             {
