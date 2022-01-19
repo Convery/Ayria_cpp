@@ -157,6 +157,7 @@
 #pragma comment(lib, "absl_leak_check.lib")
 #pragma comment(lib, "absl_leak_check_disable.lib")
 #pragma comment(lib, "absl_log_severity.lib")
+#pragma comment(lib, "absl_low_level_hash.lib")
 #pragma comment(lib, "absl_malloc_internal.lib")
 #pragma comment(lib, "absl_periodic_sampler.lib")
 #pragma comment(lib, "absl_random_distributions.lib")
@@ -186,7 +187,6 @@
 #pragma comment(lib, "absl_throw_delegate.lib")
 #pragma comment(lib, "absl_time.lib")
 #pragma comment(lib, "absl_time_zone.lib")
-#pragma comment(lib, "absl_wyhash.lib")
 
 template <class K, class V,
           class Hash = absl::container_internal::hash_default_hash<K>,

@@ -5,7 +5,6 @@
 */
 
 #include "AABackend.hpp"
-#include <openssl/curve25519.h>
 #include <winioctl.h>
 
 // 512-bit aligned storage.
@@ -58,8 +57,8 @@ namespace Backend
     void setCryptokey_CRED(std::string_view Cred1, std::string_view Cred2)
     {
         uint8_t Seed[32]{};
-        const auto Ret = PKCS5_PBKDF2_HMAC(Cred1.data(), Cred1.size(),
-            (uint8_t *)Cred2.data(), Cred2.size(), 12345, EVP_sha256(), 32, Seed);
+        const auto Ret = PKCS5_PBKDF2_HMAC(Cred1.data(), (int)Cred1.size(),
+            (uint8_t *)Cred2.data(), (int)Cred2.size(), 12345, EVP_sha256(), 32, Seed);
         if (!Ret) [[unlikely]] return;
 
         std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(std::to_array(Seed));

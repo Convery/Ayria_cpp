@@ -158,7 +158,7 @@ namespace JSON
         [[nodiscard]] bool contains(const std::string_view Key) const
         {
             if (Type != Type_t::Object) return false;
-            return asPtr(Object_t)->contains(Key.data());
+            return asPtr(Object_t)->contains(Key.data()) && !asPtr(Object_t)->at(Key.data()).isNull();
         }
         [[nodiscard]] bool isNull() const
         {
@@ -287,8 +287,18 @@ namespace JSON
         //
         template <typename T> Value_t(const T &Input) requires(!std::is_pointer_v<T>)
         {
-            // Safety-check..
-            static_assert(toType<T>() != Type_t::Null);
+            // Optional support.
+            if constexpr (isDerived<T, std::optional>)
+            {
+                if (Input) *this = Value_t(*Input);
+                else *this = Value_t();
+                return;
+            }
+            else
+            {
+                // Safety-check..
+                static_assert(toType<T>() != Type_t::Null);
+            }
 
             if constexpr (std::is_same_v<T, Value_t>) *this = Input;
             else
