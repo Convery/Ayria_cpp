@@ -24,7 +24,7 @@ namespace Backend::Messageprocessing
 
         // Poll for unprocessed packets.
         Backend::Database()
-            << "SELECT (rowid, Messagetype, Timestamp, Message, Sender) FROM Messagestream WHERE (isProcessed = false) ORDER BY Timestamp LIMIT 10;"
+            << "SELECT rowid, Messagetype, Timestamp, Message, Sender FROM Messagestream WHERE (isProcessed = false) ORDER BY Timestamp LIMIT 10;"
             >> [&](int64_t rowid, uint32_t Messagetype, uint64_t Timestamp, const std::string &Message, const std::string &Sender)
             {
                 // Decode generates less data, so re-use the buffer and ignore our const promise..

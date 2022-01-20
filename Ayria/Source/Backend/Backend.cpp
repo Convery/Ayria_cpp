@@ -152,7 +152,7 @@ namespace Backend
             {
                 if (!!Global.Settings.pruneDB)
                 {
-                    const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::hours(24)).time_since_epoch();
+                    const auto Timestamp = (std::chrono::system_clock::now() - std::chrono::hours(24)).time_since_epoch();
                     Backend::Database() << "DELETE FROM Messagestream WHERE Timestamp < ?;" << Timestamp.count();
                 }
 

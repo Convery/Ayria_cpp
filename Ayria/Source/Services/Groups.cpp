@@ -49,7 +49,7 @@ namespace Services::Groups
         if (Groupcache.contains(LongID)) [[likely]] return Groupcache[LongID];
 
         // Check if it needs updating.
-        const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
+        const auto Timestamp = (std::chrono::system_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
         if (Groupcache.contains(LongID) && Groupcache[LongID]->Lastupdated > Timestamp)
         {
             return Groupcache[LongID];
@@ -58,7 +58,7 @@ namespace Services::Groups
         // Get the group from the database.
         if (auto Group = fromJSON(AyriaAPI::Groups::Fetch(LongID)))
         {
-            Group->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+            Group->Lastupdated = std::chrono::system_clock::now().time_since_epoch().count();
             return Groupcache.emplace(LongID, std::make_shared<Group_t>(*Group)).first->second;
         }
 
@@ -209,7 +209,7 @@ namespace Services::Groups
                 auto New = fromJSON(Request);
                 if (!New) [[unlikely]] return false;
 
-                New->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+                New->Lastupdated = std::chrono::system_clock::now().time_since_epoch().count();
                 Groupcache[GroupID] = std::make_shared<Group_t>(*New);
 
                 // Are we interested in this group?
@@ -238,7 +238,7 @@ namespace Services::Groups
             auto New = fromJSON(Request);
             if (!New) [[unlikely]] return false;
 
-            New->Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+            New->Lastupdated = std::chrono::system_clock::now().time_since_epoch().count();
             Groupcache[GroupID] = std::make_shared<Group_t>(*New);
 
             // Are we interested in this group?
@@ -417,7 +417,7 @@ namespace Services::Groups
     void Initialize()
     {
         Backend::Database() <<
-            "CREATE TABLE IF NOT EXISTS Group ("
+            "CREATE TABLE IF NOT EXISTS Groups ("
             "GroupID TEXT PRIMARY KEY REFERENCES Account(Publickey) ON DELETE CASCADE, "
             "Groupname TEXT, "
             "Maxmembers INTEGER NOT NULL, "
@@ -425,14 +425,14 @@ namespace Services::Groups
 
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Groupmember ("
-            "GroupID TEXT REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "GroupID TEXT REFERENCES Groups(GroupID) ON DELETE CASCADE, "
             "MemberID TEXT REFERENCES Account(Publickey) ON DELETE CASCADE, "
             "isModerator BOOLEAN DEFAULT false, "
             "UNIQUE (GroupID, MemberID) );";
 
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Groupkey ("
-            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "GroupID TEXT PRIMARY KEY REFERENCES Groups(GroupID) ON DELETE CASCADE, "
             "Cryptobase INTEGER DEFAULT 0 );";
 
         // Parse Layer 2 messages.

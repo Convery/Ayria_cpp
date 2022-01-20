@@ -72,7 +72,7 @@ namespace Services::Clientinfo
         }
 
         // Check if it needs updating.
-        const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
+        const auto Timestamp = (std::chrono::system_clock::now() - std::chrono::seconds(10)).time_since_epoch().count();
         if (Clientcache.contains(LongID) && Clientcache[LongID]->Lastupdated > Timestamp)
         {
             return Clientcache[LongID];
@@ -149,7 +149,7 @@ namespace Services::Clientinfo
                 << Client.ClientID << Client.GameID << Client.ModID << Client.isIngame;
 
             // And our cache.
-            Client.Lastupdated = std::chrono::utc_clock::now().time_since_epoch().count();
+            Client.Lastupdated = std::chrono::system_clock::now().time_since_epoch().count();
             Client.Lastseen = Client.Lastupdated;
             Clientcache[Client.ClientID] = std::make_shared<Client_t>(Client);
 

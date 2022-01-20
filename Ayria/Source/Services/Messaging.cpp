@@ -29,7 +29,7 @@ namespace Services::Messaging
     void sendGroupmessage(const std::string &GroupID, uint32_t Messagetype, std::string_view Message)
     {
         // Create a unique seed for the IV and generate the shared key to use.
-        const auto IVSeed = Hash::WW32(std::chrono::utc_clock::now().time_since_epoch().count());
+        const auto IVSeed = Hash::WW32(std::chrono::system_clock::now().time_since_epoch().count());
         const auto Checksum = Hash::WW32(Message);
         const auto Key = getCryptokey(GroupID);
         const auto IV = Hash::SHA256(IVSeed);
@@ -38,7 +38,7 @@ namespace Services::Messaging
          Backend::Database()
              << "INSERT OR REPLACE INTO Groupmessage VALUES (?, ?, ?, ?, ?);"
              << Global.getLongID() << GroupID << Messagetype
-             << std::chrono::utc_clock::now().time_since_epoch().count()
+             << std::chrono::system_clock::now().time_since_epoch().count()
              << Base85::Encode(Message);
 
          // Should be optimized to be in-place..
@@ -56,7 +56,7 @@ namespace Services::Messaging
     void sendClientmessage(const std::string &ClientID, uint32_t Messagetype, std::string_view Message)
     {
         // Create a unique seed for the IV and generate the shared key to use.
-        const auto IVSeed = Hash::WW32(std::chrono::utc_clock::now().time_since_epoch().count());
+        const auto IVSeed = Hash::WW32(std::chrono::system_clock::now().time_since_epoch().count());
         const auto Key = qDSA::Generatesecret(Base58::Decode(ClientID), *Global.Privatekey);
         const auto Checksum = Hash::WW32(Message);
         const auto IV = Hash::SHA256(IVSeed);
@@ -65,7 +65,7 @@ namespace Services::Messaging
         Backend::Database()
             << "INSERT OR REPLACE INTO Clientmessage VALUES (?, ?, ?, ?, ?);"
             << Global.getLongID() << ClientID << Messagetype
-            << std::chrono::utc_clock::now().time_since_epoch().count()
+            << std::chrono::system_clock::now().time_since_epoch().count()
             << Base85::Encode(Message);
 
         // Should be optimized to be in-place..
@@ -211,7 +211,7 @@ namespace Services::Messaging
     {
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Groupkey ("
-            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID) ON DELETE CASCADE, "
+            "GroupID TEXT PRIMARY KEY REFERENCES Groups(GroupID) ON DELETE CASCADE, "
             "Cryptobase INTEGER DEFAULT 0 );";
 
         Backend::Database() <<
@@ -225,7 +225,7 @@ namespace Services::Messaging
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Groupmessage ("
             "Source TEXT REFERENCES Account(Publickey), "
-            "Target TEXT REFERENCES Group(GroupID), "
+            "Target TEXT REFERENCES Groups(GroupID), "
             "Messagetype INTEGER NOT NULL, "
             "Timestamp INTEGER NOT NULL, "
             "Message TEXT NOT NULL );";

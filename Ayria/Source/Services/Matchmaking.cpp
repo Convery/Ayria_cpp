@@ -150,7 +150,7 @@ namespace Services::Matchmaking
         // Keep a persitent table around for matchmaking.
         Backend::Database() <<
             "CREATE TABLE IF NOT EXISTS Matchmaking ("
-            "GroupID TEXT PRIMARY KEY REFERENCES Group(GroupID), "
+            "GroupID TEXT PRIMARY KEY REFERENCES Groups(GroupID), "
             "Hostaddress TEXT UNIQUE, "
             "Providers BLOB, "
             "GameID INTEGER );";

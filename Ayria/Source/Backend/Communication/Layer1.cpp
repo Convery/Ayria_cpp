@@ -90,7 +90,7 @@ namespace Backend::Messagebus
         Packet->Publickey = *Global.Publickey;
         std::ranges::copy(Payload, Packet->Payload.Message);
         Packet->Payload.Messagetype = toNet(Hash::WW32(Identifier));
-        Packet->Payload.Timestamp = toNet(std::chrono::utc_clock::now().time_since_epoch().count());
+        Packet->Payload.Timestamp = toNet(std::chrono::system_clock::now().time_since_epoch().count());
         Packet->Signature = qDSA::Sign(*Global.Publickey, *Global.Privatekey, std::span((uint8_t *)&Packet->Payload, sizeof(Payload_t) + Payload.size()));
 
         // Save our own packets incase someone requests them later.
@@ -157,7 +157,7 @@ namespace Backend::Messagebus
         if (!qDSA::Verify(Header->Publickey, Header->Signature, Payload)) return;
 
         // Check that the packet isn't from the future.
-        if (toNative(Header->Payload.Timestamp) > (uint64_t)std::chrono::utc_clock::now().time_since_epoch().count()) [[unlikely]]
+        if (toNative(Header->Payload.Timestamp) > (uint64_t)std::chrono::system_clock::now().time_since_epoch().count()) [[unlikely]]
             return;
 
         // Update the database's last-seen status for the client, without triggering the forgein-keys.
@@ -322,6 +322,10 @@ namespace Backend::Messagebus
         // Ensure that this is only done once.
         [[maybe_unused]] static bool doOnce = []() -> bool
         {
+            // Ensure that we exist in the database.
+            Backend::Database() << "INSERT OR REPLACE INTO Account VALUES (?, ?);"
+                << Global.getLongID() << std::chrono::system_clock::now().time_since_epoch().count();
+
             // TODO(tcn): Tune the polling rate.
             Backend::Enqueuetask(250, doMulticast);
             Backend::Enqueuetask(200, doRouting);
