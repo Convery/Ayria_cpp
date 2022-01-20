@@ -203,6 +203,10 @@ namespace sqlite
         bool isStarted{};
         int32_t Index{};
 
+        #if !defined (NDEBUG)
+        std::shared_ptr<sqlite3> Owner;
+        #endif
+
         // Intial state for the bindings.
         inline void setStarted()
         {
@@ -221,7 +225,15 @@ namespace sqlite
 
             // Verify that there's indeed only one row.
             Result = sqlite3_step(Statement.get());
-            assert(SQLITE_DONE == Result);
+
+            // For debugging.
+            #if !defined (NDEBUG)
+            if (Result != SQLITE_DONE)
+            {
+                const auto Error = sqlite3_errmsg(Owner.get());
+                Errorprint(Error);
+            }
+            #endif
         }
         void Extractmultiple(std::function<void()> Callback)
         {
@@ -233,8 +245,14 @@ namespace sqlite
                 Callback();
             }
 
-            // If there was an error, report it.
-            assert(SQLITE_DONE == Result);
+            // For debugging.
+            #if !defined (NDEBUG)
+            if (Result != SQLITE_DONE)
+            {
+                const auto Error = sqlite3_errmsg(Owner.get());
+                Errorprint(Error);
+            }
+            #endif
         }
         void Extractmultiple(std::function<bool()> Callback)
         {
@@ -249,8 +267,14 @@ namespace sqlite
                 }
             }
 
-            // If there was an error, report it.
-            assert(SQLITE_DONE == Result);
+            // For debugging.
+            #if !defined (NDEBUG)
+            if (Result != SQLITE_DONE)
+            {
+                const auto Error = sqlite3_errmsg(Owner.get());
+                Errorprint(Error);
+            }
+            #endif
         }
 
     public:
@@ -287,8 +311,7 @@ namespace sqlite
                 sqlite3_reset(Statement.get());
                 sqlite3_clear_bindings(Statement.get());
             }
-
-            bindValue(Statement.get(), Index++, Value);
+            bindValue(Statement.get(), ++Index, Value);
             return *this;
         }
         Statement_t &operator<<(std::string_view Value)
@@ -300,7 +323,7 @@ namespace sqlite
                 sqlite3_clear_bindings(Statement.get());
             }
 
-            bindValue(Statement.get(), Index++, Value);
+            bindValue(Statement.get(), ++Index, Value);
             return *this;
         }
 
@@ -314,13 +337,29 @@ namespace sqlite
 
             // Prepare the statement.
             const auto Result = sqlite3_prepare_v2(Connection.get(), SQL.data(), (int)SQL.size(), &Temp, &Remaining);
-            assert(SQLITE_OK == Result);
+
+            // For debugging.
+            #if !defined (NDEBUG)
+            Owner = Connection;
+
+            if (Result != SQLITE_OK)
+            {
+                const auto Error = sqlite3_errmsg(Owner.get());
+                Errorprint(Error);
+            }
+            #endif
             (void)Result;
 
             // Save the statement and finalize when we go out of scope.
             Statement = { Temp, sqlite3_finalize };
         }
-        Statement_t(Statement_t &&Other) noexcept : Statement(std::move(Other.Statement)), isStarted(Other.isStarted), Index(Other.Index) {}
+        Statement_t(Statement_t &&Other) noexcept : Statement(std::move(Other.Statement)), isStarted(Other.isStarted), Index(Other.Index)
+        {
+            // For debugging.
+            #if !defined (NDEBUG)
+            Owner = Other.Owner;
+            #endif
+        }
         ~Statement_t()
         {
             // Need to ensure that the statement was evaluated.
