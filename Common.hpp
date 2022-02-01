@@ -24,8 +24,6 @@
 
 // Remove some Windows annoyance.
 #if defined(_WIN32)
-#define _HAS_DEPRECATED_RESULT_OF 1
-
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN

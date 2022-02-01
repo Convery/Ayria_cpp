@@ -78,7 +78,6 @@ using namespace std::literals;
 #include <Utilities/Containers/Bitbuffer.hpp>
 #include <Utilities/Containers/Bytebuffer.hpp>
 #include <Utilities/Containers/Ringbuffer.hpp>
-#include <Utilities/Containers/SQLitewrapper.hpp>
 #include <Utilities/Crypto/Hashes.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
 #include <Utilities/Crypto/Tiger192Hash.hpp>
@@ -97,10 +96,12 @@ using namespace std::literals;
 #include <Utilities/Threads/Debugmutex.hpp>
 #include <Utilities/Wrappers/Logging.hpp>
 #include <Utilities/Wrappers/Filesystem.hpp>
-
+#include <Utilities/Wrappers/Endian.hpp>
+#include <Utilities/Wrappers/SQLitewrapper.hpp>
 
 #include <Utilities/Ayria/AyriaAPI.hpp>
 #include <Utilities/Ayria/Ayriamodule.h>
+#include <Utilities/Ayria/Ayriahelper.hpp>
 #include <Utilities/Ayria/Localnetservers.h>
 
 // Temporary includes.
