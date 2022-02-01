@@ -32,6 +32,7 @@
 // For UTF8 encoding.
 #include "../Encoding/Stringconv.hpp"
 
+#define SQLITE_ENABLE_PREUPDATE_HOOK
 #include <sqlite3.h>
 #pragma comment(lib, "sqlite3.lib")
 
@@ -199,7 +200,7 @@ namespace sqlite
     // Holds the prepared statement that we append values to.
     class Statement_t
     {
-        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> Statement;
+        std::shared_ptr<sqlite3_stmt> Statement{};
         bool isStarted{};
         int32_t Index{};
 
@@ -330,7 +331,7 @@ namespace sqlite
         // Reset can also be used to avoid RTTI evaluation.
         void Reset() { setStarted(); }
 
-        explicit Statement_t(std::shared_ptr<sqlite3> Connection, std::string_view SQL) : Statement(nullptr, sqlite3_finalize)
+        explicit Statement_t(std::shared_ptr<sqlite3> Connection, std::string_view SQL)
         {
             const char *Remaining{};
             sqlite3_stmt *Temp{};
@@ -352,6 +353,13 @@ namespace sqlite
 
             // Save the statement and finalize when we go out of scope.
             Statement = { Temp, sqlite3_finalize };
+        }
+        Statement_t(const Statement_t &Other) noexcept : Statement(Other.Statement), isStarted(Other.isStarted), Index(Other.Index)
+        {
+            // For debugging.
+            #if !defined (NDEBUG)
+            Owner = Other.Owner;
+            #endif
         }
         Statement_t(Statement_t &&Other) noexcept : Statement(std::move(Other.Statement)), isStarted(Other.isStarted), Index(Other.Index)
         {
