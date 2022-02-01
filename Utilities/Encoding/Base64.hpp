@@ -407,7 +407,4 @@ namespace Base64
 
         return Input;
     }
-
-    // Sanity checking.
-    static_assert(Decode("MTIzNDU=") == Decode(Encode("12345")), "Someone fucked with the Base64 encoding..");
 }

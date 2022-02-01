@@ -409,7 +409,4 @@ namespace Base85
 
     // Default to RFC1924.
     using namespace RFC1924;
-
-    // Sanity checking.
-    static_assert(Z85::Decode(Z85::Encode("1234")) == RFC1924::Decode(RFC1924::Encode("1234")), "Someone fucked with the Base85 encoding..");
 }

@@ -11,7 +11,7 @@
 
 // std::byteswap if not available.
 #if !defined (__cpp_lib_byteswap)
-#include "../Internal/Misc.hpp"
+#include "../Wrappers/Endian.hpp"
 #endif
 
 #pragma warning(push, 0)

@@ -467,5 +467,11 @@ namespace JSON
         if (Length == 0) return Parse(std::string(JSONString));
         return Parse(std::string_view(JSONString, Length));
     }
+
+    template <typename T> requires (sizeof(T) == 1)
+    inline Value_t Parse(std::span<T> Span)
+    {
+        return Parse(std::string_view{ (char *)Span.data(), Span.size() });
+    }
 }
 #pragma warning(pop)

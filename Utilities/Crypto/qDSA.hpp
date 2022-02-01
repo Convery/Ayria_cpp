@@ -1117,7 +1117,7 @@ namespace qDSA
         std::array<uint8_t, 32> Public, Private;
         std::ranges::move(Hash::SHA256(Seed), Private.begin());
 
-        // Make the private-key compatible with RFC 8032 incase someone want's to re-use it.
+        // Make the private-key compatible with RFC 8032 in-case someone want's to re-use it.
         Private[0] &= 0xF8;
         Private[31] &= 0x7F;
         Private[31] |= 0x40;
