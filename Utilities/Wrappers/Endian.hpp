@@ -5,7 +5,9 @@
 */
 
 #pragma once
-#include <Stdinclude.hpp>
+#include <bit>
+#include <cstdint>
+#include <concepts>
 
 // Will be added in MSVC 17.1, copied from MS-STL.
 #if !defined (__cpp_lib_byteswap)

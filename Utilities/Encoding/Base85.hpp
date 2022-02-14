@@ -1,93 +1,25 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-08-20
+    Started: 2022-02-13
     License: MIT
-
-    RFC encoding is JSON compatible.
-    Z85 encoding is C++ compatible.
-    Use accordingly.
 */
 
 #pragma once
-#include <span>
-#include <array>
-#include <string>
-#include <vector>
-#include <cassert>
-#include <cstdint>
-#include <concepts>
-#include <algorithm>
-#include <string_view>
+#include <Utilities/Wrappers/Endian.hpp>
+#include <Utilities/Constexprhelpers.hpp>
 
-// std::byteswap if not available.
-#if !defined (__cpp_lib_byteswap)
-#include "../Internal/Misc.hpp"
-#endif
-
-using Blob = std::basic_string<uint8_t>;
-using Blob_view = std::basic_string_view<uint8_t>;
-
+// TODO(tcn): Benchmark the two implementation-styles and converge on the best one.
 namespace Base85
 {
-    template <typename T> concept Byte_t = sizeof(T) == 1;
-    constexpr size_t Encodesize(size_t N)  { return N * 5 / 4; }
-    constexpr size_t Decodesize(size_t N)  { return N * 4 / 5; }
-    template <size_t N> constexpr size_t Encodesize() { return N * 5 / 4; }
-    template <size_t N> constexpr size_t Decodesize() { return N * 4 / 5; }
-    constexpr size_t Encodesize_padded(size_t N) { return Encodesize(N) + ((Encodesize(N) % 5) ? (5 - (Encodesize(N) % 5)) : 0); }
-    constexpr size_t Decodesize_padded(size_t N) { return Decodesize(N) + ((Decodesize(N) & 3) ? (4 - (Decodesize(N) & 3)) : 0); }
-    template <size_t N> constexpr size_t Encodesize_padded() { return Encodesize<N>() + ((Encodesize<N>() % 5) ? (5 - (Encodesize<N>() % 5)) : 0); }
-    template <size_t N> constexpr size_t Decodesize_padded() { return Decodesize<N>() + ((Decodesize<N>() & 3) ? (4 - (Decodesize<N>() & 3)) : 0); }
+    constexpr size_t Encodesize_min(size_t N)  { return N * 5 / 4; }
+    constexpr size_t Decodesize_min(size_t N)  { return N * 4 / 5; }
+    constexpr size_t Encodesize(size_t N) { return Encodesize_min(N) + ((Encodesize_min(N) % 5) ? (5 - (Encodesize_min(N) % 5)) : 0); }
+    constexpr size_t Decodesize(size_t N) { return Decodesize_min(N) + ((Decodesize_min(N) & 3) ? (4 - (Decodesize_min(N) & 3)) : 0); }
 
-    template <typename T> concept Range_t = requires (const T &t) { std::ranges::begin(t); std::ranges::end(t); std::ranges::size(t); };
-    template <typename T> concept Complexstring_t = Range_t<T> && !Byte_t<typename T::value_type>;
-    template <typename T> concept Simplestring_t = Range_t<T> && Byte_t<typename T::value_type>;
-
-    // Convert the range to a flat type (as you can't cast pointers in constexpr).
-    template <Complexstring_t T> [[nodiscard]] constexpr Blob Flatten(const T &Input)
-    {
-        Blob Bytearray; Bytearray.reserve(Input.size() * sizeof(typename T::value_type));
-
-        for (auto &&Item : Input)
-        {
-            for (size_t i = 0; i < (sizeof(typename T::value_type) - 1); ++i)
-            {
-                Bytearray.append(Item & 0xFF);
-                Item >>= 8;
-            }
-
-            Bytearray.append(Item & 0xFF);
-        }
-
-        return Bytearray;
-    }
-
-    // Yes, all this to remove the null-byte from a string literal..
-    template <size_t N, Byte_t T> consteval std::array<T, N - 1> char_array(const T(&Input)[N])
-    {
-        return []<size_t ...Index>(const T(&Input)[N], std::index_sequence<Index...>)
-        {
-            return std::array<T, N - 1>{ {Input[Index]...} };
-        }(Input, std::make_index_sequence<N - 1>());
-    }
-
-    // Not allowed to cast a pointer to a value, because reasons..
-    template <Byte_t T> constexpr uint32_t toInt32(const T *Ptr)
-    {
-        return uint8_t(*Ptr++) << 24 | uint8_t(*Ptr++) << 16 | uint8_t(*Ptr++) << 8 | uint8_t(*Ptr);
-    }
-    template <Byte_t T> constexpr void fromInt32(T *Ptr, uint32_t Value)
-    {
-        (*Ptr++) = T((Value >> 24) & 0xFF);
-        (*Ptr++) = T((Value >> 16) & 0xFF);
-        (*Ptr++) = T((Value >> 8) & 0xFF);
-        (*Ptr  ) = T((Value >> 0) & 0xFF);
-    }
-
-    // TODO(tcn): Benchmark the two implementation-styles and converge on the best one.
+    // Zero-MQ version, for source-code embedding.
     namespace Z85
     {
-        constexpr uint8_t Table[85] =
+        constexpr uint8_t Table[85]
         {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
@@ -100,7 +32,7 @@ namespace Base85
             '&', '<', '>', '(', ')', '[', ']', '{', '}', '@',
             '%', '$', '#'
         };
-        constexpr uint8_t Reversetable[128] =
+        constexpr uint8_t Reversetable[128]
         {
             0x00, 0x44, 0x00, 0x54, 0x53, 0x52, 0x48, 0x00,
             0x4B, 0x4C, 0x46, 0x41, 0x00, 0x3F, 0x3E, 0x45,
@@ -118,15 +50,59 @@ namespace Base85
         };
 
         constexpr uint32_t Div85(uint32_t Value) { constexpr uint64_t Magic = 3233857729ULL; return (uint32_t)((Magic * Value) >> 32) >> 6; }
-        template <Byte_t T, Byte_t U> constexpr std::span<U> Encode(std::span<const T> Input, std::span<U> Output)
+
+        template <cmp::Byte_t T, size_t N> requires((N & 3) == 0) constexpr cmp::Vector_t<T, Encodesize(N)> Encode(const std::array<T, N> &Input)
         {
-            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
+            cmp::Vector_t<T, Encodesize(N)> Output{};
+            const auto sOutput = std::span(Output);
+
+            for (size_t i = 0; i < N / 4; ++i)
+            {
+                uint32_t Accumulator, Rem;
+                Accumulator = std::byteswap(cmp::toINT<uint32_t>(&Input[i * 4]));
+                const auto outTuple = sOutput.subspan(i * 5, 5);
+
+                Rem = Div85(Accumulator); outTuple[4] = T(Table[Accumulator - Rem * 85UL]); Accumulator = Rem;
+                Rem = Div85(Accumulator); outTuple[3] = T(Table[Accumulator - Rem * 85UL]); Accumulator = Rem;
+                Rem = Div85(Accumulator); outTuple[2] = T(Table[Accumulator - Rem * 85UL]); Accumulator = Rem;
+                Rem = Div85(Accumulator); outTuple[1] = T(Table[Accumulator - Rem * 85UL]);
+                outTuple[0] = T(Table[Rem]);
+            }
+
+            return Output;
+        }
+        template <cmp::Byte_t T, size_t N> requires((N % 5) == 0) constexpr cmp::Vector_t<T, Decodesize(N)> Decode(const std::array<T, N> &Input)
+        {
+            cmp::Vector_t<T, Decodesize(N)> Output{};
+            const auto sInput = std::span(Input);
+
+            for (size_t i = 0; i < N / 5; ++i)
+            {
+                const auto inTuple = sInput.subspan(i * 5, 5);
+                uint32_t Accumulator = 0;
+
+                Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[0]) - 32UL) & 127];
+                Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[1]) - 32UL) & 127];
+                Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[2]) - 32UL) & 127];
+                Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[3]) - 32UL) & 127];
+                Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[4]) - 32UL) & 127];
+
+                cmp::fromINT(&Output[i * 4], Accumulator);
+            }
+
+            return Output;
+        }
+
+        // Runtime encoding.
+        template <cmp::Byte_t T, cmp::Byte_t U> constexpr cmp::Vector_t<U> Encode(std::span<T> Input, std::span<U> Output)
+        {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize(Input.size()));
             if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
 
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
                 uint32_t Accumulator, Rem;
-                Accumulator = std::byteswap(toInt32(&Input[i * 4]));
+                Accumulator = std::byteswap(cmp::toINT<uint32_t>(&Input[i * 4]));
                 const auto outTuple = Output.subspan(i * 5, 5);
 
                 Rem = Div85(Accumulator); outTuple[4] = U(Table[Accumulator - Rem * 85UL]); Accumulator = Rem;
@@ -136,11 +112,11 @@ namespace Base85
                 outTuple[0] = U(Table[Rem]);
             }
 
-            return Output.subspan(0, Encodesize_padded(Input.size()));
+            return Output.subspan(0, Encodesize(Input.size()));
         }
-        template <Byte_t T, Byte_t U> constexpr std::span<U> Decode(std::span<const T> Input, std::span<U> Output)
+        template <cmp::Byte_t T, cmp::Byte_t U> constexpr cmp::Vector_t<U> Decode(std::span<T> Input, std::span<U> Output)
         {
-            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize(Input.size()));
             if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
 
             for (size_t i = 0; i < Input.size() / 5; ++i)
@@ -154,124 +130,135 @@ namespace Base85
                 Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[3]) - 32UL) & 127];
                 Accumulator = Accumulator * 85 + Reversetable[(uint8_t(inTuple[4]) - 32UL) & 127];
 
-                fromInt32(&Output[i * 4], Accumulator);
+                cmp::fromINT(&Output[i * 4], Accumulator);
             }
 
-            return Output.subspan(0, Decodesize_padded(Input.size()));
+            return Output.subspan(0, Decodesize(Input.size()));
         }
 
-        // Overloads because string-types are special and needs another constructor..
-        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Encode(const T &Input, std::span<U> Output)
+        // Helper to deal with padding.
+        template <cmp::Byte_t T, size_t N> requires((N & 3) != 0) constexpr auto Encode(const std::array<T, N> &Input)
         {
-            return Encode(std::span{ Input }, Output);
+            constexpr auto Newarray = cmp::resize_array<T, N, N + (4 - (N & 3))>(Input);
+            return Encode(Newarray);
         }
-        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Decode(const T &Input, std::span<U> Output)
+        template <cmp::Byte_t T, size_t N> requires((N % 5) != 0) constexpr auto Decode(const std::array<T, N> &Input)
         {
-            return Decode(std::span{ Input }, Output);
-        }
-        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Encode(const T &Input, U &Output)
-        {
-            return Encode(std::span{ Input }, std::span{ Output });
-        }
-        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Decode(const T &Input, U &Output)
-        {
-            return Decode(std::span{ Input }, std::span{ Output });
+            constexpr auto Newarray = cmp::resize_array<T, N, N + (5 - (N % 5))>(Input);
+            return Decode(Newarray);
         }
 
-        // Covers most containers available, questionable compiler support for constexpr though.
-        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        // Wrapper to return a owning container, std::array compatible if size is provided..
+        template <cmp::Byte_t T, size_t N> constexpr auto Encode(std::span<T, N> Input)
         {
-            const auto Size = std::ranges::size(Input);
-
-            // We may need to pad the input.
-            if (Size & 3)
+            // Size provided, compiletime possible.
+            if constexpr (N != 0 && N != static_cast<size_t>(-1))
             {
-                // Prefer a uniform type with the padding being default initialized.
-                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
-                Vec.resize(Vec.size() + (4 - (Size & 3)));
-                return Encode<T>(Vec);
+                return Encode(cmp::make_vector(Input));
             }
 
-            std::basic_string<T> Result(Encodesize_padded(Size), '\0');
-            Encode<typename U::value_type, T>(Input, Result);
-            return Result;
-        }
-        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
-        {
-            const auto Size = std::ranges::size(Input);
-
-            // We may need to pad the input.
-            if (Size % 5)
+            // Dynamic span, runtime only.
+            else
             {
-                // Prefer a uniform type with the padding being default initialized.
-                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
-                Vec.resize(Vec.size() + (5 - (Size % 5)));
-                return Decode<T>(Vec);
+                Blob_t Temp(Encodesize(Input.size()), 0);
+                Encode(std::span(Input), std::span(Temp));
+                return Temp;
+            }
+        }
+        template <cmp::Byte_t T, size_t N> constexpr auto Decode(std::span<T, N> Input)
+        {
+            // Size provided, compiletime possible.
+            if constexpr (N != 0 && N != static_cast<size_t>(-1))
+            {
+                return Decode(cmp::make_vector(Input));
             }
 
-            std::basic_string<T> Result(Decodesize_padded(Size), '\0');
-            Decode<typename U::value_type, T>(Input, Result);
-            return Result;
-        }
-        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
-        {
-            return Encode<T>(Flatten(Input));
-        }
-        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
-        {
-            return Decode<T>(Flatten(Input));
+            // Dynamic span, runtime only.
+            else
+            {
+                Blob_t Temp(Decodesize(Input.size()), 0);
+                Decode(std::span(Input), std::span(Temp));
+                return Temp;
+            }
         }
 
-        // For compiletime evaluation, an array is fine too.
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        // Wrapper to deal with string-literals.
+        template <cmp::Char_t T, size_t N> constexpr auto Encode(const T(&Input)[N])
         {
-            std::array<T, Encodesize_padded<N>()> Result{};
-            Encode<U, T>(Input, Result);
-            return Result;
+            return Encode(cmp::make_vector(Input));
         }
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
+        template <cmp::Char_t T, size_t N> constexpr auto Decode(const T(&Input)[N])
         {
-            std::array<T, Decodesize_padded<N>()> Result{};
-            Decode<U, T>(Input, Result);
-            return Result;
+            return Decode(cmp::make_vector(Input));
         }
 
-        // String literals need a bit of extra wrangling.
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Encodesize_padded<N - 1>()> Encode(const U(&Input)[N])
+        // Just verify the characters, not going to bother with length.
+        template <cmp::Simple_t T> [[nodiscard]] constexpr bool isValid(const T &Input)
         {
-            std::array<T, Encodesize_padded<N - 1>()> Result{};
-            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
-                Encode<U, T>(std::to_array(Input), Result);
-            else Encode<U, T>(char_array(Input), Result);
-            return Result;
-        }
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Decodesize_padded<N - 1>()> Decode(const U(&Input)[N])
-        {
-            std::array<T, Decodesize_padded<N - 1>()> Result{};
-            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
-                Decode<U, T>(std::to_array(Input), Result);
-            else Decode<U, T>(char_array(Input), Result);
-            return Result;
-        }
-
-        // Only verifies the chars, padding will be added as needed in other functions.
-        template <Simplestring_t T> constexpr bool isValid(const T &Input)
-        {
-            constexpr auto Charset = Blob_view(Table, 85);
-            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.npos; });
+            constexpr auto Charset = std::string_view("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#");
+            return std::ranges::all_of(Input, [&](auto Char) { return Charset.contains(char(Char)); });
         }
     }
+
+    // Standard Base85, for everything else.
     namespace RFC1924
     {
         constexpr uint32_t Pow85[] = { 52200625UL, 614125UL, 7225UL, 85UL, 1UL };
-        template <Byte_t T, Byte_t U> constexpr std::span<U> Encode(std::span<const T> Input, std::span<U> Output)
+
+        // Compiletime encoding, Vector_t is compatible with std::array.
+        template <cmp::Byte_t T, size_t N> requires((N & 3) == 0) constexpr cmp::Vector_t<T, Encodesize(N)> Encode(const std::array<T, N> &Input)
         {
-            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize_padded(Input.size()));
+            cmp::Vector_t<T, Encodesize(N)> Output{};
+
+            // Rather think about everything as spans.
+            const auto sOutput = std::span(Output);
+            const auto sInput = std::span(Input);
+
+            for (size_t i = 0; i < N / 4; ++i)
+            {
+                const uint32_t inTuple = std::byteswap(cmp::toINT<uint32_t>(&Input[i * 4]));
+                const auto outTuple = sOutput.subspan(i * 5, 5);
+
+                outTuple[0] = T(((inTuple / Pow85[0]) % 85UL) + 33UL);
+                outTuple[1] = T(((inTuple / Pow85[1]) % 85UL) + 33UL);
+                outTuple[2] = T(((inTuple / Pow85[2]) % 85UL) + 33UL);
+                outTuple[3] = T(((inTuple / Pow85[3]) % 85UL) + 33UL);
+                outTuple[4] = T(((inTuple / Pow85[4]) % 85UL) + 33UL);
+            }
+
+            return Output;
+        }
+        template <cmp::Byte_t T, size_t N> requires((N % 5) == 0) constexpr cmp::Vector_t<T, Decodesize(N)> Decode(const std::array<T, N> &Input)
+        {
+            cmp::Vector_t<T, Decodesize(N)> Output{};
+            const auto sInput = std::span(Input);
+
+            for (size_t i = 0; i < N / 5; ++i)
+            {
+                const auto inTuple = sInput.subspan(i * 5, 5);
+                uint32_t outTuple = 0;
+
+                outTuple += (uint8_t(inTuple[0]) - 33UL) * Pow85[0];
+                outTuple += (uint8_t(inTuple[1]) - 33UL) * Pow85[1];
+                outTuple += (uint8_t(inTuple[2]) - 33UL) * Pow85[2];
+                outTuple += (uint8_t(inTuple[3]) - 33UL) * Pow85[3];
+                outTuple += (uint8_t(inTuple[4]) - 33UL) * Pow85[4];
+
+                cmp::fromINT(&Output[i * 4], outTuple);
+            }
+
+            return Output;
+        }
+
+        // Runtime encoding.
+        template <cmp::Byte_t T, cmp::Byte_t U> constexpr cmp::Vector_t<U> Encode(std::span<T> Input, std::span<U> Output)
+        {
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize(Input.size()));
             if (!std::is_constant_evaluated()) assert((Input.size() & 3) == 0);
 
             for (size_t i = 0; i < Input.size() / 4; ++i)
             {
-                const uint32_t inTuple = std::byteswap(toInt32(&Input[i * 4]));
+                const uint32_t inTuple = std::byteswap(cmp::toINT<uint32_t>(&Input[i * 4]));
                 const auto outTuple = Output.subspan(i * 5, 5);
 
                 outTuple[0] = U(((inTuple / Pow85[0]) % 85UL) + 33UL);
@@ -281,11 +268,11 @@ namespace Base85
                 outTuple[4] = U(((inTuple / Pow85[4]) % 85UL) + 33UL);
             }
 
-            return Output.subspan(0, Encodesize_padded(Input.size()));
+            return Output.subspan(0, Encodesize(Input.size()));
         }
-        template <Byte_t T, Byte_t U> constexpr std::span<U> Decode(std::span<const T> Input, std::span<U> Output)
+        template <cmp::Byte_t T, cmp::Byte_t U> constexpr cmp::Vector_t<U> Decode(std::span<T> Input, std::span<U> Output)
         {
-            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize_padded(Input.size()));
+            if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize(Input.size()));
             if (!std::is_constant_evaluated()) assert(Input.size() % 5 == 0);
 
             for (size_t i = 0; i < Input.size() / 5; ++i)
@@ -299,111 +286,73 @@ namespace Base85
                 outTuple += (uint8_t(inTuple[3]) - 33UL) * Pow85[3];
                 outTuple += (uint8_t(inTuple[4]) - 33UL) * Pow85[4];
 
-                fromInt32(&Output[i * 4], outTuple);
+                cmp::fromINT(&Output[i * 4], outTuple);
             }
 
-            return Output.subspan(0, Decodesize_padded(Input.size()));
+            return Output.subspan(0, Decodesize(Input.size()));
         }
 
-        // Overloads because string-types are special and needs another constructor..
-        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Encode(const T &Input, std::span<U> Output)
+        // Helper to deal with padding.
+        template <cmp::Byte_t T, size_t N> requires((N & 3) != 0) constexpr auto Encode(const std::array<T, N> &Input)
         {
-            return Encode(std::span{ Input }, Output);
+            constexpr auto Newarray = cmp::resize_array<T, N, N + (4 - (N & 3))>(Input);
+            return Encode(Newarray);
         }
-        template <Simplestring_t T, Byte_t U> constexpr std::span<U> Decode(const T &Input, std::span<U> Output)
+        template <cmp::Byte_t T, size_t N> requires((N % 5) != 0) constexpr auto Decode(const std::array<T, N> &Input)
         {
-            return Decode(std::span{ Input }, Output);
-        }
-        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Encode(const T &Input, U &Output)
-        {
-            return Encode(std::span{ Input }, std::span{ Output });
-        }
-        template <Simplestring_t T, Simplestring_t U> constexpr std::span<typename U::value_type> Decode(const T &Input, U &Output)
-        {
-            return Decode(std::span{ Input }, std::span{ Output });
+            constexpr auto Newarray = cmp::resize_array<T, N, N + (5 - (N % 5))>(Input);
+            return Decode(Newarray);
         }
 
-        // Covers most containers available, questionable compiler support for constexpr though.
-        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
+        // Wrapper to return a owning container, std::array compatible if size is provided..
+        template <cmp::Byte_t T, size_t N> constexpr auto Encode(std::span<T, N> Input)
         {
-            const auto Size = std::ranges::size(Input);
-
-            // We may need to pad the input.
-            if (Size & 3)
+            // Size provided, compiletime possible.
+            if constexpr (N != 0 && N != static_cast<size_t>(-1))
             {
-                // Prefer a uniform type with the padding being default initialized.
-                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
-                Vec.resize(Vec.size() + (4 - (Size & 3)));
-                return Encode<T>(Vec);
+                return Encode(cmp::make_vector(Input));
             }
 
-            std::basic_string<T> Result(Encodesize_padded(Size), '\0');
-            Encode<typename U::value_type, T>(Input, Result);
-            return Result;
-        }
-        template <Byte_t T= char, Simplestring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
-        {
-            const auto Size = std::ranges::size(Input);
-
-            // We may need to pad the input.
-            if (Size % 5)
+            // Dynamic span, runtime only.
+            else
             {
-                // Prefer a uniform type with the padding being default initialized.
-                std::vector<typename U::value_type> Vec(Input.begin(), Input.end());
-                Vec.resize(Vec.size() + (5 - (Size % 5)));
-                return Decode<T>(Vec);
+                Blob_t Temp(Encodesize(Input.size()), 0);
+                Encode(std::span(Input), std::span(Temp));
+                return Temp;
+            }
+        }
+        template <cmp::Byte_t T, size_t N> constexpr auto Decode(std::span<T, N> Input)
+        {
+            // Size provided, compiletime possible.
+            if constexpr (N != 0 && N != static_cast<size_t>(-1))
+            {
+                return Decode(cmp::make_vector(Input));
             }
 
-            std::basic_string<T> Result(Decodesize_padded(Size), '\0');
-            Decode<typename U::value_type, T>(Input, Result);
-            return Result;
-        }
-        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Encode(const U &Input)
-        {
-            return Encode<T>(Flatten(Input));
-        }
-        template <Byte_t T= char, Complexstring_t U> [[nodiscard]] constexpr std::basic_string<T> Decode(const U &Input)
-        {
-            return Decode<T>(Flatten(Input));
+            // Dynamic span, runtime only.
+            else
+            {
+                Blob_t Temp(Decodesize(Input.size()), 0);
+                Decode(std::span(Input), std::span(Temp));
+                return Temp;
+            }
         }
 
-        // For compiletime evaluation, an array is fine too.
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Encodesize_padded<N>()> Encode(const std::array<U, N> &Input)
+        // Wrapper to deal with string-literals.
+        template <cmp::Char_t T, size_t N> constexpr auto Encode(const T(&Input)[N])
         {
-            std::array<T, Encodesize_padded<N>()> Result{};
-            Encode<U, T>(Input, Result);
-            return Result;
+            return Encode(cmp::make_vector(Input));
         }
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] constexpr std::array<T, Decodesize_padded<N>()> Decode(const std::array<U, N> &Input)
+        template <cmp::Char_t T, size_t N> constexpr auto Decode(const T(&Input)[N])
         {
-            std::array<T, Decodesize_padded<N>()> Result{};
-            Decode<U, T>(Input, Result);
-            return Result;
+            return Decode(cmp::make_vector(Input));
         }
 
-        // String literals need a bit of extra wrangling.
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Encodesize_padded<N - 1>()> Encode(const U(&Input)[N])
-        {
-            std::array<T, Encodesize_padded<N - 1>()> Result{};
-            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
-                Encode<U, T>(std::to_array(Input), Result);
-            else Encode<U, T>(char_array(Input), Result);
-            return Result;
-        }
-        template <size_t N, Byte_t T= char, Byte_t U> [[nodiscard]] consteval std::array<T, Decodesize_padded<N - 1>()> Decode(const U(&Input)[N])
-        {
-            std::array<T, Decodesize_padded<N - 1>()> Result{};
-            if constexpr (!(std::is_same_v<T, char> || std::is_same_v<T, char8_t>))
-                Decode<U, T>(std::to_array(Input), Result);
-            else Decode<U, T>(char_array(Input), Result);
-            return Result;
-        }
-
-        // Only verifies the chars, padding will be added as needed in other functions.
-        template <Simplestring_t T> constexpr bool isValid(const T &Input)
+        // Just verify the characters, not going to bother with length.
+        template <cmp::Simple_t T> [[nodiscard]] constexpr bool isValid(const T &Input)
         {
             constexpr auto Charset = std::string_view("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_\'{|}~");
-            return std::ranges::all_of(Input, [&](auto Char) { return Charset.find(Char) != Charset.npos; });
+            return std::ranges::all_of(Input, [&](auto Char) { return Charset.contains(char(Char)); });
         }
     }
 

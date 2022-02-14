@@ -6,12 +6,17 @@
 
 #pragma once
 #include <cstdint>
-#include <numeric>
+#include <numbers>
+#include <string>
 #include <cmath>
 #include <bit>
 
 //
 #pragma pack(push, 1)
+
+// Generic datatype for dynamic arrays.
+using Blob_t = std::basic_string<uint8_t>;
+using Blob_view_t = std::basic_string_view<uint8_t>;
 
 // See ML-frameworks like Tensorflow for optimisation ideas of bfloat16.
 struct bfloat16_t
@@ -216,7 +221,9 @@ struct vec4_t
 {
     union
     {
+        #pragma warning (suppress: 4201)
         struct { vec2_t<T> ab, cd; };
+        #pragma warning (suppress: 4201)
         struct { T x, y, z, w; };
     };
 

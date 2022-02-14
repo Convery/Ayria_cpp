@@ -1,96 +1,47 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-08-20
+    Started: 2022-02-13
     License: MIT
 */
 
 #pragma once
-#include <array>
-#include <cstdint>
-#include <concepts>
-#include <string_view>
-using Blob = std::basic_string<uint8_t>;
-using Blob_view = std::basic_string_view<uint8_t>;
+#include <Utilities/Constexprhelpers.hpp>
 
 namespace Base58
 {
-    constexpr size_t Decodesize(size_t N) { return (N * 733 / 1000.0f); }  // log(58) / log(256), rounded.
-    constexpr size_t Encodesize(size_t N) { return (N * 138 / 100.0f); }   // log(256) / log(58), rounded.
-    template <typename T> concept Byte_t = sizeof(T) == 1;
+    constexpr size_t Decodesize(size_t N) { return size_t(N * 733 / 1000.0f + 0.5f); }  // log(58) / log(256), rounded.
+    constexpr size_t Encodesize(size_t N) { return size_t(N * 137 / 100.0f + 0.5f); }   // log(256) / log(58), rounded.
 
-    namespace B58Internal
+    static constexpr uint8_t Table[58]
     {
-        constexpr uint8_t Table[58] =
-        {
-            '1', '2', '3', '4', '5', '6', '7', '8', '9',
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J',
-            'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T',
-            'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c',
-            'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm',
-            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-            'w', 'x','y', 'z'
-        };
-        constexpr uint8_t Reversetable[128] =
-        {
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0xFF, 0x11, 0x12, 0x13, 0x14, 0x15, 0xFF,
-            0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0xFF, 0x2C, 0x2D, 0x2E,
-            0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-        };
-
-        template <typename T> concept Range_t = requires (const T & t) { std::ranges::begin(t); std::ranges::end(t); };
-        template <typename T> concept Complexstring_t = Range_t<T> && !Byte_t<typename T::value_type>;
-        template <typename T> concept Simplestring_t = Range_t<T> && Byte_t<typename T::value_type>;
-        template <Complexstring_t T> [[nodiscard]] constexpr Blob Flatten(const T &Input)
-        {
-            Blob Bytearray; Bytearray.reserve(Input.size() * sizeof(typename T::value_type));
-            static_assert(sizeof(typename T::value_type) <= 8, "Dude..");
-
-            for (auto &&Item : Input)
-            {
-                if constexpr (sizeof(typename T::value_type) > 7) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 6) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 5) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 4) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 3) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 2) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-                if constexpr (sizeof(typename T::value_type) > 1) { Bytearray.append(Item & 0xFF); Item >>= 8; }
-
-                Bytearray.append(Item & 0xFF);
-            }
-
-            return Bytearray;
-        }
-
-        constexpr bool isSpace(char c) noexcept
-        {
-            return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
-        }
-    }
-
-    // Should be constexpr in C++20, questionable compiler support though.
-    template <typename C = char, B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
+        '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J',
+        'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T',
+        'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c',
+        'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm',
+        'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+        'w', 'x','y', 'z'
+    };
+    static constexpr uint8_t Reversetable[128]
     {
-        return Encode<C>(B58Internal::Flatten(Input));
-    }
-    template <typename C = char, B58Internal::Complexstring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0xFF, 0x11, 0x12, 0x13, 0x14, 0x15, 0xFF,
+        0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0xFF, 0x2C, 0x2D, 0x2E,
+        0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+    };
+
+    // Compiletime encoding, Vector_t is compatible with std::array.
+    template <cmp::Byte_t T, size_t N> constexpr cmp::Vector_t<T, Encodesize(N)> Encode(const std::array<T, N> &Input)
     {
-        return Decode<C>(B58Internal::Flatten(Input));
-    }
-    template <typename C = char, B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Encode(const T &Input)
-    {
-        const auto N = std::ranges::size(Input);
-        Blob Buffer(Encodesize(N), 0x00);
+        cmp::Vector_t<T, Encodesize(N)> Buffer{}, Result{};
         size_t Outputposition{ 1 };
         size_t Leadingzeros{};
 
-        // Count leading zeros.
-        while (Input[Leadingzeros] == 0) Leadingzeros++;
-
+        // Process the rest of the input.
         for (size_t i = 0; i < N; ++i)
         {
             auto Item = static_cast<uint32_t>(Input[i]);
@@ -106,28 +57,27 @@ namespace Base58
                 Buffer[Outputposition++] = static_cast<uint8_t>(Item % 58);
         }
 
+        // Count leading zeros.
+        while (Input[Leadingzeros] == 0 && Leadingzeros < N)
+        { Buffer[Leadingzeros] = '1'; Leadingzeros++; }
+
         // Reverse emplace from the map.
-        std::basic_string<C> Result(Leadingzeros + Outputposition, '1');
         for (size_t i = 0; i < Outputposition; ++i)
         {
-            Result[Leadingzeros + i] = B58Internal::Table[Buffer[Outputposition - 1 - i]];
+            Result[Leadingzeros + i] = Table[Buffer[Outputposition - 1 - i]];
         }
 
         return Result;
     }
-    template <typename C = char, B58Internal::Simplestring_t T> [[nodiscard]] constexpr std::basic_string<C> Decode(const T &Input)
+    template <cmp::Byte_t T, size_t N> constexpr cmp::Vector_t<T, Decodesize(N)> Decode(const std::array<T, N> &Input)
     {
-        const auto N = std::ranges::size(Input);
+        std::array<T, Encodesize(N)> Buffer{};
         size_t Outputposition{ 1 };
-        size_t Leadingzeros{};
 
-        // Count leading ones and spaces (zero in output).
-        while (Input[Leadingzeros] == '1' || B58Internal::isSpace(Input[Leadingzeros])) Leadingzeros++;
-        Blob Buffer(Decodesize(N) + Leadingzeros, 0x00);
-
+        // Process the rest of the input.
         for (size_t i = 0; i < N; ++i)
         {
-            auto Item = static_cast<uint32_t>(B58Internal::Reversetable[Input[i] & 0x7F]);
+            auto Item = static_cast<uint32_t>(Reversetable[Input[i] & 0x7F]);
 
             for (size_t c = 0; c < Outputposition; c++)
             {
@@ -140,20 +90,25 @@ namespace Base58
                 Buffer[Outputposition++] = Item & 0xFF;
         }
 
-        return { Buffer.rbegin(), Buffer.rend() };
+        for (size_t i = 0; i < N && Input[i] == '1'; i++)
+            Buffer[Outputposition++] = 0;
+
+        std::ranges::reverse(Buffer);
+        return cmp::resize_array<T, Encodesize(N), Decodesize(N)>(Buffer);
     }
 
-    // No need for extra allocations, assume the caller knows what they are doing.
-    template <typename C = char, B58Internal::Simplestring_t T> constexpr void Encode(const T &Input, C *Result)
+    // Runtime encoding.
+    template <cmp::Byte_t T, cmp::Bytealigned_t U> constexpr cmp::Vector_t<U> Encode(std::span<T> Input, std::span<U> Output)
     {
         const auto N = std::ranges::size(Input);
-        Blob Buffer(Encodesize(N), 0x00);
+        cmp::Vector_t<T, Encodesize(N)> Buffer{};
         size_t Outputposition{ 1 };
         size_t Leadingzeros{};
 
-        // Count leading zeros.
-        while (Input[Leadingzeros] == 0) Leadingzeros++;
+        // Verify that there's enough space to decode.
+        if (!std::is_constant_evaluated()) assert(Output.size() >= Encodesize(N));
 
+        // Process the rest of the input.
         for (size_t i = 0; i < N; ++i)
         {
             auto Item = static_cast<uint32_t>(Input[i]);
@@ -169,25 +124,34 @@ namespace Base58
                 Buffer[Outputposition++] = static_cast<uint8_t>(Item % 58);
         }
 
+        // Count leading zeros.
+        while (Input[Leadingzeros] == 0 && Leadingzeros < N)
+        {
+            Buffer[Leadingzeros] = '1'; Output[Leadingzeros] = 0; Leadingzeros++;
+        }
+
         // Reverse emplace from the map.
         for (size_t i = 0; i < Outputposition; ++i)
         {
-            Result[Leadingzeros + i] = B58Internal::Table[Buffer[Outputposition - 1 - i]];
+            Output[Leadingzeros + i] = Table[Buffer[Outputposition - 1 - i]];
         }
+
+        return Output.subspan(0, Encodesize(Input.size()));
     }
-    template <typename C = char, B58Internal::Simplestring_t T> constexpr void Decode(const T &Input, C *Result)
+    template <cmp::Byte_t T, cmp::Bytealigned_t U> constexpr cmp::Vector_t<U> Decode(std::span<T> Input, std::span<U> Output)
     {
         const auto N = std::ranges::size(Input);
+        Blob_t Buffer(Encodesize(N), 0);
         size_t Outputposition{ 1 };
         size_t Leadingzeros{};
 
-        // Count leading ones and spaces (zero in output).
-        while (Input[Leadingzeros] == '1' || B58Internal::isSpace(Input[Leadingzeros])) Leadingzeros++;
-        Blob Buffer(Decodesize(N) + Leadingzeros, 0x00);
+        // Verify that there's enough space to decode.
+        if (!std::is_constant_evaluated()) assert(Output.size() >= Decodesize(N));
 
+        // Process the rest of the input.
         for (size_t i = 0; i < N; ++i)
         {
-            auto Item = static_cast<uint32_t>(B58Internal::Reversetable[Input[i] & 0x7F]);
+            auto Item = static_cast<uint32_t>(Reversetable[Input[i] & 0x7F]);
 
             for (size_t c = 0; c < Outputposition; c++)
             {
@@ -200,18 +164,62 @@ namespace Base58
                 Buffer[Outputposition++] = Item & 0xFF;
         }
 
-        std::ranges::move(Buffer.rbegin(), Buffer.rend(), Result);
+        for (size_t i = 0; i < N && Input[i] == '1'; i++)
+            Buffer[Outputposition++] = 0;
+
+        std::ranges::reverse(Buffer);
+        std::ranges::copy_n(Buffer, Decodesize(Input.size()), Output);
+        return Output.subspan(0, Decodesize(Input.size()));
     }
 
-    // Verify that the string is valid, MSVC STL does not have String.contains yet.
-    [[nodiscard]] inline bool isValid(std::string_view Input)
+    // Wrapper to return a owning container, std::array compatible if size is provided..
+    template <cmp::Byte_t T, size_t N> constexpr auto Encode(std::span<T, N> Input)
     {
-        constexpr char Valid[] = { "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" };
-        for (const auto &Item : Input)
+        // Size provided, compiletime possible.
+        if constexpr (N != 0 && N != static_cast<size_t>(-1))
         {
-            if (!std::memchr(Valid, Item, sizeof(Valid))) [[unlikely]]
-                return false;
+            return Encode(cmp::make_vector(Input));
         }
-        return true;
+
+        // Dynamic span, runtime only.
+        else
+        {
+            Blob_t Temp(Encodesize(Input.size()), 0);
+            Encode(std::span(Input), std::span(Temp));
+            return Temp;
+        }
+    }
+    template <cmp::Byte_t T, size_t N> constexpr auto Decode(std::span<T, N> Input)
+    {
+        // Size provided, compiletime possible.
+        if constexpr (N != 0 && N != static_cast<size_t>(-1))
+        {
+            return Decode(cmp::make_vector(Input));
+        }
+
+        // Dynamic span, runtime only.
+        else
+        {
+            Blob_t Temp(Decodesize(Input.size()), 0);
+            Decode(std::span(Input), std::span(Temp));
+            return Temp;
+        }
+    }
+
+    // Wrapper to deal with string-literals.
+    template <cmp::Char_t T, size_t N> constexpr auto Encode(const T(&Input)[N])
+    {
+        return Encode(cmp::make_vector(Input));
+    }
+    template <cmp::Char_t T, size_t N> constexpr auto Decode(const T(&Input)[N])
+    {
+        return Decode(cmp::make_vector(Input));
+    }
+
+    // Just verify the characters, not going to bother with length.
+    template <cmp::Simple_t T> [[nodiscard]] constexpr bool isValid(const T &Input)
+    {
+        constexpr auto Charset = std::string_view("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz");
+        return std::ranges::all_of(Input, [&](auto Char) { return Charset.contains(char(Char)); });
     }
 }
