@@ -12,6 +12,7 @@
 #include <concepts>
 #include <algorithm>
 #include "Datatypes.hpp"
+#include "Wrappers\Endian.hpp"
 
 namespace cmp
 {

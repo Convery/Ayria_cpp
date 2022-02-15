@@ -234,7 +234,7 @@ namespace Hash
     }
 
     // Any range type.
-    template <cmp::Range_t U> constexpr cmp::Vector_t<uint8_t, 32> SHA256(const U &Input)
+    template <cmp::Simple_t U> constexpr cmp::Vector_t<uint8_t, 32> SHA256(const U &Input)
     {
         if (std::is_constant_evaluated())
         {
@@ -249,7 +249,7 @@ namespace Hash
             #endif
         }
     };
-    template <cmp::Range_t U> constexpr cmp::Vector_t<uint8_t, 64> SHA512(const U &Input)
+    template <cmp::Simple_t U> constexpr cmp::Vector_t<uint8_t, 64> SHA512(const U &Input)
     {
         if (std::is_constant_evaluated())
         {

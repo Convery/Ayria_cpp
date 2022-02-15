@@ -18,9 +18,9 @@
 
 #include <Utilities/Crypto/Hashes.hpp>
 #include <Utilities/Crypto/OpenSSLWrappers.hpp>
-#include <Utilities/Crypto/Tiger192Hash.hpp>
 #include <Utilities/Crypto/SHA.hpp>
 #include <Utilities/Crypto/qDSA.hpp>
+#include <Utilities/Crypto/Tiger192.hpp>
 
 #include <Utilities/Encoding/Base58.hpp>
 #include <Utilities/Encoding/Base64.hpp>

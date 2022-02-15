@@ -221,30 +221,7 @@ namespace Hash
 
             return std::string((char *)Buffer.get(), 20);
         }
-        template <Bytealigned_t T> [[nodiscard]] inline std::string SHA256(const T *Input, const size_t Size)
-        {
-            const auto Buffer = std::make_unique<uint8_t[]>(32);
-            const auto Context = EVP_MD_CTX_create();
 
-            EVP_DigestInit_ex(Context, EVP_sha256(), nullptr);
-            EVP_DigestUpdate(Context, Input, Size);
-            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
-            EVP_MD_CTX_destroy(Context);
-
-            return std::string((char *)Buffer.get(), 32);
-        }
-        template <Bytealigned_t T> [[nodiscard]] inline std::string SHA512(const T *Input, const size_t Size)
-        {
-            const auto Buffer = std::make_unique<uint8_t[]>(64);
-            const auto Context = EVP_MD_CTX_create();
-
-            EVP_DigestInit_ex(Context, EVP_sha512(), nullptr);
-            EVP_DigestUpdate(Context, Input, Size);
-            EVP_DigestFinal_ex(Context, Buffer.get(), nullptr);
-            EVP_MD_CTX_destroy(Context);
-
-            return std::string((char *)Buffer.get(), 64);
-        }
         #endif
 
         // Compile-time hashing for simple fixed-length datablocks.
@@ -302,7 +279,7 @@ namespace Hash
     Impl(CRC32A); Impl(CRC32B); Impl(CRC32T);
 
     #if defined (HAS_OPENSSL)
-    Impl(MD5); Impl(SHA1); Impl(SHA256); Impl(SHA512);
+    Impl(MD5); Impl(SHA1);
     inline std::string HMACSHA1(const void *Input, const size_t Size, const void *Key, const size_t Keysize)
     {
         unsigned int Buffersize = 20;

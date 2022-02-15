@@ -1,26 +1,20 @@
 /*
     Initial author: Convery (tcn@ayria.se)
     Started: 2020-02-10
-    License: GNU Lesser General Public License
+    License: MIT
 
-    Re-factored from Libgcrypt, modified to be compatible with libtom.
+    LibTom compatible.
 */
 
 #pragma once
-#include <Stdinclude.hpp>
+#include <Utilities/Constexprhelpers.hpp>
 
-// std::byteswap if not available.
-#if !defined (__cpp_lib_byteswap)
-#include "../Wrappers/Endian.hpp"
-#endif
-
-#pragma warning(push, 0)
 namespace Hash
 {
     namespace Internal
     {
-        #pragma region Data
-        static uint64_t sbox1[256] = {
+        #pragma region Tables
+        static constexpr uint64_t Tiger1[256] = {
         0x02aab17cf7e90c5eULL /*    0 */ , 0xac424b03e243a8ecULL /*    1 */ ,
         0x72cd5be30dd5fcd3ULL /*    2 */ , 0x6d019b93f6f97f3aULL /*    3 */ ,
         0xcd9978ffd21f9193ULL /*    4 */ , 0x7573a1c9708029e2ULL /*    5 */ ,
@@ -150,7 +144,7 @@ namespace Hash
         0xffed95d8f1ea02a2ULL /*  252 */ , 0xe72b3bd61464d43dULL /*  253 */ ,
         0xa6300f170bdc4820ULL /*  254 */ , 0xebc18760ed78a77aULL /*  255 */
         };
-        static uint64_t sbox2[256] = {
+        static constexpr uint64_t Tiger2[256] = {
             0xe6a6be5a05a12138ULL /*  256 */ , 0xb5a122a5b4f87c98ULL /*  257 */ ,
             0x563c6089140b6990ULL /*  258 */ , 0x4c46cb2e391f5dd5ULL /*  259 */ ,
             0xd932addbc9b79434ULL /*  260 */ , 0x08ea70e42015aff5ULL /*  261 */ ,
@@ -280,7 +274,7 @@ namespace Hash
             0x9010a91e84711ae9ULL /*  508 */ , 0x4df7f0b7b1498371ULL /*  509 */ ,
             0xd62a2eabc0977179ULL /*  510 */ , 0x22fac097aa8d5c0eULL /*  511 */
         };
-        static uint64_t sbox3[256] = {
+        static constexpr uint64_t Tiger3[256] = {
             0xf49fcc2ff1daf39bULL /*  512 */ , 0x487fd5c66ff29281ULL /*  513 */ ,
             0xe8a30667fcdca83fULL /*  514 */ , 0x2c9b4be3d2fcce63ULL /*  515 */ ,
             0xda3ff74b93fbbbc2ULL /*  516 */ , 0x2fa165d2fe70ba66ULL /*  517 */ ,
@@ -410,7 +404,7 @@ namespace Hash
             0x454c6fe9f2c0c1cdULL /*  764 */ , 0x419cf6496412691cULL /*  765 */ ,
             0xd3dc3bef265b0f70ULL /*  766 */ , 0x6d0e60f5c3578a9eULL /*  767 */
         };
-        static uint64_t sbox4[256] = {
+        static constexpr uint64_t Tiger4[256] = {
             0x5b0e608526323c55ULL /*  768 */ , 0x1a46c1a9fa1b59f5ULL /*  769 */ ,
             0xa9e245a17c4c8ffaULL /*  770 */ , 0x65ca5159db2955d7ULL /*  771 */ ,
             0x05db0a76ce35afc2ULL /*  772 */ , 0x81eac77ea9113d45ULL /*  773 */ ,
@@ -542,239 +536,176 @@ namespace Hash
         };
         #pragma endregion
 
-        struct tiger_state
+        constexpr void Mix(std::array<uint64_t, 8> &Block)
         {
-            uint64_t a, b, c;
-            uint8_t buf[64];
-            int count;
-            uint32_t nblocks;
+            Block[0] -= Block[7] ^ 0xa5a5a5a5a5a5a5a5ULL;
+            Block[1] ^= Block[0];
+            Block[2] += Block[1];
+            Block[3] -= Block[2] ^ ((~Block[1]) << 19);
+            Block[4] ^= Block[3];
+            Block[5] += Block[4];
+            Block[6] -= Block[5] ^ ((~Block[4]) >> 23);
+            Block[7] ^= Block[6];
+            Block[0] += Block[7];
+            Block[1] -= Block[0] ^ ((~Block[7]) << 19);
+            Block[2] ^= Block[1];
+            Block[3] += Block[2];
+            Block[4] -= Block[3] ^ ((~Block[2]) >> 23);
+            Block[5] ^= Block[4];
+            Block[6] += Block[5];
+            Block[7] -= Block[6] ^ 0x0123456789abcdefULL;
+        }
+        constexpr void Round(uint64_t &A, uint64_t &B, uint64_t &C, uint64_t X, int32_t Factor)
+        {
+            C ^= X;
+            A -= Tiger1[(C >> 0) & 0xFF] ^ Tiger2[(C >> 16) & 0xFF] ^ Tiger3[(C >> 32) & 0xff] ^ Tiger4[(C >> 48) & 0xff];
+            B += Tiger4[(C >> 8) & 0xff] ^ Tiger3[(C >> 24) & 0xff] ^ Tiger2[(C >> 40) & 0xff] ^ Tiger1[(C >> 56) & 0xff];
+            B *= Factor;
+        }
+        constexpr void Pass(uint64_t &A, uint64_t &B, uint64_t &C, const std::array<uint64_t, 8> &Block, int32_t Factor)
+        {
+            Round(A, B, C, Block[0], Factor);
+            Round(B, C, A, Block[1], Factor);
+            Round(C, A, B, Block[2], Factor);
+            Round(A, B, C, Block[3], Factor);
+            Round(B, C, A, Block[4], Factor);
+            Round(C, A, B, Block[5], Factor);
+            Round(A, B, C, Block[6], Factor);
+            Round(B, C, A, Block[7], Factor);
+        }
+        constexpr void Transform(std::array<uint64_t, 8> &Block, uint64_t &A, uint64_t &B, uint64_t &C)
+        {
+            // Should be optimized out on little-endian systems.
+            for (size_t i = 0; i < 8; ++i) Block[i] = Endian::toLittle(Block[i]);
+
+            // Save the context.
+            const uint64_t AA = A, BB = B, CC = C;
+
+            // Process.
+            Pass(A, B, C, Block, 5);
+            Mix(Block);
+            Pass(C, A, B, Block, 7);
+            Mix(Block);
+            Pass(B, C, A, Block, 9);
+
+            // Feed forward.
+            A ^= AA;
+            B -= BB;
+            C += CC;
+        }
+
+        struct State_t
+        {
+            uint64_t A{ 0x0123456789abcdefLL };
+            uint64_t B{ 0xfedcba9876543210LL };
+            uint64_t C{ 0xf096a5b4c3b2e187LL };
+
+            std::array<uint64_t, 8> Block{};
+            uint32_t Blockcount{};
+            uint8_t Fillcount{};
+
+            constexpr void tryFlush()
+            {
+                // Only flush the buffer if full..
+                if (Fillcount == sizeof(Block))
+                {
+                    Transform(Block, A, B, C);
+                    Fillcount = 0;
+                    Blockcount++;
+                }
+            }
         };
 
-        inline void tiger_round(uint64_t *ra, uint64_t *rb, uint64_t *rc, uint64_t x, int mul)
+        constexpr std::array<uint8_t, 24> Finalize(State_t &State)
         {
-            uint64_t a = *ra;
-            uint64_t b = *rb;
-            uint64_t c = *rc;
+            // Ensure that the block is not full..
+            State.tryFlush();
 
-            c ^= x;
-            a -= sbox1[c & 0xff] ^ sbox2[(c >> 16) & 0xff]
-                ^ sbox3[(c >> 32) & 0xff] ^ sbox4[(c >> 48) & 0xff];
-            b += sbox4[(c >> 8) & 0xff] ^ sbox3[(c >> 24) & 0xff]
-                ^ sbox2[(c >> 40) & 0xff] ^ sbox1[(c >> 56) & 0xff];
-            b *= mul;
+            // Save how many bytes we originally had.
+            const auto Messagelength = static_cast<uint64_t>(State.Blockcount * 64 + State.Fillcount * 8);
 
-            *ra = a;
-            *rb = b;
-            *rc = c;
-        }
+            // Add padding as necessary.
+            auto Block = std::bit_cast<std::array<uint8_t, 64>>(State.Block);
+            Block[State.Fillcount++] = 0x01;
 
-        inline void tiger_pass(uint64_t *ra, uint64_t *rb, uint64_t *rc, const uint64_t *x, int mul)
-        {
-            uint64_t a = *ra;
-            uint64_t b = *rb;
-            uint64_t c = *rc;
+            // Going to need a new block.
+            if (State.Fillcount > 56)
+            {
+                while (State.Fillcount < 64) Block[State.Fillcount++] = 0x00;
+                State.Block = std::bit_cast<std::array<uint64_t, 8>>(Block);
 
-            tiger_round(&a, &b, &c, x[0], mul);
-            tiger_round(&b, &c, &a, x[1], mul);
-            tiger_round(&c, &a, &b, x[2], mul);
-            tiger_round(&a, &b, &c, x[3], mul);
-            tiger_round(&b, &c, &a, x[4], mul);
-            tiger_round(&c, &a, &b, x[5], mul);
-            tiger_round(&a, &b, &c, x[6], mul);
-            tiger_round(&b, &c, &a, x[7], mul);
-
-            *ra = a;
-            *rb = b;
-            *rc = c;
-        }
-
-        inline void tiger_key_schedule(uint64_t *x)
-        {
-            x[0] -= x[7] ^ 0xa5a5a5a5a5a5a5a5LL;
-            x[1] ^= x[0];
-            x[2] += x[1];
-            x[3] -= x[2] ^ ((~x[1]) << 19);
-            x[4] ^= x[3];
-            x[5] += x[4];
-            x[6] -= x[5] ^ ((~x[4]) >> 23);
-            x[7] ^= x[6];
-            x[0] += x[7];
-            x[1] -= x[0] ^ ((~x[7]) << 19);
-            x[2] ^= x[1];
-            x[3] += x[2];
-            x[4] -= x[3] ^ ((~x[2]) >> 23);
-            x[5] ^= x[4];
-            x[6] += x[5];
-            x[7] -= x[6] ^ 0x0123456789abcdefLL;
-        }
-
-        inline void tiger_transform(const uint8_t *data, tiger_state &State)
-        {
-            uint64_t a, b, c, aa, bb, cc;
-            uint64_t x[8];
-            #ifdef BIG_ENDIAN_HOST
-            #define MKWORD(d,n) \
-                (  ((uint64_t)(d)[8*(n)+7]) << 56 | ((uint64_t)(d)[8*(n)+6]) << 48  \
-                 | ((uint64_t)(d)[8*(n)+5]) << 40 | ((uint64_t)(d)[8*(n)+4]) << 32  \
-                 | ((uint64_t)(d)[8*(n)+3]) << 24 | ((uint64_t)(d)[8*(n)+2]) << 16  \
-                 | ((uint64_t)(d)[8*(n)+1]) << 8  | ((uint64_t)(d)[8*(n) ])  )
-            x[0] = MKWORD(data, 0);
-            x[1] = MKWORD(data, 1);
-            x[2] = MKWORD(data, 2);
-            x[3] = MKWORD(data, 3);
-            x[4] = MKWORD(data, 4);
-            x[5] = MKWORD(data, 5);
-            x[6] = MKWORD(data, 6);
-            x[7] = MKWORD(data, 7);
-            #undef MKWORD
-            #else
-            memcpy(&x[0], data, 64);
-            #endif
-
-            /* save */
-            a = aa = State.a;
-            b = bb = State.b;
-            c = cc = State.c;
-
-            tiger_pass(&a, &b, &c, x, 5);
-            tiger_key_schedule(x);
-            tiger_pass(&c, &a, &b, x, 7);
-            tiger_key_schedule(x);
-            tiger_pass(&b, &c, &a, x, 9);
-
-            /* feedforward */
-            a ^= aa;
-            b -= bb;
-            c += cc;
-            /* store */
-            State.a = a;
-            State.b = b;
-            State.c = c;
-        }
-
-        inline void tiger_write(const uint8_t *inbuf, int inlen, tiger_state &State)
-        {
-            if (State.count == 64) { /* flush the buffer */
-                tiger_transform(State.buf, State);
-                State.count = 0;
-                State.nblocks++;
-            }
-            if (!inbuf)
-                return;
-            if (State.count) {
-                for (; inlen && State.count < 64; inlen--)
-                    State.buf[State.count++] = *inbuf++;
-                tiger_write(nullptr, 0, State);
-                if (!inlen)
-                    return;
+                State.tryFlush();
             }
 
-            while (inlen >= 64) {
-                tiger_transform(inbuf, State);
-                State.count = 0;
-                State.nblocks++;
-                inlen -= 64;
-                inbuf += 64;
-            }
-            for (; inlen && State.count < 64; inlen--)
-                State.buf[State.count++] = *inbuf++;
+            // Ensure that any non-message bytes are null.
+            while (State.Fillcount < 56) Block[State.Fillcount++] = 0x00;
+
+            // Write the length and compress.
+            State.Block = std::bit_cast<std::array<uint64_t, 8>>(Block);
+            State.Block[7] = Endian::toLittle(Messagelength);
+            Transform(State.Block, State.A, State.B, State.C);
+
+            std::array<uint8_t, 24> Result{};
+            cmp::fromINT(Result.data() + 0, Endian::toLittle(State.A));
+            cmp::fromINT(Result.data() + 8, Endian::toLittle(State.B));
+            cmp::fromINT(Result.data() + 16, Endian::toLittle(State.C));
+            return Result;
         }
-
-        inline uint8_t *tiger_final(tiger_state &State)
+        template <cmp::Byte_t T> constexpr void Write(State_t &State, std::span<T> Input)
         {
-            tiger_write(nullptr, 0, State); /* flush */
+            // Ensure that the state is ready for writing.
+            State.tryFlush();
 
-            uint32_t t = State.nblocks;
-            /* multiply by 64 to make a uint8_t count */
-            uint32_t lsb = t << 6;
-            uint32_t msb = t >> 26;
-            /* add the count */
-            t = lsb;
-            if ((lsb += State.count) < t)
-                msb++;
-            /* multiply by 8 to make a bit count */
-            t = lsb;
-            lsb <<= 3;
-            msb <<= 3;
-            msb |= t >> 29;
+            // If the block is partially filled.
+            if (State.Fillcount != 0 || Input.size() < sizeof(State.Block))
+            {
+                auto Block = std::bit_cast<std::array<uint8_t, 64>>(State.Block);
+                const auto Remainder = sizeof(State.Block) - State.Fillcount;
+                const auto Count = std::min(Remainder, Input.size());
 
-            if (State.count < 56) { /* enough room */
-                State.buf[State.count++] = 0x01; /* pad */
-                while (State.count < 56)
-                    State.buf[State.count++] = 0; /* pad */
+                for (uint8_t i = 0; i < Count; ++i)
+                    Block[State.Fillcount++] = Input[i];
+
+                State.Block = std::bit_cast<std::array<uint64_t, 8>>(Block);
+                Input = Input.subspan(Count);
+                State.tryFlush();
             }
-            else {  /* need one extra block */
-                State.buf[State.count++] = 0x01; /* pad character */
-                while (State.count < 64)
-                    State.buf[State.count++] = 0;
-                tiger_write(nullptr, 0, State); /* flush */
-                memset(State.buf, 0, 64); /* fill next block with zeroes */
+
+            // For each block..
+            while (Input.size() >= sizeof(State.Block))
+            {
+                for (uint8_t i = 0; i < 8; ++i)
+                    State.Block[i] = cmp::toINT<uint64_t>(Input.data() + sizeof(uint64_t) * i);
+
+                Transform(State.Block, State.A, State.B, State.C);
+                State.Fillcount = 0;
+                State.Blockcount++;
+
+                Input = Input.subspan(64);
             }
-            /* append the 64 bit count */
-            State.buf[56] = lsb;
-            State.buf[57] = lsb >> 8;
-            State.buf[58] = lsb >> 16;
-            State.buf[59] = lsb >> 24;
-            State.buf[60] = msb;
-            State.buf[61] = msb >> 8;
-            State.buf[62] = msb >> 16;
-            State.buf[63] = msb >> 24;
-            tiger_transform(State.buf, State);
 
-            uint8_t *p = State.buf;
-            #ifdef BIG_ENDIAN_HOST
-            #define X(a) do { *(uint64_t*)p = State.a ; p += 8; } while(0)
-            #else /* little endian */
-            #define X(a) do { *p++ = State.a >> 56; *p++ = State.a >> 48; \
-                      *p++ = State.a >> 40; *p++ = State.a >> 32; \
-                      *p++ = State.a >> 24; *p++ = State.a >> 16; \
-                      *p++ = State.a >>  8; *p++ = State.a; } while(0)
-            #endif
-            X(a);
-            X(b);
-            X(c);
-            #undef X
-            return State.buf;
-        }
-
-        inline void tiger_init(tiger_state &State)
-        {
-            State.a = 0x0123456789abcdefLL;
-            State.b = 0xfedcba9876543210LL;
-            State.c = 0xf096a5b4c3b2e187LL;
-            State.nblocks = 0;
-            State.count = 0;
+            // Recurse on remaining data.
+            if (!Input.empty()) return Write(State, Input);
         }
     }
 
-    inline void Tiger192(const void *Input, const size_t Size, uint8_t Output[24])
+    // Any range type.
+    template <cmp::Simple_t U> constexpr cmp::Vector_t<uint8_t, 24> Tiger192(const U &Input)
     {
-        Internal::tiger_state State;
-
-        Internal::tiger_init(State);
-        Internal::tiger_write((uint8_t *)Input, static_cast<const int>(Size), State);
-        std::memcpy(Output, Internal::tiger_final(State), 24);
+        Internal::State_t State{};
+        Internal::Write(State, std::span(Input));
+        return Internal::Finalize(State);
     }
-    inline std::string Tiger192(const void *Input, const size_t Size)
+
+    // Wrapper to deal with string-literals.
+    template <cmp::Char_t T, size_t N> constexpr auto Tiger192(const T(&Input)[N])
     {
-        std::string Resultstring;
-        uint8_t Resultbuffer[24]{};
-
-        // Hash the input.
-        Tiger192(Input, Size, Resultbuffer);
-
-        // Reverse the blocks because libtom likes them that way..
-        auto *Blocks = reinterpret_cast<uint64_t *>(Resultbuffer);
-        Blocks[0] = std::byteswap(Blocks[0]);
-        Blocks[1] = std::byteswap(Blocks[1]);
-        Blocks[2] = std::byteswap(Blocks[2]);
-
-        Resultstring.append((const char *)Resultbuffer, 24);
-        return Resultstring;
+        return Tiger192(cmp::make_vector(Input));
     }
-    inline std::string Tiger192(std::string_view Input)
+
+    // Helper for other types.
+    template <typename T> constexpr auto Tiger192(const T &Input)
     {
-        return Tiger192(Input.data(), Input.size());
+        return Tiger192(cmp::make_vector(Input));
     }
 }
-#pragma warning(pop)

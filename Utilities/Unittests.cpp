@@ -46,4 +46,13 @@ namespace Testing
         return true;
     }();
 
+    // Crypto/Tiger192.hpp
+    constexpr auto TigerTest = []() -> bool
+    {
+        // 61d26192cf832c07612c541552d80027bbb3f520064f48ec
+        constexpr auto Test192 = Hash::Tiger192("12345");
+        static_assert(Test192[0] == 0x61 && Test192[1] == 0xd2 && Test192[2] == 0x61, "Tiger192 is borked..");
+
+        return true;
+    }();
 }
