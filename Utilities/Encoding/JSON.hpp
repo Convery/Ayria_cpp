@@ -11,8 +11,9 @@
 #pragma once
 #include <memory>
 #include <Stdinclude.hpp>
-#include "Stringconv.hpp"
 #include "Utilities/Internal/Misc.hpp"
+#include <Utilities/Encoding/UTF8.hpp>
+#include <Utilities/Encoding/Variadicstring.hpp>
 
 #pragma warning(push)
 #pragma warning(disable: 4702)
@@ -52,18 +53,18 @@ namespace JSON
     }
 
     // Generic value wrapper.
-    #define asPtr(Type) std::static_pointer_cast<Type>(Value)
+    #define asPtr(Type) std::static_pointer_cast<Type>(Internalstorage)
     struct Value_t
     {
+        std::shared_ptr<void> Internalstorage{};
         Type_t Type{};
-        std::shared_ptr<void> Value{};
 
         //
         [[nodiscard]] std::string dump() const
         {
             switch (Type)
             {
-                case Type_t::String: return va("\"%s\"", Encoding::toNarrow(*asPtr(std::u8string)).c_str());
+                case Type_t::String: return va("\"%s\"", Encoding::toASCII(*asPtr(std::u8string)).c_str());
                 case Type_t::Unsignedint: return va("%llu", *asPtr(uint64_t));
                 case Type_t::Signedint: return va("%lli", *asPtr(int64_t));
                 case Type_t::Bool: return *asPtr(bool) ? "true" : "false";
@@ -117,7 +118,7 @@ namespace JSON
                 case Type_t::Null: break;
                 case Type_t::Object:
                 {
-                    const auto Delta = std::static_pointer_cast<Object_t>(Input.Value);
+                    const auto Delta = std::static_pointer_cast<Object_t>(Input.Internalstorage);
                     const auto Current = asPtr(Object_t);
 
                     for (const auto &[lKey, lValue] : *Delta)
@@ -129,7 +130,7 @@ namespace JSON
                 }
                 case Type_t::Array:
                 {
-                    const auto Delta = std::static_pointer_cast<Array_t>(Input.Value);
+                    const auto Delta = std::static_pointer_cast<Array_t>(Input.Internalstorage);
                     const auto Current = asPtr(Array_t);
 
                     Current->reserve(Current->size() + Delta->size());
@@ -215,10 +216,10 @@ namespace JSON
                     if constexpr (isDerived<T, std::basic_string>)
                     {
                         if constexpr (std::is_same_v<typename T::value_type, wchar_t>)
-                            return Encoding::toWide(*asPtr(std::u8string));
+                            return Encoding::toUNICODE(*asPtr(std::u8string));
 
                         if constexpr (std::is_same_v<typename T::value_type, char>)
-                            return Encoding::toNarrow(*asPtr(std::u8string));
+                            return Encoding::toASCII(*asPtr(std::u8string));
 
                         if constexpr (std::is_same_v<typename T::value_type, char8_t>)
                             return *asPtr(std::u8string);
@@ -305,11 +306,11 @@ namespace JSON
             {
                 Type = toType<T>();
 
-                if constexpr (toType<T>() == Type_t::String) Value = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
-                if constexpr (toType<T>() == Type_t::Unsignedint) Value = std::make_shared<uint64_t>(Input);
-                if constexpr (toType<T>() == Type_t::Signedint) Value = std::make_shared<int64_t>(Input);
-                if constexpr (toType<T>() == Type_t::Float) Value = std::make_shared<double>(Input);
-                if constexpr (toType<T>() == Type_t::Bool) Value = std::make_shared<bool>(Input);
+                if constexpr (toType<T>() == Type_t::String) Internalstorage = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
+                if constexpr (toType<T>() == Type_t::Unsignedint) Internalstorage = std::make_shared<uint64_t>(Input);
+                if constexpr (toType<T>() == Type_t::Signedint) Internalstorage = std::make_shared<int64_t>(Input);
+                if constexpr (toType<T>() == Type_t::Float) Internalstorage = std::make_shared<double>(Input);
+                if constexpr (toType<T>() == Type_t::Bool) Internalstorage = std::make_shared<bool>(Input);
 
                 if constexpr (isDerived<T, std::unordered_map> || isDerived<T, std::map>)
                 {
@@ -320,7 +321,7 @@ namespace JSON
                         Object[Key] = _Value;
 
                     Type = Type_t::Object;
-                    Value = std::make_shared<Object_t>(std::move(Object));
+                    Internalstorage = std::make_shared<Object_t>(std::move(Object));
                 }
                 if constexpr (isDerived<T, std::set> || isDerived<T, std::unordered_set> || isDerived<T, std::vector>)
                 {
@@ -329,7 +330,7 @@ namespace JSON
                         Array[Index] = _Value;
 
                     Type = Type_t::Array;
-                    Value = std::make_shared<Array_t>(std::move(Array));
+                    Internalstorage = std::make_shared<Array_t>(std::move(Array));
                 }
             }
         }
@@ -346,7 +347,7 @@ namespace JSON
         Value_t(const char *Input)
         {
             Type = Type_t::String;
-            Value = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
+            Internalstorage = std::make_shared<std::u8string>(Encoding::toUTF8(Input));
         }
         Value_t() = default;
     };

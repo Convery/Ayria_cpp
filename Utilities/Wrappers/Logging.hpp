@@ -22,7 +22,7 @@ namespace Logging
 
         const auto Formatted = std::format("[{}][{:02}:{:02}:{:02}] {}\n", Prefix,
             Local->tm_hour, Local->tm_min, Local->tm_sec,
-            Encoding::toNarrow(Message));
+            Encoding::toASCII(Message));
 
         toDebugstream(Formatted);
         toConsole(Formatted);

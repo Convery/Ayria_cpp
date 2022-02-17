@@ -57,7 +57,7 @@ struct LZString_t
         const auto Decodesize = LZ4_decompress_safe((char *)Internalstorage.get(),
             (char *)Decodebuffer.get(), (int)Buffersize, (int)Buffersize * 3);
 
-        return Encoding::toWide(std::u8string_view(Decodebuffer.get(), Decodesize));
+        return Encoding::toUNICODE(std::u8string_view(Decodebuffer.get(), Decodesize));
     }
     [[nodiscard]] operator std::string() const
     {
@@ -67,7 +67,7 @@ struct LZString_t
         const auto Decodesize = LZ4_decompress_safe((char *)Internalstorage.get(),
             (char *)Decodebuffer.get(), (int)Buffersize, (int)Buffersize * 3);
 
-        return Encoding::toNarrow(std::u8string_view(Decodebuffer.get(), Decodesize));
+        return Encoding::toASCII(std::u8string_view(Decodebuffer.get(), Decodesize));
     }
 
     [[nodiscard]] size_t size() const

@@ -8,14 +8,16 @@
     NOTES:
     On errors, an assert is triggered.
     If a query fails, no output is written.
-    If a query returns incompatible data, output is default constructed.
-    If a lambda is supplied as output, it will be called for each result but can return false to terminate.
-    If an output is not provided, the query will be executed when the object goes out of scope but results ignored.
+    Bound values per query is limited to 256.
+    Only a single statement per query is supported.
+    If a query returns incompatible data, output is default constructed or converted (e.g. int <-> string).
+    If an output is not provided, the query will be executed when the object goes out of scope but results are discarded.
 
     Database_t(*Ptr) << "SELECT * FROM Table WHERE Input = ?;" << myInput
-        >> [](Results...) {};
-        >> std::tie(a, b);
-        >> myOutput;
+    (1)   >> [](int &a, &b, &c) -> bool {};     // Lambda with the expected types, return false to stop evaluation.
+    (2)   >> [](int &a, &b, &c) -> void {};     // Lambda with the expected types, executed for each row.
+    (3)   >> std::tie(a, b);                    // Tuple with the expected types.
+    (4)   >> myOutput;                          // Single variable.
 */
 
 #pragma once
@@ -28,9 +30,7 @@
 #include <functional>
 #include <type_traits>
 #include <string_view>
-
-// For UTF8 encoding.
-#include "../Encoding/Stringconv.hpp"
+#include <Utilities/Encoding/UTF8.hpp>
 
 #define SQLITE_ENABLE_PREUPDATE_HOOK
 #include <sqlite3.h>
@@ -93,8 +93,8 @@ namespace sqlite
                 {
                     const std::u8string Temp = (char8_t *)sqlite3_column_text(Statement, Index);
 
-                    if constexpr (std::is_same_v<typename T::value_type, char>) return Encoding::toNarrow(Temp);
-                    else if constexpr (std::is_same_v<typename T::value_type, wchar_t>) return Encoding::toWide(Temp);
+                    if constexpr (std::is_same_v<typename T::value_type, char>) return Encoding::toASCII(Temp);
+                    else if constexpr (std::is_same_v<typename T::value_type, wchar_t>) return Encoding::toUNICODE(Temp);
                     else return Temp;
                 }
                 static_assert(!isDerived<T, std::basic_string_view>, "Can't bind result to string_view.");
@@ -180,8 +180,8 @@ namespace sqlite
         template <typename Function, size_t Index> using Argtype = typename Functiontraits<Function>::template arg<Index>;
         template <typename Function> using R = typename Functiontraits<Function>::return_type;
 
-        template <typename Function, typename ...Values, size_t Boundry = Count>
-        static R<Function> Run(sqlite3_stmt *Statement, Function &&Func, Values&& ...va) requires(sizeof...(Values) < Boundry)
+        template <typename Function, typename ...Values, size_t Boundary = Count>
+        static R<Function> Run(sqlite3_stmt *Statement, Function &&Func, Values&& ...va) requires(sizeof...(Values) < Boundary)
         {
             std::remove_cv_t<std::remove_reference_t<Argtype<Function, sizeof...(Values)>>> value{};
 
@@ -190,8 +190,8 @@ namespace sqlite
             return Run<Function>(Statement, Func, std::forward<Values>(va)..., std::move(value));
         }
 
-        template <typename Function, typename ...Values, size_t Boundry = Count>
-        static R<Function> Run(sqlite3_stmt *, Function &&Func, Values&& ...va) requires(sizeof...(Values) == Boundry)
+        template <typename Function, typename ...Values, size_t Boundary = Count>
+        static R<Function> Run(sqlite3_stmt *, Function &&Func, Values&& ...va) requires(sizeof...(Values) == Boundary)
         {
             return Func(std::move(va)...);
         }
@@ -201,14 +201,15 @@ namespace sqlite
     class Statement_t
     {
         std::shared_ptr<sqlite3_stmt> Statement{};
+        uint8_t Argcount{};
         bool isStarted{};
-        int32_t Index{};
+        uint8_t Index{};
 
         #if !defined (NDEBUG)
         std::shared_ptr<sqlite3> Owner;
         #endif
 
-        // Intial state for the bindings.
+        // Initial state for the bindings.
         inline void setStarted()
         {
             isStarted = true;
@@ -216,12 +217,16 @@ namespace sqlite
         }
 
         // Step through the query and extract anything interesting.
-        void Extractsingle(std::function<void()> Callback)
+        void Extractsingle(const std::function<void()> &&Callback)
         {
+            // Verify that we didn't forget an argument.
+            assert(Argcount == Index);
+
+            // Clear the state.
             setStarted();
 
             // Extract a row.
-            int Result = sqlite3_step(Statement.get());
+            auto Result = sqlite3_step(Statement.get());
             if (SQLITE_ROW == Result) Callback();
 
             // Verify that there's indeed only one row.
@@ -232,18 +237,24 @@ namespace sqlite
             if (Result != SQLITE_DONE)
             {
                 const auto Error = sqlite3_errmsg(Owner.get());
-                Errorprint(Error);
+                Errorprint(va("SQL error: %s", Error));
+                assert(false);
             }
             #endif
         }
-        void Extractmultiple(std::function<void()> Callback)
+        void Extractmultiple(const std::function<void()> &&Callback)
         {
-            int Result;
+            // Verify that we didn't forget an argument.
+            assert(Argcount == Index);
+
+            // Clear the state.
             setStarted();
 
-            while (SQLITE_ROW == (Result = sqlite3_step(Statement.get())))
+            auto Result = sqlite3_step(Statement.get());
+            while (SQLITE_ROW == Result)
             {
                 Callback();
+                Result = sqlite3_step(Statement.get());
             }
 
             // For debugging.
@@ -251,21 +262,24 @@ namespace sqlite
             if (Result != SQLITE_DONE)
             {
                 const auto Error = sqlite3_errmsg(Owner.get());
-                Errorprint(Error);
+                Errorprint(va("SQL error: %s", Error));
+                assert(false);
             }
             #endif
         }
-        void Extractmultiple(std::function<bool()> Callback)
+        void Extractmultiple(const std::function<bool()> &&Callback)
         {
-            int Result;
+            // Verify that we didn't forget an argument.
+            assert(Argcount == Index);
+
+            // Clear the state.
             setStarted();
 
-            while (SQLITE_ROW == (Result = sqlite3_step(Statement.get())))
+            auto Result = sqlite3_step(Statement.get());
+            while (SQLITE_ROW == Result)
             {
-                if (!Callback())
-                {
-                    return;
-                }
+                if (!Callback()) return;
+                Result = sqlite3_step(Statement.get());
             }
 
             // For debugging.
@@ -273,13 +287,14 @@ namespace sqlite
             if (Result != SQLITE_DONE)
             {
                 const auto Error = sqlite3_errmsg(Owner.get());
-                Errorprint(Error);
+                Errorprint(va("SQL error: %s", Error));
+                assert(false);
             }
             #endif
         }
 
     public:
-        // Result-extraction opterator, lambdas return false to terminate execution or void for complete queries.
+        // Result-extraction operator, lambdas return false to terminate execution or void for full queries.
         template <typename Function> requires (!Value_t<Function>) void operator>>(Function &&Callback)
         {
             // Interruptable queries.
@@ -290,28 +305,34 @@ namespace sqlite
         }
         template <typename... T> void operator>>(std::tuple<T...> &&Value)
         {
-            Extractsingle([&Value, this]
+            Extractsingle([&Value, this]()
             {
                 Tuple_t<std::tuple<T...>>::iterate(Statement.get(), Value);
             });
         }
         template <Value_t T> void operator>>(T &Value)
         {
-            Extractsingle([&Value, this]
+            Extractsingle([&Value, this]()
             {
                 getResult(Statement.get(), 0, Value);
             });
         }
 
         // Input operator, sequential propagating of the '?' placeholders in the query.
+        template <cmp::Bytealigned_t T, size_t N> Statement_t &operator<<(const cmp::Vector_t<T, N> &Value)
+        {
+            const std::basic_string_view<T> Temp{ Value.begin(), Value.end() };
+            return operator<<(Temp);
+        }
         template <Value_t T> Statement_t &operator<<(const T &Value)
         {
             // Ensure a clean state,
-            if (isStarted && Index == 0)
+            if (isStarted && Index == 0) [[unlikely]]
             {
                 sqlite3_reset(Statement.get());
                 sqlite3_clear_bindings(Statement.get());
             }
+
             bindValue(Statement.get(), ++Index, Value);
             return *this;
         }
@@ -329,6 +350,7 @@ namespace sqlite
         }
 
         // Reset can also be used to avoid RTTI evaluation.
+        void Execute() { Extractmultiple([]() {}); }
         void Reset() { setStarted(); }
 
         explicit Statement_t(std::shared_ptr<sqlite3> Connection, std::string_view SQL)
@@ -336,8 +358,13 @@ namespace sqlite
             const char *Remaining{};
             sqlite3_stmt *Temp{};
 
+            // For simplicity, we don't accept more than one statement, i.e. only one ';' allowed.
+            assert(1 == std::ranges::count(SQL, ';'));
+            Argcount = std::ranges::count(SQL, '?');
+
             // Prepare the statement.
-            const auto Result = sqlite3_prepare_v2(Connection.get(), SQL.data(), (int)SQL.size(), &Temp, &Remaining);
+            const auto Result = sqlite3_prepare_v2(Connection.get(), SQL.data(), int(SQL.size()), &Temp, &Remaining);
+            (void)Result;
 
             // For debugging.
             #if !defined (NDEBUG)
@@ -349,19 +376,18 @@ namespace sqlite
                 Errorprint(Error);
             }
             #endif
-            (void)Result;
 
             // Save the statement and finalize when we go out of scope.
             Statement = { Temp, sqlite3_finalize };
         }
-        Statement_t(const Statement_t &Other) noexcept : Statement(Other.Statement), isStarted(Other.isStarted), Index(Other.Index)
+        Statement_t(const Statement_t &Other) noexcept : Statement(Other.Statement), Argcount(Other.Argcount), isStarted(Other.isStarted), Index(Other.Index)
         {
             // For debugging.
             #if !defined (NDEBUG)
             Owner = Other.Owner;
             #endif
         }
-        Statement_t(Statement_t &&Other) noexcept : Statement(std::move(Other.Statement)), isStarted(Other.isStarted), Index(Other.Index)
+        Statement_t(Statement_t &&Other) noexcept : Statement(std::move(Other.Statement)), Argcount(Other.Argcount), isStarted(Other.isStarted), Index(Other.Index)
         {
             // For debugging.
             #if !defined (NDEBUG)
@@ -375,7 +401,7 @@ namespace sqlite
         }
     };
 
-    // Holds the connection and creates the prepared statement.
+    // Holds the connection and creates the prepared statement(s).
     struct Database_t
     {
         std::shared_ptr<sqlite3> Connection;
@@ -383,8 +409,6 @@ namespace sqlite
         Database_t(std::shared_ptr<sqlite3> Ptr) : Connection(Ptr) {};
         Statement_t operator<<(std::string_view SQL) const
         {
-            // For simplicity, we don't accept more than one statement, i.e. only one ';' allowed.
-            assert(1 == std::ranges::count(SQL, ';'));
             return Statement_t(Connection, SQL);
         }
     };

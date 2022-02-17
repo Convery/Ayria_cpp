@@ -26,7 +26,8 @@
 #include <Utilities/Encoding/Base64.hpp>
 #include <Utilities/Encoding/Base85.hpp>
 #include <Utilities/Encoding/JSON.hpp>
-#include <Utilities/Encoding/Stringconv.hpp>
+#include <Utilities/Encoding/UTF8.hpp>
+#include <Utilities/Encoding/Tokenize.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 
 #include <Utilities/Graphics/Overlay.hpp>

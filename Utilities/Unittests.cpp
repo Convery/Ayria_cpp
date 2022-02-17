@@ -1,4 +1,4 @@
-/*
+﻿/*
     Initial author: Convery (tcn@ayria.se)
     Started: 2022-02-01
     License: MIT
@@ -9,6 +9,8 @@
 
 #include <Stdinclude.hpp>
 #include "Crypto/SHA.hpp"
+
+#include "Encoding/UTF8.hpp"
 
 namespace Testing
 {
@@ -52,6 +54,19 @@ namespace Testing
         // 61d26192cf832c07612c541552d80027bbb3f520064f48ec
         constexpr auto Test192 = Hash::Tiger192("12345");
         static_assert(Test192[0] == 0x61 && Test192[1] == 0xd2 && Test192[2] == 0x61, "Tiger192 is borked..");
+
+        return true;
+    }();
+
+    // Encoding/UTF8.hpp
+    constexpr auto EncodeTest = []() -> bool
+    {
+        constexpr auto A = L"åäö"s == Encoding::toUNICODE(u8"åäö");
+        constexpr auto B = u8"åäö"s == Encoding::toUTF8("\\u00E5\\u00E4\\u00F6");
+        constexpr auto C = "\\u00E5\\u00E4\\u00F6"s == Encoding::toASCII(u8"åäö");
+        constexpr auto D = "???"s == Encoding::toASCII(Encoding::toUNICODE(u8"åäö"));
+
+        static_assert(A && B && C && D, "Encoding is borked (verify that the file is saved as UTF8)");
 
         return true;
     }();

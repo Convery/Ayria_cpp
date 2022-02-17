@@ -5,29 +5,14 @@
 */
 
 #pragma once
-#include <string_view>
-
-// NOTE(tcn): Abseil does not support std::u8string arguments so it's disabled for the foreseeable future.
-#if 0
-template<typename ... Args> [[nodiscard]] std::string va(std::string_view Format, const Args& ...args)
-{
-    return absl::StrFormat(Format, args ...);
-}
-template<typename ... Args> [[nodiscard]] std::string va(const char *Format, const Args& ...args)
-{
-    return absl::StrFormat(Format, args ...);
-}
-#endif
-
-// Helpers for type deduction.
-template <class, template <class...> class> inline constexpr bool isDerived = false;
-template <template <class...> class T, class... Args> inline constexpr bool isDerived<T<Args...>, T> = true;
+#include <Utilities/AAUtilities.hpp>
+#include <Utilities/Constexprhelpers.hpp>
 
 // Helpers to deal with std::basic_string.
 template <typename T> concept String_t = requires (const T &Arg) { Arg.c_str(); };
-template <String_t T> decltype(auto) Forward(const T &Arg) { return Arg.c_str(); }
-template <typename T> decltype(auto) Forward(T &&Arg) { static_assert(!isDerived<T, std::basic_string_view>); return Arg; }
-template <typename T> decltype(auto) Forward(const T &Arg) { static_assert(!isDerived<T, std::basic_string_view>); return Arg; }
+template <String_t T> constexpr decltype(auto) Forward(const T &Arg) { return Arg.c_str(); }
+template <typename T> constexpr decltype(auto) Forward(T &&Arg) { static_assert(!cmp::isDerived<T, std::basic_string_view>); return Arg; }
+template <typename T> constexpr decltype(auto) Forward(const T &Arg) { static_assert(!cmp::isDerived<T, std::basic_string_view>); return Arg; }
 
 template <typename ... Args> [[nodiscard]] std::string va_impl(const char *Format, const Args& ...args)
 {

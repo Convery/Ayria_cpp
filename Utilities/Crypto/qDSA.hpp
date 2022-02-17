@@ -17,6 +17,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#include <Utilities/Constexprhelpers.hpp>
 
 namespace qDSA
 {
@@ -28,31 +29,25 @@ namespace qDSA
             union
             {
                 __m128 V; // Compiler hint.
-                uint8_t Byte[128 / 8];
+                std::array<uint8_t, 128 / 8> Byte{};
             };
 
-            constexpr FE128_t() : Byte{} {}
-            constexpr FE128_t(const FE128_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE128_t(FE128_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
-            constexpr FE128_t(std::array<uint8_t, 128 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
-            constexpr FE128_t(const std::array<uint8_t, 128 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
+            constexpr FE128_t() : Byte() {};
+            constexpr FE128_t(FE128_t &&Input) = default;
+            constexpr FE128_t(const FE128_t &Input) = default;
+            constexpr FE128_t(std::span<uint8_t> Input) { std::ranges::copy(Input, Byte.data()); }
+            constexpr FE128_t(std::array<uint8_t, 128 / 8> &&Input) { std::ranges::move(Input, Byte.data()); }
+            constexpr FE128_t(const std::array<uint8_t, 128 / 8> &Input) { std::ranges::copy(Input, Byte.data()); }
 
-            // Just copy the bytes.
-            constexpr FE128_t &operator=(FE128_t &&Right) noexcept
-            {
-                std::ranges::move(Right.Byte, Byte);
-                return *this;
-            }
-            constexpr FE128_t &operator=(const FE128_t &Right)
-            {
-                std::ranges::copy(Right.Byte, Byte);
-                return *this;
-            }
+            // No need for anything fancy..
+            constexpr FE128_t &operator=(FE128_t &&Right) = default;
+            constexpr FE128_t &operator=(const FE128_t &Right) = default;
 
             // Simplify access to Byte.
+            constexpr operator std::span<uint8_t>() { return Byte; }
             constexpr uint8_t &operator[](size_t i) { return Byte[i]; }
             constexpr uint8_t operator[](size_t i) const { return Byte[i]; }
-            constexpr operator std::array<uint8_t, 128 / 8>() const { return std::to_array(Byte); }
+            constexpr operator std::span<const uint8_t>() const { return Byte; }
 
             // Extracted due to needing expansion and reduction.
             friend constexpr FE128_t operator +(const FE128_t &Left, const FE128_t &Right);
@@ -69,35 +64,28 @@ namespace qDSA
             union
             {
                 __m256 V; // Compiler hint.
-                uint8_t Byte[256 / 8];
                 struct { FE128_t X, Y; };
+                std::array<uint8_t, 256 / 8> Byte{};
             };
 
-            constexpr FE256_t() : Byte{} {}
-            constexpr FE256_t(const FE256_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE256_t(FE256_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
-            constexpr FE256_t(std::array<uint8_t, 256 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
-            constexpr FE256_t(const std::array<uint8_t, 256 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
-
+            constexpr FE256_t() : Byte() {};
+            constexpr FE256_t(FE256_t &&Input) = default;
+            constexpr FE256_t(const FE256_t &Input) = default;
             constexpr FE256_t(const FE128_t &A, const FE128_t &B) { X = A; Y = B; }
             constexpr FE256_t(FE128_t &&A, FE128_t &&B) { X = std::move(A); Y = std::move(B); }
+            constexpr FE256_t(std::span<const uint8_t> Input) { std::ranges::copy(Input, Byte.data()); }
+            constexpr FE256_t(std::array<uint8_t, 256 / 8> &&Input) { std::ranges::move(Input, Byte.data()); }
+            constexpr FE256_t(const std::array<uint8_t, 256 / 8> &Input) { std::ranges::copy(Input, Byte.data()); }
 
-            // Just copy the bytes.
-            constexpr FE256_t &operator=(FE256_t &&Right) noexcept
-            {
-                std::ranges::move(Right.Byte, Byte);
-                return *this;
-            }
-            constexpr FE256_t &operator=(const FE256_t &Right)
-            {
-                std::ranges::copy(Right.Byte, Byte);
-                return *this;
-            }
+            // No need for anything fancy..
+            constexpr FE256_t &operator=(FE256_t &&Right) = default;
+            constexpr FE256_t &operator=(const FE256_t &Right) = default;
 
             // Simplify access to Byte.
+            constexpr operator std::span<uint8_t>() { return Byte; }
             constexpr uint8_t &operator[](size_t i) { return Byte[i]; }
             constexpr uint8_t operator[](size_t i) const { return Byte[i]; }
-            constexpr operator std::array<uint8_t, 256 / 8>() const { return std::to_array(Byte); }
+            constexpr operator std::span<const uint8_t>() const { return Byte; }
         };
 
         // 512 bit uncompressed Kummer point.
@@ -106,38 +94,31 @@ namespace qDSA
             union
             {
                 __m512 V; // Compiler hint.
-                uint8_t Byte[512 / 8];
                 struct { FE256_t High, Low; };
                 struct { FE128_t X, Y, Z, W; };
+                std::array<uint8_t, 512 / 8> Byte{};
             };
 
-            constexpr FE512_t() : Byte{} {}
-            constexpr FE512_t(const FE512_t &Input) : Byte{} { std::ranges::copy(Input.Byte, Byte); }
-            constexpr FE512_t(FE512_t &&Input) noexcept : Byte{} { std::ranges::move(Input.Byte, Byte); }
-            constexpr FE512_t(std::array<uint8_t, 512 / 8> &&Input) : Byte{} { std::ranges::move(Input, Byte); }
-            constexpr FE512_t(const std::array<uint8_t, 512 / 8> &Input) : Byte{} { std::ranges::copy(Input, Byte); }
-
-            // Just copy the bytes.
-            constexpr FE512_t &operator=(FE512_t &&Right) noexcept
-            {
-                std::ranges::move(Right.Byte, Byte);
-                return *this;
-            }
-            constexpr FE512_t &operator=(const FE512_t &Right)
-            {
-                std::ranges::copy(Right.Byte, Byte);
-                return *this;
-            }
-
-            // Simplify access to Byte.
-            constexpr uint8_t &operator[](size_t i) { return Byte[i]; }
-            constexpr uint8_t operator[](size_t i) const { return Byte[i]; }
-            constexpr operator std::array<uint8_t, 512 / 8>() const { return std::to_array(Byte); }
-
+            constexpr FE512_t() : Byte() {};
+            constexpr FE512_t(FE512_t &&Input) = default;
+            constexpr FE512_t(const FE512_t &Input) = default;
             constexpr FE512_t(const FE256_t &A, const FE256_t &B) { High = A; Low = B; }
+            constexpr FE512_t(std::span<uint8_t> Input) { std::ranges::copy(Input, Byte.data()); }
             constexpr FE512_t(FE256_t &&A, FE256_t &&B) { High = std::move(A); Low = std::move(B); }
+            constexpr FE512_t(std::array<uint8_t, 512 / 8> &&Input) { std::ranges::move(Input, Byte.data()); }
+            constexpr FE512_t(const std::array<uint8_t, 512 / 8> &Input) { std::ranges::copy(Input, Byte.data()); }
             constexpr FE512_t(const FE128_t &A, const FE128_t &B, const FE128_t &C, const FE128_t &D) { X = A; Y = B; Z = C; W = D; }
             constexpr FE512_t(FE128_t &&A, FE128_t &&B, FE128_t &&C, FE128_t &&D) { X = std::move(A); Y = std::move(B); Z = std::move(C); W = std::move(D); }
+
+            // No need for anything fancy..
+            constexpr FE512_t &operator=(FE512_t &&Right) = default;
+            constexpr FE512_t &operator=(const FE512_t &Right) = default;
+
+            // Simplify access to Byte.
+            constexpr operator std::span<uint8_t>() { return Byte; }
+            constexpr uint8_t &operator[](size_t i) { return Byte[i]; }
+            constexpr uint8_t operator[](size_t i) const { return Byte[i]; }
+            constexpr operator std::span<const uint8_t>() const { return Byte; }
         };
 
         // Partial addition with an offset for sets.
@@ -186,7 +167,7 @@ namespace qDSA
             }
 
             Result[31] = uint8_t(Buffer[31]);
-            return Result;
+            return { Result };
         }
         constexpr FE512_t Expand(const FE256_t &X, const FE256_t &Y)
         {
@@ -235,12 +216,11 @@ namespace qDSA
             }
 
             Result[15] = uint8_t(Buffer[15]);
-            return Result;
+            return { Result };
         }
         constexpr FE256_t Reduce(const FE512_t &Input)
         {
-            constexpr FE256_t L1
-            { {
+            constexpr FE256_t L1{ {
                 0xbd, 0x05, 0x0c, 0x84, 0x4b, 0x0b, 0x73, 0x47,
                 0xff, 0x54, 0xa1, 0xf9, 0xc9, 0x7f, 0xc2, 0xd2,
                 0x94, 0x52, 0xc7, 0x20, 0x98, 0xd6, 0x34, 0x03
@@ -336,15 +316,15 @@ namespace qDSA
         // Point helpers.
         constexpr bool isZero(const FE128_t &Input)
         {
-            return std::to_array(Input.Byte) == std::to_array(FE128_t{}.Byte);
+            return Input.Byte == FE128_t{}.Byte;
         }
         constexpr bool isZero(const FE256_t &Input)
         {
-            return std::to_array(Input.Byte) == std::to_array(FE256_t{}.Byte);
+            return Input.Byte == FE256_t{}.Byte;
         }
         constexpr bool isZero(const FE512_t &Input)
         {
-            return std::to_array(Input.Byte) == std::to_array(FE512_t{}.Byte);
+            return Input.Byte == FE512_t{}.Byte;
         }
         constexpr FE128_t Freeze(const FE128_t &Input)
         {
@@ -891,7 +871,7 @@ namespace qDSA
             const auto Y = (C * Bij * R1 * R2) + (C * Bij * R1 * R2);
 
             const auto Result = Freeze(FE128_t{ {1} } + (X - Y + Z));
-            return std::to_array(Result.Byte) == std::to_array(FE128_t{ {1} }.Byte);
+            return Result.Byte == FE128_t{ {1} }.Byte;
         }
 
         // Bi-quadratic form.
@@ -1002,120 +982,118 @@ namespace qDSA
         }
     }
 
-    //                                                                     Crashes MSVC: sizeof(typename T::value_type) == 1;
-    template <typename T> concept Range_t = requires (const T &&t) { t.data(); t.size(); sizeof(t[0]) == 1; };
-    using Signature_t = std::array<uint8_t, 64>;
-    using Key_t = std::array<uint8_t, 32>;
+    // cmp::array is convertible to most containers.
+    using Signature_t = cmp::Vector_t<uint8_t, 64>;
+    using Key_t = cmp::Vector_t<uint8_t, 32>;
 
-    template <Range_t A, Range_t B, Range_t C>
-    constexpr Signature_t Sign(A &&Publickey, B &&Privatekey, C &&Message)
+    // Combine arrays, no idea why the STL doesn't provide this..
+    template <typename T, size_t N, size_t M>
+    constexpr std::array<T, N + M> operator+(const std::array<T, N> &Left, const std::array<T, M> &Right)
+    {
+        return[]<size_t ...LIndex, size_t ...RIndex>(const std::array<T, N> &Left, const std::array<T, M> &Right,
+                                                     std::index_sequence<LIndex...>, std::index_sequence<RIndex...>)
+        {
+            return std::array<T, N + M>{ { Left[LIndex]..., Right[RIndex]... } };
+        }(Left, Right, std::make_index_sequence<N>(), std::make_index_sequence<M>());
+    }
+
+    // Create a signature for the provided message, somewhat hardened against hackery.
+    template <cmp::Sequence_t A, cmp::Sequence_t B, cmp::Sequence_t C>
+    constexpr Signature_t Sign(const A &Publickey, const B &Privatekey, const C &Message)
     {
         using namespace Internal;
 
         // First point.
         const auto Seed1 = [&]()
         {
-            // Add a bit of 'randomness' to prevent attacks on multiple PKs at once.
-            auto Buffer = std::make_unique<uint8_t[]>(64);
-            const auto PRND = Hash::SHA512(Privatekey);
-            const auto Context = EVP_MD_CTX_create();
+            Blob_t Local;
+            const auto PRNG = Hash::SHA512(Privatekey);
 
-            EVP_DigestInit(Context, EVP_sha512());
-            EVP_DigestUpdate(Context, PRND.data(), 32);
-            EVP_DigestUpdate(Context, Message.data(), Message.size());
-            EVP_DigestFinal(Context, Buffer.get(), nullptr);
+            Local.reserve(Message.size() + PRNG.size());
+            Local.append(PRNG.data(), PRNG.size());
+            Local.append((uint8_t *)Message.data(), Message.size());
 
-            return std::move(Buffer);
-        }();
-        auto P = Ladder(getScalar64(Seed1.get()), 250);
+            return Hash::SHA512(Local);
+        };
+        auto P = Ladder(getScalar64(Seed1().data()), 250);
         std::tie(P.Z, P.W) = Compress(P);
 
         // Second point.
         const auto Seed2 = [&]()
         {
-            auto Buffer = std::make_unique<uint8_t[]>(64);
-            const auto Context = EVP_MD_CTX_create();
+            Blob_t Local;
+            Local.reserve(16 + 16 + 32 + Message.size());
 
-            EVP_DigestInit(Context, EVP_sha512());
-            EVP_DigestUpdate(Context, P.Z.Byte, 16);
-            EVP_DigestUpdate(Context, P.W.Byte, 16);
-            EVP_DigestUpdate(Context, Publickey.data(), 32);
-            EVP_DigestUpdate(Context, Message.data(), Message.size());
-            EVP_DigestFinal(Context, Buffer.get(), {});
+            Local.append(P.Z.Byte.data(), 16);
+            Local.append(P.W.Byte.data(), 16);
+            Local.append(Publickey.data(), 32);
+            Local.append((uint8_t *)Message.data(), Message.size());
 
-            return std::move(Buffer);
-        }();
-        const auto Q = getScalar64(Seed2.get());
+            return Hash::SHA512(Local);
+        };
+        const auto Q = getScalar64(Seed2().data());
 
         // Third point.
-        const auto W = opsScalar(getScalar64(Seed1.get()), getPositive(Q), getScalar32(Privatekey.data()));
+        const auto W = opsScalar(getScalar64(Seed1().data()), getPositive(Q), getScalar32(Privatekey.data()));
 
         // Share with the world..
-        std::array<uint8_t, 64> Signature;
-        std::memcpy(Signature.data() + 32, W.Byte, 32);
-        std::memcpy(Signature.data() + 0, P.Z.Byte, 16);
-        std::memcpy(Signature.data() + 16, P.W.Byte, 16);
-        return Signature;
+        return P.Z.Byte + P.W.Byte + W.Byte;
     }
 
-    template <Range_t A, Range_t B, Range_t C>
-    constexpr bool Verify(A &&Publickey, B &&Signature, C &&Message)
+    // Verify that the message was signed by the owner of the public key.
+    template <cmp::Sequence_t A, cmp::Sequence_t B, cmp::Sequence_t C>
+    constexpr bool Verify(const A &Publickey, const B &Signature, const C &Message)
     {
         using namespace Internal;
-        const auto KP = *(FE512_t *)Signature.data();
 
-        // Validate compression.
+        // Validate compression of the first point.
         auto P = Decompress(FE256_t{ Publickey });
-        if (isZero(P)) return false;
+        if (isZero(P)) [[unlikely]] return false;
 
         // Second point.
         const auto Seed2 = [&]()
         {
-            auto Buffer = std::make_unique<uint8_t[]>(64);
-            const auto Context = EVP_MD_CTX_create();
+            Blob_t Local;
+            Local.reserve(64 + 32 + Message.size());
+            Local.append(Signature.data(), Signature.size());
+            Local.append(Publickey.data(), Publickey.size());
+            Local.append((uint8_t *)Message.data(), Message.size());
 
-            EVP_DigestInit(Context, EVP_sha512());
-            EVP_DigestUpdate(Context, Signature.data(), Signature.size());
-            EVP_DigestUpdate(Context, Publickey.data(), Publickey.size());
-            EVP_DigestUpdate(Context, Message.data(), Message.size());
-            EVP_DigestFinal(Context, Buffer.get(), {});
-
-            return std::move(Buffer);
-        }();
-        const auto Q = getScalar64(Seed2.get());
+            return Hash::SHA512(Local);
+        };
+        const auto Q = getScalar64(Seed2().data());
 
         // Third point.
+        const auto KP = FE512_t(Signature);
         auto W = Ladder(&P, Wrap(P), Q, 250);
-        P = Ladder(getScalar32(KP.Low.Byte), 250);
+        P = Ladder(getScalar32(KP.Low.Byte.data()), 250);
 
         return Check(P, W, KP.High);
     }
 
-    template <Range_t A, Range_t B>
-    constexpr Key_t Generatesecret(A &&Publickey, B &&Privatekey)
+    // Compute a shared secret between two keypairs (A.PK, B.SK) == (B.PK, A.SK)
+    template <cmp::Sequence_t A, cmp::Sequence_t B>
+    constexpr Key_t Generatesecret(const A &Publickey, const B &Privatekey)
     {
         using namespace Internal;
 
         const auto Scalar = getScalar32(Privatekey.data());
-        auto PK = Decompress(*(FE256_t *)Publickey.data());
+        auto PK = Decompress(FE256_t(Publickey));
         const auto PKW = Wrap(PK);
 
         auto Secret = Ladder(&PK, PKW, Scalar, 250);
         std::tie(Secret.Z, Secret.W) = Compress(Secret);
 
-        std::array<uint8_t, 32> Result;
-        std::memcpy(Result.data() + 0, Secret.Z.Byte, 16);
-        std::memcpy(Result.data() + 16, Secret.W.Byte, 16);
-
-        return Result;
+        return Secret.Low.Byte;
     }
 
-    template <Range_t A, typename = std::enable_if<sizeof(A) >= 32>>
-    constexpr std::tuple<Key_t, Key_t> Createkeypair(A &&Seed)
+    // Create a keypair from a given seed.
+    template <cmp::Sequence_t T>
+    constexpr std::pair<Key_t, Key_t> Createkeypair(const T &Seed)
     {
         using namespace Internal;
-        std::array<uint8_t, 32> Public, Private;
-        std::ranges::move(Hash::SHA256(Seed), Private.begin());
+
+        auto Private{ Hash::SHA256(Seed) };
 
         // Make the private-key compatible with RFC 8032 in-case someone want's to re-use it.
         Private[0] &= 0xF8;
@@ -1123,8 +1101,6 @@ namespace qDSA
         Private[31] |= 0x40;
 
         const auto [X, Y] = Compress(Ladder(getScalar32(Private.data()), 250));
-        std::memcpy(Public.data() + 16, Y.Byte, 16);
-        std::memcpy(Public.data() + 0, X.Byte, 16);
-        return { Public, Private };
+        return { FE256_t{X, Y}.Byte, Private };
     }
 }

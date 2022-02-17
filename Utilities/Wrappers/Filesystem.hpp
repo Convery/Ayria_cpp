@@ -5,12 +5,12 @@
 */
 
 #pragma once
-#include "../Encoding/Stringconv.hpp"
-#include <vector>
+#include <io.h>
 #include <cstdio>
 #include <memory>
 #include <string>
-#include <io.h>
+#include <vector>
+#include <Utilities/Encoding/UTF8.hpp>
 
 using Blob = std::basic_string<uint8_t>;
 using Blob_view = std::basic_string_view<uint8_t>;
@@ -117,7 +117,7 @@ namespace FS
             Ptr = (uint8_t *)mmap(NULL, Filesize, PROT_READ, MAP_PRIVATE, FD, 0);
             Data = { (uint8_t *)Ptr, Info.RegionSize };
         }
-        explicit MMap_t(const std::wstring &Path) : MMap_t(Encoding::toNarrow(Path)) {}
+        explicit MMap_t(const std::wstring &Path) : MMap_t(Encoding::toASCII(Path)) {}
         ~MMap_t()
         {
             if (Ptr) munmap((void *)Ptr, Data.size());
@@ -175,7 +175,7 @@ namespace FS
         #if defined(_WIN32)
         std::FILE *Filehandle = _wfopen(Path.c_str(), L"wb");
         #else
-        std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "wb");
+        std::FILE *Filehandle = std::fopen(Encoding::toASCII(Path).c_str(), "wb");
         #endif
         if (!Filehandle) return false;
 
@@ -207,7 +207,7 @@ namespace FS
         #if defined(_WIN32)
         std::FILE *Filehandle = _wfopen(Path.c_str(), L"ab");
         #else
-        std::FILE *Filehandle = std::fopen(Encoding::toNarrow(Path).c_str(), "ab");
+        std::FILE *Filehandle = std::fopen(Encoding::toASCII(Path).c_str(), "ab");
         #endif
         if (!Filehandle) return false;
 
@@ -302,7 +302,7 @@ namespace FS
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #else
         struct stat Buffer;
-        if (stat(Encoding::toNarrow(Path).c_str(), &Buffer) == -1) return {};
+        if (stat(Encoding::toASCII(Path).c_str(), &Buffer) == -1) return {};
         return { (uint32_t)Buffer.st_ctime, (uint32_t)Buffer.st_mtime, (uint32_t)Buffer.st_atime };
         #endif
     }

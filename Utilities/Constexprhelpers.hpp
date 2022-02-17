@@ -73,30 +73,6 @@ namespace cmp
         }
     }
 
-    // Make a buffer sequential, questionable constexpr support.
-    template <Complex_t T> constexpr Blob_t flatten_array(const T &Input)
-    {
-        using Type_t = typename T::value_type;
-        constexpr auto N = std::size(Input);
-        constexpr auto O = sizeof(Type_t);
-
-        Blob_t Buffer; Buffer.reserve(N * O);
-        for (const auto &Item : Input)
-        {
-            auto Ptr = (uint8_t *)&Item;
-            for (size_t i = 0; i < sizeof(Type_t); ++i)
-            {
-                Buffer.append(Ptr++, 1);
-            }
-        }
-
-        return Buffer;
-    }
-    template <Simple_t T> constexpr Blob_view_t flatten_array(const T &Input)
-    {
-        return { Input.begin(), Input.end() };
-    }
-
     // Sometimes we just need a bit more room..
     template <typename T, size_t Old, size_t New>
     constexpr std::array<T, New> resize_array(const std::array<T, Old> &Input)
@@ -137,6 +113,19 @@ namespace cmp
             }
 
             return true;
+        }
+    }
+    template <Byte_t T, typename U> requires (sizeof(U) != 1) constexpr void memcpy(T *Dst, const U *Src, size_t Size)
+    {
+        if (!std::is_constant_evaluated())
+        {
+            std::memcpy(Dst, Src, Size);
+        }
+        else
+        {
+            const auto Temp = std::bit_cast<std::array<uint8_t, sizeof(U)>>(*Src);
+            for (size_t i = 0; i < sizeof(U); ++i, --Size) Dst[i] = Temp[i];
+            if (Size) memcpy(Dst + sizeof(U), ++Src, Size);
         }
     }
 
@@ -240,8 +229,7 @@ namespace cmp
         template <Simple_t U> constexpr Vector_t(const U &Range) : Basevector_t<T, N>::Basevector_t(Range.begin(), Range.end()) {}
         template <Complex_t U> constexpr Vector_t(const U &Range)
         {
-            const auto Flat = flatten_array(Range);
-            Basevector_t<T, N>::Basevector_t(std::move(Flat));
+            Basevector_t<T, N>::Basevector_t(std::as_bytes(std::span(Range)));
         }
     };
 
@@ -276,7 +264,7 @@ namespace cmp
         constexpr auto N = sizeof(Value);
         std::array<uint8_t, N> Buffer;
 
-        memcpy(Buffer.data(), (uint8_t *)&Value, N);
+        memcpy(Buffer.data(), &Value, N);
         return Vector_t<uint8_t, N>(Buffer);
     }
     template <Byte_t T, size_t N> constexpr Vector_t<T, N> make_vector(const std::array<T, N> &Input)
