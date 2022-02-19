@@ -362,9 +362,10 @@ namespace JSON
         Value_t Result{};
 
         // Malformed statement check. Missing brackets, null-chars messing up C-string parsing.
-        if (std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}') ||
-            std::ranges::count(JSONString, '[') != std::ranges::count(JSONString, ']') ||
-            std::ranges::count(JSONString, '\0') > 1)
+        const auto C1 = std::ranges::count(JSONString, '{') != std::ranges::count(JSONString, '}');
+        const auto C2 = std::ranges::count(JSONString, '[') != std::ranges::count(JSONString, ']');
+        const auto C3 = std::ranges::count(JSONString, '\0') > 1;
+        if (C1 || C2 || C3)
         {
             Errorprint(va("Trying to parse invalid JSON string, first chars: %*s", std::min(size_t(20), JSONString.size()), JSONString.data()));
             return Result;
