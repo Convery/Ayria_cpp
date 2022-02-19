@@ -56,7 +56,7 @@ namespace Hash
         };
         #pragma endregion
 
-        template <cmp::Bytealigned_t T> constexpr void Transform256(std::array<uint32_t, 8> &State, std::span<const T> Input)
+        template <cmp::Bytealigned_t T> constexpr void Transform256(std::array<uint32_t, 8> &State, std::span<T> Input)
         {
             std::array<uint32_t, 8> Copy{ State };
             std::array<uint32_t, 64> Scratch{};
@@ -97,7 +97,7 @@ namespace Hash
                 State[i] += Copy[i];
             }
         }
-        template <cmp::Bytealigned_t T> constexpr void Transform512(std::array<uint64_t, 8> &State, std::span<const T> Input)
+        template <cmp::Bytealigned_t T> constexpr void Transform512(std::array<uint64_t, 8> &State, std::span<T> Input)
         {
             std::array<uint64_t, 8> Copy{ State };
             std::array<uint64_t, 80> Scratch{};
@@ -140,7 +140,7 @@ namespace Hash
             }
         }
 
-        template <cmp::Bytealigned_t T> constexpr std::array<uint8_t, 32> SHA256Compiletime(std::span<const T> Input)
+        template <cmp::Bytealigned_t T> constexpr std::array<uint8_t, 32> SHA256Compiletime(std::span<T> Input)
         {
             std::array<uint32_t, 8> State{ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 };
             const auto Remaining = Input.size() - int(Input.size() / 64) * 64;
@@ -152,7 +152,8 @@ namespace Hash
             }
 
             std::array<uint8_t, 64> Lastblock{};
-            std::ranges::copy(Input.subspan(Input.size() - Remaining), Lastblock.data());
+            auto Span = Input.subspan(Input.size() - Remaining);
+            cmp::memcpy(Lastblock.data(), Span.data(), Span.size());
 
             Lastblock[Remaining] = 0x80;
             if (Remaining >= 56)
@@ -172,7 +173,7 @@ namespace Hash
 
             return Result;
         }
-        template <cmp::Bytealigned_t T> constexpr std::array<uint8_t, 64> SHA512Compiletime(std::span<const T> Input)
+        template <cmp::Bytealigned_t T> constexpr std::array<uint8_t, 64> SHA512Compiletime(std::span<T> Input)
         {
             std::array<uint64_t, 8> State{ 0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179 };
             const auto Remaining = Input.size() - int(Input.size() / 128) * 128;
@@ -206,7 +207,7 @@ namespace Hash
         }
 
         #if defined (HAS_OPENSSL)
-        template <cmp::Bytealigned_t T> [[nodiscard]] inline std::array<uint8_t, 32> SHA256OpenSSL(std::span<const T> Input)
+        template <cmp::Bytealigned_t T> [[nodiscard]] inline std::array<uint8_t, 32> SHA256OpenSSL(std::span<T> Input)
         {
             const auto Context = EVP_MD_CTX_create();
             std::array<uint8_t, 32> Result{};
@@ -218,7 +219,7 @@ namespace Hash
 
             return Result;
         }
-        template <cmp::Bytealigned_t T> [[nodiscard]] inline std::array<uint8_t, 64> SHA512OpenSSL(std::span<const T> Input)
+        template <cmp::Bytealigned_t T> [[nodiscard]] inline std::array<uint8_t, 64> SHA512OpenSSL(std::span<T> Input)
         {
             const auto Context = EVP_MD_CTX_create();
             std::array<uint8_t, 64> Result{};
@@ -238,14 +239,14 @@ namespace Hash
     {
         if (std::is_constant_evaluated())
         {
-            return SHAInternal::SHA256Compiletime(std::span{ Input.cbegin(), Input.cend() });
+            return SHAInternal::SHA256Compiletime(std::span{ Input.begin(), Input.end() });
         }
         else
         {
             #if defined (HAS_OPENSSL)
-            return SHAInternal::SHA256OpenSSL(std::span(Input.cbegin(), Input.cend()));
+            return SHAInternal::SHA256OpenSSL(std::span(Input.begin(), Input.end()));
             #else
-            return SHAInternal::SHA256Compiletime(std::span(Input.cbegin(), Input.cend()));
+            return SHAInternal::SHA256Compiletime(std::span(Input.begin(), Input.end()));
             #endif
         }
     };
@@ -253,14 +254,14 @@ namespace Hash
     {
         if (std::is_constant_evaluated())
         {
-            return SHAInternal::SHA512Compiletime(std::span(Input.cbegin(), Input.cend()));
+            return SHAInternal::SHA512Compiletime(std::span(Input.begin(), Input.end()));
         }
         else
         {
             #if defined (HAS_OPENSSL)
-            return SHAInternal::SHA512OpenSSL(std::span(Input.cbegin(), Input.cend()));
+            return SHAInternal::SHA512OpenSSL(std::span(Input.begin(), Input.end()));
             #else
-            return SHAInternal::SHA512Compiletime(std::span(Input.cbegin(), Input.cend()));
+            return SHAInternal::SHA512Compiletime(std::span(Input.begin(), Input.end()));
             #endif
         }
     };
