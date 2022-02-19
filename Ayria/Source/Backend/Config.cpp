@@ -5,7 +5,6 @@
 */
 
 #include "Backend.hpp"
-#include <winioctl.h>
 
 namespace Config
 {
@@ -205,11 +204,11 @@ namespace Config
         {
             std::array<uint32_t, 1036> Query = { 49, 0, 3, 1, 1, 0, 40, 4096 };
 
-            const HANDLE Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
-                                                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+            const auto Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
+                                                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                                      NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-            if (!DeviceIoControl(Handle, IOCTL_STORAGE_QUERY_PROPERTY, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
+            if (!DeviceIoControl(Handle, 0x2D1400, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
                 CloseHandle(Handle);
                 return {};
@@ -233,11 +232,11 @@ namespace Config
         };
         constexpr auto getSATA = []() -> std::string
         {
-            std::array<uint8_t, 36 + 512> Query{ 0, 0, 0, 0, 0, 1, 1, 0, 0, 0xA0, 0xEC }; *(uint32_t *)&Query[0] = 512;
+            std::array<uint8_t, 548> Query{ 0, 0, 0, 0, 0, 1, 1, 0, 0, 0xA0, 0xEC }; *(uint32_t *)&Query[0] = 512;
 
-            const HANDLE Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
-                                                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+            const auto Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
+                                                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                                      NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
             if (!DeviceIoControl(Handle, 0x0007C088, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
