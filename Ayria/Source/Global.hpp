@@ -43,6 +43,7 @@ class Globalstate_t
                 enableIATHooking : 1,
                 enableFileshare : 1,
                 modifiedConfig : 1,
+                enableRouting : 1,
                 noNetworking : 1,
                 pruneDB : 1,
 
@@ -65,11 +66,10 @@ class Globalstate_t
     // ************************************
 
     // Helpers for access to the members.
-    uint64_t getShortID() const { return Hash::WW64(getLongID()); }
-    const std::string &getLongID() const
+    [[nodiscard]] const std::string &getLongID() const
     {
-        static auto LongID = Base58::Encode(*Publickey);
-        static auto Lasthash = Hash::WW32(*Publickey);
+        static std::string LongID;
+        static uint32_t Lasthash{};
 
         const auto Currenthash = Hash::WW32(*Publickey);
         if (Currenthash != Lasthash) [[unlikely]]
@@ -80,6 +80,7 @@ class Globalstate_t
 
         return LongID;
     }
+    [[nodiscard]] uint64_t getShortID() const { return Hash::WW64(getLongID()); }
 };
 #pragma pack(pop)
 
@@ -88,5 +89,5 @@ static_assert(sizeof(Globalstate_t) <= 64, "Do not cross cache lines with Global
 extern Globalstate_t Global;
 
 // Project includes.
-#include "Backend\AABackend.hpp"
+#include "Backend\Backend.hpp"
 #include "Services\AAServices.hpp"

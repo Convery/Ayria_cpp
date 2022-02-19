@@ -22,7 +22,7 @@ namespace Console
     template <typename T> void addMessage(std::basic_string_view<T> Message, Color_t RGBColor)
     {
         // Passthrough for T = char
-        const auto Compat = Encoding::toNarrow(Message);
+        const auto Compat = Encoding::toASCII(Message);
         std::scoped_lock Threadguard(Writelock);
 
         for (const auto &String : lz::split(Compat, '\n'))
@@ -48,12 +48,12 @@ namespace Console
                 }();
 
                 // Passthrough for T = wchar_t
-                Consolelog.emplace_back(Encoding::toWide(String), Newcolor);
+                Consolelog.emplace_back(Encoding::toUNICODE(String), Newcolor);
             }
             else
             {
                 // Passthrough for T = wchar_t
-                Consolelog.emplace_back(Encoding::toWide(String), RGBColor);
+                Consolelog.emplace_back(Encoding::toUNICODE(String), RGBColor);
             }
         }
 
@@ -111,7 +111,7 @@ namespace Console
     template <typename T> void execCommand(std::basic_string_view<T> Commandline, bool Log)
     {
         // Passthrough for T = char
-        const auto Compatible = Encoding::toNarrow(Commandline);
+        const auto Compatible = Encoding::toASCII(Commandline);
 
         // Can't think of an easier way to parse the commandline.
         static const std::regex Regex(R"(("[^"]+"|[^\s"]+))", std::regex_constants::optimize);
@@ -163,7 +163,7 @@ namespace Console
     template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback)
     {
         if (!Callback || Name.empty()) [[unlikely]] return;
-        Commands[Encoding::toNarrow(Name)].insert(Callback);
+        Commands[Encoding::toASCII(Name)].insert(Callback);
     }
     template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback)
     {
@@ -234,8 +234,8 @@ namespace Console
         addCommand("List"sv, List);
         addCommand("Help"sv, List);
 
-        Layer3::addEndpoint("Console::Exec", API::execCommand);
-        Layer3::addEndpoint("Console::Print", API::printLine);
+        JSONAPI::addEndpoint("Console::Exec", API::execCommand);
+        JSONAPI::addEndpoint("Console::Print", API::printLine);
     }
 
     // Instantiate the templates to make MSVC happy.

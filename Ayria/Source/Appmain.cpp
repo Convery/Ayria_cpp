@@ -6,6 +6,9 @@
 
 #include <Global.hpp>
 
+// 512-bit aligned storage.
+Globalstate_t Global{};
+
 // Some applications do not handle exceptions well.
 static LONG __stdcall onUnhandledexception(PEXCEPTION_POINTERS Context)
 {
@@ -80,8 +83,10 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
     return TRUE;
 }
 
+// Entrypoint when loaded as a GUI application.
 int main()
 {
+    // Although it should already be touched by the ctors, ensure it's propagated and prioritized.
     _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_T0);
 
     // Ensure that Ayrias default directories exist.

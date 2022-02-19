@@ -7,23 +7,23 @@
 #pragma once
 
 // Fixup some Visual Studio builds not defining this.
-#if !defined(_DEBUG) && !defined(NDEBUG)
+#if !defined (_DEBUG) && !defined (NDEBUG)
     #define NDEBUG
 #endif
 
 // Platform identification.
-#if defined(_MSC_VER)
+#if defined (_MSC_VER)
 #define EXPORT_ATTR __declspec(dllexport)
 #define IMPORT_ATTR __declspec(dllimport)
-#elif defined(__GNUC__)
+#elif defined (__GNUC__) || defined (__clang__)
 #define EXPORT_ATTR __attribute__((visibility("default")))
 #define IMPORT_ATTR
 #else
-#error Compiling for unknown platform.
+#error Unknown compiler..
 #endif
 
 // Remove some Windows annoyance.
-#if defined(_WIN32)
+#if defined (_WIN32)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN
@@ -39,20 +39,19 @@ namespace Build
 {
     constexpr bool is64bit = sizeof(void *) == 8;
 
-    #if defined(_WIN32)
+    #if defined (_WIN32)
     constexpr bool isWindows = true;
     #else
     constexpr bool isWindows = false;
     #endif
 
-    #if defined(__linux__)
+    #if defined (__linux__)
     constexpr bool isLinux = true;
     #else
     constexpr bool isLinux = false;
     #endif
 
-
-    #if defined(NDEBUG)
+    #if defined (NDEBUG)
     constexpr bool isDebug = false;
     #else
     constexpr bool isDebug = true;
@@ -64,7 +63,7 @@ namespace Logging { template <typename T> extern void Print(char Prefix, const T
 #define Warningprint(string) Logging::Print('W', string)
 #define Errorprint(string) Logging::Print('E', string)
 #define Infoprint(string) Logging::Print('I', string)
-#if !defined(NDEBUG)
+#if !defined (NDEBUG)
     #define Debugprint(string) Logging::Print('D', string)
     #define Traceprint() Logging::Print('>', __FUNCTION__)
 #else
@@ -73,18 +72,19 @@ namespace Logging { template <typename T> extern void Print(char Prefix, const T
 #endif
 
 // Where to keep the log.
-#if !defined(LOG_PATH)
+#if !defined (LOG_PATH)
     #define LOG_PATH "./Ayria/Logs"
 #endif
 
 // Helper to switch between debug and release mutex's.
-#if defined(NDEBUG)
+#if defined (NDEBUG)
     #define Defaultmutex Spinlock
 #else
     #define Defaultmutex Debugmutex
 #endif
 
 // Ignore ANSI compatibility for structs.
+#pragma warning(disable: 4200)
 #pragma warning(disable: 4201)
 
 // Ignore warnings about casting float to int.

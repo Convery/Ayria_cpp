@@ -1,12 +1,12 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 2021-10-05
+    Started: 2022-01-31
     License: MIT
 */
 
-#include <Global.hpp>
+#include "Backend.hpp"
 
-namespace Backend::JSONAPI
+namespace JSONAPI
 {
     static Hashmap<std::string, Callback_t> Requesthandlers{};
     static Ringbuffer_t<std::string, 16> Results{};
@@ -15,18 +15,17 @@ namespace Backend::JSONAPI
     constexpr auto Generichash = Hash::WW32("{}");
     constexpr auto Genericresult = "{}";
 
-    using Callback_t = std::string (__cdecl *)(JSON::Value_t &&Request);
-    // static std::string __cdecl Callback(JSON::Value_t &&Request);
-
     // Listen for requests to this functionname.
     void addEndpoint(std::string_view Functionname, Callback_t Callback)
     {
         if (Callback) Requesthandlers[std::string(Functionname)] = Callback;
     }
 
-    // For internal use.
-    const char *callEndpoint(std::string_view Functionname, JSON::Value_t &&Request)
+    // Access from the plugins.
+    extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
     {
+        const std::string_view Functionname = Function ? Function : "";
+
         if (!Requesthandlers.contains(Functionname)) [[unlikely]]
         {
             static std::string Failurestring = va(R"({ "Error" : "No endpoint with name %*s available.", \n"Endpoints" : [\n)",
@@ -43,17 +42,10 @@ namespace Backend::JSONAPI
             return Failurestring.c_str();
         }
 
-        const auto Result = Requesthandlers[std::string(Functionname)](std::move(Request));
+        const auto Result = Requesthandlers[std::string(Functionname)](JSON::Parse(JSONString));
         if (Result.empty() || Hash::WW32(Result) == Generichash) [[likely]] return Genericresult;
 
         // Save the result on the heap for 16 calls.
         return Results.emplace_back(Result).c_str();
-    }
-
-    // Access from the plugins.
-    extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
-    {
-        const std::string_view Functionname = Function ? Function : "";
-        return callEndpoint(Functionname, JSON::Parse(JSONString));
     }
 }
