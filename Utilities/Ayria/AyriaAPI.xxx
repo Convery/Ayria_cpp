@@ -244,7 +244,7 @@ namespace AyriaAPI
         // Active clients only (last seen > 60 seconds ago).
         inline uint32_t Count(bool IncludeAFK = false)
         {
-            const auto Timestamp = (std::chrono::utc_clock::now() - std::chrono::seconds(60)).time_since_epoch().count();
+            const auto Timestamp = (std::chrono::system_clock::now() - std::chrono::seconds(60)).time_since_epoch().count();
             uint32_t Count{};
 
             if (IncludeAFK)
@@ -698,6 +698,17 @@ namespace AyriaAPI
             Query("SELECT GroupID FROM Matchmaking WHERE GameID = ?;", GameID)
                 >> [&](const LongID_t &ID) { Result.emplace_back(ID); };
             return Result;
+        }
+        inline std::vector<LongID_t> Find(uint32_t GameID, uint32_t ProviderID)
+        {
+            std::vector<LongID_t> Result{};
+            Query("SELECT GroupID, Providers FROM Matchmaking WHERE GameID = ?;", GameID)
+                >> [&](const LongID_t &ID, const std::unordered_set<uint32_t> &Providers) { if (Providers.contains(ProviderID)) [[likely]] Result.emplace_back(ID); };
+            return Result;
+        }
+        inline std::vector<LongID_t> Find(uint32_t GameID, std::string_view Provider)
+        {
+            return Find(GameID, Hash::WW32(Provider));
         }
     }
 

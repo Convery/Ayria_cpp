@@ -79,6 +79,7 @@ namespace Core
 
         // Database configuration.
         Database << "PRAGMA foreign_keys = ON;";
+        Database << "PRAGMA temp_store = MEMORY;";
         Database << "PRAGMA auto_vacuum = INCREMENTAL;";
 
         // Helper functions for inline hashing.
@@ -142,7 +143,7 @@ namespace Core
     // Interface with the client database.
     sqlite::Database_t QueryDB()
     {
-        if (!DBConnection)
+        if (!DBConnection) [[unlikely]]
         {
             sqlite3 *Ptr{};
 

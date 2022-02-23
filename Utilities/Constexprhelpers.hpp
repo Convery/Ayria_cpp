@@ -83,7 +83,6 @@ namespace cmp
         {
             return std::array<T, New>{ { Input[Index]... }};
         }(Input, std::make_index_sequence<Min>());
-
     }
 
     // Since we can't cast (char *) <-> (void *) in constexpr.
@@ -124,8 +123,8 @@ namespace cmp
         else
         {
             const auto Temp = std::bit_cast<std::array<uint8_t, sizeof(U)>>(*Src);
-            for (size_t i = 0; i < sizeof(U); ++i, --Size) Dst[i] = Temp[i];
-            if (Size) memcpy(Dst + sizeof(U), ++Src, Size);
+            for (size_t i = 0; i < sizeof(U); ++i) Dst[i] = Temp[i];
+            if (--Size) memcpy(Dst + sizeof(U), ++Src, Size);
         }
     }
 
@@ -262,7 +261,7 @@ namespace cmp
     template <typename T> requires(!Range_t<T>) constexpr Vector_t<> make_vector(const T &Value) requires (!std::is_pointer_v<T>)
     {
         constexpr auto N = sizeof(Value);
-        std::array<uint8_t, N> Buffer;
+        std::array<uint8_t, N> Buffer{};
 
         memcpy(Buffer.data(), &Value, N);
         return Vector_t<uint8_t, N>(Buffer);
