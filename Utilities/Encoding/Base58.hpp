@@ -220,6 +220,13 @@ namespace Base58
     template <cmp::Simple_t T> [[nodiscard]] constexpr bool isValid(const T &Input)
     {
         constexpr auto Charset = std::string_view("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz");
-        return std::ranges::all_of(Input, [&](auto Char) { return Charset.contains(char(Char)); });
+        return std::ranges::all_of(Input, [&](char Char)
+        {
+            #if defined(__cpp_lib_string_contains)
+            return Charset.contains(Char);
+            #else
+            return Charset.find(Char) != Charset.end();
+            #endif
+        });
     }
 }

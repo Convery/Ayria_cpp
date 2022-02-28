@@ -61,13 +61,14 @@ namespace Testing
     // Encoding/UTF8.hpp
     constexpr auto EncodeTest = []() -> bool
     {
+        #if __cpp_constexpr >= 202110L
         constexpr auto A = L"åäö"s == Encoding::toUNICODE(u8"åäö");
         constexpr auto B = u8"åäö"s == Encoding::toUTF8("\\u00E5\\u00E4\\u00F6");
         constexpr auto C = "\\u00E5\\u00E4\\u00F6"s == Encoding::toASCII(u8"åäö");
         constexpr auto D = "???"s == Encoding::toASCII(Encoding::toUNICODE(u8"åäö"));
 
         static_assert(A && B && C && D, "Encoding is borked (verify that the file is saved as UTF8)");
-
+        #endif
         return true;
     }();
 }

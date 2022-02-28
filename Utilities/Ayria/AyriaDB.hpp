@@ -9,6 +9,7 @@
 #pragma once
 #include <Stdinclude.hpp>
 #include "Ayriamodule.h"
+#include <Utilities/Wrappers/SQLitewrapper.hpp>
 
 namespace AyriaDB
 {
@@ -71,22 +72,16 @@ namespace AyriaDB
         {
             sqlite3 *Ptr{};
 
-        // :memory: should never fail unless the client has more serious problems.
-        auto Result = sqlite3_open_v2("./Ayria/Client.sqlite", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
-        if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
-        assert(Result == SQLITE_OK);
+            // :memory: should never fail unless the client has more serious problems.
+            auto Result = sqlite3_open_v2("./Ayria/Client.sqlite", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            if (Result != SQLITE_OK) Result = sqlite3_open_v2(":memory:", &Ptr, SQLITE_OPEN_READONLY | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+            assert(Result == SQLITE_OK);
 
-        // Log errors in debug-mode.
-        if constexpr (Build::isDebug) sqlite3_db_config(Ptr, SQLITE_CONFIG_LOG, SQLErrorlog, "Client.sqlite");
-
-        // Track our changes to the DB.
-        sqlite3_preupdate_hook(Ptr, Clientupdatehook, nullptr);
-
-        // Close the DB at exit to ensure everything's flushed.
-        DBConnection = std::shared_ptr<sqlite3>(Ptr, [](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
+            // Close the DB at exit to ensure everything's flushed.
+            DBConnection = std::shared_ptr<sqlite3>(Ptr, [](sqlite3 *Ptr) { sqlite3_close_v2(Ptr); });
         }
 
-        return sqlite::Database_t(Database);
+        return sqlite::Database_t(DBConnection);
     }
 
     // Creation of a prepared statement, evaluates with the '>>' operator or when it goes out of scope.
@@ -118,7 +113,7 @@ namespace AyriaDB
     namespace Clientinfo
     {
         // Active clients being defined as last seen < 60 seconds ago.
-        inline size_t Count(bool incudeAFK = false)
+        inline size_t Count(bool includeAFK = false)
         {
             const auto Timestamp = (std::chrono::system_clock::now() - std::chrono::seconds(60)).time_since_epoch().count();
             size_t Result{};

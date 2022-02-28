@@ -8,6 +8,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#include <bit>
 
 // Python-esque constructs for loops.
 #pragma region Python
@@ -142,3 +143,19 @@ inline void setThreadname(std::string_view Name)
 {
 }
 #endif
+
+// Simple PRNG to avoid OS dependencies.
+namespace RNG
+{
+    // Xoroshiro128+
+    static inline uint64_t Table[2]{ __rdtsc(), ~(__rdtsc()) };
+    inline uint64_t Next()
+    {
+        const uint64_t Result = Table[0] + Table[1];
+        const uint64_t S1 = Table[0] ^ Table[1];
+
+        Table[0] = std::rotl(Table[0], 24) ^ S1 ^ (S1 << 16);
+        Table[1] = std::rotl(S1, 37);
+        return Result;
+    }
+}

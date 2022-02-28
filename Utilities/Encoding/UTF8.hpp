@@ -302,7 +302,7 @@ namespace Encoding
     // We do not check for malformed sequences.
     [[nodiscard]] constexpr std::wstring toUNICODE(std::u8string_view Input)
     {
-        std::wstring Buffer;
+        std::wstring Buffer{};
         Buffer.reserve(Input.size() * 2);
 
         while (!Input.empty())
@@ -328,7 +328,7 @@ namespace Encoding
             return { Input.begin(), Input.end() };
         }
 
-        std::string Buffer;
+        std::string Buffer{};
         Buffer.reserve(Input.size() * 2);
 
         while (!Input.empty())
@@ -348,7 +348,7 @@ namespace Encoding
     }
     [[nodiscard]] constexpr std::u8string toUTF8(std::wstring_view Input)
     {
-        std::u8string Result;
+        std::u8string Result{};
         Result.reserve(Input.size() * 3);
 
         // Common case is that it's only ASCII data.
@@ -417,7 +417,7 @@ namespace Encoding
         }
 
         // Common case is ASCII with the code-points being smaller than text.
-        std::u8string Result; Result.reserve(Input.size() * sizeof(char));
+        std::u8string Result{}; Result.reserve(Input.size() * sizeof(char));
 
         // In case of extended 32-bit codepoints.
         Codepoint_t Extendedpoint{};

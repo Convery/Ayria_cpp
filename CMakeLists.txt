@@ -56,8 +56,8 @@ else()
 endif()
 
 # Try to add the lib directories based on a required package.
-find_path(STD_INC openssl/aes.h)
-find_library(STD_LIB_RAW sqlite3.lib)
+find_library(STD_LIB_RAW libssl.lib)
+find_path(STD_INC openssl/ssl.h)
 get_filename_component(STD_LIB ${STD_LIB_RAW} DIRECTORY)
 include_directories(${STD_INC})
 link_directories(${STD_LIB})

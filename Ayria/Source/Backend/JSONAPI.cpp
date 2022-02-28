@@ -24,7 +24,7 @@ namespace JSONAPI
     // Access from the plugins.
     extern "C" EXPORT_ATTR const char *__cdecl JSONRequest(const char *Function, const char *JSONString)
     {
-        const std::string_view Functionname = Function ? Function : "";
+        const std::string Functionname = Function ? Function : "";
 
         if (!Requesthandlers.contains(Functionname)) [[unlikely]]
         {

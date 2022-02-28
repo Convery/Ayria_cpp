@@ -41,14 +41,17 @@ namespace Core
                     // Take advantage of unsigned overflows.
                     if ((Currenttime - Task.Last) > Task.Period) [[unlikely]]
                     {
+                        // Accurate enough.
                         Task.Last = Currenttime;
-                    Task.Callback();
+                        Task.Callback();
                     }
                 }
             }
 
             // Most tasks run with periods in seconds.
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            const auto Delta = GetTickCount() - Currenttime;
+            const auto Remaining = std::clamp(int(100 - Delta), 0, 100);
+            std::this_thread::sleep_for(std::chrono::milliseconds(Remaining));
         }
     }
 

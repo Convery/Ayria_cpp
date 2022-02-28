@@ -452,6 +452,13 @@ namespace JSON
             try { Result = Parse(nlohmann::json::parse(JSONString.data(), nullptr, true, true)); }
             catch (const std::exception &e) { (void)e; Debugprint(e.what()); };
             #else
+            //std::function<Value_t(std::string_view &)> Parse = [&Parse](std::string_view &Stream)
+            //{
+            //    const auto RXString = R"(" ([^"\n\r\t\\\\]* | \\\\ ["\\\\bfnrt\/] | \\\\ u [0-9a-f]{4} )* ")";
+            //    const auto RXNumber = R"(-? (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)";
+            //    const auto RXBool = R"(true | false | null)";
+            //};
+
             static_assert(false, "No JSON parser available.");
             #endif
         }
