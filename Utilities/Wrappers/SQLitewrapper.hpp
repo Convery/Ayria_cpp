@@ -32,9 +32,7 @@
 #include <string_view>
 #include <Utilities/Encoding/UTF8.hpp>
 
-#define SQLITE_ENABLE_PREUPDATE_HOOK
-#include <sqlite3.h>
-#pragma comment(lib, "sqlite3.lib")
+#include "sqlite3.h"
 
 namespace sqlite
 {

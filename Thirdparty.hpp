@@ -93,6 +93,7 @@
 // Alternative JSON parser.
 #if __has_include(<simdjson.h>)
 #define SIMDJSON_NO_PORTABILITY_WARNING
+#define SIMDJSON_USING_LIBRARY 1
 #define HAS_SIMDJSON
 #include <simdjson.h>
 #pragma comment(lib, "simdjson.lib")
