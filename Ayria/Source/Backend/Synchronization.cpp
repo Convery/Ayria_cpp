@@ -29,8 +29,6 @@ struct Networkpacket_t final
     char Messagedata[0];
 };
 
-constexpr auto a = sizeof(cmp::Vector_t<uint8_t, 64>);
-
 namespace Synchronization
 {
     // Routers accept sync packets and returns sync packets from other keys.
@@ -213,9 +211,10 @@ namespace Synchronization
         const auto Compressedsize = int(Compressed.size());
 
         // Decompress the payload.
-        const auto Buffersize = int(Compressedsize * 3);
+        const auto Buffersize = size_t(Compressedsize * 3);
         const auto Payloadbuffer = std::make_unique<char[]>(Buffersize);
-        const int Decompressedsize = LZ4_decompress_safe(Compressed.data(), Payloadbuffer.get(), Compressedsize, Buffersize);
+        const auto Fullbuffer = std::span{ Payloadbuffer.get(), Buffersize };
+        const int Decompressedsize = LZ4_decompress_safe(Compressed.data(), Payloadbuffer.get(), Compressedsize, int(Buffersize));
 
         // Create prepared statements for the queries.
         static auto UpdatePS = Core::QueryDB() << "INSERT INTO Accounts (Publickey, Timestamp) VALUES (?,?) ON CONFLICT DO UPDATE SET Timestamp = ?;";
@@ -227,8 +226,14 @@ namespace Synchronization
         UpdatePS.Execute();
 
         // Insert the static parts of the packet.
+        InsertPS << Publickey << Timestamp << Signature;
+
+        // If there is enough room in the buffer, encode in-place before inserting into the DB.
         const auto Decompressed = std::span{ Payloadbuffer.get(), size_t(Decompressedsize) };
-        InsertPS << Publickey << Timestamp << Signature << Base85::Encode(Decompressed);
+        if (Buffersize >= Base85::Encodesize(Decompressedsize)) [[unlikely]]
+            InsertPS << Base85::Encode(Decompressed, Fullbuffer);
+        else
+            InsertPS << Base85::Encode(Decompressed);
 
         // If this is our own packet, it's already processed.
         InsertPS << (0 == std::memcmp(Global.Publickey->data(), Header->Publickey.data(), 32));
@@ -313,7 +318,7 @@ namespace Synchronization
                 Keys.emplace_back(Key);
             newKeys.clear();
 
-            // No
+            // Broadcast to all routers.
             sendRoutingpacket("Router::Subscribe", JSON::Object_t{ {"Keys", Keys} });
         }
     }

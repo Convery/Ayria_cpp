@@ -16,6 +16,13 @@ namespace Core
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)())
     {
         std::scoped_lock Guard(Threadsafe);
+
+        // Check for duplicates.
+        for (const auto &Task : Backgroundtasks)
+            if (Task.Callback == Callback) [[unlikely]]
+                return;
+
+        // Else put it at the end, will be evaluated next tick.
         Backgroundtasks.push_back({ 0, PeriodMS, Callback });
     }
 
@@ -50,7 +57,7 @@ namespace Core
 
             // Most tasks run with periods in seconds.
             const auto Delta = GetTickCount() - Currenttime;
-            const auto Remaining = std::clamp(int(100 - Delta), 0, 100);
+            const auto Remaining = std::clamp(int(50 - Delta), 0, 50);
             std::this_thread::sleep_for(std::chrono::milliseconds(Remaining));
         }
     }
