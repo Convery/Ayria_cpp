@@ -93,22 +93,34 @@ namespace Plugins
 namespace Console
 {
     // UTF8 escaped ASCII strings are passed to argv for compatibility.
-    using Functioncallback_t = void(__cdecl *)(int argc, const char **argv);
+    using Functioncallback_t = void(__cdecl *)(int argc, const wchar_t **argv);
     using Logline_t = std::pair<std::wstring, Color_t>;
 
     // Useful for checking for new messages.
     extern uint32_t LastmessageID;
 
-    // Threadsafe injection into and fetching from the global log.
-    template <typename T> void addMessage(const std::basic_string<T> &Message, Color_t RGBColor);
-    template <typename T> void addMessage(std::basic_string_view<T> Message, Color_t RGBColor);
-    std::vector<Logline_t> getMessages(size_t Maxcount, std::wstring_view Filter);
+    // Threadsafe injection and fetching from the global log.
+    void addMessage(Logline_t &&Message);
+    std::vector<Logline_t> getMessages(size_t Maxcount = 256, std::wstring_view Filter = L"");
+    template <typename T> inline void addMessage(std::basic_string_view<T> Message, Color_t RGBColor)
+    {
+        // Passthrough for T = wchar_t
+        return addMessage({ Encoding::toUNICODE(Message), RGBColor });
+    }
 
     // Manage and execute the commandline, with optional logging.
-    template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback);
-    template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback);
-    template <typename T> void execCommand(const std::basic_string<T> &Commandline, bool Log = true);
-    template <typename T> void execCommand(std::basic_string_view<T> Commandline, bool Log = true);
+    void execCommand(std::wstring_view Commandline, bool Log = true);
+    void addCommand(std::wstring_view Name, Functioncallback_t Callback);
+    template <typename T> inline void execCommand(std::basic_string_view<T> Commandline, bool Log = true)
+    {
+        // Passthrough for T = wchar_t
+        return execCommand(Encoding::toUNICODE(Commandline), Log);
+    }
+    template <typename T> inline void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback)
+    {
+        // Passthrough for T = wchar_t
+        return addCommand(Encoding::toUNICODE(Name), Callback);
+    }
 
     // Add common commands to the backend.
     void Initialize();

@@ -25,7 +25,7 @@ struct Ayriamodule_t
 
     // UTF8 escaped ASCII strings are used for console functions. Colour as ARGB.
     void(__cdecl *addConsolemessage)(const char *String, unsigned int Colour);
-    void(__cdecl *addConsolecommand)(const char *Name, void(__cdecl *Callback)(int Argc, const char **Argv));
+    void(__cdecl *addConsolecommand)(const char *Name, void(__cdecl *Callback)(int Argc, const wchar_t **Argv));
 
     // Communication with the network, use with extreme care.
     void(__cdecl *subscribeMessage)(const char *Identifier, bool (__cdecl * Callback)(uint64_t Timestamp, const char *LongID, const char *Message, unsigned int Length));

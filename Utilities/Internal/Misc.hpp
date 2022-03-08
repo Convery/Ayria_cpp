@@ -149,13 +149,27 @@ namespace RNG
 {
     // Xoroshiro128+
     static inline uint64_t Table[2]{ __rdtsc(), ~(__rdtsc()) };
-    inline uint64_t Next()
+    template <typename T = uint64_t> T Next()
     {
         const uint64_t Result = Table[0] + Table[1];
         const uint64_t S1 = Table[0] ^ Table[1];
 
         Table[0] = std::rotl(Table[0], 24) ^ S1 ^ (S1 << 16);
         Table[1] = std::rotl(S1, 37);
-        return Result;
+
+        if constexpr (std::is_same_v<T, bool>) return Result & 1;
+        if constexpr (sizeof(T) == sizeof(uint64_t)) return std::bit_cast<T>(Result);
+        else
+        {
+            constexpr uint64_t Mask = [N = sizeof(T)]()
+            {
+                uint64_t TMP{};
+                for (size_t i = 0; i < N; ++i)
+                    TMP = (TMP << 8) | 0xFF;
+                return TMP;
+            }();
+
+            return Result & Mask;
+        }
     }
 }

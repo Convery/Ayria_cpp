@@ -12,53 +12,45 @@ namespace Console
     static Spinlock Writelock{};
     constexpr size_t Loglimit = 256;
     static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
-    static Hashmap<std::string, Hashset<Functioncallback_t>> Commands{};
+    static Hashmap<std::wstring, Hashset<Functioncallback_t>> Commands{};
 
-    // Threadsafe injection into and fetching from the global log.
-    template <typename T> void addMessage(const std::basic_string<T> &Message, Color_t RGBColor)
+    // Threadsafe injection and fetching from the global log.
+    void addMessage(Logline_t &&Message)
     {
-        return addMessage(std::basic_string_view<T> {Message}, RGBColor);
-    }
-    template <typename T> void addMessage(std::basic_string_view<T> Message, Color_t RGBColor)
-    {
-        // Passthrough for T = char
-        const auto Compat = Encoding::toASCII(Message);
+        const auto Lines = Tokenizestring(Message.first, L'\n');
+
         std::scoped_lock Threadguard(Writelock);
-
-        for (const auto &String : lz::split(Compat, '\n'))
+        for (const auto &String : Lines)
         {
             // Ensure that we have some color.
-            if (RGBColor == 0)
+            if (Message.second == 0)
             {
                 const auto Newcolor = [&]() -> uint32_t
                 {
                     // Ayria common prefixes.
-                    if (String.find("[E]") != String.npos) return 0xBE282A;
-                    if (String.find("[W]") != String.npos) return 0x2AC0BE;
-                    if (String.find("[I]") != String.npos) return 0xBD8F21;
-                    if (String.find("[D]") != String.npos) return 0x3E967F;
-                    if (String.find("[>]") != String.npos) return 0x7F963E;
+                    if (String.find(L"[E]") != String.npos) return 0xBE282A;
+                    if (String.find(L"[W]") != String.npos) return 0x2AC0BE;
+                    if (String.find(L"[I]") != String.npos) return 0xBD8F21;
+                    if (String.find(L"[D]") != String.npos) return 0x3E967F;
+                    if (String.find(L"[>]") != String.npos) return 0x7F963E;
 
                     // Hail Mary..
-                    if (String.find("rror") !=  String.npos) return 0xBE282A;
-                    if (String.find("arning") !=  String.npos) return 0x2AC0BE;
+                    if (String.find(L"rror") != String.npos) return 0xBE282A;
+                    if (String.find(L"arning") != String.npos) return 0x2AC0BE;
 
                     // Default.
                     return 0x315571;
                 }();
 
-                // Passthrough for T = wchar_t
-                Consolelog.emplace_back(Encoding::toUNICODE(String), Newcolor);
+                Consolelog.emplace_back(String, Newcolor);
             }
             else
             {
-                // Passthrough for T = wchar_t
-                Consolelog.emplace_back(Encoding::toUNICODE(String), RGBColor);
+                Consolelog.emplace_back(String, Message.second);
             }
         }
 
-        // Just need a new number.
-        LastmessageID = rand();
+        LastmessageID = RNG::Next<uint32_t>();
     }
     std::vector<Logline_t> getMessages(size_t Maxcount, std::wstring_view Filter)
     {
@@ -88,7 +80,7 @@ namespace Console
     }
 
     // Helper to manage the commands.
-    static std::optional<Hashset<Functioncallback_t>> Findcommand(std::string_view Functionname)
+    static std::optional<Hashset<Functioncallback_t>> Findcommand(std::wstring_view Functionname)
     {
         for (const auto &[Name, Callbacks] : Commands)
         {
@@ -107,29 +99,30 @@ namespace Console
         return {};
     }
 
-    // Manage and execute the commandline, with optional logging.
-    template <typename T> void execCommand(std::basic_string_view<T> Commandline, bool Log)
+    // Helper for parsing UTF8 escaped ASCII.
+    static std::wstring toWIDE(std::string_view Input)
     {
-        // Passthrough for T = char
-        const auto Compatible = Encoding::toASCII(Commandline);
+        return Encoding::toUNICODE(Encoding::toUTF8(Input));
+    }
 
+    // Manage and execute the commandline, with optional logging.
+    void execCommand(std::wstring_view Commandline, bool Log)
+    {
         // Can't think of an easier way to parse the commandline.
-        static const std::regex Regex(R"(("[^"]+"|[^\s"]+))", std::regex_constants::optimize);
-        auto It = std::sregex_iterator(Compatible.cbegin(), Compatible.cend(), Regex);
-        const auto Size = std::distance(It, std::sregex_iterator());
+        static const std::wregex Regex(LR"(("[^"]+"|[^\s"]+))", std::regex_constants::optimize);
+        auto It = std::regex_iterator<std::wstring_view::const_iterator>(Commandline.begin(), Commandline.end(), Regex);
+        const auto Size = std::distance(It, std::regex_iterator<std::wstring_view::const_iterator>());
 
         // Why would you do this to me? =(
         if (Size == 0) [[unlikely]] return;
 
         // Format as a C-array with the last pointer being null.
-        const auto Arguments = std::make_unique<const char *[]>(Size + 1);
-        std::vector<std::string> Heapstorage;
-        Heapstorage.reserve(Size);
-
+        const auto Arguments = std::make_unique<const wchar_t *[]>(Size + 1);
+        std::vector<std::wstring> Heapstorage; Heapstorage.reserve(Size);
         for (ptrdiff_t i = 0; i < Size; ++i)
         {
             auto Temp = (*It++).str();
-            if (Temp.back() == '\"' && Temp.front() == '\"') Temp = Temp.substr(1, Temp.size() - 2);
+            if (Temp.back() == L'\"' && Temp.front() == L'\"') Temp = Temp.substr(1, Temp.size() - 2);
             Arguments[i] = Heapstorage.emplace_back(std::move(Temp)).c_str();
         }
 
@@ -144,7 +137,7 @@ namespace Console
         // Notify the user about what was executed.
         if (Log) [[likely]]
         {
-            addMessage("> "s + Compatible, Color_t(0xD6, 0xB7, 0x49));
+            addMessage({L"> " + std::wstring{Commandline.data(), Commandline.size()}, Color_t(0xD6, 0xB7, 0x49)});
         }
 
         // And finally evaluate.
@@ -156,18 +149,10 @@ namespace Console
             }
         }
     }
-    template <typename T> void execCommand(const std::basic_string<T> &Commandline, bool Log)
-    {
-        return execCommand(std::basic_string_view<T>{Commandline}, Log);
-    }
-    template <typename T> void addCommand(std::basic_string_view<T> Name, Functioncallback_t Callback)
+    void addCommand(std::wstring_view Name, Functioncallback_t Callback)
     {
         if (!Callback || Name.empty()) [[unlikely]] return;
-        Commands[Encoding::toASCII(Name)].insert(Callback);
-    }
-    template <typename T> void addCommand(const std::basic_string<T> &Name, Functioncallback_t Callback)
-    {
-        return addCommand(std::basic_string_view<T>{Name}, Callback);
+        Commands[{Name.data(), Name.size()}].insert(Callback);
     }
 
     // Interactions with other plugins.
@@ -177,12 +162,12 @@ namespace Console
         extern "C" EXPORT_ATTR void __cdecl addConsolemessage(const char *String, unsigned int RGBColor)
         {
             if (!String) [[unlikely]] return;
-            addMessage(std::string_view{ String }, uint32_t(RGBColor));
+            addMessage({ toWIDE(String), uint32_t(RGBColor) });
         }
-        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, void(__cdecl *Callback)(int Argc, const char **Argv))
+        extern "C" EXPORT_ATTR void __cdecl addConsolecommand(const char *Name, void(__cdecl *Callback)(int Argc, const wchar_t **Argv))
         {
             if (!Name || !Callback) [[unlikely]] return;
-            addCommand(Encoding::toUTF8(Name), Callback);
+            addCommand(toWIDE(Name), Callback);
         }
 
         // JSON endpoints.
@@ -191,7 +176,7 @@ namespace Console
             const auto Color = std::max(Request.value<uint32_t>("Color"), Request.value<uint32_t>("Colour"));
             const auto Message = Request.value<std::string>("Message");
 
-            addMessage(Message, Color);
+            addMessage({ toWIDE(Message), Color });
             return "{}";
         }
         static std::string __cdecl execCommand(JSON::Value_t &&Request)
@@ -199,7 +184,7 @@ namespace Console
             const auto Commandline = Request.value<std::string>("Commandline");
             const auto Shouldlog = Request.value<bool>("Log");
 
-            Console::execCommand(Commandline, Shouldlog);
+            Console::execCommand(toWIDE(Commandline), Shouldlog);
             return "{}";
         }
     }
@@ -211,48 +196,30 @@ namespace Console
         if (Initialized) return;
         Initialized = true;
 
-        static constexpr auto Quit = [](int, const char **)
+        static constexpr auto Quit = [](int, const wchar_t **)
         {
             std::exit(0);
         };
-        addCommand("Quit"sv, Quit);
-        addCommand("Exit"sv, Quit);
+        addCommand(L"Quit", Quit);
+        addCommand(L"Exit", Quit);
 
-        static constexpr auto List = [](int, const char **)
+        static constexpr auto List = [](int, const wchar_t **)
         {
-            std::string Output; Output.reserve(20 * Commands.size());
+            std::wstring Output; Output.reserve(20 * Commands.size());
             for (const auto &[Index, Tuple] : lz::enumerate(Commands, 1))
             {
-                Output += "    ";
+                Output += L"    ";
                 Output += Tuple.first;
-                if (Index % 4 == 0) Output += '\n';
+                if (Index % 4 == 0) Output += L'\n';
             }
 
-            addMessage("Available commands:"sv , 0xBD8F21U);
-            addMessage(Output, 0x715531U);
+            addMessage({ L"Available commands:" , 0xBD8F21U });
+            addMessage({ Output, 0x715531U });
         };
-        addCommand("List"sv, List);
-        addCommand("Help"sv, List);
+        addCommand(L"List", List);
+        addCommand(L"Help", List);
 
         JSONAPI::addEndpoint("Console::Exec", API::execCommand);
         JSONAPI::addEndpoint("Console::Print", API::printLine);
-    }
-
-    // Instantiate the templates to make MSVC happy.
-    void Totally_real_func()
-    {
-        addMessage(std::wstring(), {});
-        addCommand(std::wstring(), {});
-        execCommand(std::wstring(), {});
-        addMessage(std::wstring_view(), {});
-        addCommand(std::wstring_view(), {});
-        execCommand(std::wstring_view(), {});
-
-        addMessage(std::string(), {});
-        addCommand(std::string(), {});
-        execCommand(std::string(), {});
-        addMessage(std::string_view(), {});
-        addCommand(std::string_view(), {});
-        execCommand(std::string_view(), {});
     }
 }
