@@ -99,6 +99,7 @@ namespace Config
         // Sometimes 2.x is reported as "default" AKA 0.
         if (Version_major == 0 || Version_major >= 2)
         {
+            std::vector<std::string> Serials{};
             std::string Serial1{}, Serial2{}, Serial3{};
 
             while (!Table.empty())
@@ -118,80 +119,80 @@ namespace Config
                 const auto Headerlength = Entry[1];
                 const auto Type = Entry[0];
 
-                if (Version_minor >= 3)
+                // Sometimes messed up if using modded BIOS, i.e. 02000300040005000006000700080009
+                if (Type == 1)
                 {
-                    //
-                    if (Type == 17)
-                    {
-                        const auto Stringindex = Entry[0x18];
-                        Entry.remove_prefix(Headerlength);
+                    std::string Serial; Serial.reserve(16);
 
-                        for (uint8_t i = 1; i < Stringindex; ++i)
-                            Entry.remove_prefix(std::strlen((char *)Entry.data()) + 1);
+                    for (size_t i = 0; i < 16; ++i) Serial.append(std::format("{:02X}", (uint8_t)Entry[8 + i]));
 
-                        if (Serial1.empty()) Serial1 = std::string((char *)Entry.data());
-                        else if (Serial2.empty()) Serial2 = std::string((char *)Entry.data());
-                        else Serial3 = std::string((char *)Entry.data());
-                    }
-                }
-                else
-                {
-                    // Sometimes messed up if using modded BIOS, i.e. 02000300040005000006000700080009
-                    if (Type == 1)
-                    {
-                        std::string Serial; Serial.reserve(16);
-
-                        for (size_t i = 0; i < 16; ++i) Serial.append(std::format("{:02X}", (uint8_t)Entry[8 + i]));
-
-                        if (Serial1.empty()) Serial1 = Serial;
-                        else if (Serial2.empty()) Serial2 = Serial;
-                        else Serial3 = Serial;
-                    }
-
-                    // Sometimes not actually filled..
-                    if (Type == 2)
-                    {
-                        const auto Stringindex = Entry[0x03];
-                        Entry.remove_prefix(Headerlength);
-
-                        for (uint8_t i = 1; i < Stringindex; ++i)
-                            Entry.remove_prefix(std::strlen((char *)Entry.data()) + 1);
-
-                        if (Serial1.empty()) Serial1 = std::string((char *)Entry.data());
-                        else if (Serial2.empty()) Serial2 = std::string((char *)Entry.data());
-                        else Serial3 = std::string((char *)Entry.data());
-                    }
-
-                    // Not as unique as we want..
-                    if (Type == 4)
-                    {
-                        const auto Serial = std::format("{}", *(uint64_t *)&Entry[8]);
-                        if (Serial1.empty()) Serial1 = Serial;
-                        else if (Serial2.empty()) Serial2 = Serial;
-                        else Serial3 = Serial;
-                    }
+                    Serials.push_back(Serial);
                 }
 
-                if (!Serial1.empty() && !Serial2.empty() && !Serial3.empty()) break;
+                // Sometimes not actually filled..
+                if (Type == 2)
+                {
+                    const auto Stringindex = Entry[0x07];
+                    Entry.remove_prefix(Headerlength);
+
+                    for (uint8_t i = 1; i < Stringindex; ++i)
+                        Entry.remove_prefix(std::strlen((char *)Entry.data()) + 1);
+
+                    Serials.push_back((char *)Entry.data());
+                }
+
+                // Only relevant for laptops.
+                if (Type == 3)
+                {
+                    const auto Stringindex = Entry[0x06];
+                    Entry.remove_prefix(Headerlength);
+
+                    for (uint8_t i = 1; i < Stringindex; ++i)
+                        Entry.remove_prefix(std::strlen((char *)Entry.data()) + 1);
+
+                    Serials.push_back((char *)Entry.data());
+                }
+
+                // Not as unique as we want..
+                if (Type == 4)
+                {
+                    const auto Serial = std::format("{}", *(uint64_t *)&Entry[8]);
+                    Serials.push_back(Serial);
+                }
+
+                // Some laptops do not have a tag.
+                if (Type == 17)
+                {
+                    const auto Stringindex = Entry[0x18];
+                    Entry.remove_prefix(Headerlength);
+
+                    for (uint8_t i = 1; i < Stringindex; ++i)
+                        Entry.remove_prefix(std::strlen((char *)Entry.data()) + 1);
+
+                    Serials.push_back((char *)Entry.data());
+                }
                 Table.remove_prefix(Structsize);
             }
 
-            const auto Maxsize = std::max(Serial1.size(), std::max(Serial2.size(), Serial3.size()));
+            size_t Maxsize = 0;
+            for (const auto &Item : Serials)
+                Maxsize = std::max(Maxsize, Item.size());
             const auto TMP = (uint8_t *)alloca(Maxsize);
             std::memset(TMP, 0, Maxsize);
 
             // In-case we want to verify something.
             if constexpr (Build::isDebug)
             {
-                Infoprint(va("Serial1: %s", Serial1));
-                Infoprint(va("Serial2: %s", Serial2));
-                Infoprint(va("Serial3: %s", Serial3));
+                for (const auto &Item : Serials)
+                    Infoprint(va("Serial: %s", Item));
             }
 
             // Mix so that the ordering is no longer relevant.
-            for (size_t i = 0; i < Serial1.size(); ++i) TMP[i] ^= Serial1[i];
-            for (size_t i = 0; i < Serial2.size(); ++i) TMP[i] ^= Serial2[i];
-            for (size_t i = 0; i < Serial3.size(); ++i) TMP[i] ^= Serial3[i];
+            for (const auto &Item : Serials)
+            {
+                if (Item == "None" || Item == "02000300040005000006000700080009" || Item.empty()) continue;
+                for (size_t i = 0; i < Item.size(); ++i) TMP[i] ^= Item[i];
+            }
 
             return Hash::SHA256(std::span(TMP, Maxsize));
         }
@@ -207,6 +208,8 @@ namespace Config
             const auto Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+            if (Handle == INVALID_HANDLE_VALUE) Debugprint("getNVME requires admin.");
 
             if (!DeviceIoControl(Handle, 0x2D1400, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
@@ -237,6 +240,8 @@ namespace Config
             const auto Handle = CreateFileW(L"\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE,
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+            if (Handle == INVALID_HANDLE_VALUE) Debugprint("getSATA requires admin.");
 
             if (!DeviceIoControl(Handle, 0x0007C088, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
@@ -283,7 +288,10 @@ namespace Config
     }
     void setKey_HWID()
     {
-        const auto Seed = Hash::SHA256(bySMBIOS() + byDisk());
+        const auto Seed1 = bySMBIOS();
+        const auto Seed2 = byDisk();    // Requires admin.
+
+        const auto Seed = Seed1.empty() ? Seed2 : Seed1;
         std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(Seed);
     }
 }
