@@ -224,6 +224,16 @@ namespace cmp
             return U ((typename U::value_type *)&*data(), size());
         }
 
+        // Override the empty operator for use with arrays.
+        [[nodiscard]] constexpr bool empty() const noexcept
+        {
+            if constexpr (N == 0) return Basevector_t<T, N>::empty();
+            else
+            {
+                return std::ranges::all_of(*this, [](const T &Item) { return Item == T{}; });
+            }
+        }
+
         constexpr Vector_t() = default;
         template <Simple_t U> constexpr Vector_t(const U &Range) : Basevector_t<T, N>::Basevector_t(Range.begin(), Range.end()) {}
         template <Complex_t U> constexpr Vector_t(const U &Range)

@@ -54,7 +54,7 @@ namespace Config
     // Just two random sources for somewhat static data.
     inline cmp::Vector_t<uint8_t, 32> bySMBIOS()
     {
-        uint8_t Version_major{}, Version_minor{};
+        uint8_t Version_major{};
         std::u8string_view Table;
 
         #if defined (_WIN32)
@@ -63,7 +63,6 @@ namespace Config
         GetSystemFirmwareTable('RSMB', 0, Buffer.get(), Size);
 
         Version_major = *(uint8_t *)(Buffer.get() + 1);
-        Version_minor = *(uint8_t *)(Buffer.get() + 2);
         const auto Tablelength = *(uint32_t *)(Buffer.get() + 4);
         Table = std::u8string_view(Buffer.get() + 8, Tablelength);
 
@@ -73,7 +72,7 @@ namespace Config
         // SMBIOS
         if (*(uint32_t *)File.data() == 0x5F534D5F)
         {
-            Version_major = File[6]; Version_minor = File[7];
+            Version_major = File[6];
 
             const auto Offset = *(uint32_t *)(File.data() + 0x18);
             const auto Tablelength = *(uint32_t *)(File.data() + 0x16);
@@ -83,7 +82,7 @@ namespace Config
         // SMBIOS3
         if (*(uint32_t *)File.data() == 0x5F534D33)
         {
-            Version_major = File[7]; Version_minor = File[8];
+            Version_major = File[7];
 
             const auto Offset = *(uint64_t *)(File.data() + 0x10);
             const auto Tablelength = *(uint32_t *)(File.data() + 0x0C);
@@ -91,16 +90,10 @@ namespace Config
         }
         #endif
 
-        // Fixup for silly OEMs..
-        if (Version_minor == 0x1F) Version_minor = 3;
-        if (Version_minor == 0x21) Version_minor = 3;
-        if (Version_minor == 0x33) Version_minor = 6;
-
         // Sometimes 2.x is reported as "default" AKA 0.
         if (Version_major == 0 || Version_major >= 2)
         {
             std::vector<std::string> Serials{};
-            std::string Serial1{}, Serial2{}, Serial3{};
 
             while (!Table.empty())
             {
@@ -174,27 +167,45 @@ namespace Config
                 Table.remove_prefix(Structsize);
             }
 
-            size_t Maxsize = 0;
-            for (const auto &Item : Serials)
-                Maxsize = std::max(Maxsize, Item.size());
-            const auto TMP = (uint8_t *)alloca(Maxsize);
-            std::memset(TMP, 0, Maxsize);
+            // Filter out bad OEM strings.
+            auto Baseview = Serials
+                | std::views::transform([](std::string &String) { for (auto &Char : String) Char = std::toupper(Char); return String; })
+                | std::views::filter([](const std::string &String) -> bool
+                {
+                    const std::vector<std::string> Badstrings = { "NONE", "FILLED", "OEM", "O.E.M.", "00020003000400050006000700080009", "SERNUM" };
+
+                    if (String.empty()) return false;
+                    return std::ranges::none_of(Badstrings, [&](const auto &Item) { return std::strstr(String.c_str(), Item.c_str()); });
+                });
+
+            // C++ does not have ranges::actions yet.
+            auto Unique = std::vector(Baseview.begin(), Baseview.end()); std::ranges::sort(Unique);
+            const auto [First, Last] = std::ranges::unique(Unique);
+            Unique.erase(First, Last);
+
+            // Limit ourselves to 3 items in-case of changes.
+            auto View = Unique | std::views::take(3);
 
             // In-case we want to verify something.
             if constexpr (Build::isDebug)
             {
-                for (const auto &Item : Serials)
+                for (const auto &Item : View)
                     Infoprint(va("Serial: %s", Item));
             }
 
-            // Mix so that the ordering is no longer relevant.
-            for (const auto &Item : Serials)
-            {
-                if (Item == "None" || Item == "02000300040005000006000700080009" || Item.empty()) continue;
-                for (size_t i = 0; i < Item.size(); ++i) TMP[i] ^= Item[i];
-            }
+            // Mix the serials so that the order doesn't matter.
+            size_t Longest = 0;
+            for (const auto &Item : View)
+                Longest = std::max(Longest, Item.size());
 
-            return Hash::SHA256(std::span(TMP, Maxsize));
+            const auto Mixbuffer = (uint8_t *)alloca(Longest);
+            std::memset(Mixbuffer, 0, Longest);
+
+            for (const auto &Item : View)
+                for (size_t i = 0; i < Item.size(); ++i)
+                    Mixbuffer[i] ^= Item[i];
+
+            return Hash::SHA256(std::span(Mixbuffer, Longest));
         }
 
         return {};
@@ -209,7 +220,7 @@ namespace Config
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-            if (Handle == INVALID_HANDLE_VALUE) Debugprint("getNVME requires admin.");
+            if (Handle == INVALID_HANDLE_VALUE) Errorprint("getNVME requires admin.");
 
             if (!DeviceIoControl(Handle, 0x2D1400, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
@@ -241,7 +252,7 @@ namespace Config
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-            if (Handle == INVALID_HANDLE_VALUE) Debugprint("getSATA requires admin.");
+            if (Handle == INVALID_HANDLE_VALUE) Errorprint("getSATA requires admin.");
 
             if (!DeviceIoControl(Handle, 0x0007C088, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
