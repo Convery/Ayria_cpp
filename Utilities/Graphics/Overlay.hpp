@@ -47,9 +47,10 @@ namespace Graphics
     };
 
     // Callback types that the element can provide.
-    using Tickcallback = void(__cdecl *)(class Overlay_t *Parent, uint32_t DeltatimeMS);
-    using Paintcallback = void(__cdecl *)(class Overlay_t *Parent, const struct Renderer_t &Renderer);
-    using Eventcallback = void(__cdecl *)(class Overlay_t *Parent, Eventflags_t Eventtype, const std::variant<uint32_t, vec2i> &Eventdata);
+    class Overlay_t;
+    using Tickcallback = std::function<void(Overlay_t *Parent, uint32_t DeltatimeMS)>;
+    using Paintcallback = std::function<void(Overlay_t *Parent, const struct Renderer_t &Renderer)>;
+    using Eventcallback = std::function<void(Overlay_t *Parent, Eventflags_t Eventtype, const std::variant<uint32_t, vec2i> &Eventdata)>;
 
     // Core building block of the graphics.
     struct Elementinfo_t
@@ -71,8 +72,6 @@ namespace Graphics
         std::pmr::unsynchronized_pool_resource Pool{};
 
         protected:
-        bool isVisible{};
-        HWND Windowhandle{};
         Spinlock Threadlock{};
         std::atomic_flag dirtyCache{};
         std::atomic_flag dirtyBuffer{};
@@ -87,7 +86,7 @@ namespace Graphics
         std::pmr::vector<Paintcallback> Paintcallbacks{ &Pool };
         std::pmr::vector<Elementinfo_t *> Trackedelements{ &Pool };
 
-        // Callbacks that could be extrended.
+        // Callbacks that could be extended.
         virtual void onPaint()
         {
             const RECT Rect = dirtyScreen.load();
@@ -106,14 +105,27 @@ namespace Graphics
             const Graphics::Renderer_t Renderer(Devicecontext, Paintrect);
             BitBlt(Devicecontext, Paintrect.x, Paintrect.y, Size.x, Size.y, NULL, 0, 0, WHITENESS);
 
+            // Helper for debugging Z-ordering.
+            #if !defined (NDEBUG)
+            uint32_t ZARGB = 0xFFFF0000;
+            #endif
+
             // Drawing needs to be sequential, skip elements that are out of view.
             const auto Range = lz::zip(Paintcallbacks, Hitbox);
             for (const auto &[Callback, Box] : Range)
             {
+                if constexpr (Build::isDebug) ZARGB += 0x00FFFF / Paintcallbacks.size();
+
                 if (!Callback) [[unlikely]] continue;
                 if (Box.x > Paintrect.z || Box.z < Paintrect.x) [[unlikely]] continue;
                 if (Box.y > Paintrect.w || Box.w < Paintrect.y) [[unlikely]] continue;
+
                 Callback(this, Renderer);
+                if constexpr (Build::isDebug)
+                {
+                    const auto Color = Color_t(ZARGB);
+                    Renderer.Rectangle({ Box.x, Box.y }, { Box.z - Box.x, Box.w - Box.y })->Render(Color_t(00, 255, 00), Color_t(ZARGB));
+                }
             }
 
             BitBlt(Windowcontext, Paintrect.x, Paintrect.y, Size.x, Size.y, Devicecontext, Paintrect.x, Paintrect.y, SRCCOPY);
@@ -167,7 +179,9 @@ namespace Graphics
         }
 
         public:
+        bool isVisible{};
         vec2u Windowsize{};
+        HWND Windowhandle{};
         vec2i Windowposition{};
 
         // Access from the elements.
@@ -184,6 +198,8 @@ namespace Graphics
         {
             isVisible = Visible;
             ShowWindowAsync(Windowhandle, isVisible ? SW_SHOW : SW_HIDE);
+            if (Visible) Invalidatescreen({}, Windowsize);
+            SetFocus(Windowhandle);
         }
         void Insertelement(Elementinfo_t *Element)
         {
@@ -228,6 +244,13 @@ namespace Graphics
         void Invalidatescreen(vec2i Dirtypos, const vec2u &Dirtysize)
         {
             return Invalidatescreen(vec4i{ Dirtypos.x, Dirtypos.y, Dirtypos.x + Dirtysize.x, Dirtypos.y + Dirtysize.y });
+        }
+        void Resize(vec2i Position, vec2u Size)
+        {
+            if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
+            if (Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
+
+            Invalidatescreen(Position, Size);
         }
 
         // Called each frame, dispatches to derived classes.

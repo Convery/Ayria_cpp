@@ -15,12 +15,12 @@ static_assert(Build::isWindows, "Renderer is only available on Windows for now."
 namespace Graphics
 {
     // While Ayria currently only uses a single instance, better be safe.
-    thread_local std::shared_ptr<Renderobject_t> Currentobject{};
     thread_local std::pmr::monotonic_buffer_resource Pool{};
 
     // Always clear the pool when destroying.
-    Renderobject_t::~Renderobject_t()
+    Renderer_t::~Renderer_t()
     {
+        if (Clipping) DeleteObject(Clipping);
         Pool.release();
     }
 
@@ -295,8 +295,7 @@ namespace Graphics
     template <typename T, typename ... Args>
     static std::shared_ptr<Renderobject_t> Internalalloc(Args& ...args)
     {
-        Currentobject = std::make_shared<T>(std::forward<Args>(args)...);
-        return Currentobject;
+        return std::make_shared<T>(std::forward<Args>(args)...);
     }
 
     // Create renderobjects based on the users needs, only valid until the next call.

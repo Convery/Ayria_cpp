@@ -76,8 +76,16 @@ namespace Graphics
         (void)AddFontMemResourceEx((void *)Data.data(), (DWORD)Data.size(), NULL, &Fontcount);
         return Createfont(Name, Fontsize);
     }
-    inline HFONT getDefaultfont(int8_t Fontsize)
+    inline HFONT getDefaultfont(int8_t Fontsize = 0)
     {
+        if (Fontsize == 0)
+        {
+            CONSOLE_FONT_INFO ConsoleFontInfo;
+            GetCurrentConsoleFont(GetStdHandle(STD_OUTPUT_HANDLE), false, &ConsoleFontInfo);
+            const auto Coord = GetConsoleFontSize(GetStdHandle(STD_OUTPUT_HANDLE), ConsoleFontInfo.nFont);
+
+            Fontsize = Coord.Y - 2;
+        }
         return Createfont(L"Consolas", Fontsize);
     }
 
@@ -166,15 +174,16 @@ namespace Graphics
 
         // Optional values are used as booleans for Mesh(). Outline can also be Foreground or text color.
         virtual void Render(std::optional<Color_t> Outline, std::optional<Color_t> Background) = 0;
-        virtual ~Renderobject_t();
     };
     struct Renderer_t
     {
         HDC Devicecontext;
         HRGN Clipping{};
 
+        // Accesses thread local storage.
+        ~Renderer_t();
+
         // Needs to be explicitly instantiated by an overlay.
-        ~Renderer_t() { if (Clipping) DeleteObject(Clipping); }
         explicit Renderer_t(HDC Context) : Devicecontext(Context) {}
         explicit Renderer_t(HDC Context, vec4f Boundingbox) : Devicecontext(Context)
         {
@@ -193,7 +202,7 @@ namespace Graphics
         std::shared_ptr<Renderobject_t> Rectangle(vec2i Position, vec2i Size, uint8_t Rounding = 0, uint8_t Linewidth = 1) const noexcept;
         std::shared_ptr<Renderobject_t> Mesh(const std::vector<vec2i> &Points, const std::vector<Color_t> &Colors, uint8_t Linewidth = 1) const noexcept;
 
-        std::shared_ptr<Renderobject_t> Text(vec2i Position, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
-        std::shared_ptr<Renderobject_t> Textcentered(vec4f Boundingbox, const std::wstring &String, HFONT Font = getDefaultfont(16)) const noexcept;
+        std::shared_ptr<Renderobject_t> Text(vec2i Position, const std::wstring &String, HFONT Font = getDefaultfont()) const noexcept;
+        std::shared_ptr<Renderobject_t> Textcentered(vec4f Boundingbox, const std::wstring &String, HFONT Font = getDefaultfont()) const noexcept;
     };
 }

@@ -39,7 +39,7 @@ namespace Logging
         // Console does thread-safety.
         if (Console) [[likely]]
         {
-            reinterpret_cast<void(__cdecl *)(const char *, unsigned int, unsigned int)>(Console)(Message.data(), (uint32_t)Message.size(), 0);
+            reinterpret_cast<void(__cdecl *)(const char *, unsigned int)>(Console)(Message.data(), 0);
         }
     }
     inline void toLogfile(const std::string &Message)

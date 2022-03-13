@@ -295,11 +295,13 @@ namespace sqlite
         // Result-extraction operator, lambdas return false to terminate execution or void for full queries.
         template <typename Function> requires (!Value_t<Function>) void operator>>(Function &&Callback)
         {
-            // Interruptable queries.
+            // Interruptible queries.
             Extractmultiple([&Callback, this]()
             {
                 return Functionbinder_t<Functiontraits<Function>::argcount>::Run(Statement.get(), Callback);
             });
+
+            sqlite3_reset(Statement.get());
         }
         template <typename... T> void operator>>(std::tuple<T...> &&Value)
         {
@@ -307,6 +309,8 @@ namespace sqlite
             {
                 Tuple_t<std::tuple<T...>>::iterate(Statement.get(), Value);
             });
+
+            sqlite3_reset(Statement.get());
         }
         template <Value_t T> void operator>>(T &Value)
         {
@@ -314,6 +318,8 @@ namespace sqlite
             {
                 getResult(Statement.get(), 0, Value);
             });
+
+            sqlite3_reset(Statement.get());
         }
 
         // Input operator, sequential propagating of the '?' placeholders in the query.
@@ -348,8 +354,8 @@ namespace sqlite
         }
 
         // Reset can also be used to avoid RTTI evaluation.
-        void Execute() { Extractmultiple([]() {}); }
-        void Reset() { setStarted(); }
+        void Execute() { Extractmultiple([]() {}); sqlite3_reset(Statement.get()); }
+        void Reset() { setStarted(); sqlite3_reset(Statement.get()); }
 
         explicit Statement_t(std::shared_ptr<sqlite3> Connection, std::string_view SQL)
         {

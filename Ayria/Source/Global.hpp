@@ -90,4 +90,5 @@ extern Globalstate_t Global;
 
 // Project includes.
 #include "Backend\Backend.hpp"
+#include "Frontend\Frontend.hpp"
 #include "Services\AAServices.hpp"

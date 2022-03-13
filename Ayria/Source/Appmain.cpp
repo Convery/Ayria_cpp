@@ -107,6 +107,38 @@ int main()
     // If injected, we can't hook. So just load all plugins directly.
     Plugins::Initialize();
 
+    // Register the window.
+    WNDCLASSEXW Windowclass{};
+    Windowclass.cbSize = sizeof(WNDCLASSEXW);
+    Windowclass.lpfnWndProc = DefWindowProcW;
+    Windowclass.lpszClassName = L"Hostwindow";
+    Windowclass.hInstance = GetModuleHandleA(NULL);
+    Windowclass.hbrBackground = CreateSolidBrush(0xFF00FF);
+    Windowclass.style = CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT;
+    if (NULL == RegisterClassExW(&Windowclass)) return 2;
+
+    const auto hDC = GetDC(GetDesktopWindow());
+    const auto swidth = GetDeviceCaps(hDC, HORZRES);
+    const auto sheight = GetDeviceCaps(hDC, VERTRES);
+    ReleaseDC(GetDesktopWindow(), hDC);
+
+    // Create a simple window.
+    const auto Windowhandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"HOST", NULL, swidth / 4, sheight / 4,
+                                              swidth / 2, sheight / 2, NULL, NULL, Windowclass.hInstance, NULL);
+    if (!Windowhandle) return 1;
+    ShowWindow(Windowhandle, SW_SHOW);
+
+    //
+    auto X = Frontend::CreateOverlayconsole();
+
+    MSG Message{};
+    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
+    {
+        // WM_DWMNCRENDERINGCHANGED
+        TranslateMessage(&Message);
+        DispatchMessageW(&Message);
+    }
+
 
     while (true) Sleep(10);
 
