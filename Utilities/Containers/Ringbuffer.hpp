@@ -18,13 +18,16 @@ template <typename T, size_t N> class Ringbuffer_t
     static inline size_type Clamp(size_type Value) noexcept
     {
         // Apparently MSVC did not know how to do the most basic optimization..
-        if constexpr (N % 2 == 0) return Value & (N - 1);
+        if constexpr (N && !(N & (N - 1))) return Value & (N - 1);
         else return Value % N;
     }
     static inline size_type Distance(size_type A, size_type B) noexcept
     {
-        if (B >= A) return B - A;
-        else return N - A - B;
+        const auto X = N - A - B;
+        const auto Y = B - A;
+        const auto C = B < A;
+
+        return Y ^ (-C & (X ^ Y));
     }
     static inline size_type Advance(size_type Index, int Offset) noexcept
     {
@@ -42,7 +45,7 @@ template <typename T, size_t N> class Ringbuffer_t
     {
         Storage[Head] = Value;
         Head = Advance(Head, 1);
-        if (Head == Tail) Tail = Advance(Tail, 1);
+        Tail = Advance(Tail, Head == Tail);
     }
     template <typename... Args> T &emplace_back(Args&&... args) noexcept
     {
@@ -50,8 +53,7 @@ template <typename T, size_t N> class Ringbuffer_t
         auto &Ret = Storage[Head];
 
         Head = Advance(Head, 1);
-        if (Head == Tail) Tail = Advance(Tail, 1);
-
+        Tail = Advance(Tail, Head == Tail);
         return Ret;
     }
 

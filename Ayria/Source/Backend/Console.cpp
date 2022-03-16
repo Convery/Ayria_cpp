@@ -10,7 +10,7 @@ namespace Console
 {
     uint32_t LastmessageID{};
     static Debugmutex Writelock{};
-    constexpr size_t Loglimit = 255;
+    constexpr size_t Loglimit = 128;
     static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
     static Hashmap<std::wstring, Hashset<Functioncallback_t>> Commands{};
 
