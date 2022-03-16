@@ -220,7 +220,7 @@ namespace Config
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-            if (Handle == INVALID_HANDLE_VALUE) Errorprint("getNVME requires admin.");
+            if (Handle == INVALID_HANDLE_VALUE) Warningprint("getNVME requires admin.");
 
             if (!DeviceIoControl(Handle, 0x2D1400, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
@@ -252,7 +252,7 @@ namespace Config
                                                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-            if (Handle == INVALID_HANDLE_VALUE) Errorprint("getSATA requires admin.");
+            if (Handle == INVALID_HANDLE_VALUE) Warningprint("getSATA requires admin.");
 
             if (!DeviceIoControl(Handle, 0x0007C088, &Query, sizeof(Query), &Query, sizeof(Query), NULL, NULL))
             {
@@ -299,10 +299,21 @@ namespace Config
     }
     void setKey_HWID()
     {
-        const auto Seed1 = bySMBIOS();
-        const auto Seed2 = byDisk();    // Requires admin.
+        // SMBIOS should always be available.
+        if (const auto BIOS = bySMBIOS(); !BIOS.empty()) [[likely]]
+        {
+            std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(BIOS);
+            return;
+        }
 
-        const auto Seed = Seed1.empty() ? Seed2 : Seed1;
-        std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(Seed);
+        // Requires administrator privileges.
+        if (const auto DISK = byDisk(); !DISK.empty())
+        {
+            std::tie(*Global.Publickey, *Global.Privatekey) = qDSA::Createkeypair(DISK);
+            return;
+        }
+
+        Errorprint("Could not generate a fixed key, run as admin to save progress.");
+        setKey_RANDOM();
     }
 }
