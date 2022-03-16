@@ -9,8 +9,8 @@
 namespace Console
 {
     uint32_t LastmessageID{};
-    static Spinlock Writelock{};
-    constexpr size_t Loglimit = 256;
+    static Debugmutex Writelock{};
+    constexpr size_t Loglimit = 255;
     static Ringbuffer_t<Logline_t, Loglimit> Consolelog{};
     static Hashmap<std::wstring, Hashset<Functioncallback_t>> Commands{};
 
@@ -60,19 +60,19 @@ namespace Console
 
         std::scoped_lock Threadguard(Writelock);
         std::copy_if(Consolelog.rbegin(), Consolelog.rend(), std::back_inserter(Result),
-                     [&](const auto &Tuple)
-                     {
-                         if (0 == Clamped) return false;
+                    [&](const auto &Tuple) -> bool
+                    {
+                        if (0 == Clamped) return false;
 
-                         const auto &[String, Colot] = Tuple;
-                         if (String.find(Filter) != String.npos)
-                         {
-                             Clamped--;
-                             return true;
-                         }
+                        const auto &[String, Color] = Tuple;
+                        if (String.find(Filter) != String.npos)
+                        {
+                            Clamped--;
+                            return true;
+                        }
 
-                         return false;
-                     });
+                        return false;
+                    });
 
         // Reverse the vector to simplify other code.
         std::ranges::reverse(Result);

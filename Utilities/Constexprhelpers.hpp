@@ -28,6 +28,24 @@ namespace cmp
     template <class, template <class...> class> inline constexpr bool isDerived = false;
     template <template <class...> class T, class... Args> inline constexpr bool isDerived<T<Args...>, T> = true;
 
+    // Helper to avoid nested conditionals in templates.
+    template <bool Conditional, typename T> struct Case_t : std::bool_constant<Conditional> { using type = T; };
+    using Defaultcase_t = Case_t<false, void>;
+
+    // Get the smallest type that can hold our value.
+    template <int64_t Maxvalue> using Intsize_t = typename std::disjunction<
+        Case_t<(Maxvalue >  INT32_MAX), uint64_t>,
+        Case_t<(Maxvalue >  INT16_MAX), uint32_t>,
+        Case_t<(Maxvalue >  INT8_MAX), uint16_t>,
+        Case_t<(Maxvalue <= INT8_MAX), uint8_t>,
+        Defaultcase_t>::type;
+    template <uint64_t Maxvalue> using UIntsize_t = typename std::disjunction<
+        Case_t<(Maxvalue >  UINT32_MAX), uint64_t>,
+        Case_t<(Maxvalue >  UINT16_MAX), uint32_t>,
+        Case_t<(Maxvalue >  UINT8_MAX), uint16_t>,
+        Case_t<(Maxvalue <= UINT8_MAX), uint8_t>,
+        Defaultcase_t>::type;
+
     // Memcpy of integer types, for *(int *)&Type = 1;
     template <std::integral T, Byte_t U> constexpr T toINT(const U *Ptr)
     {
