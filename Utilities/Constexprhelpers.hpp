@@ -32,7 +32,7 @@ namespace cmp
     template <bool Conditional, typename T> struct Case_t : std::bool_constant<Conditional> { using type = T; };
     using Defaultcase_t = Case_t<false, void>;
 
-    // Get the smallest type that can hold our value.
+    // Get the smallest type that can hold our value. Can use std::bit_width in the future.
     template <int64_t Maxvalue> using Intsize_t = typename std::disjunction<
         Case_t<(Maxvalue >  INT32_MAX), uint64_t>,
         Case_t<(Maxvalue >  INT16_MAX), uint32_t>,
