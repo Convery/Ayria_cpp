@@ -67,6 +67,24 @@ template <typename T, size_t N> class Ringbuffer_t
         return Head == Tail;
     }
 
+    // Simpler access.
+    [[nodiscard]] T &front()
+    {
+        return Storage[Tail];
+    }
+    [[nodiscard]] T &back()
+    {
+        return Storage[Advance(Head, -1)];
+    }
+
+    // STL algorithms do not support sentinels (yet).
+    void Rotate(std::ptrdiff_t Offset)
+    {
+        auto Iter = (Offset > 0) ? Storage.begin() : Storage.end();
+        std::advance(Iter, Offset);
+        std::ranges::rotate(Storage, Iter);
+    }
+
     // Simple iterator using sentinels rather than math.
     struct Iterator_t
     {

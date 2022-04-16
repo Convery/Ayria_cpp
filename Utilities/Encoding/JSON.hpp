@@ -375,7 +375,7 @@ namespace JSON
         if (!JSONString.empty())
         {
             #if defined(HAS_SIMDJSON)
-            static simdjson::dom::parser Parser;
+            simdjson::dom::parser Parser;
             const std::function<Value_t(const simdjson::dom::element &)>
                 Parse = [&Parse](const simdjson::dom::element &Item) -> Value_t
                 {
