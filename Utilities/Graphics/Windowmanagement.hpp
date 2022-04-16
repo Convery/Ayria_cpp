@@ -12,7 +12,9 @@
 #include "Utilities/Threads/Spinlock.hpp"
 
 // Windows only module.
-static_assert(Build::isWindows, "Overlay is only available on Windows for now.");
+static_assert(Build::isWindows, "Window management is only available on Windows for now.");
+
+constexpr bool dbgUpdate = false;
 
 namespace Graphics
 {
@@ -47,10 +49,10 @@ namespace Graphics
     };
 
     // Callback types that the element can provide.
-    class Overlay_t;
-    using Tickcallback = std::function<void(Overlay_t *Parent, uint32_t DeltatimeMS)>;
-    using Paintcallback = std::function<void(Overlay_t *Parent, const struct Renderer_t &Renderer)>;
-    using Eventcallback = std::function<void(Overlay_t *Parent, Eventflags_t Eventtype, const std::variant<uint32_t, vec2i> &Eventdata)>;
+    class Window_t;
+    using Tickcallback = std::function<void(Window_t *Parent, uint32_t DeltatimeMS)>;
+    using Paintcallback = std::function<void(Window_t *Parent, const struct Renderer_t &Renderer)>;
+    using Eventcallback = std::function<void(Window_t *Parent, Eventflags_t Eventtype, const std::variant<uint32_t, vec2i> &Eventdata)>;
 
     // Core building block of the graphics.
     struct Elementinfo_t
@@ -67,94 +69,40 @@ namespace Graphics
     };
 
     // Window host and element-manager.
-    class Overlay_t
+    class Window_t
     {
-        std::pmr::unsynchronized_pool_resource Pool{};
-
         protected:
+        HRGN dirtyRegion{ CreateRectRgn(0, 0, 0, 0) };
+        std::atomic_flag dirtyElements{};
         Spinlock Threadlock{};
-        std::atomic_flag dirtyCache{};
-        std::atomic_flag dirtyBuffer{};
-        std::atomic<RECT> dirtyScreen{ { INT16_MAX, INT16_MAX, 0, 0 } };
 
-        // Cache of the elements properties by Z.
-        std::pmr::vector<int8_t> ZIndex{ &Pool };
-        std::pmr::vector<vec4i> Hitbox{ &Pool };
-        std::pmr::vector<uint8_t> Eventmasks{ &Pool };
-        std::pmr::vector<Tickcallback> Tickcallbacks{ &Pool };
-        std::pmr::vector<Eventcallback> Eventcallbacks{ &Pool };
-        std::pmr::vector<Paintcallback> Paintcallbacks{ &Pool };
-        std::pmr::vector<Elementinfo_t *> Trackedelements{ &Pool };
-
-        // Callbacks that could be extended.
-        virtual void onPaint()
+        // Inline element manager.
+        struct
         {
-            const RECT Rect = dirtyScreen.load();
-            dirtyScreen.store({ INT16_MAX, INT16_MAX, 0, 0 });
-            dirtyBuffer.clear();
+            std::vector<vec4i> Hitboxes{};
+            std::vector<Eventflags_t> Eventmasks{};
+            std::vector<Tickcallback> Tickcallbacks{};
+            std::vector<Eventcallback> Eventcallbacks{};
+            std::vector<Paintcallback> Paintcallbacks{};
+            std::vector<Elementinfo_t *> Trackedelements{};
 
-            const vec4i Paintrect(Rect.left, Rect.top, Rect.right, Rect.bottom);
-            const vec2u Size(Paintrect.z - Paintrect.x, Paintrect.w - Paintrect.y);
-
-            const auto Windowcontext = GetDC(Windowhandle);
-            const auto Devicecontext = CreateCompatibleDC(Windowcontext);
-            const auto BMP = CreateCompatibleBitmap(Windowcontext, Windowsize.x, Windowsize.y);
-            DeleteObject(SelectObject(Devicecontext, BMP));
-
-            // Clipped rendering to the rect that needs updating.
-            const Graphics::Renderer_t Renderer(Devicecontext, Paintrect);
-            BitBlt(Devicecontext, Paintrect.x, Paintrect.y, Size.x, Size.y, NULL, 0, 0, WHITENESS);
-
-            // Helper for debugging Z-ordering.
-            #if !defined (NDEBUG)
-            uint32_t ZARGB = 0xFFFF0000;
-            #endif
-
-            // Drawing needs to be sequential, skip elements that are out of view.
-            const auto Range = lz::zip(Paintcallbacks, Hitbox);
-            for (const auto &[Callback, Box] : Range)
+            void Removeelement(Elementinfo_t *Element)
             {
-                if constexpr (Build::isDebug) ZARGB += 0x00FFFF / Paintcallbacks.size();
-
-                if (!Callback) [[unlikely]] continue;
-                if (Box.x > Paintrect.z || Box.z < Paintrect.x) [[unlikely]] continue;
-                if (Box.y > Paintrect.w || Box.w < Paintrect.y) [[unlikely]] continue;
-
-                Callback(this, Renderer);
-                if constexpr (Build::isDebug)
-                {
-                    const auto Color = Color_t(ZARGB);
-                    Renderer.Rectangle({ Box.x, Box.y }, { Box.z - Box.x, Box.w - Box.y })->Render(Color_t(00, 255, 00), Color_t(ZARGB));
-                }
+                const auto Result = std::ranges::find(Trackedelements, Element);
+                if (Result != Trackedelements.end()) Trackedelements.erase(Result);
             }
-
-            BitBlt(Windowcontext, Paintrect.x, Paintrect.y, Size.x, Size.y, Devicecontext, Paintrect.x, Paintrect.y, SRCCOPY);
-
-            DeleteObject(BMP);
-            DeleteDC(Devicecontext);
-            ReleaseDC(Windowhandle, Windowcontext);
-
-            ValidateRect(Windowhandle, NULL);
-        }
-        virtual void onTick(uint32_t DeltatimeMS)
-        {
-            std::for_each(std::execution::par_unseq, Tickcallbacks.cbegin(), Tickcallbacks.cend(),
-                          [&](auto &Callback) { if (Callback) [[likely]] Callback(this, DeltatimeMS); });
-        }
-        virtual void onEvent(Eventflags_t Eventtype, std::variant<uint32_t, vec2i> Eventdata)
-        {
-            // Basic hit detection.
-            if (Eventtype.onMousemove)
+            void Trackelement(Elementinfo_t *Element)
             {
-                const auto &Mouseposition = std::get<vec2i>(Eventdata);
-                const auto Range = lz::zip(Trackedelements, Hitbox);
-
+                Trackedelements.emplace_back(Element);
+            }
+            void Updatefocus(vec2i Point)
+            {
+                const auto Range = lz::zip(Trackedelements, Hitboxes);
                 std::for_each(std::execution::par_unseq, Range.begin(), Range.end(), [&](const auto &Tuple)
                 {
                     const auto &[Element, Box] = Tuple;
 
-                    if (Mouseposition.x >= Box.x && Mouseposition.x <= Box.z &&
-                        Mouseposition.y >= Box.y && Mouseposition.y <= Box.w)
+                    if (Point.x >= Box.x && Point.x <= Box.z && Point.y >= Box.y && Point.y <= Box.w)
                     {
                         Element->isFocused.test_and_set();
                     }
@@ -164,14 +112,115 @@ namespace Graphics
                     }
                 });
             }
+            void Reinitialize()
+            {
+                Hitboxes.resize(Trackedelements.size());
+                Eventmasks.resize(Trackedelements.size());
+                Tickcallbacks.resize(Trackedelements.size());
+                Paintcallbacks.resize(Trackedelements.size());
+                Eventcallbacks.resize(Trackedelements.size());
+
+                std::ranges::sort(Trackedelements, {}, &Elementinfo_t::ZIndex);
+                for (const auto &[Index, Element] : lz::enumerate(Trackedelements))
+                {
+                    Eventmasks[Index] = Element->Eventmask;
+                    Tickcallbacks[Index] = Element->onTick;
+                    Paintcallbacks[Index] = Element->onPaint;
+                    Eventcallbacks[Index] = Element->onEvent;
+
+                    Hitboxes[Index] = { Element->Position.x, Element->Position.y,
+                        Element->Position.x + Element->Size.x, Element->Position.y + Element->Size.y };
+                }
+            }
+        } Elements{};
+
+        // Internal helpers.
+        static inline bool needsPaint(HRGN Dirty)
+        {
+            static auto Clean = CreateRectRgn(0, 0, 0, 0);
+            return !EqualRgn(Dirty, Clean);
+        }
+
+        // Callbacks that could be extended.
+        virtual void onPaint()
+        {
+            RECT Dirtyrect{};
+            if (1 >= GetRgnBox(dirtyRegion, &Dirtyrect)) [[unlikely]] return;
+
+            const vec2u Size(Dirtyrect.right - Dirtyrect.left, Dirtyrect.bottom - Dirtyrect.top);
+            const vec4i Paintrect(Dirtyrect.left, Dirtyrect.top, Dirtyrect.right, Dirtyrect.bottom);
+
+            const auto Windowcontext = GetDCEx(Windowhandle, NULL, DCX_LOCKWINDOWUPDATE | DCX_VALIDATE);
+            const auto Devicecontext = CreateCompatibleDC(Windowcontext);
+            const auto BMP = CreateCompatibleBitmap(Windowcontext, Size.x, Size.y);
+            const auto Old = SelectObject(Devicecontext, BMP);
+
+            // Clean the new bitmap.
+            const Graphics::Renderer_t Renderer(Devicecontext);
+            BitBlt(Devicecontext, 0, 0, Size.x, Size.y, NULL, 0, 0, WHITENESS);
+
+            // Update the viewport so that the elemements can use natural coordinates.
+            SetViewportOrgEx(Devicecontext, 0 - Dirtyrect.left, 0 - Dirtyrect.top, NULL);
+
+            // Drawing needs to be sequential, skip elements that are out of view.
+            const auto Range = lz::zip(Elements.Paintcallbacks, Elements.Hitboxes);
+            for (const auto &[Callback, Box] : Range)
+            {
+                if (!Callback) [[unlikely]] continue;
+                if (Box.x > Paintrect.z || Box.z < Paintrect.x) continue;
+                if (Box.y > Paintrect.w || Box.w < Paintrect.y) continue;
+
+                Callback(this, Renderer);
+            }
+
+            // For debugging, draw an outline over the elements.
+            if constexpr (Build::isDebug && dbgUpdate)
+            {
+                static Color_t Rainbow[6] = { Color_t(168, 0, 255), Color_t(0, 121, 255), Color_t(0, 241, 29),
+                                              Color_t(255, 239, 0), Color_t(255, 127, 0), Color_t(255, 9, 0) };
+
+                const auto dbgRange = lz::zip(Elements.Trackedelements, Elements.Hitboxes);
+                for (const auto &[Element, Box] : dbgRange)
+                {
+                    if (!Element->onPaint) [[unlikely]] continue;
+                    if (Box.x > Paintrect.z || Box.z < Paintrect.x) continue;
+                    if (Box.y > Paintrect.w || Box.w < Paintrect.y) continue;
+
+                    Renderer.Rectangle({ Box.x, Box.y }, { Box.z - Box.x, Box.w - Box.y }, 0, 2)->Render(Rainbow[Element->ZIndex % 6], {});
+                }
+            }
+
+            // And blit to the screen.
+            BitBlt(Windowcontext, Paintrect.x, Paintrect.y, Size.x, Size.y, Devicecontext, Dirtyrect.left, Dirtyrect.top, SRCCOPY);
+
+            DeleteObject(SelectObject(Devicecontext, Old));
+            DeleteDC(Devicecontext);
+            ReleaseDC(Windowhandle, Windowcontext);
+
+            // Clear the region.
+            ValidateRgn(Windowhandle, dirtyRegion);
+            CombineRgn(dirtyRegion, dirtyRegion, dirtyRegion, RGN_XOR);
+        }
+        virtual void onTick(uint32_t DeltatimeMS)
+        {
+            std::for_each(std::execution::par_unseq, Elements.Tickcallbacks.cbegin(), Elements.Tickcallbacks.cend(),
+                          [&](auto &Callback) { if (Callback) [[likely]] Callback(this, DeltatimeMS); });
+        }
+        virtual void onEvent(Eventflags_t Eventtype, std::variant<uint32_t, vec2i> Eventdata)
+        {
+            // Basic hit detection.
+            if (Eventtype.onMousemove)
+            {
+                Elements.Updatefocus(std::get<vec2i>(Eventdata));
+            }
 
             // We do not care about the order of elements here.
-            const auto Range = lz::zip(Eventcallbacks, Eventmasks);
+            const auto Range = lz::zip(Elements.Eventcallbacks, Elements.Eventmasks);
             std::for_each(std::execution::par_unseq, Range.begin(), Range.end(), [&](const auto &Tuple)
             {
                 const auto &[Callback, Mask] = Tuple;
 
-                if ((Eventtype.Raw & Mask) && Callback) [[likely]]
+                if ((Eventtype.Raw & Mask.Raw) && Callback) [[likely]]
                 {
                     Callback(this, Eventtype, Eventdata);
                 }
@@ -187,120 +236,63 @@ namespace Graphics
         // Access from the elements.
         void Togglevisibility()
         {
-            isVisible ^= true;
-            ShowWindowAsync(Windowhandle, isVisible ? SW_SHOW : SW_HIDE);
-        }
-        void Invalidateelements()
-        {
-            dirtyCache.test_and_set();
+            setVisibility(isVisible ^ 1);
         }
         void setVisibility(bool Visible)
         {
             isVisible = Visible;
             ShowWindowAsync(Windowhandle, isVisible ? SW_SHOW : SW_HIDE);
-            if (Visible) Invalidatescreen({}, Windowsize);
-            SetFocus(Windowhandle);
+            if (Visible)
+            {
+                Invalidatescreen({}, Windowsize);
+                SetActiveWindow(Windowhandle);
+            }
         }
         void Insertelement(Elementinfo_t *Element)
         {
-            std::scoped_lock Guard(Threadlock);
             assert(Element);
+            std::scoped_lock Guard(Threadlock);
 
-            Trackedelements.push_back(Element);
-            ZIndex.emplace_back(Element->ZIndex);
-            Tickcallbacks.emplace_back(Element->onTick);
-            Eventcallbacks.emplace_back(Element->onEvent);
-            Paintcallbacks.emplace_back(Element->onPaint);
-            Eventmasks.emplace_back(Element->Eventmask.Raw);
-            Hitbox.emplace_back(Element->Position.x, Element->Position.y,
-                                Element->Position.x + Element->Size.x, Element->Position.y + Element->Size.y);
-
-            dirtyCache.test_and_set();
+            Elements.Trackelement(Element);
+            dirtyElements.test_and_set();
         }
-        void Invalidatescreen(vec4i &&Dirtyrect)
+        void Removelement(Elementinfo_t *Element)
         {
-            auto Original = dirtyScreen.load();
-            if (0 == std::memcmp(&Original, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16))
-            {
-                dirtyScreen.store(Dirtyrect);
-            }
-            else
-            {
-                while (true)
-                {
+            assert(Element);
+            std::scoped_lock Guard(Threadlock);
 
-                    Original = dirtyScreen.load();
-                    auto TMP = Original;
-                    TMP.top = std::min(TMP.top, static_cast<LONG>(Dirtyrect.y));
-                    TMP.left = std::min(TMP.left, static_cast<LONG>(Dirtyrect.x));
-                    TMP.right = std::max(TMP.right, static_cast<LONG>(Dirtyrect.z));
-                    TMP.bottom = std::max(TMP.bottom, static_cast<LONG>(Dirtyrect.w));
-                    if (dirtyScreen.compare_exchange_weak(Original, TMP)) break;
-                }
-            }
-
-            dirtyBuffer.test_and_set();
+            Elements.Removeelement(Element);
+            dirtyElements.test_and_set();
         }
-        void Invalidatescreen(vec2i Dirtypos, const vec2u &Dirtysize)
+        void Resize(vec2i Position, vec2u Size) const
+        {
+            if (Position && Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS);
+            else if (Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
+            else if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
+
+            Invalidatescreen({}, Size);
+            SetActiveWindow(Windowhandle);
+        }
+        void Invalidatescreen(vec4u &&Dirtyrect) const
+        {
+            const auto Addition = CreateRectRgn(Dirtyrect.x, Dirtyrect.y, Dirtyrect.z, Dirtyrect.w);
+            CombineRgn(dirtyRegion, dirtyRegion, Addition, RGN_OR);
+            DeleteObject(Addition);
+        }
+        void Invalidatescreen(vec2i Dirtypos, const vec2u &Dirtysize) const
         {
             return Invalidatescreen(vec4i{ Dirtypos.x, Dirtypos.y, Dirtypos.x + Dirtysize.x, Dirtypos.y + Dirtysize.y });
-        }
-        void Resize(vec2i Position, vec2u Size)
-        {
-            if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
-            if (Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
-
-            Invalidatescreen(Position, Size);
         }
 
         // Called each frame, dispatches to derived classes.
         void onFrame(uint32_t DeltatimeMS)
         {
-            // If the cache is dirty, we need to sort it again.
-            if (dirtyCache.test()) [[unlikely]]
+            // If the element-cache is dirty, we need to sort it again.
+            if (dirtyElements.test()) [[unlikely]]
             {
                 std::scoped_lock Guard(Threadlock);
-                dirtyCache.clear();
-
-                // Re-fetch all the data.
-                for (size_t i = 0; i < Trackedelements.size(); ++i)
-                {
-                    const auto Element = Trackedelements[i];
-
-                    ZIndex[i] = Element->ZIndex;
-                    Tickcallbacks[i] = Element->onTick;
-                    Eventcallbacks[i] = Element->onEvent;
-                    Paintcallbacks[i] = Element->onPaint;
-                    Eventmasks[i] = Element->Eventmask.Raw;
-                    Hitbox[i] = { Element->Position.x, Element->Position.y,
-                                  Element->Position.x + Element->Size.x, Element->Position.y + Element->Size.y };
-                }
-
-                // Could probably create some better algorithm here..
-                while (true)
-                {
-                    // Find the first unordered element.
-                    const auto Element = std::ranges::is_sorted_until(ZIndex);
-                    if (Element == ZIndex.end()) break;
-
-                    // Find where the element belongs and the offsets.
-                    const auto Position = std::ranges::find_if(ZIndex, [=](const auto &Item) { return Item > *Element; });
-                    const auto A = std::ranges::distance(ZIndex.begin(), Position);
-                    const auto B = std::ranges::distance(ZIndex.begin(), Element);
-                    const auto Start = std::min(A, B);
-                    const auto End = std::max(A, B);
-
-                    // And rotate the whole cache around those points.
-                    #define Rotate(x) std::rotate(x .begin() + Start, x .begin() + End, x .begin() + End)
-                    Rotate(Trackedelements);
-                    Rotate(Paintcallbacks);
-                    Rotate(Eventcallbacks);
-                    Rotate(Tickcallbacks);
-                    Rotate(Eventmasks);
-                    Rotate(Hitbox);
-                    Rotate(ZIndex);
-                    #undef Rotate
-                };
+                Elements.Reinitialize();
+                dirtyElements.clear();
 
                 // Probably needs a redraw.
                 Invalidatescreen({}, Windowsize);
@@ -318,20 +310,20 @@ namespace Graphics
             onTick(DeltatimeMS);
 
             // If a repaint is needed, notify the elements.
-            if (dirtyBuffer.test()) [[unlikely]] onPaint();
+            if (needsPaint(dirtyRegion)) [[unlikely]] onPaint();
         }
 
-        // Only the base Overlay_t class handles the window events, for simplicity.
+        // Only the base Window_t class handles the window events, for simplicity.
         static LRESULT __stdcall Overlaywndproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
             static bool modShift{}, modCtrl{};
             static HWND Mousecaptureowner{};
-            Overlay_t *This{};
+            Window_t *This{};
 
             // Need to save the class pointer on creation.
             if (Message == WM_NCCREATE) [[unlikely]]
             {
-                This = static_cast<Overlay_t *>(reinterpret_cast<LPCREATESTRUCTA>(lParam)->lpCreateParams);
+                This = static_cast<Window_t *>(reinterpret_cast<LPCREATESTRUCTA>(lParam)->lpCreateParams);
                 SetWindowLongPtrA(Windowhandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(This));
 
                 // Set up mouse-tracking.
@@ -339,12 +331,25 @@ namespace Graphics
             }
             else
             {
-                This = reinterpret_cast<Overlay_t *>(GetWindowLongPtrA(Windowhandle, GWLP_USERDATA));
+                This = reinterpret_cast<Window_t *>(GetWindowLongPtrA(Windowhandle, GWLP_USERDATA));
             }
 
             // May need to extend this in the future.
             switch (Message)
             {
+                // While we track most invalidation internally, just in case..
+                case WM_PAINT:
+                {
+                    RECT Updaterect;
+                    if (GetUpdateRect(This->Windowhandle, &Updaterect, FALSE))
+                    {
+                        This->Invalidatescreen({ Updaterect.left, Updaterect.top, Updaterect.right, Updaterect.bottom });
+                    }
+
+                    ValidateRect(This->Windowhandle, NULL);
+                    return NULL;
+                }
+
                 // Preferred over WM_MOVE/WM_SIZE for performance.
                 case WM_WINDOWPOSCHANGED:
                 {
@@ -355,6 +360,9 @@ namespace Graphics
 
                     Eventflags_t Flags{}; Flags.onWindowchange = true;
                     This->onEvent(Flags, vec2i{ Info->cx, Info->cy });
+
+                    // Elements have probably been resized.
+                    This->dirtyElements.test_and_set();
                     return NULL;
                 }
 
@@ -374,7 +382,7 @@ namespace Graphics
                 case WM_KEYDOWN:
                 case WM_KEYUP:
                 {
-                    const auto isDown = !(lParam & (1 << 31));
+                    const auto isDown = !(lParam & (1U << 31));
 
                     // Translate macros to extended codes.
                     switch (wParam)
@@ -539,19 +547,58 @@ namespace Graphics
         }
 
         // Create a new window for our overlay.
-        Overlay_t(vec2i Position, vec2u Size) : Windowsize(Size), Windowposition(Position)
+        Window_t() = default;
+        Window_t(vec2i Position, vec2u Size) : Windowsize(Size), Windowposition(Position)
         {
             // Register the overlay class.
             WNDCLASSEXW Windowclass{};
-            Windowclass.style = CS_DBLCLKS;
+            Windowclass.cbSize = sizeof(WNDCLASSEXW);
+            Windowclass.lpfnWndProc = Overlaywndproc;
+            Windowclass.lpszClassName = L"Ayria_window";
+            Windowclass.cbWndExtra = sizeof(Window_t *);
+            Windowclass.style = CS_DBLCLKS | CS_SAVEBITS | CS_CLASSDC | CS_BYTEALIGNCLIENT | CS_BYTEALIGNWINDOW;
+            RegisterClassExW(&Windowclass);
+
+            // Generic overlay style.
+            constexpr DWORD Style = WS_POPUP;
+            constexpr DWORD StyleEx = WS_EX_LAYERED;
+
+            // Topmost, transparent, no icon on the taskbar, zero size so it's not shown.
+            Windowhandle = CreateWindowExW(StyleEx, Windowclass.lpszClassName, NULL, Style, 0, 0, 0, 0, NULL, NULL, NULL, this);
+            assert(Windowhandle);
+
+            // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
+            SetLayeredWindowAttributes(Windowhandle, 0x00FFFFFF, 0, LWA_COLORKEY);
+
+            // Resize to show the window.
+            if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
+            if (Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
+        }
+
+        // In-case someone does something silly.
+        virtual ~Window_t() = default;
+    };
+
+    // Top-most overlay to track another window.
+    class Overlay_t : public Window_t
+    {
+        // Create a new window for our overlay.
+        Overlay_t(vec2i Position, vec2u Size)
+        {
+            Windowsize = Size;
+            Windowposition = Position;
+
+            // Register the overlay class.
+            WNDCLASSEXW Windowclass{};
             Windowclass.cbSize = sizeof(WNDCLASSEXW);
             Windowclass.lpfnWndProc = Overlaywndproc;
             Windowclass.lpszClassName = L"Ayria_overlay";
             Windowclass.cbWndExtra = sizeof(Overlay_t *);
+            Windowclass.style = CS_DBLCLKS | CS_SAVEBITS | CS_CLASSDC | CS_BYTEALIGNCLIENT | CS_BYTEALIGNWINDOW;
             RegisterClassExW(&Windowclass);
 
             // Generic overlay style.
-            constexpr DWORD Style = WS_POPUP | (Build::isDebug * WS_BORDER);
+            constexpr DWORD Style = WS_POPUP;
             constexpr DWORD StyleEx = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
 
             // Topmost, transparent, no icon on the taskbar, zero size so it's not shown.
@@ -559,7 +606,7 @@ namespace Graphics
             assert(Windowhandle);
 
             // Use a pixel-value to mean transparent rather than Alpha, because using Alpha is slow.
-            SetLayeredWindowAttributes(Windowhandle, 0x0000FFFF, 0, LWA_COLORKEY);
+            SetLayeredWindowAttributes(Windowhandle, 0x00FFFFFF, 0, LWA_COLORKEY);
 
             // Resize to show the window.
             if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);

@@ -130,7 +130,7 @@ namespace Console
         const auto Callbacks = Findcommand(Heapstorage.front());
         if (!Callbacks) [[unlikely]]
         {
-            Errorprint(va("No command named: %s", Heapstorage.front().c_str()));
+            Errorprint(va(L"No command named: %s", Heapstorage.front().c_str()));
             return;
         }
 

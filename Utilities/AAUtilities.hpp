@@ -30,7 +30,8 @@
 #include <Utilities/Encoding/Tokenize.hpp>
 #include <Utilities/Encoding/Variadicstring.hpp>
 
-#include <Utilities/Graphics/Overlay.hpp>
+#include <Utilities/Graphics/Windowmanagement.hpp>
+#include <Utilities/Graphics/Renderer.hpp>
 
 #include <Utilities/Hacking/Hooking.hpp>
 #include <Utilities/Hacking/Memprotect.hpp>
