@@ -198,7 +198,7 @@ namespace Console
 
         static constexpr auto Quit = [](int, const wchar_t **)
         {
-            std::exit(0);
+            Core::Terminate();
         };
         addCommand(L"Quit", Quit);
         addCommand(L"Exit", Quit);

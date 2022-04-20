@@ -401,7 +401,8 @@ namespace sqlite
         ~Statement_t()
         {
             // Need to ensure that the statement was evaluated.
-            if (!isStarted) Extractmultiple([]() {});
+            if (!isStarted && Argcount == Index) [[unlikely]]
+                Extractmultiple([]() {});
         }
     };
 

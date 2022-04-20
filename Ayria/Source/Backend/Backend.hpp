@@ -12,6 +12,9 @@ namespace Core
     // Add a recurring task to the worker thread.
     void Enqueuetask(uint32_t PeriodMS, void(__cdecl *Callback)());
 
+    // Terminate the background thread and prepare for exit.
+    void Terminate();
+
     // Interface with the client database.
     sqlite::Database_t QueryDB();
 
@@ -135,15 +138,16 @@ namespace Backend
         timeBeginPeriod(1);
         #endif
 
-        // Initialize the subsystems.
+        // Initialize the core subsystems.
         Core::Initialize();
         Config::Initialize();
-        Console::Initialize();
-        Synchronization::Initialize();
 
-        //
-        Plugins::Initialize();
+        // Initialize the independant systems.
+        const auto A = std::async(std::launch::async, []() { Synchronization::Initialize(); });
+        const auto B = std::async(std::launch::async, []() { Console::Initialize(); });
 
+        // Wait for the initialization to finis.
+        A.wait(); B.wait();
     }
 }
 

@@ -19,11 +19,11 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 
     # Windows compilation.
     if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
-        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /W4 /Oiysyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except-")
-        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /LTCG /filealign:512 /opt:ref,icf,lbr /incremental:no /Brepro /cgthreads:8")
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /Z7 /permissive- /W4 /Oiysyb3 /GF /Gy /Gw /GR- /GL /utf-8 /Brepro /fp:except-")
+        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /LTCG /debug:full /filealign:512 /opt:ref,icf=8,lbr /incremental:no /Brepro /cgthreads:8")
     else()
-        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /permissive- /Gy /utf-8 /fp:except-") # /d2TPReport
-        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /LTCG /debug:full /incremental:no /cgthreads:8")
+        set(EXTRA_CMPFLAGS "${EXTRA_CMPFLAGS} /Zc:__cplusplus /Z7 /permissive- /Gy /utf-8 /fp:except-") # /d2TPReport
+        set(EXTRA_LNKFLAGS "${EXTRA_LNKFLAGS} /time /LTCG /debug:full /opt:ref,icf=1,lbr /incremental:no /cgthreads:8")
     endif()
 
     # Need to specify the arch for x86.

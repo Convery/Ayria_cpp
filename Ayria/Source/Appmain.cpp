@@ -60,9 +60,8 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
         // Opt out of further notifications.
         DisableThreadLibraryCalls(hDllHandle);
 
-        // Initialize the backend and console; in-case plugins need access.
+        // Initialize the backend; in-case plugins need access.
         Backend::Initialize();
-        Console::Initialize();
 
         // If injected, we can't hook. So just load all plugins directly.
         if (lpvReserved == NULL) Plugins::Initialize();
@@ -84,8 +83,10 @@ BOOLEAN __stdcall DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID lpvReserve
 }
 
 // Entrypoint when loaded as a GUI application.
-int main()
+int __stdcall WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
+    #pragma comment(linker, "/SUBSYSTEM:WINDOWS")
+
     // Although it should already be touched by the ctors, ensure it's propagated and prioritized.
     _mm_prefetch(reinterpret_cast<const char *>(&Global), _MM_HINT_T0);
 
@@ -100,46 +101,15 @@ int main()
     // Catch any unwanted exceptions.
     SetUnhandledExceptionFilter(onUnhandledexception);
 
-    // Initialize the backend and console; in-case plugins need access.
+    // Initialize the backend; in-case plugins need access.
     Backend::Initialize();
-    Console::Initialize();
 
     // If injected, we can't hook. So just load all plugins directly.
     Plugins::Initialize();
 
-    // Register the window.
-    WNDCLASSEXW Windowclass{};
-    Windowclass.cbSize = sizeof(WNDCLASSEXW);
-    Windowclass.lpfnWndProc = DefWindowProcW;
-    Windowclass.lpszClassName = L"Hostwindow";
-    Windowclass.hInstance = GetModuleHandleA(NULL);
-    Windowclass.hbrBackground = CreateSolidBrush(0xFF00FF);
-    Windowclass.style = CS_BYTEALIGNWINDOW | CS_BYTEALIGNCLIENT;
-    if (NULL == RegisterClassExW(&Windowclass)) return 2;
+    // Create the application window and overlay, wait for app termination.
+    Frontend::CreateOverlayconsole().detach();
+    Frontend::CreateAppwindow().join();
 
-    const auto hDC = GetDC(GetDesktopWindow());
-    const auto swidth = GetDeviceCaps(hDC, HORZRES);
-    const auto sheight = GetDeviceCaps(hDC, VERTRES);
-    ReleaseDC(GetDesktopWindow(), hDC);
-
-    // Create a simple window.
-    const auto Windowhandle = CreateWindowExW(NULL, Windowclass.lpszClassName, L"HOST", NULL, swidth / 4, sheight / 4,
-                                              swidth / 2, sheight / 2, NULL, NULL, Windowclass.hInstance, NULL);
-    if (!Windowhandle) return 1;
-    ShowWindow(Windowhandle, SW_SHOW);
-
-    //
-    auto X = Frontend::CreateOverlayconsole();
-
-    MSG Message{};
-    while (GetMessageW(&Message, Windowhandle, NULL, NULL))
-    {
-        // WM_DWMNCRENDERINGCHANGED
-        TranslateMessage(&Message);
-        DispatchMessageW(&Message);
-    }
-
-
-    while (true) Sleep(10);
-
+    return 1;
 }

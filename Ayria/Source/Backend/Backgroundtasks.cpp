@@ -10,6 +10,7 @@ namespace Core
 {
     using Task_t = struct { uint32_t Last, Period; void(__cdecl *Callback)(); };
     static Inlinedvector<Task_t, 8> Backgroundtasks{};
+    static std::atomic_flag doTerminate{};
     static Defaultmutex Threadsafe{};
 
     // Add a recurring task to the worker thread.
@@ -25,6 +26,9 @@ namespace Core
         // Else put it at the end, will be evaluated next tick.
         Backgroundtasks.push_back({ 0, PeriodMS, Callback });
     }
+
+    // Terminate the background thread and prepare for exit.
+    void Terminate() { doTerminate.test_and_set(); }
 
     // Normal-priority thread.
     [[noreturn]] static unsigned __stdcall Backgroundthread(void *)
@@ -54,6 +58,10 @@ namespace Core
                     }
                 }
             }
+
+            // The user has requested us to terminate.
+            if (doTerminate.test()) [[unlikely]]
+                std::exit(1);
 
             // Most tasks run with periods in seconds.
             const auto Delta = GetTickCount() - Currenttime;

@@ -4,9 +4,8 @@
     License: MIT
 */
 
-#pragma once
-#include <Global.hpp>
 
+#include <Global.hpp>
 using namespace Graphics;
 
 constexpr auto Backgroundcolor = Color_t(39, 38, 35);
@@ -66,7 +65,7 @@ struct Outputarea_t : Elementinfo_t
             Parent->Invalidatescreen(Position, Size);
         };
     }
-};
+} Outputarea{};
 
 struct Inputarea_t : Elementinfo_t
 {
@@ -235,7 +234,7 @@ struct Inputarea_t : Elementinfo_t
             Parent->Invalidatescreen(Position, Size);
         };
     }
-};
+} Inputarea{};
 
 struct Boundingbox_t : Elementinfo_t
 {
@@ -257,7 +256,7 @@ struct Boundingbox_t : Elementinfo_t
                 const auto Parentheight = std::abs(Area.bottom - Area.top);
 
                 const vec2u Wantedsize{ std::min(Parentwidth - 20, 1440L), Parentheight * (isExtended ? 0.66f : 0.33f) + 0.5f };
-                const vec2i Wantedposition{ Area.left + (Parentwidth / 2) - (Wantedsize.x / 2), Area.top + Parentheight * 0.005f };
+                const vec2i Wantedposition{ Area.left + (Parentwidth / 2) - (Wantedsize.x / 2), Area.top + Parentheight * 0.01f };
 
                 // Unlikely to be needed, but let's check.
                 if (Parent->Windowposition != Wantedposition || Parent->Windowsize != Wantedsize) [[unlikely]]
@@ -303,8 +302,8 @@ struct Boundingbox_t : Elementinfo_t
                 if (Parent->Windowhandle == GetForegroundWindow()) [[likely]]
                     return;
 
-                // Avoid jitter by only updating every 100ms.
-                if (Currenttick - Lastmove > 100)
+                // Avoid jitter by only updating every 33ms.
+                if (Currenttick - Lastmove > 33)
                 {
                     Lastmove = Currenttick;
                     Resize();
@@ -314,7 +313,7 @@ struct Boundingbox_t : Elementinfo_t
             return;
         };
     }
-};
+} Boundingbox{};
 
 namespace Frontend
 {
@@ -326,14 +325,10 @@ namespace Frontend
             // Name for debugging.
             setThreadname("Ayria_Consoleoverlay");
 
-            static Boundingbox_t Box{};
-            static Outputarea_t Output{};
-            static Inputarea_t Input{};
-
-            static Window_t Overlay({}, {});
-            Overlay.Insertelement(&Box);
-            Overlay.Insertelement(&Output);
-            Overlay.Insertelement(&Input);
+            static Overlay_t Overlay({}, {});
+            Overlay.Insertelement(&Boundingbox);
+            Overlay.Insertelement(&Outputarea);
+            Overlay.Insertelement(&Inputarea);
 
             uint64_t Lastframe = GetTickCount64();
             while (true)

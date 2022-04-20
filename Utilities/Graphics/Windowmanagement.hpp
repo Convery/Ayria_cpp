@@ -245,7 +245,7 @@ namespace Graphics
             if (Visible)
             {
                 Invalidatescreen({}, Windowsize);
-                SetActiveWindow(Windowhandle);
+                SetForegroundWindow(Windowhandle);
             }
         }
         void Insertelement(Elementinfo_t *Element)
@@ -272,6 +272,14 @@ namespace Graphics
 
             Invalidatescreen({}, Size);
             SetActiveWindow(Windowhandle);
+        }
+        void Reposition(std::optional<vec2i> newPosition, std::optional<vec2i> Delta)
+        {
+            assert((!!newPosition ^ !!Delta) == 1);
+            if (newPosition)
+                SetWindowPos(Windowhandle, NULL, newPosition->x, newPosition->y, Windowsize.x, Windowsize.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
+            else
+                SetWindowPos(Windowhandle, NULL, Windowposition.x + Delta->x, Windowposition.y + Delta->y, Windowsize.x, Windowsize.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
         }
         void Invalidatescreen(vec4u &&Dirtyrect) const
         {
@@ -314,8 +322,9 @@ namespace Graphics
         }
 
         // Only the base Window_t class handles the window events, for simplicity.
-        static LRESULT __stdcall Overlaywndproc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
+        static LRESULT __stdcall wndProc(HWND Windowhandle, UINT Message, WPARAM wParam, LPARAM lParam)
         {
+            static bool rDown{}, lDown{}, mDown{};
             static bool modShift{}, modCtrl{};
             static HWND Mousecaptureowner{};
             Window_t *This{};
@@ -457,11 +466,11 @@ namespace Graphics
                     // Translate to normal codes.
                     do
                     {
-                        if (wParam & MK_LBUTTON) { wParam = VK_LBUTTON; break; }
-                        if (wParam & MK_RBUTTON) { wParam = VK_RBUTTON; break; }
-                        if (wParam & MK_MBUTTON) [[unlikely]] { wParam = VK_MBUTTON; break; }
+                        if (wParam & MK_LBUTTON) { lDown = true; wParam = VK_LBUTTON; break; }
+                        if (wParam & MK_RBUTTON) { rDown = true; wParam = VK_RBUTTON; break; }
                         if (wParam & MK_XBUTTON1) [[unlikely]] { wParam = VK_XBUTTON1; break; }
                         if (wParam & MK_XBUTTON2) [[unlikely]] { wParam = VK_XBUTTON2; break; }
+                        if (wParam & MK_MBUTTON)  [[unlikely]] { mDown = true; wParam = VK_MBUTTON; break; }
                     } while (false);
 
                     // Bit of a hack, send a move event first.
@@ -502,11 +511,9 @@ namespace Graphics
                     // Translate to normal codes.
                     do
                     {
-                        if (wParam & MK_LBUTTON) { wParam = VK_LBUTTON; break; }
-                        if (wParam & MK_RBUTTON) { wParam = VK_RBUTTON; break; }
-                        if (wParam & MK_MBUTTON) [[unlikely]] { wParam = VK_MBUTTON; break; }
-                        if (wParam & MK_XBUTTON1) [[unlikely]] { wParam = VK_XBUTTON1; break; }
-                        if (wParam & MK_XBUTTON2) [[unlikely]] { wParam = VK_XBUTTON2; break; }
+                        if (Message == WM_LBUTTONUP) { lDown = false; wParam = VK_LBUTTON; break; }
+                        if (Message == WM_RBUTTONUP) { rDown = false; wParam = VK_RBUTTON; break; }
+                        if (Message == WM_MBUTTONUP) { mDown = false; wParam = VK_MBUTTON; break; }
                     } while (false);
 
                     // Bit of a hack, send a move event first.
@@ -546,22 +553,22 @@ namespace Graphics
             return DefWindowProcW(Windowhandle, Message, wParam, lParam);
         }
 
-        // Create a new window for our overlay.
+        // Create a new window..
         Window_t() = default;
-        Window_t(vec2i Position, vec2u Size) : Windowsize(Size), Windowposition(Position)
+        Window_t(vec2u Size, vec2i Position) : Windowsize(Size), Windowposition(Position)
         {
-            // Register the overlay class.
+            // Register the window class.
             WNDCLASSEXW Windowclass{};
+            Windowclass.lpfnWndProc = wndProc;
             Windowclass.cbSize = sizeof(WNDCLASSEXW);
-            Windowclass.lpfnWndProc = Overlaywndproc;
             Windowclass.lpszClassName = L"Ayria_window";
             Windowclass.cbWndExtra = sizeof(Window_t *);
             Windowclass.style = CS_DBLCLKS | CS_SAVEBITS | CS_CLASSDC | CS_BYTEALIGNCLIENT | CS_BYTEALIGNWINDOW;
             RegisterClassExW(&Windowclass);
 
-            // Generic overlay style.
+            // Generic window style.
             constexpr DWORD Style = WS_POPUP;
-            constexpr DWORD StyleEx = WS_EX_LAYERED;
+            constexpr DWORD StyleEx = WS_EX_APPWINDOW | WS_EX_LAYERED;
 
             // Topmost, transparent, no icon on the taskbar, zero size so it's not shown.
             Windowhandle = CreateWindowExW(StyleEx, Windowclass.lpszClassName, NULL, Style, 0, 0, 0, 0, NULL, NULL, NULL, this);
@@ -573,6 +580,7 @@ namespace Graphics
             // Resize to show the window.
             if (Position) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOSIZE);
             if (Size) SetWindowPos(Windowhandle, NULL, Position.x, Position.y, Size.x, Size.y, SWP_ASYNCWINDOWPOS | SWP_NOMOVE);
+            if (Position || Size) setVisibility(true);
         }
 
         // In-case someone does something silly.
@@ -582,16 +590,16 @@ namespace Graphics
     // Top-most overlay to track another window.
     class Overlay_t : public Window_t
     {
-        // Create a new window for our overlay.
-        Overlay_t(vec2i Position, vec2u Size)
+        public:
+        Overlay_t(vec2u Size, vec2i Position)
         {
             Windowsize = Size;
             Windowposition = Position;
 
             // Register the overlay class.
             WNDCLASSEXW Windowclass{};
+            Windowclass.lpfnWndProc = wndProc;
             Windowclass.cbSize = sizeof(WNDCLASSEXW);
-            Windowclass.lpfnWndProc = Overlaywndproc;
             Windowclass.lpszClassName = L"Ayria_overlay";
             Windowclass.cbWndExtra = sizeof(Overlay_t *);
             Windowclass.style = CS_DBLCLKS | CS_SAVEBITS | CS_CLASSDC | CS_BYTEALIGNCLIENT | CS_BYTEALIGNWINDOW;
