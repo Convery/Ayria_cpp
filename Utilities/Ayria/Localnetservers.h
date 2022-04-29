@@ -6,6 +6,7 @@
 
 #pragma once
 #include <Stdinclude.hpp>
+#pragma warning(disable: 4996)
 
 typedef struct { unsigned int IPv4; unsigned short Port; } Address_t;
 
