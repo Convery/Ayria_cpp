@@ -309,28 +309,39 @@ namespace Graphics
         {
             const RECT Area{ Dimensions.x, Dimensions.y, Dimensions.z, Dimensions.w };
             const Textcolor_t RTTI1(Devicecontext, Outline.value_or(Color_t()));
-            const RECT *pArea = (Dimensions.z && Dimensions.w) ? &Area : NULL;
+            const RECT* pArea = (Dimensions.z && Dimensions.w) ? &Area : NULL;
+            const Background_t RTTI3(Devicecontext, Background);
             const Font_t RTTI2(Devicecontext, Fonthandle);
-            [[maybe_unused]] UINT Alignment{};
-
+            
             if (isCentered)
             {
-                Alignment = SetTextAlign(Devicecontext, TA_CENTER);
-            }
+                TEXTMETRICW Metric = {};
+                GetTextMetricsW(Devicecontext, &Metric);
+                const auto Alignment = SetTextAlign(Devicecontext, TA_CENTER);
+                const vec2i Center = { Dimensions.x + (Dimensions.z - Dimensions.x) / 2 , 
+                                       Dimensions.y + (Dimensions.w - Dimensions.y) / 2 - (Metric.tmHeight / 2) };
 
-            if (Background)
-            {
-                const Background_t RTTI3(Devicecontext, Background);
-                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN | ETO_OPAQUE, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                if (Background)
+                {                    
+                    ExtTextOutW(Devicecontext, Center.x, Center.y, ETO_NUMERICSLATIN | ETO_OPAQUE, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                }
+                else
+                {
+                    ExtTextOutW(Devicecontext, Center.x, Center.y, ETO_NUMERICSLATIN, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                }
+
+                SetTextAlign(Devicecontext, Alignment);
             }
             else
             {
-                ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN, pArea, Text.c_str(), (UINT)Text.size(), NULL);
-            }
-
-            if (isCentered)
-            {
-                SetTextAlign(Devicecontext, Alignment);
+                if (Background)
+                {
+                    ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN | ETO_OPAQUE, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                }
+                else
+                {
+                    ExtTextOutW(Devicecontext, Dimensions.x, Dimensions.y, ETO_NUMERICSLATIN, pArea, Text.c_str(), (UINT)Text.size(), NULL);
+                }
             }
         }
     };
